@@ -8,6 +8,9 @@
     "preview": "vite preview",
     "lint": "eslint . --fix --ignore-path .gitignore"
   },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,vue,tsx,html,css,json}": ["prettier --write"]
+  },
   "dependencies": {
     "@mdi/font": "7.0.96",
     "core-js": "^3.29.0",
@@ -28,6 +31,7 @@
     "eslint": "^8.37.0",
     "eslint-plugin-vue": "^9.3.0",
     "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
     "prettier": "^3.1.0",
     "pug": "^3.0.2",
     "sass": "^1.60.0",
