@@ -17,6 +17,6 @@
 	},
 	"plugins": ["@typescript-eslint", "vue", "sonarjs", "prettier"],
 	"rules": {
-		"prettier/prettier": "error"
+		"prettier/prettier": "warn"
 	}
 }

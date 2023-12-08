@@ -1,5 +1,5 @@
 <template lang="pug">
-v-container.fill-height
+v-container.fill-height.ma-0.pa-0(fluid)
 	#map.h-100.w-100
 </template>
 
@@ -8,6 +8,12 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { onMounted } from 'vue';
 
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerIconShadow from 'leaflet/dist/images/marker-shadow.png';
+const customMarker = L.icon({
+	iconUrl: markerIcon,
+	shadowUrl: markerIconShadow
+});
 onMounted(async () => {
 	const map = L.map('map').fitWorld();
 
@@ -21,7 +27,7 @@ onMounted(async () => {
 	function onLocationFound(e: any) {
 		const radius = e.accuracy;
 
-		L.marker(e.latlng)
+		L.marker(e.latlng, { icon: customMarker })
 			.addTo(map)
 			.bindPopup('You are within ' + radius + ' meters from this point')
 			.openPopup();

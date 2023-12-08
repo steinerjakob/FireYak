@@ -1,7 +1,7 @@
 <template lang="pug">
-HelloWorld
+MainMap
 </template>
 
 <script lang="ts" setup>
-import HelloWorld from '@/components/HelloWorld.vue';
+import MainMap from '@/components/MainMap.vue';
 </script>
