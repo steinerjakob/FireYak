@@ -13,13 +13,14 @@
 			"prettier --write",
 			"eslint"
 		],
-		"**/*.{vue,scss}": [
+		"**/*.{scss}": [
 			"stylelint"
 		]
 	},
 	"dependencies": {
 		"@mdi/font": "7.0.96",
 		"core-js": "^3.29.0",
+		"leaflet": "^1.9.4",
 		"pinia": "^2.0.0",
 		"roboto-fontface": "*",
 		"stylelint-scss": "^5.3.1",
@@ -32,6 +33,7 @@
 		"@commitlint/cli": "^18.4.3",
 		"@commitlint/config-conventional": "^18.4.3",
 		"@prettier/plugin-pug": "^3.0.0",
+		"@types/leaflet": "^1.9.8",
 		"@types/node": "^18.15.0",
 		"@vitejs/plugin-vue": "^4.0.0",
 		"@vue/eslint-config-typescript": "^11.0.0",
