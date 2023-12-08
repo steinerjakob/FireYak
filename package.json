@@ -9,9 +9,12 @@
 		"lint": "eslint . --fix --ignore-path .gitignore"
 	},
 	"lint-staged": {
-		"**/*.{js,jsx,ts,vue,tsx,html,css,json}": [
+		"**/*.{js,jsx,ts,vue,tsx,html,css,scss,json}": [
 			"prettier --write",
 			"eslint"
+		],
+		"**/*.{vue,scss}": [
+			"stylelint"
 		]
 	},
 	"dependencies": {
@@ -19,6 +22,7 @@
 		"core-js": "^3.29.0",
 		"pinia": "^2.0.0",
 		"roboto-fontface": "*",
+		"stylelint-scss": "^5.3.1",
 		"vue": "^3.2.0",
 		"vue-router": "^4.0.0",
 		"vuetify": "^3.0.0"
@@ -41,6 +45,9 @@
 		"prettier": "^3.1.0",
 		"pug": "^3.0.2",
 		"sass": "^1.60.0",
+		"stylelint": "^15.11.0",
+		"stylelint-config-standard": "^34.0.0",
+		"stylelint-config-standard-scss": "^11.1.0",
 		"typescript": "^5.0.0",
 		"unplugin-fonts": "^1.0.3",
 		"vite": "^4.2.0",
