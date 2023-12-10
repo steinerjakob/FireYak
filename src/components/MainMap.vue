@@ -14,16 +14,9 @@ import { MarkerClusterGroup } from 'leaflet.markercluster';
 
 import { onMounted } from 'vue';
 
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerIconShadow from 'leaflet/dist/images/marker-shadow.png';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import { getMarkersForView } from '@/plugins/overPassApi';
-
-const customMarker = L.icon({
-	iconUrl: markerIcon,
-	shadowUrl: markerIconShadow
-});
 
 let rootMap: L.Map | null = null;
 
@@ -58,7 +51,7 @@ onMounted(async () => {
 	rootMap.on('locationfound', (e) => {
 		const radius = e.accuracy;
 
-		L.marker(e.latlng, { icon: customMarker })
+		L.marker(e.latlng)
 			.addTo(rootMap as L.Map)
 			.bindPopup('You are within ' + radius + ' meters from this point')
 			.openPopup();
