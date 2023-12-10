@@ -6,40 +6,67 @@ v-container.fill-height.ma-0.pa-0(fluid)
 <script lang="ts" setup>
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { MarkerClusterGroup } from 'leaflet.markercluster';
+
 import { onMounted } from 'vue';
 
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerIconShadow from 'leaflet/dist/images/marker-shadow.png';
-const customMarker = L.icon({
-	iconUrl: markerIcon,
-	shadowUrl: markerIconShadow
-});
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { getMarkersForView } from '@/plugins/overPassApi';
+
+let rootMap: L.Map | null = null;
+
+const fireMapCluster = new MarkerClusterGroup();
+async function handleMapMovement() {
+	// do not fetch data for big zoom areas!
+	if (!rootMap || rootMap.getZoom() <= 9) {
+		return;
+	}
+	const markersToAdd = await getMarkersForView(rootMap.getBounds());
+	fireMapCluster.clearLayers();
+	markersToAdd.forEach((marker) => {
+		if (marker) {
+			marker.on('click', (event) => {
+				rootMap?.panTo(event.target.getLatLng());
+			});
+			fireMapCluster.addLayer(marker);
+		}
+	});
+}
+
 onMounted(async () => {
-	const map = L.map('map').fitWorld();
+	rootMap = L.map('map');
 
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 		maxZoom: 19,
 		attribution: '© OpenStreetMap'
-	}).addTo(map);
+	}).addTo(rootMap);
 
-	map.locate({ setView: true, maxZoom: 16 });
+	rootMap.locate({ setView: true, maxZoom: 16 });
 
-	function onLocationFound(e: any) {
+	rootMap.on('locationfound', (e) => {
 		const radius = e.accuracy;
 
-		L.marker(e.latlng, { icon: customMarker })
-			.addTo(map)
+		L.marker(e.latlng)
+			.addTo(rootMap as L.Map)
 			.bindPopup('You are within ' + radius + ' meters from this point')
 			.openPopup();
 
-		L.circle(e.latlng, radius).addTo(map);
-	}
+		L.circle(e.latlng, radius).addTo(rootMap as L.Map);
+	});
 
-	map.on('locationfound', onLocationFound);
-	function onLocationError(e: any) {
+	rootMap.on('locationerror', (e) => {
 		alert(e.message);
-	}
+	});
 
-	map.on('locationerror', onLocationError);
+	//watch map movement
+	rootMap.on('zoomend', handleMapMovement);
+	rootMap.on('dragend', handleMapMovement);
+
+	fireMapCluster.addTo(rootMap);
 });
 </script>
