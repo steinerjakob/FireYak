@@ -6,16 +6,44 @@ v-container.fill-height.ma-0.pa-0(fluid)
 <script lang="ts" setup>
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { MarkerClusterGroup } from 'leaflet.markercluster';
+
 import { onMounted } from 'vue';
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconShadow from 'leaflet/dist/images/marker-shadow.png';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { getMarkersForView } from '@/plugins/overPassApi';
+
 const customMarker = L.icon({
 	iconUrl: markerIcon,
 	shadowUrl: markerIconShadow
 });
 
 let rootMap: L.Map | null = null;
+
+const fireMapCluster = new MarkerClusterGroup();
+async function handleMapMovement() {
+	// do not fetch data for big zoom areas!
+	if (!rootMap || rootMap.getZoom() <= 9) {
+		return;
+	}
+	const markersToAdd = await getMarkersForView(rootMap.getBounds());
+	fireMapCluster.clearLayers();
+	markersToAdd.forEach((marker) => {
+		if (marker) {
+			marker.on('click', (event) => {
+				rootMap?.panTo(event.target.getLatLng());
+			});
+			fireMapCluster.addLayer(marker);
+		}
+	});
+}
 
 onMounted(async () => {
 	rootMap = L.map('map');
@@ -41,5 +69,11 @@ onMounted(async () => {
 	rootMap.on('locationerror', (e) => {
 		alert(e.message);
 	});
+
+	//watch map movement
+	rootMap.on('zoomend', handleMapMovement);
+	rootMap.on('dragend', handleMapMovement);
+
+	fireMapCluster.addTo(rootMap);
 });
 </script>
