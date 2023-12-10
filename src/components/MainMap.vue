@@ -14,32 +14,32 @@ const customMarker = L.icon({
 	iconUrl: markerIcon,
 	shadowUrl: markerIconShadow
 });
+
+let rootMap: L.Map | null = null;
+
 onMounted(async () => {
-	const map = L.map('map').fitWorld();
+	rootMap = L.map('map');
 
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 		maxZoom: 19,
 		attribution: '© OpenStreetMap'
-	}).addTo(map);
+	}).addTo(rootMap);
 
-	map.locate({ setView: true, maxZoom: 16 });
+	rootMap.locate({ setView: true, maxZoom: 16 });
 
-	function onLocationFound(e: any) {
+	rootMap.on('locationfound', (e) => {
 		const radius = e.accuracy;
 
 		L.marker(e.latlng, { icon: customMarker })
-			.addTo(map)
+			.addTo(rootMap as L.Map)
 			.bindPopup('You are within ' + radius + ' meters from this point')
 			.openPopup();
 
-		L.circle(e.latlng, radius).addTo(map);
-	}
+		L.circle(e.latlng, radius).addTo(rootMap as L.Map);
+	});
 
-	map.on('locationfound', onLocationFound);
-	function onLocationError(e: any) {
+	rootMap.on('locationerror', (e) => {
 		alert(e.message);
-	}
-
-	map.on('locationerror', onLocationError);
+	});
 });
 </script>
