@@ -14,9 +14,8 @@ import { MarkerClusterGroup } from 'leaflet.markercluster';
 
 import { onMounted } from 'vue';
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 import { getMarkersForView } from '@/plugins/overPassApi';
+import { debounce } from '@/helper/helper';
 
 let rootMap: L.Map | null = null;
 
@@ -37,6 +36,8 @@ async function handleMapMovement() {
 		}
 	});
 }
+
+const debouncedMapMove = debounce(handleMapMovement, 200);
 
 onMounted(async () => {
 	rootMap = L.map('map');
@@ -64,8 +65,8 @@ onMounted(async () => {
 	});
 
 	//watch map movement
-	rootMap.on('zoomend', handleMapMovement);
-	rootMap.on('dragend', handleMapMovement);
+	rootMap.on('zoomend', debouncedMapMove);
+	rootMap.on('dragend', debouncedMapMove);
 
 	fireMapCluster.addTo(rootMap);
 });
