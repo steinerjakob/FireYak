@@ -56,7 +56,7 @@ onMounted(async () => {
 			position: 'bottomright',
 			flyTo: true,
 			keepCurrentZoomLevel: true,
-			setView: 'once',
+			setView: false,
 			clickBehavior: { inView: 'setView', outOfView: 'setView', inViewNotFollowing: 'inView' }
 		})
 		.addTo(rootMap);
