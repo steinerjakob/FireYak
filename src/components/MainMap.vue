@@ -12,6 +12,9 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 // @ts-ignore
 import { MarkerClusterGroup } from 'leaflet.markercluster';
 
+import 'leaflet.locatecontrol';
+import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
+
 import { onMounted } from 'vue';
 
 import { getMarkersForView } from '@/plugins/overPassApi';
@@ -47,22 +50,30 @@ onMounted(async () => {
 		attribution: '© OpenStreetMap'
 	}).addTo(rootMap);
 
-	rootMap.locate({ setView: true, maxZoom: 16 });
+	L.control
+		.locate({
+			flyTo: true
+		})
+		.addTo(rootMap);
 
-	rootMap.on('locationfound', (e) => {
-		const radius = e.accuracy;
+	rootMap.setView([48.135314, 15.274102], 13);
 
-		L.marker(e.latlng)
-			.addTo(rootMap as L.Map)
-			.bindPopup('You are within ' + radius + ' meters from this point')
-			.openPopup();
+	/*	// rootMap.locate({ setView: true, maxZoom: 16 });
 
-		L.circle(e.latlng, radius).addTo(rootMap as L.Map);
-	});
+		rootMap.on('locationfound', (e) => {
+			const radius = e.accuracy;
 
-	rootMap.on('locationerror', (e) => {
-		alert(e.message);
-	});
+			L.marker(e.latlng)
+				.addTo(rootMap as L.Map)
+				.bindPopup('You are within ' + radius + ' meters from this point')
+				.openPopup();
+
+			L.circle(e.latlng, radius).addTo(rootMap as L.Map);
+		});
+
+		rootMap.on('locationerror', (e) => {
+			alert(e.message);
+		});*/
 
 	//watch map movement
 	rootMap.on('zoomend', debouncedMapMove);
