@@ -17,6 +17,7 @@
 	},
 	"plugins": ["@typescript-eslint", "vue", "sonarjs", "prettier"],
 	"rules": {
-		"prettier/prettier": "warn"
+		"prettier/prettier": "warn",
+		"@typescript-eslint/ban-ts-comment": "off"
 	}
 }
