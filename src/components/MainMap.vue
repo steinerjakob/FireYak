@@ -50,11 +50,17 @@ onMounted(async () => {
 		attribution: '© OpenStreetMap'
 	}).addTo(rootMap);
 
-	L.control
+	const locationControl = L.control
 		.locate({
-			flyTo: true
+			position: 'bottomright',
+			flyTo: true,
+			keepCurrentZoomLevel: true,
+			setView: 'once',
+			clickBehavior: { inView: 'setView', outOfView: 'setView', inViewNotFollowing: 'inView' }
 		})
 		.addTo(rootMap);
+
+	locationControl.start();
 
 	rootMap.setView([48.135314, 15.274102], 13);
 
