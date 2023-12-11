@@ -8,9 +8,10 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import { MarkerClusterGroup } from 'leaflet.markercluster';
+
+import '../plugins/leaflet.restoreview.js';
 
 import 'leaflet.locatecontrol';
 import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
@@ -62,24 +63,11 @@ onMounted(async () => {
 
 	locationControl.start();
 
-	rootMap.setView([48.135314, 15.274102], 13);
-
-	/*	// rootMap.locate({ setView: true, maxZoom: 16 });
-
-		rootMap.on('locationfound', (e) => {
-			const radius = e.accuracy;
-
-			L.marker(e.latlng)
-				.addTo(rootMap as L.Map)
-				.bindPopup('You are within ' + radius + ' meters from this point')
-				.openPopup();
-
-			L.circle(e.latlng, radius).addTo(rootMap as L.Map);
-		});
-
-		rootMap.on('locationerror', (e) => {
-			alert(e.message);
-		});*/
+	// @ts-ignore
+	if (!rootMap.restoreView()) {
+		rootMap.setView([48.135314, 15.274102], 13);
+	}
+	handleMapMovement();
 
 	//watch map movement
 	rootMap.on('zoomend', debouncedMapMove);
