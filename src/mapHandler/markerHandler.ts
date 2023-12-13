@@ -9,6 +9,7 @@ import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
 import { fetchMarkerData, OverPassElement } from './overPassApi';
+import { storeMapNodes } from '@/mapHandler/databaseHandler';
 
 function getIconForNode(element: OverPassElement): L.Icon {
 	let iconData = iconHydrant;
@@ -44,10 +45,13 @@ function getIconForNode(element: OverPassElement): L.Icon {
 		iconSize: [32, 32]
 	});
 }
+
 export async function getMarkersForView(mapBounds: LatLngBounds) {
 	const markerList: L.Marker[] = [];
 	try {
 		const mapElements = await fetchMarkerData(mapBounds);
+		//todo do not wait for storage finish
+		await storeMapNodes(mapElements);
 		for (const element of mapElements) {
 			const latLng = L.latLng(
 				(element?.lat || element.center?.lat) as number,
