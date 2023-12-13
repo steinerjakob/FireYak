@@ -17,9 +17,8 @@ import 'leaflet.locatecontrol';
 import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
 
 import { onMounted } from 'vue';
-
-import { getMarkersForView } from '@/plugins/overPassApi';
 import { debounce } from '@/helper/helper';
+import { getMarkersForView } from '@/mapHandler/markerHandler';
 
 let rootMap: L.Map | null = null;
 
