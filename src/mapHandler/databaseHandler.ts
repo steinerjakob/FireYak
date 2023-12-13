@@ -1,5 +1,7 @@
 import { openDB } from 'idb';
 import { OverPassElement } from '@/mapHandler/overPassApi';
+import { LatLngBounds } from 'leaflet';
+import { ca } from 'vuetify/locale';
 
 const markerStoreName = 'fireMarker';
 
@@ -29,5 +31,41 @@ export async function storeMapNodes(nodes: OverPassElement[]) {
 		]);
 	} catch (e) {
 		console.error(e);
+	}
+}
+
+export async function getMapNodesForView(mapBounds: LatLngBounds) {
+	try {
+		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
+		const markerStore = transaction.objectStore(markerStoreName);
+
+		// Create an index on lat and lon keys
+		const index = markerStore.index('lat, lon'); // Replace 'latLonIndex' with the actual index name
+
+		// Initialize an empty array to store the results
+		const results: OverPassElement[] = [];
+
+		// Iterate over the indexed items within the LatLngBounds
+		const range = IDBKeyRange.bound(
+			[mapBounds.getSouthWest().lat, mapBounds.getSouthWest().lng],
+			[mapBounds.getNorthEast().lat, mapBounds.getNorthEast().lng]
+		);
+
+		// todo range is not correct?
+		let cursor = await index.openCursor(range);
+
+		while (cursor) {
+			// Retrieve the map marker object from the cursor
+			const mapMarker = cursor.value as OverPassElement;
+
+			// Add the map marker to the results array
+			results.push(mapMarker);
+
+			cursor = await cursor.continue();
+		}
+		return results;
+	} catch (e) {
+		console.error(e);
+		return [];
 	}
 }

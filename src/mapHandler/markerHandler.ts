@@ -1,4 +1,4 @@
-import L, { LatLngBounds } from 'leaflet';
+import L, { LatLngBounds, map } from 'leaflet';
 
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
@@ -9,7 +9,7 @@ import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
 import { fetchMarkerData, OverPassElement } from './overPassApi';
-import { storeMapNodes } from '@/mapHandler/databaseHandler';
+import { getMapNodesForView, storeMapNodes } from '@/mapHandler/databaseHandler';
 
 function getIconForNode(element: OverPassElement): L.Icon {
 	let iconData = iconHydrant;
@@ -46,12 +46,17 @@ function getIconForNode(element: OverPassElement): L.Icon {
 	});
 }
 
+async function updateNodeCache(mapBounds: LatLngBounds) {
+	const mapElements = await fetchMarkerData(mapBounds);
+	await storeMapNodes(mapElements);
+	return mapElements;
+}
+
 export async function getMarkersForView(mapBounds: LatLngBounds) {
 	const markerList: L.Marker[] = [];
 	try {
-		const mapElements = await fetchMarkerData(mapBounds);
-		//todo do not wait for storage finish
-		await storeMapNodes(mapElements);
+		updateNodeCache(mapBounds);
+		const mapElements = await getMapNodesForView(mapBounds);
 		for (const element of mapElements) {
 			const latLng = L.latLng(
 				(element?.lat || element.center?.lat) as number,
