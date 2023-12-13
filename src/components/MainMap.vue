@@ -8,7 +8,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
-// @ts-ignore
+// @ts-ignore: does not find typings
 import { MarkerClusterGroup } from 'leaflet.markercluster';
 
 import '../plugins/leaflet.restoreview.js';
@@ -63,7 +63,7 @@ onMounted(async () => {
 
 	locationControl.start();
 
-	// @ts-ignore
+	// @ts-ignore: is a js plugin without any typings
 	if (!rootMap.restoreView()) {
 		rootMap.setView([48.135314, 15.274102], 13);
 	}
