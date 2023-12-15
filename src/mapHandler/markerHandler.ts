@@ -1,4 +1,4 @@
-import L, { LatLngBounds } from 'leaflet';
+import L, { LatLngBounds, map } from 'leaflet';
 
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
@@ -8,54 +8,8 @@ import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
-const OverpassBaseURL = `https://overpass-api.de/api/interpreter?data=`;
-
-interface OverPassElement {
-	id: number;
-	type: string;
-	lat?: number;
-	lon?: number;
-	center?: {
-		lat: number;
-		lon: number;
-	};
-	tags: {
-		// emergency: 'fire_hydrant' | 'water_tank' | 'suction_point' | 'fire_water_pond' | undefined;
-		// 'firehydrant:type': 'pillar' | 'underground' | 'wall' | undefined;
-		[key: string]: string;
-	};
-}
-export async function fetchMarkerData(mapBounds: LatLngBounds): Promise<OverPassElement[]> {
-	let fetchData = '[out:json][timeout:15];(';
-
-	const osmDataKeys = [
-		'node[emergency=fire_hydrant]',
-		'way[amenity=fire_station]',
-		'node[emergency=water_tank]',
-		'node[emergency=suction_point]',
-		'node[emergency=fire_water_pond]'
-	];
-	const boundString =
-		'(' +
-		mapBounds.getSouth() +
-		',' +
-		mapBounds.getWest() +
-		',' +
-		mapBounds.getNorth() +
-		',' +
-		mapBounds.getEast() +
-		')';
-
-	osmDataKeys.forEach((key) => {
-		fetchData += key + boundString + ';';
-	});
-
-	fetchData += ');out qt center 1000 tags;';
-
-	const response = await fetch(OverpassBaseURL + encodeURI(fetchData));
-	const data = await response.json();
-	return data?.elements as OverPassElement[];
-}
+import { fetchMarkerData, OverPassElement } from './overPassApi';
+import { getMapNodesForView, storeMapNodes } from '@/mapHandler/databaseHandler';
 
 function getIconForNode(element: OverPassElement): L.Icon {
 	let iconData = iconHydrant;
@@ -91,10 +45,23 @@ function getIconForNode(element: OverPassElement): L.Icon {
 		iconSize: [32, 32]
 	});
 }
+
+async function updateNodeCache(mapBounds: LatLngBounds) {
+	const mapElements = await fetchMarkerData(mapBounds);
+	await storeMapNodes(mapElements);
+	return mapElements;
+}
+
 export async function getMarkersForView(mapBounds: LatLngBounds) {
 	const markerList: L.Marker[] = [];
 	try {
-		const mapElements = await fetchMarkerData(mapBounds);
+		let mapElements = await getMapNodesForView(mapBounds);
+		// if nothing is in the cache wait for the api call
+		if (!mapElements.length) {
+			mapElements = await updateNodeCache(mapBounds);
+		} else {
+			updateNodeCache(mapBounds);
+		}
 		for (const element of mapElements) {
 			const latLng = L.latLng(
 				(element?.lat || element.center?.lat) as number,
