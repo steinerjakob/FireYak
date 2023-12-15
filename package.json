@@ -20,6 +20,7 @@
 	"dependencies": {
 		"@mdi/font": "7.0.96",
 		"core-js": "^3.29.0",
+		"idb": "^8.0.0",
 		"leaflet": "^1.9.4",
 		"leaflet.locatecontrol": "^0.79.0",
 		"leaflet.markercluster": "^1.5.3",
