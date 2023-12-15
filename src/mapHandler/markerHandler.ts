@@ -55,8 +55,13 @@ async function updateNodeCache(mapBounds: LatLngBounds) {
 export async function getMarkersForView(mapBounds: LatLngBounds) {
 	const markerList: L.Marker[] = [];
 	try {
-		updateNodeCache(mapBounds);
-		const mapElements = await getMapNodesForView(mapBounds);
+		let mapElements = await getMapNodesForView(mapBounds);
+		// if nothing is in the cache wait for the api call
+		if (!mapElements.length) {
+			mapElements = await updateNodeCache(mapBounds);
+		} else {
+			updateNodeCache(mapBounds);
+		}
 		for (const element of mapElements) {
 			const latLng = L.latLng(
 				(element?.lat || element.center?.lat) as number,

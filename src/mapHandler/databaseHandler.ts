@@ -1,7 +1,6 @@
 import { openDB } from 'idb';
 import { OverPassElement } from '@/mapHandler/overPassApi';
-import { LatLngBounds } from 'leaflet';
-import { ca } from 'vuetify/locale';
+import L, { LatLngBounds } from 'leaflet';
 
 const markerStoreName = 'fireMarker';
 
@@ -58,8 +57,16 @@ export async function getMapNodesForView(mapBounds: LatLngBounds) {
 			// Retrieve the map marker object from the cursor
 			const mapMarker = cursor.value as OverPassElement;
 
-			// Add the map marker to the results array
-			results.push(mapMarker);
+			const markerLatLng = new L.LatLng(
+				mapMarker.lat || mapMarker.center?.lat || 0,
+				mapMarker.lon || mapMarker.center?.lon || 0
+			);
+
+			// somehow the filter returns more markers than in the range specified?
+			if (mapBounds.contains(markerLatLng)) {
+				// Add the map marker to the results array
+				results.push(mapMarker);
+			}
 
 			cursor = await cursor.continue();
 		}

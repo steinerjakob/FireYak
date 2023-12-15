@@ -42,7 +42,7 @@ export async function fetchMarkerData(mapBounds: LatLngBounds): Promise<OverPass
 		fetchData += key + boundString + ';';
 	});
 
-	fetchData += ');out qt center 1000 tags;';
+	fetchData += ');out qt center 2000 tags;';
 
 	const response = await fetch(OverpassBaseURL + encodeURI(fetchData));
 	const data = await response.json();
