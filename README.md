@@ -1,6 +1,16 @@
-# FireYak 
+<p align="center"><img src="logo.png" alt="logo" width="150"/></p>
 
-A website for fire departments to provide easy and fast access to the nearest water source. The data is from [OpenStreetMap](https://www.openstreetmap.org).
+# FireYak
+
+A website for fire departments to provide easy and fast access to the nearest water source.  
+The data is from [OpenStreetMap](https://www.openstreetmap.org).
+
+This project is still work in progress and many features are planned:
+- detailed fire hydrant information
+- amount of needed fire houses to access the fire hydrant
+- list of the nearest fire hydrants
+- portable pump calculator
+- ...
 
 ## Support
 
