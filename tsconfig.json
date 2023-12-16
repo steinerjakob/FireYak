@@ -12,18 +12,12 @@
 		"sourceMap": false,
 		"resolveJsonModule": true,
 		"esModuleInterop": true,
-		"lib": ["esnext", "dom"],
+		"lib": ["esnext", "dom", "DOM.Iterable"],
 		"types": ["node", "vuetify"],
 		"paths": {
 			"@/*": ["src/*"]
 		}
 	},
-	"include": [
-		"@/**/*.ts",
-		"src/**/*.ts",
-		"src/**/*.d.ts",
-		"src/**/*.tsx",
-		"src/**/*.vue",
-		"vite.config.ts"
-	]
+	"include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],
+	"references": [{ "path": "./tsconfig.node.json" }]
 }
