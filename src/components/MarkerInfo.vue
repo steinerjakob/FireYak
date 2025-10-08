@@ -1,66 +1,46 @@
 <script setup lang="ts">
-import { useRoute, useRouter } from 'vue-router';
-import { watch } from 'vue';
-import { ref } from 'vue';
 import {
-	IonModal,
-	IonContent,
+	IonButton,
 	IonCard,
-	IonCardHeader,
 	IonCardContent,
-	IonCardTitle
+	IonCardHeader,
+	IonCardTitle,
+	IonIcon
 } from '@ionic/vue';
+import { close } from 'ionicons/icons';
 
-const router = useRouter();
-const route = useRoute();
+const emit = defineEmits<{
+	(e: 'close'): void;
+}>();
 
-let showMarkerInfo = ref(false);
-// fetch the user information when params change
-watch(
-	() => route.params.markerId,
-	async (newId) => {
-		console.log('MARKER', newId);
-		showMarkerInfo.value = !!newId;
-	}
-);
-
-// const { mobile } = useDisplay();
-let sheetWidth = ref('100%');
-let sheetHeight = ref('100%');
-
-watch(
-	() => true, //mobile.value,
-	async (isMobile) => {
-		console.log('MODDSFS', isMobile);
-		if (isMobile) {
-			sheetWidth.value = '100%';
-			sheetHeight.value = '100%';
-		} else {
-			sheetWidth.value = '30%';
-		}
-	},
-	{ immediate: true }
-);
+const closeModal = () => {
+	emit('close');
+};
 </script>
 
 <template>
-	<ion-modal
-		:is-open="showMarkerInfo"
-		:breakpoints="[0, 0.5, 1]"
-		:initial-breakpoint="1"
-		@didDismiss="router.push('/')"
-	>
-		<ion-content>
-			<ion-card>
-				<ion-card-header>
-					<ion-card-title>Bottom Sheet</ion-card-title>
-				</ion-card-header>
-				<ion-card-content>
-					Lorem ipsum dolor sit amet consectetur, adipisicing elit. Ut, eos? Nulla aspernatur odio
-					rem, culpa voluptatibus eius debitis dolorem perspiciatis asperiores sed consectetur
-					praesentium! Delectus et iure maxime eaque exercitationem!
-				</ion-card-content>
-			</ion-card>
-		</ion-content>
-	</ion-modal>
+	<ion-card>
+		<ion-card-header>
+			<div class="header-content">
+				<ion-card-title>Location Info</ion-card-title>
+				<ion-button fill="clear" @click="closeModal">
+					<ion-icon :icon="close" />
+				</ion-button>
+			</div>
+		</ion-card-header>
+		<ion-card-content>
+			Lorem ipsum dolor sit amet consectetur, adipisicing elit. Ut, eos? Nulla aspernatur odio rem,
+			culpa voluptatibus eius debitis dolorem perspiciatis asperiores sed consectetur praesentium!
+			Delectus et iure maxime eaque exercitationem!
+		</ion-card-content>
+	</ion-card>
 </template>
+
+<style scoped>
+.header-content {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px;
+}
+</style>

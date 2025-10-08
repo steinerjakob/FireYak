@@ -33,7 +33,6 @@ async function ensureMapSize() {
 	rootMap?.invalidateSize();
 }
 
-// ... existing code ...
 async function handleMapMovement() {
 	// do not fetch data for big zoom areas!
 	if (!rootMap || rootMap.getZoom() <= 9) return;
