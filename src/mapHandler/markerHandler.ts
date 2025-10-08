@@ -8,8 +8,8 @@ import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
-import { fetchMarkerData, OverPassElement } from './overPassApi';
-import { getMapNodesForView, storeMapNodes } from '@/mapHandler/databaseHandler';
+import { fetchMarkerData, fetchNodeById, OverPassElement } from './overPassApi';
+import { getMapNodeById, getMapNodesForView, storeMapNodes } from '@/mapHandler/databaseHandler';
 
 function getIconForNode(element: OverPassElement): L.Icon {
 	let iconData = iconHydrant;
@@ -77,4 +77,19 @@ export async function getMarkersForView(mapBounds: LatLngBounds) {
 	}
 
 	return markerList;
+}
+
+export async function getMarkerById(markerId: number) {
+	let node = await getMapNodeById(Number(markerId));
+
+	// If not found in database, fetch from Overpass API
+	if (!node) {
+		node = await fetchNodeById(Number(markerId));
+		// If found via API, store it in the database for future use
+		if (node) {
+			await storeMapNodes([node]);
+		}
+	}
+
+	return node;
 }
