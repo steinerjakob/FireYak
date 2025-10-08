@@ -8,10 +8,27 @@ import {
 	IonIcon
 } from '@ionic/vue';
 import { close } from 'ionicons/icons';
+import { onMounted, watch } from 'vue';
+import { getMapNodeById } from '@/mapHandler/databaseHandler';
 
 const emit = defineEmits<{
 	(e: 'close'): void;
 }>();
+
+const props = defineProps<{ markerId: number }>();
+
+onMounted(async () => {
+	watch(
+		() => props.markerId,
+		async (newId) => {
+			if (newId) {
+				const info = await getMapNodeById(props.markerId);
+				console.log('Marker ID changed:', newId, info);
+			}
+		},
+		{ immediate: true }
+	);
+});
 
 const closeModal = () => {
 	emit('close');
