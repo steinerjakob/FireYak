@@ -34,7 +34,8 @@
 			"access": "Zugang",
 			"location": "Standort",
 			"coordinates": "Koordinaten",
-			"osmId": "OSM-ID"
+			"osmId": "OSM-ID",
+			"flowCapacity": "Durchfluss"
 		},
 		"values": {
 			"fire_hydrant:type": {
