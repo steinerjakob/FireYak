@@ -61,6 +61,18 @@
 				"100": "100 mm",
 				"125": "125 mm",
 				"150": "150 mm"
+			},
+			"water_source": {
+				"main": "Water Main",
+				"pond": "Pond",
+				"stream": "Stream",
+				"river": "River",
+				"lake": "Lake",
+				"well": "Well",
+				"tank": "Tank",
+				"reservoir": "Reservoir",
+				"cistern": "Cistern",
+				"water_works": "Water Works"
 			}
 		},
 		"navigation": {

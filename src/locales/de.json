@@ -61,6 +61,18 @@
 				"100": "100 mm",
 				"125": "125 mm",
 				"150": "150 mm"
+			},
+			"water_source": {
+				"main": "Wasserleitung",
+				"pond": "Teich",
+				"stream": "Bach",
+				"river": "Fluss",
+				"lake": "See",
+				"well": "Brunnen",
+				"tank": "Tank",
+				"reservoir": "Reservoir",
+				"cistern": "Zisterne",
+				"water_works": "Wasserwerk"
 			}
 		},
 		"navigation": {
