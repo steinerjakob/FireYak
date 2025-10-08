@@ -12,7 +12,7 @@ const emit = defineEmits<{
 
 const props = defineProps<{ markerId: number }>();
 
-const { t } = useI18n();
+const { t, te } = useI18n();
 const markerData = ref<OverPassElement | null>(null);
 
 // Map of tag keys to translation keys
@@ -71,6 +71,20 @@ const relevantTags = [
 	'location'
 ];
 
+// Translate value if translation exists
+const translateValue = (key: string, value: string): string => {
+	// Check if this is a fire_hydrant field
+	if (key.startsWith('fire_hydrant:')) {
+		const translationKey = `markerInfo.values.${key}.${value}`;
+		// Check if translation exists
+		if (te(translationKey)) {
+			return t(translationKey);
+		}
+	}
+	// Return original value if no translation found
+	return value;
+};
+
 const getFilteredTags = () => {
 	if (!markerData.value?.tags) return [];
 
@@ -79,7 +93,7 @@ const getFilteredTags = () => {
 		.map(([key, value]) => ({
 			key,
 			label: t(tagTranslationKeys[key] || key),
-			value
+			value: translateValue(key, value)
 		}))
 		.sort((a, b) => {
 			const aIndex = relevantTags.indexOf(a.key);

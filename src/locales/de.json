@@ -30,11 +30,37 @@
 			"postcode": "Postleitzahl",
 			"description": "Beschreibung",
 			"note": "Hinweis",
-			"surveyDate": "Erhebungsdatum",
+			"surveyDate": "Erfassungsdatum",
 			"access": "Zugang",
 			"location": "Standort",
 			"coordinates": "Koordinaten",
-			"osmId": "OSM ID"
+			"osmId": "OSM-ID"
+		},
+		"values": {
+			"fire_hydrant:type": {
+				"pillar": "Überflurhydrant",
+				"underground": "Unterflurhydrant",
+				"wall": "Wandhydrant",
+				"pond": "Löschwasserteich"
+			},
+			"fire_hydrant:position": {
+				"green": "Grünfläche",
+				"lane": "Fahrbahn",
+				"parking_lot": "Parkplatz",
+				"sidewalk": "Gehweg",
+				"street": "Straße"
+			},
+			"fire_hydrant:pressure": {
+				"pressurised": "Druckleitung",
+				"suction": "Saugleitung",
+				"gravity": "Schwerkraft"
+			},
+			"fire_hydrant:diameter": {
+				"80": "80 mm",
+				"100": "100 mm",
+				"125": "125 mm",
+				"150": "150 mm"
+			}
 		},
 		"navigation": {
 			"title": "Zur Position navigieren"

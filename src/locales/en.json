@@ -36,6 +36,32 @@
 			"coordinates": "Coordinates",
 			"osmId": "OSM ID"
 		},
+		"values": {
+			"fire_hydrant:type": {
+				"pillar": "Pillar Hydrant",
+				"underground": "Underground Hydrant",
+				"wall": "Wall Hydrant",
+				"pond": "Pond"
+			},
+			"fire_hydrant:position": {
+				"green": "Green Area",
+				"lane": "Lane",
+				"parking_lot": "Parking Lot",
+				"sidewalk": "Sidewalk",
+				"street": "Street"
+			},
+			"fire_hydrant:pressure": {
+				"pressurised": "Pressurised",
+				"suction": "Suction",
+				"gravity": "Gravity"
+			},
+			"fire_hydrant:diameter": {
+				"80": "80 mm",
+				"100": "100 mm",
+				"125": "125 mm",
+				"150": "150 mm"
+			}
+		},
 		"navigation": {
 			"title": "Navigate to location"
 		},
