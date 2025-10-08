@@ -48,3 +48,17 @@ export async function fetchMarkerData(mapBounds: LatLngBounds): Promise<OverPass
 	const data = await response.json();
 	return data?.elements as OverPassElement[];
 }
+
+export async function fetchNodeById(nodeId: number): Promise<OverPassElement | null> {
+	const fetchData = `[out:json][timeout:15];(node(${nodeId});way(${nodeId}););out center tags;`;
+
+	try {
+		const response = await fetch(OverpassBaseURL + encodeURI(fetchData));
+		const data = await response.json();
+		const elements = data?.elements as OverPassElement[];
+		return elements && elements.length > 0 ? elements[0] : null;
+	} catch (e) {
+		console.error('Error fetching node by ID:', e);
+		return null;
+	}
+}
