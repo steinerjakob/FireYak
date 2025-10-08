@@ -9,9 +9,10 @@ import {
 	IonItem,
 	IonLabel,
 	IonList,
-	IonNote
+	IonNote,
+	isPlatform
 } from '@ionic/vue';
-import { close } from 'ionicons/icons';
+import { close, navigate } from 'ionicons/icons';
 import { onMounted, ref, watch } from 'vue';
 import { getMapNodeById } from '@/mapHandler/databaseHandler';
 import { OverPassElement } from '@/mapHandler/overPassApi';
@@ -124,6 +125,25 @@ const getTitle = () => {
 	return 'Location Info';
 };
 
+const openNavigation = () => {
+	if (!markerData.value) return;
+
+	const lat = markerData.value.lat || markerData.value.center?.lat;
+	const lon = markerData.value.lon || markerData.value.center?.lon;
+
+	if (lat && lon) {
+		if (isPlatform('mobile')) {
+			// Create a universal geo URL that works on both iOS and Android
+			// iOS will open Apple Maps, Android will show options including Google Maps
+			const geoUrl = `geo:${lat},${lon}?q=${lat},${lon}`;
+			window.open(geoUrl, '_system');
+		} else {
+			const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+			window.open(googleMapsUrl, '_system');
+		}
+	}
+};
+
 onMounted(async () => {
 	watch(
 		() => props.markerId,
@@ -146,8 +166,8 @@ const closeModal = () => {
 		<ion-card-header>
 			<div class="header-content">
 				<ion-card-title>{{ getTitle() }}</ion-card-title>
-				<ion-button fill="clear" @click="closeModal">
-					<ion-icon :icon="close" />
+				<ion-button fill="clear" @click="openNavigation" title="Navigate to location">
+					<ion-icon :icon="navigate" />
 				</ion-button>
 			</div>
 		</ion-card-header>
