@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote, isPlatform } from '@ionic/vue';
-import { close, navigate } from 'ionicons/icons';
+import { navigate } from 'ionicons/icons';
 import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { getMapNodeById } from '@/mapHandler/databaseHandler';
 import { OverPassElement } from '@/mapHandler/overPassApi';
+import { getMarkerById } from '@/mapHandler/markerHandler';
 
 const emit = defineEmits<{
 	(e: 'close'): void;
@@ -155,7 +155,7 @@ onMounted(async () => {
 		() => props.markerId,
 		async (newId) => {
 			if (newId) {
-				markerData.value = await getMapNodeById(props.markerId);
+				markerData.value = await getMarkerById(props.markerId);
 			}
 		},
 		{ immediate: true }

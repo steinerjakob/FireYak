@@ -9,23 +9,24 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 // @ts-ignore: does not find typings
 import { MarkerClusterGroup } from 'leaflet.markercluster';
 import selectedMarkerIcon from '../assets/markers/selectedmarker.png';
-// ... existing code ...
 import '../plugins/leaflet.restoreview.js';
 import 'leaflet.locatecontrol';
 import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
-import { computed, nextTick, onMounted, watch } from 'vue';
+import { nextTick, onMounted, watch } from 'vue';
 import { debounce } from '@/helper/helper';
-import { getMarkersForView } from '@/mapHandler/markerHandler';
+import { getMarkerById, getMarkersForView } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
-import { getMapNodeById } from '@/mapHandler/databaseHandler';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
+const DISABLE_CLUSTERING_ZOOM = 17;
 
 const router = useRouter();
 const route = useRoute();
 let rootMap: L.Map | null = null;
-const fireMapCluster = new MarkerClusterGroup();
+const fireMapCluster = new MarkerClusterGroup({
+	disableClusteringAtZoom: DISABLE_CLUSTERING_ZOOM
+});
 
 // Ensure Leaflet recalculates the map size once layout is settled
 async function ensureMapSize() {
@@ -53,13 +54,13 @@ const markerIcon = L.icon({
 
 const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
 
-async function showSelectMarkerForNode(markerId: string | undefined) {
+async function showSelectMarkerForNode(markerId: string | undefined, shouldZoom = false) {
 	if (!markerId) {
 		rootMap?.removeLayer(selectedMarker);
 		return;
 	}
 	try {
-		const nodeInfo = await getMapNodeById(Number(markerId));
+		const nodeInfo = await getMarkerById(Number(markerId));
 		const latLng = L.latLng(
 			nodeInfo?.lat || nodeInfo?.center?.lat || 0,
 			nodeInfo?.lon || nodeInfo?.center?.lon || 0
@@ -67,6 +68,11 @@ async function showSelectMarkerForNode(markerId: string | undefined) {
 		selectedMarker.setLatLng(latLng);
 		if (!rootMap?.hasLayer(selectedMarker)) {
 			rootMap?.addLayer(selectedMarker);
+		}
+		if (shouldZoom) {
+			rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
+		} else {
+			rootMap?.panTo(latLng);
 		}
 	} catch (e) {
 		console.error(e);
@@ -86,7 +92,7 @@ onMounted(async () => {
 	rootMap.on('click', () => {
 		router.push('/');
 	});
-
+	let isFirstWatch = true;
 	watch(
 		() => route.path,
 		(path) => {
@@ -94,7 +100,9 @@ onMounted(async () => {
 				rootMap?.removeLayer(selectedMarker);
 			}
 			const markerId = (route.params.markerId as string) || undefined;
-			showSelectMarkerForNode(markerId);
+
+			showSelectMarkerForNode(markerId, isFirstWatch);
+			isFirstWatch = false;
 		},
 		{ immediate: true }
 	);
