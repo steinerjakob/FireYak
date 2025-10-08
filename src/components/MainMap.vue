@@ -13,10 +13,11 @@ import selectedMarkerIcon from '../assets/markers/selectedmarker.png';
 import '../plugins/leaflet.restoreview.js';
 import 'leaflet.locatecontrol';
 import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
-import { nextTick, onMounted, watch } from 'vue';
+import { computed, nextTick, onMounted, watch } from 'vue';
 import { debounce } from '@/helper/helper';
 import { getMarkersForView } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
+import { getMapNodeById } from '@/mapHandler/databaseHandler';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -52,13 +53,27 @@ const markerIcon = L.icon({
 
 const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
 
-function onMapMarkerClick(event: LeafletMouseEvent) {
-	const latLng = event.target.getLatLng();
-	rootMap?.panTo(latLng);
-	selectedMarker.setLatLng(latLng);
-	if (!rootMap?.hasLayer(selectedMarker)) {
-		rootMap?.addLayer(selectedMarker);
+async function showSelectMarkerForNode(markerId: string | undefined) {
+	if (!markerId) {
+		rootMap?.removeLayer(selectedMarker);
+		return;
 	}
+	try {
+		const nodeInfo = await getMapNodeById(Number(markerId));
+		const latLng = L.latLng(
+			nodeInfo?.lat || nodeInfo?.center?.lat || 0,
+			nodeInfo?.lon || nodeInfo?.center?.lon || 0
+		);
+		selectedMarker.setLatLng(latLng);
+		if (!rootMap?.hasLayer(selectedMarker)) {
+			rootMap?.addLayer(selectedMarker);
+		}
+	} catch (e) {
+		console.error(e);
+	}
+}
+
+function onMapMarkerClick(event: LeafletMouseEvent) {
 	router.push(`/markers/${event.target.options.title}`);
 }
 
@@ -69,10 +84,7 @@ onMounted(async () => {
 	rootMap = L.map(MAP_ELEMENT_ID);
 
 	rootMap.on('click', () => {
-		if (rootMap?.hasLayer(selectedMarker)) {
-			rootMap?.removeLayer(selectedMarker);
-			router.push('/');
-		}
+		router.push('/');
 	});
 
 	watch(
@@ -81,7 +93,10 @@ onMounted(async () => {
 			if (path === '/' && rootMap?.hasLayer(selectedMarker)) {
 				rootMap?.removeLayer(selectedMarker);
 			}
-		}
+			const markerId = (route.params.markerId as string) || undefined;
+			showSelectMarkerForNode(markerId);
+		},
+		{ immediate: true }
 	);
 
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
