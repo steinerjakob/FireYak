@@ -9,6 +9,7 @@ const route = useRoute();
 const modal = ref();
 
 const showMarkerInfo = computed(() => !!route.params.markerId);
+const markerId = computed(() => Number(route.params.markerId));
 
 const isMobile = ref(false);
 
@@ -34,12 +35,12 @@ const closeModal = () => {
 			class="marker-info"
 		>
 			<ion-content>
-				<MarkerInfo @close="closeModal"></MarkerInfo>
+				<MarkerInfo :markerId="markerId" @close="closeModal"></MarkerInfo>
 			</ion-content>
 		</ion-modal>
 	</template>
 	<ion-card v-else-if="showMarkerInfo" class="desktop-card">
-		<MarkerInfo @close="closeModal"></MarkerInfo>
+		<MarkerInfo :markerId="markerId" @close="closeModal"></MarkerInfo>
 	</ion-card>
 </template>
 
