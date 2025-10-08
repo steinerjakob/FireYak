@@ -1,6 +1,5 @@
 // Plugins
 import vue from '@vitejs/plugin-vue';
-import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify';
 import ViteFonts from 'unplugin-fonts/vite';
 import { VitePWA, VitePWAOptions } from 'vite-plugin-pwa';
 
@@ -63,7 +62,7 @@ const pwaOptions: Partial<VitePWAOptions> = {
 	},
 	registerType: 'prompt',
 	devOptions: {
-		enabled: true,
+		enabled: false,
 		/* when using generateSW the PWA plugin will switch to classic */
 		type: 'module',
 		navigateFallback: 'index.html',
@@ -74,16 +73,8 @@ const pwaOptions: Partial<VitePWAOptions> = {
 // https://vitejs.dev/config/
 export default defineConfig({
 	plugins: [
-		vue({
-			template: { transformAssetUrls }
-		}),
-		// https://github.com/vuetifyjs/vuetify-loader/tree/master/packages/vite-plugin#readme
-		vuetify({
-			autoImport: true,
-			styles: {
-				configFile: 'src/styles/settings.scss'
-			}
-		}),
+		vue(),
+
 		ViteFonts({
 			google: {
 				families: [

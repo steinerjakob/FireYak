@@ -76,3 +76,15 @@ export async function getMapNodesForView(mapBounds: LatLngBounds) {
 		return [];
 	}
 }
+
+export async function getMapNodeById(id: number) {
+	try {
+		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
+		const store = transaction.objectStore(markerStoreName);
+		const result = await store.get(id);
+		return result || null;
+	} catch (e) {
+		console.error(e);
+		return null;
+	}
+}
