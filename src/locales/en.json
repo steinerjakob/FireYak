@@ -1,0 +1,47 @@
+{
+	"markerInfo": {
+		"title": {
+			"locationInfo": "Location Info",
+			"fireHydrant": "Fire Hydrant",
+			"waterTank": "Water Tank",
+			"suctionPoint": "Suction Point",
+			"fireWaterPond": "Fire Water Pond",
+			"fireStation": "Fire Station"
+		},
+		"tags": {
+			"emergencyType": "Emergency Type",
+			"hydrantType": "Hydrant Type",
+			"diameter": "Diameter",
+			"pressure": "Pressure",
+			"position": "Position",
+			"couplings": "Couplings",
+			"couplingType": "Coupling Type",
+			"couplingDiameters": "Coupling Diameters",
+			"waterSource": "Water Source",
+			"capacity": "Capacity",
+			"volume": "Volume",
+			"referenceNumber": "Reference Number",
+			"operator": "Operator",
+			"name": "Name",
+			"amenity": "Amenity",
+			"street": "Street",
+			"houseNumber": "House Number",
+			"city": "City",
+			"postcode": "Postcode",
+			"description": "Description",
+			"note": "Note",
+			"surveyDate": "Survey Date",
+			"access": "Access",
+			"location": "Location",
+			"coordinates": "Coordinates",
+			"osmId": "OSM ID"
+		},
+		"navigation": {
+			"title": "Navigate to location"
+		},
+		"messages": {
+			"noAdditionalInfo": "No additional information available",
+			"loading": "Loading marker information..."
+		}
+	}
+}
