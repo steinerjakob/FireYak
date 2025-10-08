@@ -150,7 +150,7 @@ const closeModal = () => {
 </script>
 
 <template>
-	<div class="marker-info-container">
+	<div>
 		<div class="header">
 			<h2 class="title">{{ getTitle() }}</h2>
 			<ion-button fill="clear" @click="openNavigation" title="Navigate to location">
@@ -202,6 +202,10 @@ const closeModal = () => {
 }
 
 .header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: var(--ion-background-color, #fff);
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
