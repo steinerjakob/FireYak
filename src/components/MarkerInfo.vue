@@ -1,17 +1,5 @@
 <script setup lang="ts">
-import {
-	IonButton,
-	IonCard,
-	IonCardContent,
-	IonCardHeader,
-	IonCardTitle,
-	IonIcon,
-	IonItem,
-	IonLabel,
-	IonList,
-	IonNote,
-	isPlatform
-} from '@ionic/vue';
+import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote, isPlatform } from '@ionic/vue';
 import { close, navigate } from 'ionicons/icons';
 import { onMounted, ref, watch } from 'vue';
 import { getMapNodeById } from '@/mapHandler/databaseHandler';
@@ -162,77 +150,100 @@ const closeModal = () => {
 </script>
 
 <template>
-	<ion-card>
-		<ion-card-header>
-			<div class="header-content">
-				<ion-card-title>{{ getTitle() }}</ion-card-title>
-				<ion-button fill="clear" @click="openNavigation" title="Navigate to location">
-					<ion-icon :icon="navigate" />
-				</ion-button>
-			</div>
-		</ion-card-header>
-		<ion-card-content>
-			<ion-list v-if="markerData">
-				<!-- Relevant Tags -->
-				<ion-item v-for="tag in getFilteredTags()" :key="tag.key">
-					<ion-label>
-						<h3>{{ tag.label }}</h3>
-						<p>{{ tag.value }}</p>
-					</ion-label>
-				</ion-item>
-				<!-- Coordinates -->
-				<ion-item v-if="getCoordinates()">
-					<ion-label>
-						<h3>Coordinates</h3>
-						<p>{{ getCoordinates() }}</p>
-					</ion-label>
-				</ion-item>
+	<div class="marker-info-container">
+		<div class="header">
+			<h2 class="title">{{ getTitle() }}</h2>
+			<ion-button fill="clear" @click="openNavigation" title="Navigate to location">
+				<ion-icon :icon="navigate" />
+			</ion-button>
+		</div>
 
-				<!-- OSM ID -->
-				<ion-item>
-					<ion-label>
-						<h3>OSM ID</h3>
-						<p>{{ markerData.id }} ({{ markerData.type }})</p>
-					</ion-label>
-				</ion-item>
+		<ion-list v-if="markerData" class="info-list">
+			<!-- Relevant Tags -->
+			<ion-item v-for="tag in getFilteredTags()" :key="tag.key" lines="none">
+				<ion-label>
+					<h3>{{ tag.label }}</h3>
+					<p>{{ tag.value }}</p>
+				</ion-label>
+			</ion-item>
 
-				<!-- No data message -->
-				<ion-item v-if="getFilteredTags().length === 0">
-					<ion-label>
-						<ion-note>No additional information available</ion-note>
-					</ion-label>
-				</ion-item>
-			</ion-list>
-			<ion-note v-else>Loading marker information...</ion-note>
-		</ion-card-content>
-	</ion-card>
+			<!-- Coordinates -->
+			<ion-item v-if="getCoordinates()" lines="none">
+				<ion-label>
+					<h3>Coordinates</h3>
+					<p>{{ getCoordinates() }}</p>
+				</ion-label>
+			</ion-item>
+
+			<!-- OSM ID -->
+			<ion-item lines="none">
+				<ion-label>
+					<h3>OSM ID</h3>
+					<p>{{ markerData.id }} ({{ markerData.type }})</p>
+				</ion-label>
+			</ion-item>
+
+			<!-- No data message -->
+			<ion-item v-if="getFilteredTags().length === 0" lines="none">
+				<ion-label>
+					<ion-note>No additional information available</ion-note>
+				</ion-label>
+			</ion-item>
+		</ion-list>
+		<ion-note v-else class="loading-note">Loading marker information...</ion-note>
+	</div>
 </template>
 
 <style scoped>
-.header-content {
+.marker-info-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 12px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--ion-color-light-shade);
 }
 
-ion-list {
+.title {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--ion-color-dark);
+}
+
+.info-list {
 	background: transparent;
+	padding-top: 4px;
 }
 
 ion-item {
 	--background: transparent;
+	--padding-start: 12px;
+	--padding-end: 12px;
+	--inner-padding-end: 0;
+	--min-height: 48px;
 }
 
 ion-label h3 {
 	font-weight: 600;
 	font-size: 0.875rem;
 	color: var(--ion-color-medium);
-	margin-bottom: 4px;
+	margin-bottom: 2px;
 }
 
 ion-label p {
 	font-size: 1rem;
 	color: var(--ion-color-dark);
+	margin-top: 0;
+}
+
+.loading-note {
+	padding: 12px;
+	display: block;
 }
 </style>
