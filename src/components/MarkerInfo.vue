@@ -75,8 +75,8 @@ const relevantTags = [
 
 // Translate value if translation exists
 const translateValue = (key: string, value: string): string => {
-	// Check if this is a fire_hydrant field
-	if (key.startsWith('fire_hydrant:')) {
+	// Check if this is a fire_hydrant field or water_source
+	if (key.startsWith('fire_hydrant:') || key === 'water_source') {
 		const translationKey = `markerInfo.values.${key}.${value}`;
 		// Check if translation exists
 		if (te(translationKey)) {
