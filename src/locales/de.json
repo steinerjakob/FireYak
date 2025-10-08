@@ -1,0 +1,47 @@
+{
+	"markerInfo": {
+		"title": {
+			"locationInfo": "Standortinformation",
+			"fireHydrant": "Hydrant",
+			"waterTank": "Wassertank",
+			"suctionPoint": "Saugstelle",
+			"fireWaterPond": "Löschwasserteich",
+			"fireStation": "Feuerwehrhaus"
+		},
+		"tags": {
+			"emergencyType": "Notfall-Typ",
+			"hydrantType": "Hydrantentyp",
+			"diameter": "Durchmesser",
+			"pressure": "Druck",
+			"position": "Position",
+			"couplings": "Kupplungen",
+			"couplingType": "Kupplungstyp",
+			"couplingDiameters": "Kupplungsdurchmesser",
+			"waterSource": "Wasserquelle",
+			"capacity": "Kapazität",
+			"volume": "Volumen",
+			"referenceNumber": "Referenznummer",
+			"operator": "Betreiber",
+			"name": "Name",
+			"amenity": "Einrichtung",
+			"street": "Straße",
+			"houseNumber": "Hausnummer",
+			"city": "Stadt",
+			"postcode": "Postleitzahl",
+			"description": "Beschreibung",
+			"note": "Hinweis",
+			"surveyDate": "Erhebungsdatum",
+			"access": "Zugang",
+			"location": "Standort",
+			"coordinates": "Koordinaten",
+			"osmId": "OSM ID"
+		},
+		"navigation": {
+			"title": "Zur Position navigieren"
+		},
+		"messages": {
+			"noAdditionalInfo": "Keine zusätzlichen Informationen verfügbar",
+			"loading": "Lade Marker-Informationen..."
+		}
+	}
+}

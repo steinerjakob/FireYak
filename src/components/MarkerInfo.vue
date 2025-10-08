@@ -2,6 +2,7 @@
 import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote, isPlatform } from '@ionic/vue';
 import { close, navigate } from 'ionicons/icons';
 import { onMounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { getMapNodeById } from '@/mapHandler/databaseHandler';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 
@@ -11,34 +12,35 @@ const emit = defineEmits<{
 
 const props = defineProps<{ markerId: number }>();
 
+const { t } = useI18n();
 const markerData = ref<OverPassElement | null>(null);
 
-// Map of tag keys to human-readable labels
-const tagLabels: Record<string, string> = {
-	emergency: 'Emergency Type',
-	'fire_hydrant:type': 'Hydrant Type',
-	'fire_hydrant:diameter': 'Diameter',
-	'fire_hydrant:pressure': 'Pressure',
-	'fire_hydrant:position': 'Position',
-	couplings: 'Couplings',
-	'couplings:type': 'Coupling Type',
-	'couplings:diameters': 'Coupling Diameters',
-	water_source: 'Water Source',
-	capacity: 'Capacity',
-	volume: 'Volume',
-	ref: 'Reference Number',
-	operator: 'Operator',
-	name: 'Name',
-	amenity: 'Amenity',
-	'addr:street': 'Street',
-	'addr:housenumber': 'House Number',
-	'addr:city': 'City',
-	'addr:postcode': 'Postcode',
-	description: 'Description',
-	note: 'Note',
-	'survey:date': 'Survey Date',
-	access: 'Access',
-	location: 'Location'
+// Map of tag keys to translation keys
+const tagTranslationKeys: Record<string, string> = {
+	emergency: 'markerInfo.tags.emergencyType',
+	'fire_hydrant:type': 'markerInfo.tags.hydrantType',
+	'fire_hydrant:diameter': 'markerInfo.tags.diameter',
+	'fire_hydrant:pressure': 'markerInfo.tags.pressure',
+	'fire_hydrant:position': 'markerInfo.tags.position',
+	couplings: 'markerInfo.tags.couplings',
+	'couplings:type': 'markerInfo.tags.couplingType',
+	'couplings:diameters': 'markerInfo.tags.couplingDiameters',
+	water_source: 'markerInfo.tags.waterSource',
+	capacity: 'markerInfo.tags.capacity',
+	volume: 'markerInfo.tags.volume',
+	ref: 'markerInfo.tags.referenceNumber',
+	operator: 'markerInfo.tags.operator',
+	name: 'markerInfo.tags.name',
+	amenity: 'markerInfo.tags.amenity',
+	'addr:street': 'markerInfo.tags.street',
+	'addr:housenumber': 'markerInfo.tags.houseNumber',
+	'addr:city': 'markerInfo.tags.city',
+	'addr:postcode': 'markerInfo.tags.postcode',
+	description: 'markerInfo.tags.description',
+	note: 'markerInfo.tags.note',
+	'survey:date': 'markerInfo.tags.surveyDate',
+	access: 'markerInfo.tags.access',
+	location: 'markerInfo.tags.location'
 };
 
 // Tags that are relevant for fire brigades
@@ -76,7 +78,7 @@ const getFilteredTags = () => {
 		.filter(([key]) => relevantTags.includes(key))
 		.map(([key, value]) => ({
 			key,
-			label: tagLabels[key] || key,
+			label: t(tagTranslationKeys[key] || key),
 			value
 		}))
 		.sort((a, b) => {
@@ -97,20 +99,20 @@ const getCoordinates = () => {
 };
 
 const getTitle = () => {
-	if (!markerData.value) return 'Location Info';
+	if (!markerData.value) return t('markerInfo.title.locationInfo');
 
 	const emergency = markerData.value.tags?.emergency;
 	const amenity = markerData.value.tags?.amenity;
 	const name = markerData.value.tags?.name;
 
 	if (name) return name;
-	if (emergency === 'fire_hydrant') return 'Fire Hydrant';
-	if (emergency === 'water_tank') return 'Water Tank';
-	if (emergency === 'suction_point') return 'Suction Point';
-	if (emergency === 'fire_water_pond') return 'Fire Water Pond';
-	if (amenity === 'fire_station') return 'Fire Station';
+	if (emergency === 'fire_hydrant') return t('markerInfo.title.fireHydrant');
+	if (emergency === 'water_tank') return t('markerInfo.title.waterTank');
+	if (emergency === 'suction_point') return t('markerInfo.title.suctionPoint');
+	if (emergency === 'fire_water_pond') return t('markerInfo.title.fireWaterPond');
+	if (amenity === 'fire_station') return t('markerInfo.title.fireStation');
 
-	return 'Location Info';
+	return t('markerInfo.title.locationInfo');
 };
 
 const openNavigation = () => {
@@ -150,10 +152,10 @@ const closeModal = () => {
 </script>
 
 <template>
-	<div>
+	<div class="marker-info-container">
 		<div class="header">
 			<h2 class="title">{{ getTitle() }}</h2>
-			<ion-button fill="clear" @click="openNavigation" title="Navigate to location">
+			<ion-button fill="clear" @click="openNavigation" :title="t('markerInfo.navigation.title')">
 				<ion-icon :icon="navigate" />
 			</ion-button>
 		</div>
@@ -170,7 +172,7 @@ const closeModal = () => {
 			<!-- Coordinates -->
 			<ion-item v-if="getCoordinates()" lines="none">
 				<ion-label>
-					<h3>Coordinates</h3>
+					<h3>{{ t('markerInfo.tags.coordinates') }}</h3>
 					<p>{{ getCoordinates() }}</p>
 				</ion-label>
 			</ion-item>
@@ -178,7 +180,7 @@ const closeModal = () => {
 			<!-- OSM ID -->
 			<ion-item lines="none">
 				<ion-label>
-					<h3>OSM ID</h3>
+					<h3>{{ t('markerInfo.tags.osmId') }}</h3>
 					<p>{{ markerData.id }} ({{ markerData.type }})</p>
 				</ion-label>
 			</ion-item>
@@ -186,17 +188,16 @@ const closeModal = () => {
 			<!-- No data message -->
 			<ion-item v-if="getFilteredTags().length === 0" lines="none">
 				<ion-label>
-					<ion-note>No additional information available</ion-note>
+					<ion-note>{{ t('markerInfo.messages.noAdditionalInfo') }}</ion-note>
 				</ion-label>
 			</ion-item>
 		</ion-list>
-		<ion-note v-else class="loading-note">Loading marker information...</ion-note>
+		<ion-note v-else class="loading-note">{{ t('markerInfo.messages.loading') }}</ion-note>
 	</div>
 </template>
 
 <style scoped>
 .marker-info-container {
-	display: flex;
 	flex-direction: column;
 	height: 100%;
 }
