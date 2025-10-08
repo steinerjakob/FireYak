@@ -11,7 +11,7 @@ const modal = ref();
 const showMarkerInfo = computed(() => !!route.params.markerId);
 const markerId = computed(() => Number(route.params.markerId));
 
-const isMobile = ref(false);
+const isMobile = ref(window.innerWidth < 768);
 
 watch(showMarkerInfo, () => {
 	isMobile.value = window.innerWidth < 768;
