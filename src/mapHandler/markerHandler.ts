@@ -70,7 +70,7 @@ export async function getMarkersForView(mapBounds: LatLngBounds) {
 			// todo add additional marker information
 			// icon and so on..
 			const markerIcon = getIconForNode(element);
-			markerList.push(L.marker(latLng, { icon: markerIcon }));
+			markerList.push(L.marker(latLng, { title: `${element.id}`, icon: markerIcon }));
 		}
 	} catch (e) {
 		// ignore error for now
