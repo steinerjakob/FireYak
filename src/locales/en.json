@@ -78,6 +78,11 @@
 		"navigation": {
 			"title": "Navigate to location"
 		},
+		"share": {
+			"title": "Share",
+			"text": "Check out this location: {title}",
+			"copiedToClipboard": "Link copied to clipboard!"
+		},
 		"messages": {
 			"noAdditionalInfo": "No additional information available",
 			"loading": "Loading marker information..."

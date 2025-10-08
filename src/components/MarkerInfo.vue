@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote, isPlatform } from '@ionic/vue';
-import { navigate } from 'ionicons/icons';
+import { navigate, shareSocial } from 'ionicons/icons';
 import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { OverPassElement } from '@/mapHandler/overPassApi';
@@ -150,6 +150,31 @@ const openNavigation = () => {
 	}
 };
 
+const shareMarker = async () => {
+	if (!markerData.value) return;
+
+	const markerId = markerData.value.id;
+	const url = `${window.location.origin}/markers/${markerId}`;
+	const title = getTitle();
+
+	try {
+		if (navigator.share) {
+			await navigator.share({
+				title: title,
+				text: t('markerInfo.share.text', { title }),
+				url: url
+			});
+		} else {
+			// Fallback: copy to clipboard
+			await navigator.clipboard.writeText(url);
+			alert(t('markerInfo.share.copiedToClipboard'));
+		}
+	} catch (error) {
+		// User cancelled share or error occurred
+		console.error('Error sharing:', error);
+	}
+};
+
 onMounted(async () => {
 	watch(
 		() => props.markerId,
@@ -171,9 +196,14 @@ const closeModal = () => {
 	<div class="marker-info-container">
 		<div class="header">
 			<h2 class="title">{{ getTitle() }}</h2>
-			<ion-button fill="clear" @click="openNavigation" :title="t('markerInfo.navigation.title')">
-				<ion-icon :icon="navigate" />
-			</ion-button>
+			<div class="header-buttons">
+				<ion-button fill="clear" @click="shareMarker" :title="t('markerInfo.share.title')">
+					<ion-icon :icon="shareSocial" />
+				</ion-button>
+				<ion-button fill="clear" @click="openNavigation" :title="t('markerInfo.navigation.title')">
+					<ion-icon :icon="navigate" />
+				</ion-button>
+			</div>
 		</div>
 
 		<ion-list v-if="markerData" class="info-list">
@@ -228,6 +258,11 @@ const closeModal = () => {
 	align-items: center;
 	padding: 8px 12px;
 	border-bottom: 1px solid var(--ion-color-light-shade);
+}
+
+.header-buttons {
+	display: flex;
+	gap: 4px;
 }
 
 .title {

@@ -78,6 +78,11 @@
 		"navigation": {
 			"title": "Zur Position navigieren"
 		},
+		"share": {
+			"title": "Teilen",
+			"text": "Schau dir diesen Standort an: {title}",
+			"copiedToClipboard": "Link in Zwischenablage kopiert!"
+		},
 		"messages": {
 			"noAdditionalInfo": "Keine zusätzlichen Informationen verfügbar",
 			"loading": "Lade Marker-Informationen..."
