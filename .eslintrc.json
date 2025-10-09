@@ -18,6 +18,7 @@
 	"plugins": ["@typescript-eslint", "vue", "sonarjs", "prettier"],
 	"rules": {
 		"prettier/prettier": "warn",
-		"@typescript-eslint/ban-ts-comment": ["error", { "ts-ignore": "allow-with-description" }]
+		"@typescript-eslint/ban-ts-comment": ["error", { "ts-ignore": "allow-with-description" }],
+		"vue/no-deprecated-slot-attribute": "off"
 	}
 }
