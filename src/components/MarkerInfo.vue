@@ -15,6 +15,8 @@ const props = defineProps<{ markerId: number }>();
 const { t, te } = useI18n();
 const markerData = ref<OverPassElement | null>(null);
 
+const waterTankVolume = 'markerInfo.tags.volume';
+
 // Map of tag keys to translation keys
 const tagTranslationKeys: Record<string, string> = {
 	emergency: 'markerInfo.tags.emergencyType',
@@ -22,13 +24,16 @@ const tagTranslationKeys: Record<string, string> = {
 	'fire_hydrant:diameter': 'markerInfo.tags.diameter',
 	'fire_hydrant:pressure': 'markerInfo.tags.pressure',
 	'fire_hydrant:flow_capacity': 'markerInfo.tags.flowCapacity',
+	flow_rate: 'markerInfo.tags.flowRate',
 	'fire_hydrant:position': 'markerInfo.tags.position',
 	couplings: 'markerInfo.tags.couplings',
 	'couplings:type': 'markerInfo.tags.couplingType',
 	'couplings:diameters': 'markerInfo.tags.couplingDiameters',
 	water_source: 'markerInfo.tags.waterSource',
 	capacity: 'markerInfo.tags.capacity',
-	volume: 'markerInfo.tags.volume',
+	volume: waterTankVolume,
+	'water_tank:volume': waterTankVolume,
+	water_volume: waterTankVolume,
 	ref: 'markerInfo.tags.referenceNumber',
 	operator: 'markerInfo.tags.operator',
 	name: 'markerInfo.tags.name',
@@ -52,12 +57,15 @@ const relevantTags = [
 	'fire_hydrant:pressure',
 	'fire_hydrant:flow_capacity',
 	'fire_hydrant:position',
+	'flow_rate',
 	'couplings',
 	'couplings:type',
 	'couplings:diameters',
 	'water_source',
 	'capacity',
 	'volume',
+	'water_tank:volume',
+	'water_volume',
 	'ref',
 	'operator',
 	'name',
@@ -83,6 +91,12 @@ const translateValue = (key: string, value: string): string => {
 			return t(translationKey);
 		}
 	}
+
+	// Add unit for flow rate
+	if (['capacity', 'volume', 'water_tank:volume', 'water_volume'].includes(key)) {
+		return `${value} l`;
+	}
+
 	// Return original value if no translation found
 	return value;
 };
@@ -245,12 +259,14 @@ const closeModal = () => {
 					<h3>{{ t('markerInfo.tags.osmId') }}</h3>
 					<p>{{ markerData.id }} ({{ markerData.type }})</p>
 				</ion-label>
-				<ion-button slot="end" fill="clear" @click="openOsmEditUrl">
-					<ion-icon :icon="createOutline" />
-				</ion-button>
-				<ion-button slot="end" fill="clear" @click="openOsmUrl">
-					<ion-icon :icon="openOutline" />
-				</ion-button>
+				<div slot="end">
+					<ion-button fill="clear" @click="openOsmEditUrl">
+						<ion-icon :icon="createOutline" />
+					</ion-button>
+					<ion-button fill="clear" @click="openOsmUrl">
+						<ion-icon :icon="openOutline" />
+					</ion-button>
+				</div>
 			</ion-item>
 
 			<!-- No data message -->
