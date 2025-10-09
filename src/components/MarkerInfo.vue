@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote, isPlatform } from '@ionic/vue';
-import { navigate, shareSocial, openOutline } from 'ionicons/icons';
+import { navigate, shareSocial, openOutline, createOutline } from 'ionicons/icons';
 import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { OverPassElement } from '@/mapHandler/overPassApi';
@@ -183,6 +183,14 @@ const openOsmUrl = () => {
 	);
 };
 
+const openOsmEditUrl = () => {
+	if (!markerData.value) return '';
+	window.open(
+		`https://www.openstreetmap.org/edit?${markerData.value.type}=${markerData.value.id}`,
+		'_blank'
+	);
+};
+
 onMounted(async () => {
 	watch(
 		() => props.markerId,
@@ -237,6 +245,9 @@ const closeModal = () => {
 					<h3>{{ t('markerInfo.tags.osmId') }}</h3>
 					<p>{{ markerData.id }} ({{ markerData.type }})</p>
 				</ion-label>
+				<ion-button slot="end" fill="clear" @click="openOsmEditUrl">
+					<ion-icon :icon="createOutline" />
+				</ion-button>
 				<ion-button slot="end" fill="clear" @click="openOsmUrl">
 					<ion-icon :icon="openOutline" />
 				</ion-button>
