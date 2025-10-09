@@ -35,7 +35,8 @@
 			"location": "Location",
 			"coordinates": "Coordinates",
 			"osmId": "OSM ID",
-			"flowCapacity": "Flow Capacity"
+			"flowCapacity": "Flow Capacity",
+			"flowRate": "Flow Rate"
 		},
 		"values": {
 			"fire_hydrant:type": {
