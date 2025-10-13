@@ -64,18 +64,6 @@ function onMapMarkerClick(event: LeafletMouseEvent) {
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
 
 let isFirstWatch = true;
-
-// Watch route params and update store
-watch(
-	() => route.params.markerId,
-	async (markerId) => {
-		const markerIdNumber = markerId ? Number(markerId) : null;
-		await markerStore.selectMarker(markerIdNumber);
-		isFirstWatch = false;
-	},
-	{ immediate: true }
-);
-
 // Watch store's selectedMarker and update map display
 watch(
 	() => markerStore.selectedMarker,
@@ -106,11 +94,13 @@ watch(
 			}
 		} catch (e) {
 			console.error(e);
+		} finally {
+			isFirstWatch = false;
 		}
 	}
 );
 
-onMounted(async () => {
+async function initMap() {
 	await nextTick();
 	rootMap = L.map(MAP_ELEMENT_ID);
 
@@ -149,5 +139,19 @@ onMounted(async () => {
 	rootMap.on('dragend', debouncedMapMove);
 
 	fireMapCluster.addTo(rootMap);
+}
+
+onMounted(async () => {
+	await initMap();
+
+	// Watch route params and update store
+	watch(
+		() => route.params.markerId,
+		async (markerId) => {
+			const markerIdNumber = markerId ? Number(markerId) : null;
+			await markerStore.selectMarker(markerIdNumber);
+		},
+		{ immediate: true }
+	);
 });
 </script>
