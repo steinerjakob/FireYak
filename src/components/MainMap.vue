@@ -14,8 +14,9 @@ import 'leaflet.locatecontrol';
 import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
 import { nextTick, onMounted, watch } from 'vue';
 import { debounce } from '@/helper/helper';
-import { getMarkerById, getMarkersForView } from '@/mapHandler/markerHandler';
+import { getMarkersForView } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
+import { useMapMarkerStore } from '@/store/app';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -23,6 +24,8 @@ const DISABLE_CLUSTERING_ZOOM = 17;
 
 const router = useRouter();
 const route = useRoute();
+const markerStore = useMapMarkerStore();
+
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
 	disableClusteringAtZoom: DISABLE_CLUSTERING_ZOOM
@@ -54,36 +57,58 @@ const markerIcon = L.icon({
 
 const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
 
-async function showSelectMarkerForNode(markerId: string | undefined, shouldZoom = false) {
-	if (!markerId) {
-		rootMap?.removeLayer(selectedMarker);
-		return;
-	}
-	try {
-		const nodeInfo = await getMarkerById(Number(markerId));
-		const latLng = L.latLng(
-			nodeInfo?.lat || nodeInfo?.center?.lat || 0,
-			nodeInfo?.lon || nodeInfo?.center?.lon || 0
-		);
-		selectedMarker.setLatLng(latLng);
-		if (!rootMap?.hasLayer(selectedMarker)) {
-			rootMap?.addLayer(selectedMarker);
-		}
-		if (shouldZoom) {
-			rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
-		} else {
-			rootMap?.panTo(latLng);
-		}
-	} catch (e) {
-		console.error(e);
-	}
-}
-
 function onMapMarkerClick(event: LeafletMouseEvent) {
 	router.push(`/markers/${event.target.options.title}`);
 }
 
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
+
+let isFirstWatch = true;
+
+// Watch route params and update store
+watch(
+	() => route.params.markerId,
+	async (markerId) => {
+		const markerIdNumber = markerId ? Number(markerId) : null;
+		await markerStore.selectMarker(markerIdNumber);
+		isFirstWatch = false;
+	},
+	{ immediate: true }
+);
+
+// Watch store's selectedMarker and update map display
+watch(
+	() => markerStore.selectedMarker,
+	(marker) => {
+		if (!marker) {
+			// Remove marker from map if no selection
+			if (rootMap?.hasLayer(selectedMarker)) {
+				rootMap?.removeLayer(selectedMarker);
+			}
+			return;
+		}
+
+		try {
+			const latLng = L.latLng(
+				marker.lat || marker.center?.lat || 0,
+				marker.lon || marker.center?.lon || 0
+			);
+			selectedMarker.setLatLng(latLng);
+
+			if (!rootMap?.hasLayer(selectedMarker)) {
+				rootMap?.addLayer(selectedMarker);
+			}
+
+			if (isFirstWatch) {
+				rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
+			} else {
+				rootMap?.panTo(latLng);
+			}
+		} catch (e) {
+			console.error(e);
+		}
+	}
+);
 
 onMounted(async () => {
 	await nextTick();
@@ -92,20 +117,6 @@ onMounted(async () => {
 	rootMap.on('click', () => {
 		router.push('/');
 	});
-	let isFirstWatch = true;
-	watch(
-		() => route.path,
-		(path) => {
-			if (path === '/' && rootMap?.hasLayer(selectedMarker)) {
-				rootMap?.removeLayer(selectedMarker);
-			}
-			const markerId = (route.params.markerId as string) || undefined;
-
-			showSelectMarkerForNode(markerId, isFirstWatch);
-			isFirstWatch = false;
-		},
-		{ immediate: true }
-	);
 
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 		maxZoom: 19,
