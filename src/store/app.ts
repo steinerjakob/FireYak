@@ -29,12 +29,12 @@ export const useMapMarkerStore = defineStore('marker', () => {
 	async function fetchMarkerById(markerId: number): Promise<OverPassElement | null> {
 		// Return cached data if available
 		if (markers.value.has(markerId)) {
-			return markers.value.get(markerId)!;
+			return markers.value.get(markerId) || null;
 		}
 
 		// Return in-flight promise if already fetching
 		if (fetchPromises.value.has(markerId)) {
-			return fetchPromises.value.get(markerId)!;
+			return fetchPromises.value.get(markerId) || null;
 		}
 
 		// Mark as loading
