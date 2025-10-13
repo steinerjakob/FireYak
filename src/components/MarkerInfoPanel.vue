@@ -37,12 +37,12 @@ const closeModal = () => {
 			class="marker-info"
 		>
 			<ion-content>
-				<MarkerInfo :markerId="markerId" @close="closeModal"></MarkerInfo>
+				<MarkerInfo @close="closeModal"></MarkerInfo>
 			</ion-content>
 		</ion-modal>
 	</template>
 	<ion-card v-else-if="showMarkerInfo" class="desktop-card">
-		<MarkerInfo :markerId="markerId" @close="closeModal"></MarkerInfo>
+		<MarkerInfo @close="closeModal"></MarkerInfo>
 	</ion-card>
 </template>
 
