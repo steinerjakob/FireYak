@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote, isPlatform } from '@ionic/vue';
 import { navigate, shareSocial, openOutline, createOutline } from 'ionicons/icons';
-import { onMounted, ref, watch } from 'vue';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { OverPassElement } from '@/mapHandler/overPassApi';
-import { getMarkerById } from '@/mapHandler/markerHandler';
+import { useMapMarkerStore } from '@/store/app';
+
+const markerStore = useMapMarkerStore();
 
 const emit = defineEmits<{
 	(e: 'close'): void;
@@ -13,7 +14,7 @@ const emit = defineEmits<{
 const props = defineProps<{ markerId: number }>();
 
 const { t, te } = useI18n();
-const markerData = ref<OverPassElement | null>(null);
+const markerData = computed(() => markerStore.selectedMarker);
 
 const waterTankVolume = 'markerInfo.tags.volume';
 
@@ -204,18 +205,6 @@ const openOsmEditUrl = () => {
 		'_blank'
 	);
 };
-
-onMounted(async () => {
-	watch(
-		() => props.markerId,
-		async (newId) => {
-			if (newId) {
-				markerData.value = await getMarkerById(props.markerId);
-			}
-		},
-		{ immediate: true }
-	);
-});
 
 const closeModal = () => {
 	emit('close');
