@@ -1,87 +1,101 @@
 // Utilities
 import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { fetchNodeById } from '@/mapHandler/overPassApi';
 import { getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
 
-interface MarkerState {
-	markers: Map<number, OverPassElement>;
-	loadingMarkers: Set<number>;
-	fetchPromises: Map<number, Promise<OverPassElement | null>>;
-}
+export const useMapMarkerStore = defineStore('marker', () => {
+	// State
+	const markers = ref<Map<number, OverPassElement>>(new Map());
+	const loadingMarkers = ref<Set<number>>(new Set());
+	const fetchPromises = ref<Map<number, Promise<OverPassElement | null>>>(new Map());
+	const selectedMarker = ref<OverPassElement | null>(null);
 
-export const useMapMarkerStore = defineStore('marker', {
-	state: (): MarkerState => ({
-		markers: new Map(),
-		loadingMarkers: new Set(),
-		fetchPromises: new Map()
-	}),
+	// Getters
+	const getMarkerById = computed(() => {
+		return (markerId: number) => {
+			return markers.value.get(markerId) || null;
+		};
+	});
 
-	getters: {
-		getMarkerById: (state) => (markerId: number) => {
-			return state.markers.get(markerId) || null;
-		},
+	const isMarkerLoading = computed(() => {
+		return (markerId: number) => {
+			return loadingMarkers.value.has(markerId);
+		};
+	});
 
-		isMarkerLoading: (state) => (markerId: number) => {
-			return state.loadingMarkers.has(markerId);
+	// Actions
+	async function fetchMarkerById(markerId: number): Promise<OverPassElement | null> {
+		// Return cached data if available
+		if (markers.value.has(markerId)) {
+			return markers.value.get(markerId)!;
 		}
-	},
 
-	actions: {
-		async fetchMarkerById(markerId: number): Promise<OverPassElement | null> {
-			// Return cached data if available
-			if (this.markers.has(markerId)) {
-				return this.markers.get(markerId)!;
-			}
+		// Return in-flight promise if already fetching
+		if (fetchPromises.value.has(markerId)) {
+			return fetchPromises.value.get(markerId)!;
+		}
 
-			// Return in-flight promise if already fetching
-			if (this.fetchPromises.has(markerId)) {
-				return this.fetchPromises.get(markerId)!;
-			}
+		// Mark as loading
+		loadingMarkers.value.add(markerId);
 
-			// Mark as loading
-			this.loadingMarkers.add(markerId);
+		// Create fetch promise
+		const fetchPromise = (async () => {
+			try {
+				// Try database first
+				let node = await getMapNodeById(markerId);
 
-			// Create fetch promise
-			const fetchPromise = (async () => {
-				try {
-					// Try database first
-					let node = await getMapNodeById(markerId);
-
-					// If not in database, fetch from API
-					if (!node) {
-						node = await fetchNodeById(markerId);
-						// Store in database for future use
-						if (node) {
-							await storeMapNodes([node]);
-						}
-					}
-
-					// Store in state if found
+				// If not in database, fetch from API
+				if (!node) {
+					node = await fetchNodeById(markerId);
+					// Store in database for future use
 					if (node) {
-						this.markers.set(markerId, node);
+						await storeMapNodes([node]);
 					}
-
-					return node;
-				} finally {
-					// Cleanup
-					this.loadingMarkers.delete(markerId);
-					this.fetchPromises.delete(markerId);
 				}
-			})();
 
-			// Cache the promise
-			this.fetchPromises.set(markerId, fetchPromise);
+				// Store in state if found
+				if (node) {
+					markers.value.set(markerId, node);
+				}
 
-			return fetchPromise;
-		},
+				return node;
+			} finally {
+				// Cleanup
+				loadingMarkers.value.delete(markerId);
+				fetchPromises.value.delete(markerId);
+			}
+		})();
 
-		clearMarkerCache() {
-			this.markers.clear();
-		},
+		// Cache the promise
+		fetchPromises.value.set(markerId, fetchPromise);
 
-		removeMarker(markerId: number) {
-			this.markers.delete(markerId);
+		return fetchPromise;
+	}
+
+	async function selectMarker(markerId: number | null) {
+		if (markerId) {
+			const marker = await fetchMarkerById(markerId);
+			if (marker) {
+				selectedMarker.value = marker;
+			}
+		} else {
+			selectedMarker.value = null;
 		}
 	}
+
+	return {
+		// State
+		markers,
+		loadingMarkers,
+		fetchPromises,
+		selectedMarker,
+		// Getters
+		getMarkerById,
+		isMarkerLoading,
+		// Actions
+		fetchMarkerById,
+		selectMarker
+	};
 });
