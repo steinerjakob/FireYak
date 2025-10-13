@@ -28,7 +28,7 @@ const closeModal = () => {
 			ref="modal"
 			:is-open="showMarkerInfo"
 			:breakpoints="[0.25, 0.5, 0.75]"
-			:initial-breakpoint="0.5"
+			:initial-breakpoint="0.25"
 			:backdrop-dismiss="false"
 			:backdrop-opacity="0"
 			:showBackdrop="false"
