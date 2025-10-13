@@ -11,8 +11,6 @@ const emit = defineEmits<{
 	(e: 'close'): void;
 }>();
 
-const props = defineProps<{ markerId: number }>();
-
 const { t, te } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
 
