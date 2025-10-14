@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { computed, ref, watch } from 'vue';
 import { IonContent, IonCard, IonModal } from '@ionic/vue';
 import MarkerInfo from '@/components/MarkerInfo.vue';
+import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -36,12 +37,14 @@ const closeModal = () => {
 			handle-behavior="cycle"
 			class="marker-info"
 		>
+			<MarkerInfoHeader></MarkerInfoHeader>
 			<ion-content>
 				<MarkerInfo @close="closeModal"></MarkerInfo>
 			</ion-content>
 		</ion-modal>
 	</template>
 	<ion-card v-else-if="showMarkerInfo" class="desktop-card">
+		<MarkerInfoHeader></MarkerInfoHeader>
 		<MarkerInfo @close="closeModal"></MarkerInfo>
 	</ion-card>
 </template>
