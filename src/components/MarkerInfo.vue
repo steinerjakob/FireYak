@@ -167,7 +167,7 @@ const shareMarker = async () => {
 	if (!markerData.value) return;
 
 	const markerId = markerData.value.id;
-	const url = `${window.location.origin}/markers/${markerId}`;
+	const url = `${window.location.origin}/#/markers/${markerId}`;
 	const title = getTitle();
 
 	try {
