@@ -1,5 +1,17 @@
 <script setup lang="ts">
-import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote, isPlatform } from '@ionic/vue';
+import {
+	IonButton,
+	IonIcon,
+	IonItem,
+	IonLabel,
+	IonList,
+	IonNote,
+	IonHeader,
+	IonToolbar,
+	IonTitle,
+	IonButtons,
+	isPlatform
+} from '@ionic/vue';
 import { navigate, shareSocial, openOutline, createOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -211,17 +223,19 @@ const closeModal = () => {
 
 <template>
 	<div class="marker-info-container">
-		<div class="header">
-			<h2 class="title">{{ getTitle() }}</h2>
-			<div class="header-buttons">
-				<ion-button fill="clear" @click="shareMarker" :title="t('markerInfo.share.title')">
-					<ion-icon :icon="shareSocial" />
-				</ion-button>
-				<ion-button fill="clear" @click="openNavigation" :title="t('markerInfo.navigation.title')">
-					<ion-icon :icon="navigate" />
-				</ion-button>
-			</div>
-		</div>
+		<ion-header>
+			<ion-toolbar>
+				<ion-title>{{ getTitle() }}</ion-title>
+				<ion-buttons slot="end">
+					<ion-button @click="shareMarker" :title="t('markerInfo.share.title')">
+						<ion-icon :icon="shareSocial" />
+					</ion-button>
+					<ion-button @click="openNavigation" :title="t('markerInfo.navigation.title')">
+						<ion-icon :icon="navigate" />
+					</ion-button>
+				</ion-buttons>
+			</ion-toolbar>
+		</ion-header>
 
 		<ion-list v-if="markerData" class="info-list">
 			<!-- Relevant Tags -->
@@ -271,30 +285,6 @@ const closeModal = () => {
 .marker-info-container {
 	flex-direction: column;
 	height: 100%;
-}
-
-.header {
-	position: sticky;
-	top: 0;
-	z-index: 10;
-	background: var(--ion-background-color, #fff);
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 8px 12px;
-	border-bottom: 1px solid var(--ion-color-light-shade);
-}
-
-.header-buttons {
-	display: flex;
-	gap: 4px;
-}
-
-.title {
-	margin: 0;
-	font-size: 1.25rem;
-	font-weight: 600;
-	color: var(--ion-color-dark);
 }
 
 .info-list {
