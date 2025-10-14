@@ -1,27 +1,11 @@
 <script setup lang="ts">
-import {
-	IonButton,
-	IonIcon,
-	IonItem,
-	IonLabel,
-	IonList,
-	IonNote,
-	IonHeader,
-	IonToolbar,
-	IonTitle,
-	IonButtons,
-	isPlatform
-} from '@ionic/vue';
-import { navigate, shareSocial, openOutline, createOutline } from 'ionicons/icons';
+import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote } from '@ionic/vue';
+import { openOutline, createOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/app';
 
 const markerStore = useMapMarkerStore();
-
-const emit = defineEmits<{
-	(e: 'close'): void;
-}>();
 
 const { t, te } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
@@ -139,67 +123,6 @@ const getCoordinates = () => {
 	return null;
 };
 
-const getTitle = () => {
-	if (!markerData.value) return t('markerInfo.title.locationInfo');
-
-	const emergency = markerData.value.tags?.emergency;
-	const amenity = markerData.value.tags?.amenity;
-	const name = markerData.value.tags?.name;
-
-	if (name) return name;
-	if (emergency === 'fire_hydrant') return t('markerInfo.title.fireHydrant');
-	if (emergency === 'water_tank') return t('markerInfo.title.waterTank');
-	if (emergency === 'suction_point') return t('markerInfo.title.suctionPoint');
-	if (emergency === 'fire_water_pond') return t('markerInfo.title.fireWaterPond');
-	if (amenity === 'fire_station') return t('markerInfo.title.fireStation');
-
-	return t('markerInfo.title.locationInfo');
-};
-
-const openNavigation = () => {
-	if (!markerData.value) return;
-
-	const lat = markerData.value.lat || markerData.value.center?.lat;
-	const lon = markerData.value.lon || markerData.value.center?.lon;
-
-	if (lat && lon) {
-		if (isPlatform('mobile')) {
-			// Create a universal geo URL that works on both iOS and Android
-			// iOS will open Apple Maps, Android will show options including Google Maps
-			const geoUrl = `geo:${lat},${lon}?q=${lat},${lon}`;
-			window.open(geoUrl, '_system');
-		} else {
-			const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
-			window.open(googleMapsUrl, '_system');
-		}
-	}
-};
-
-const shareMarker = async () => {
-	if (!markerData.value) return;
-
-	const markerId = markerData.value.id;
-	const url = `${window.location.origin}/#/markers/${markerId}`;
-	const title = getTitle();
-
-	try {
-		if (navigator.share) {
-			await navigator.share({
-				title: title,
-				text: t('markerInfo.share.text', { title }),
-				url: url
-			});
-		} else {
-			// Fallback: copy to clipboard
-			await navigator.clipboard.writeText(url);
-			alert(t('markerInfo.share.copiedToClipboard'));
-		}
-	} catch (error) {
-		// User cancelled share or error occurred
-		console.error('Error sharing:', error);
-	}
-};
-
 const openOsmUrl = () => {
 	if (!markerData.value) return '';
 	window.open(
@@ -215,78 +138,53 @@ const openOsmEditUrl = () => {
 		'_blank'
 	);
 };
-
-const closeModal = () => {
-	emit('close');
-};
 </script>
 
 <template>
-	<div class="marker-info-container">
-		<ion-header>
-			<ion-toolbar>
-				<ion-title>{{ getTitle() }}</ion-title>
-				<ion-buttons slot="end">
-					<ion-button @click="shareMarker" :title="t('markerInfo.share.title')">
-						<ion-icon :icon="shareSocial" />
-					</ion-button>
-					<ion-button @click="openNavigation" :title="t('markerInfo.navigation.title')">
-						<ion-icon :icon="navigate" />
-					</ion-button>
-				</ion-buttons>
-			</ion-toolbar>
-		</ion-header>
+	<ion-list v-if="markerData" class="info-list">
+		<!-- Relevant Tags -->
+		<ion-item v-for="tag in getFilteredTags()" :key="tag.key" lines="none">
+			<ion-label>
+				<h3>{{ tag.label }}</h3>
+				<p>{{ tag.value }}</p>
+			</ion-label>
+		</ion-item>
 
-		<ion-list v-if="markerData" class="info-list">
-			<!-- Relevant Tags -->
-			<ion-item v-for="tag in getFilteredTags()" :key="tag.key" lines="none">
-				<ion-label>
-					<h3>{{ tag.label }}</h3>
-					<p>{{ tag.value }}</p>
-				</ion-label>
-			</ion-item>
+		<!-- Coordinates -->
+		<ion-item v-if="getCoordinates()" lines="none">
+			<ion-label>
+				<h3>{{ t('markerInfo.tags.coordinates') }}</h3>
+				<p>{{ getCoordinates() }}</p>
+			</ion-label>
+		</ion-item>
 
-			<!-- Coordinates -->
-			<ion-item v-if="getCoordinates()" lines="none">
-				<ion-label>
-					<h3>{{ t('markerInfo.tags.coordinates') }}</h3>
-					<p>{{ getCoordinates() }}</p>
-				</ion-label>
-			</ion-item>
+		<!-- OSM ID -->
+		<ion-item lines="none">
+			<ion-label>
+				<h3>{{ t('markerInfo.tags.osmId') }}</h3>
+				<p>{{ markerData.id }} ({{ markerData.type }})</p>
+			</ion-label>
+			<div slot="end">
+				<ion-button fill="clear" @click="openOsmEditUrl">
+					<ion-icon :icon="createOutline" />
+				</ion-button>
+				<ion-button fill="clear" @click="openOsmUrl">
+					<ion-icon :icon="openOutline" />
+				</ion-button>
+			</div>
+		</ion-item>
 
-			<!-- OSM ID -->
-			<ion-item lines="none">
-				<ion-label>
-					<h3>{{ t('markerInfo.tags.osmId') }}</h3>
-					<p>{{ markerData.id }} ({{ markerData.type }})</p>
-				</ion-label>
-				<div slot="end">
-					<ion-button fill="clear" @click="openOsmEditUrl">
-						<ion-icon :icon="createOutline" />
-					</ion-button>
-					<ion-button fill="clear" @click="openOsmUrl">
-						<ion-icon :icon="openOutline" />
-					</ion-button>
-				</div>
-			</ion-item>
-
-			<!-- No data message -->
-			<ion-item v-if="getFilteredTags().length === 0" lines="none">
-				<ion-label>
-					<ion-note>{{ t('markerInfo.messages.noAdditionalInfo') }}</ion-note>
-				</ion-label>
-			</ion-item>
-		</ion-list>
-		<ion-note v-else class="loading-note">{{ t('markerInfo.messages.loading') }}</ion-note>
-	</div>
+		<!-- No data message -->
+		<ion-item v-if="getFilteredTags().length === 0" lines="none">
+			<ion-label>
+				<ion-note>{{ t('markerInfo.messages.noAdditionalInfo') }}</ion-note>
+			</ion-label>
+		</ion-item>
+	</ion-list>
+	<ion-note v-else class="loading-note">{{ t('markerInfo.messages.loading') }}</ion-note>
 </template>
 
 <style scoped>
-.marker-info-container {
-	flex-direction: column;
-	height: 100%;
-}
-
 .info-list {
 	background: transparent;
 	padding-top: 4px;
