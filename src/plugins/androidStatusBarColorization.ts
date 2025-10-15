@@ -13,6 +13,7 @@ function getThemeStatusBarColor(isDark: boolean) {
 async function setAndroidStatusBarColor(isDark: boolean) {
 	const color = getThemeStatusBarColor(isDark);
 	try {
+		await EdgeToEdge.enable();
 		await EdgeToEdge.setBackgroundColor({ color });
 		await StatusBar.setOverlaysWebView({ overlay: true });
 	} catch (e) {
