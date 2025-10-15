@@ -12,6 +12,7 @@ import { navigate, shareSocial } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/app';
+import { Share } from '@capacitor/share';
 
 const markerStore = useMapMarkerStore();
 
@@ -62,8 +63,8 @@ const shareMarker = async () => {
 	const title = getTitle();
 
 	try {
-		if (navigator.share) {
-			await navigator.share({
+		if (await Share.canShare()) {
+			await Share.share({
 				title: title,
 				text: t('markerInfo.share.text', { title }),
 				url: url
