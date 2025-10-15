@@ -102,7 +102,7 @@ watch(
 
 async function initMap() {
 	await nextTick();
-	rootMap = L.map(MAP_ELEMENT_ID);
+	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
 
 	rootMap.on('click', () => {
 		router.push('/');
