@@ -18,11 +18,14 @@ import '@ionic/vue/css/text-transformation.css';
 import '@ionic/vue/css/flex-utils.css';
 import '@ionic/vue/css/display.css';
 
+import '@ionic/vue/css/palettes/dark.system.css';
+
 // Components
 import App from './App.vue';
 
 // Composables
 import { createApp } from 'vue';
+import { enableEdge2Edge } from '@/plugins/edge2Edge';
 
 const app = createApp(App);
 
@@ -30,4 +33,5 @@ registerPlugins(app);
 
 router.isReady().then(() => {
 	app.mount('#app');
+	enableEdge2Edge();
 });
