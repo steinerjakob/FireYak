@@ -14,8 +14,6 @@ const pwaOptions: Partial<VitePWAOptions> = {
 	manifest: {
 		name: 'FireYak',
 		short_name: 'FireYak',
-		theme_color: '#f32121',
-		background_color: '#45B1FD',
 		display: 'standalone',
 		icons: [
 			{
