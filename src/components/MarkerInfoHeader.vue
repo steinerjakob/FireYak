@@ -59,7 +59,7 @@ const shareMarker = async () => {
 	if (!markerData.value) return;
 
 	const markerId = markerData.value.id;
-	const url = `${window.location.origin}/#/markers/${markerId}`;
+	const url = `https://app.fireyak.org/#/markers/${markerId}`;
 	const title = getTitle();
 
 	try {
