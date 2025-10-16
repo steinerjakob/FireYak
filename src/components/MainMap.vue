@@ -1,5 +1,7 @@
 <template>
-	<div id="map" style="width: 100%; height: 100%"></div>
+	<div :class="{ darkMap: isDarkMode }" style="height: 100%; width: 100%">
+		<div id="map" style="height: 100%; width: 100%"></div>
+	</div>
 </template>
 <script lang="ts" setup>
 import 'leaflet/dist/leaflet.css';
@@ -17,6 +19,7 @@ import { debounce } from '@/helper/helper';
 import { getMarkersForView } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/app';
+import { useDarkMode } from '@/composable/darkModeDetection';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -25,6 +28,7 @@ const DISABLE_CLUSTERING_ZOOM = 17;
 const router = useRouter();
 const route = useRoute();
 const markerStore = useMapMarkerStore();
+const { isDarkMode } = useDarkMode();
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
@@ -102,7 +106,7 @@ watch(
 
 async function initMap() {
 	await nextTick();
-	rootMap = L.map(MAP_ELEMENT_ID);
+	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
 
 	rootMap.on('click', () => {
 		router.push('/');
@@ -155,3 +159,15 @@ onMounted(async () => {
 	);
 });
 </script>
+<style>
+.darkMap {
+	background: #000;
+
+	.leaflet-layer,
+	.leaflet-control-zoom-in,
+	.leaflet-control-zoom-out,
+	.leaflet-control-attribution {
+		filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+	}
+}
+</style>
