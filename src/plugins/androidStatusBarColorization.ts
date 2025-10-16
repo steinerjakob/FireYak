@@ -13,7 +13,6 @@ function getThemeStatusBarColor(isDark: boolean) {
 async function setAndroidStatusBarColor(isDark: boolean) {
 	const color = getThemeStatusBarColor(isDark);
 	try {
-		await EdgeToEdge.disable();
 		await EdgeToEdge.setBackgroundColor({ color });
 		await StatusBar.setOverlaysWebView({ overlay: true });
 	} catch (e) {
@@ -34,3 +33,9 @@ mediaQuery.addEventListener('change', updateStatusBarColor);
 
 // Initial call on app load
 updateStatusBarColor();
+
+try {
+	await EdgeToEdge.disable();
+} catch (e) {
+	console.error('Failed to disable Android Edge to Edge support: ', e);
+}
