@@ -1,5 +1,5 @@
 <template>
-	<div id="map" :class="{ darkMap: darkMode.isDarkMode }"></div>
+	<div id="map" :class="{ darkMap: isDarkMode }" style="height: 100%; width: 100%"></div>
 </template>
 <script lang="ts" setup>
 import 'leaflet/dist/leaflet.css';
@@ -26,7 +26,7 @@ const DISABLE_CLUSTERING_ZOOM = 17;
 const router = useRouter();
 const route = useRoute();
 const markerStore = useMapMarkerStore();
-const darkMode = useDarkMode();
+const { isDarkMode } = useDarkMode();
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
@@ -158,13 +158,8 @@ onMounted(async () => {
 });
 </script>
 <style>
-#map {
-	height: 100vh;
-}
 .darkMap {
-	#map {
-		background: #000;
-	}
+	background: #000;
 
 	.leaflet-layer,
 	.leaflet-control-zoom-in,
