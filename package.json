@@ -6,7 +6,8 @@
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
-		"lint": "eslint . --fix --ignore-path .gitignore"
+		"lint": "eslint . --fix --ignore-path .gitignore",
+		"generate:assets": "npx @capacitor/assets generate --iconBackgroundColor '#45b1fd' --iconBackgroundColorDark '#45b1fd' --splashBackgroundColor '#45b1fd' --splashBackgroundColorDark '#45b1fd'"
 	},
 	"lint-staged": {
 		"**/*.{js,jsx,ts,vue,tsx,html,css,scss,json}": [
@@ -40,6 +41,7 @@
 	},
 	"devDependencies": {
 		"@babel/types": "^7.21.4",
+		"@capacitor/assets": "^3.0.5",
 		"@capacitor/cli": "^7.4.3",
 		"@commitlint/cli": "^18.4.3",
 		"@commitlint/config-conventional": "^18.4.3",
