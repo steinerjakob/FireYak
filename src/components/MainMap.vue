@@ -1,5 +1,7 @@
 <template>
-	<div id="map" :class="{ darkMap: isDarkMode }" style="height: 100%; width: 100%"></div>
+	<div :class="{ darkMap: isDarkMode }" style="height: 100%; width: 100%">
+		<div id="map" style="height: 100%; width: 100%"></div>
+	</div>
 </template>
 <script lang="ts" setup>
 import 'leaflet/dist/leaflet.css';
