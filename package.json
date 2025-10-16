@@ -6,7 +6,8 @@
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
-		"lint": "eslint . --fix --ignore-path .gitignore"
+		"lint": "eslint . --fix --ignore-path .gitignore",
+		"generate:assets": "npx @capacitor/assets generate --iconBackgroundColor '#45b1fd' --iconBackgroundColorDark '#45b1fd' --splashBackgroundColor '#45b1fd' --splashBackgroundColorDark '#45b1fd'"
 	},
 	"lint-staged": {
 		"**/*.{js,jsx,ts,vue,tsx,html,css,scss,json}": [
@@ -18,6 +19,11 @@
 		]
 	},
 	"dependencies": {
+		"@capacitor/android": "^7.4.3",
+		"@capacitor/core": "^7.4.3",
+		"@capacitor/share": "^7.0.2",
+		"@capacitor/status-bar": "^7.0.3",
+		"@capawesome/capacitor-android-edge-to-edge-support": "^7.2.3",
 		"@ionic/vue": "^8.7.5",
 		"@ionic/vue-router": "^8.7.5",
 		"@mdi/font": "7.0.96",
@@ -35,6 +41,8 @@
 	},
 	"devDependencies": {
 		"@babel/types": "^7.21.4",
+		"@capacitor/assets": "^3.0.5",
+		"@capacitor/cli": "^7.4.3",
 		"@commitlint/cli": "^18.4.3",
 		"@commitlint/config-conventional": "^18.4.3",
 		"@types/leaflet": "^1.9.8",
