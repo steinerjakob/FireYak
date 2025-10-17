@@ -3,7 +3,7 @@
 		<div id="map" style="height: 100%; width: 100%"></div>
 		<!-- About FAB Button -->
 		<ion-fab vertical="top" horizontal="start" slot="fixed">
-			<ion-fab-button size="small" @click="router.push('/about')" :title="$t('about.openInfo')">
+			<ion-fab-button color="light" size="small" @click="router.push('/about')" :title="$t('about.openInfo')">
 				<ion-icon :icon="informationCircle"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
