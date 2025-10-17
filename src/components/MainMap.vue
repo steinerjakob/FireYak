@@ -2,8 +2,13 @@
 	<div :class="{ darkMap: isDarkMode }" style="height: 100%; width: 100%">
 		<div id="map" style="height: 100%; width: 100%"></div>
 		<!-- About FAB Button -->
-		<ion-fab vertical="top" horizontal="start" slot="fixed">
-			<ion-fab-button color="light" size="small" @click="router.push('/about')" :title="$t('about.openInfo')">
+		<ion-fab vertical="top" horizontal="start" slot="fixed" class="safe-fab">
+			<ion-fab-button
+				color="light"
+				size="small"
+				@click="router.push('/about')"
+				:title="$t('about.openInfo')"
+			>
 				<ion-icon :icon="informationCircle"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
@@ -168,6 +173,16 @@ onMounted(async () => {
 	);
 });
 </script>
+<style scoped>
+.safe-fab {
+	margin-top: env(safe-area-inset-top);
+}
+
+:deep(.leaflet-bottom) {
+	margin-bottom: env(safe-area-inset-bottom);
+}
+</style>
+
 <style>
 .darkMap {
 	#map {
