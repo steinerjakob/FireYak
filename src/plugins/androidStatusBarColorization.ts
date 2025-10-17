@@ -1,6 +1,7 @@
 import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar } from '@capacitor/status-bar';
+import { App } from '@capacitor/app';
 
 // Define your preferred colors for light and dark mode
 const LIGHT_MODE_COLOR = '#ffffff';
@@ -14,7 +15,6 @@ async function setAndroidStatusBarColor(isDark: boolean) {
 	const color = getThemeStatusBarColor(isDark);
 	try {
 		await EdgeToEdge.setBackgroundColor({ color });
-		await StatusBar.setOverlaysWebView({ overlay: true });
 	} catch (e) {
 		console.error('Failed to set Android status bar color: ', e);
 	}
@@ -28,14 +28,26 @@ function updateStatusBarColor() {
 	}
 }
 
+async function initializeEdgeToEdge() {
+	if (Capacitor.getPlatform() === 'android') {
+		try {
+			await EdgeToEdge.enable();
+
+			// Set initial status bar color
+			updateStatusBarColor();
+		} catch (e) {
+			console.error('Failed to configure Android Edge to Edge support: ', e);
+		}
+	}
+}
+
 // Listen for theme changes
 mediaQuery.addEventListener('change', updateStatusBarColor);
 
-// Initial call on app load
-updateStatusBarColor();
+// Listen for app state changes (when app resumes from background)
+App.addListener('resume', () => {
+	initializeEdgeToEdge();
+});
 
-try {
-	await EdgeToEdge.disable();
-} catch (e) {
-	console.error('Failed to disable Android Edge to Edge support: ', e);
-}
+// Initial setup on app load
+initializeEdgeToEdge();

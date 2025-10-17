@@ -5,6 +5,7 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
+		"buildAndSync": "npm run build && npx cap sync",
 		"preview": "vite preview",
 		"lint": "eslint . --fix --ignore-path .gitignore",
 		"generate:assets": "npx @capacitor/assets generate --iconBackgroundColor '#45b1fd' --iconBackgroundColorDark '#45b1fd' --splashBackgroundColor '#45b1fd' --splashBackgroundColorDark '#45b1fd'"
@@ -20,6 +21,7 @@
 	},
 	"dependencies": {
 		"@capacitor/android": "^7.4.3",
+		"@capacitor/app": "^7.1.0",
 		"@capacitor/core": "^7.4.3",
 		"@capacitor/share": "^7.0.2",
 		"@capacitor/status-bar": "^7.0.3",
