@@ -88,5 +88,22 @@
 			"noAdditionalInfo": "Keine zusätzlichen Informationen verfügbar",
 			"loading": "Lade Marker-Informationen..."
 		}
+	},
+	"about": {
+		"title": "Über FireYak",
+		"description": "FireYak ist ein Open-Source-Wasserquellen-Lokator für Feuerwehren. Es hilft Feuerwehren, schnell die nächstgelegenen Wasserquellen mithilfe von OpenStreetMap-Daten zu finden.",
+		"openSource": "Open Source",
+		"openSourceDescription": "Diese App ist vollständig kostenlos und quelloffen. Der Quellcode ist auf GitHub verfügbar.",
+		"support": "Projekt unterstützen",
+		"supportDescription": "Sie können dieses Projekt auf verschiedene Weise unterstützen:",
+		"starRepo": "Repository auf GitHub mit Stern markieren",
+		"reportIssues": "Fehler und Probleme melden",
+		"contributeCode": "Code und Funktionen beitragen",
+		"improveDocs": "Dokumentation verbessern",
+		"viewOnGitHub": "Auf GitHub ansehen",
+		"openInfo": "Über & Unterstützen",
+		"dataSource": "Datenquelle",
+		"dataSourceDescription": "Alle Wasserquellendaten werden von OpenStreetMap-Mitwirkenden bereitgestellt.",
+		"version": "Version"
 	}
 }
