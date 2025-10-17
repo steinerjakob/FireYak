@@ -1,6 +1,12 @@
 <template>
 	<div :class="{ darkMap: isDarkMode }" style="height: 100%; width: 100%">
 		<div id="map" style="height: 100%; width: 100%"></div>
+		<!-- About FAB Button -->
+		<ion-fab vertical="top" horizontal="start" slot="fixed">
+			<ion-fab-button size="small" @click="router.push('/about')" :title="$t('about.openInfo')">
+				<ion-icon :icon="informationCircle"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 	</div>
 </template>
 <script lang="ts" setup>
@@ -20,10 +26,12 @@ import { getMarkersForView } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/app';
 import { useDarkMode } from '@/composable/darkModeDetection';
+import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
+import { informationCircle } from 'ionicons/icons';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
-const DISABLE_CLUSTERING_ZOOM = 17;
+const DISABLE_CLUSTERING_ZOOM = 16;
 
 const router = useRouter();
 const route = useRoute();
@@ -114,7 +122,8 @@ async function initMap() {
 
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 		maxZoom: 19,
-		attribution: '© OpenStreetMap'
+		attribution:
+			'© OpenStreetMap | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>'
 	}).addTo(rootMap);
 
 	const locationControl = L.control
@@ -161,7 +170,9 @@ onMounted(async () => {
 </script>
 <style>
 .darkMap {
-	background: #000;
+	#map {
+		background: #000;
+	}
 
 	.leaflet-layer,
 	.leaflet-control-zoom-in,
