@@ -29,12 +29,36 @@
 				<ion-card>
 					<ion-card-header>
 						<ion-card-title>
-							<ion-icon :icon="logoGithub" style="vertical-align: middle; margin-right: 8px"></ion-icon>
+							<ion-icon
+								:icon="logoGithub"
+								style="vertical-align: middle; margin-right: 8px"
+							></ion-icon>
 							{{ $t('about.openSource') }}
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
 						<p>{{ $t('about.openSourceDescription') }}</p>
+					</ion-card-content>
+				</ion-card>
+
+				<!-- Buy Me a Coffee Card -->
+				<ion-card class="coffee-card">
+					<ion-card-header>
+						<ion-card-title>
+							<ion-icon :icon="cafe" style="vertical-align: middle; margin-right: 8px"></ion-icon>
+							{{ $t('about.buyMeCoffee') }}
+						</ion-card-title>
+					</ion-card-header>
+					<ion-card-content>
+						<p>{{ $t('about.buyMeCoffeeDescription') }}</p>
+
+						<a href="https://www.buymeacoffee.com/steinerjakob" target="_blank" class="coffee-link">
+							<img
+								src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+								alt="Buy Me A Coffee"
+								class="coffee-button-img"
+							/>
+						</a>
 					</ion-card-content>
 				</ion-card>
 
@@ -71,13 +95,15 @@
 							expand="block"
 							href="https://github.com/steinerjakob/FireYak"
 							target="_blank"
-							class="github-button"
+							class="support-button"
 						>
 							<ion-icon :icon="logoGithub" slot="start"></ion-icon>
 							{{ $t('about.viewOnGitHub') }}
 						</ion-button>
 					</ion-card-content>
 				</ion-card>
+
+
 
 				<ion-card>
 					<ion-card-header>
@@ -122,7 +148,7 @@ import {
 	IonButtons,
 	IonBackButton
 } from '@ionic/vue';
-import { logoGithub, heart, star, bug, code, documentText, map } from 'ionicons/icons';
+import { logoGithub, heart, star, bug, code, documentText, map, cafe } from 'ionicons/icons';
 </script>
 
 <style scoped>
@@ -158,12 +184,39 @@ ion-card {
 	margin-bottom: 16px;
 }
 
-.github-button {
+.support-button {
 	margin-top: 16px;
 }
 
 ion-list {
 	margin-top: 16px;
 	margin-bottom: 0;
+}
+
+/* Buy Me a Coffee Styles */
+.coffee-card {
+	background: linear-gradient(135deg, #ffdd00 0%, #fbb034 100%);
+}
+
+.coffee-card ion-card-header,
+.coffee-card ion-card-content {
+	color: #000;
+}
+
+.coffee-link {
+	display: block;
+	margin-top: 16px;
+	text-align: center;
+}
+
+.coffee-button-img {
+	height: 60px;
+	width: auto;
+	max-width: 100%;
+	transition: transform 0.2s;
+}
+
+.coffee-button-img:hover {
+	transform: scale(1.05);
 }
 </style>

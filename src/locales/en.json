@@ -104,6 +104,8 @@
 		"openInfo": "About & Support",
 		"dataSource": "Data Source",
 		"dataSourceDescription": "All water source data is provided by OpenStreetMap contributors.",
-		"version": "Version"
+		"version": "Version",
+		"buyMeCoffee": "Buy Me a Coffee",
+		"buyMeCoffeeDescription": "If you find this app useful and want to support its development, consider buying me a coffee! Your support helps keep the project alive and enables new features."
 	}
 }
