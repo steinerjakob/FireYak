@@ -1,4 +1,5 @@
 import { LatLng } from 'leaflet';
+import { ELEVATION_RASTER } from '@/helper/elevationData';
 
 function toRadians(deg: number): number {
 	return (deg * Math.PI) / 180;
@@ -84,7 +85,7 @@ function interpolateGreatCircle(start: LatLng, end: LatLng, fraction: number): L
 export function pointsEveryMetersBetween(
 	start: LatLng,
 	end: LatLng,
-	stepMeters = 90
+	stepMeters = ELEVATION_RASTER
 ): { distance: number; points: LatLng[] } {
 	const totalKm = distanceBetween2Points(start, end);
 	const totalMeters = totalKm * 1000;
