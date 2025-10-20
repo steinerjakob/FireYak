@@ -132,7 +132,10 @@ async function initMap() {
 	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
 
 	rootMap.on('click', () => {
-		router.push('/');
+		// do not close if the supply pipe is open
+		if (route.path.includes('markers')) {
+			router.push('/');
+		}
 	});
 
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
