@@ -5,6 +5,7 @@ import { IonContent, IonCard, IonModal } from '@ionic/vue';
 import MarkerInfo from '@/components/MarkerInfo.vue';
 import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
+import SupplyPipeCalculationHeader from '@/components/SupplyPipeCalculationHeader.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -34,10 +35,13 @@ watch(screenOrientation.orientation, () => {
 			handle-behavior="cycle"
 			class="supply-pipe"
 		>
+			<SupplyPipeCalculationHeader></SupplyPipeCalculationHeader>
 			<ion-content> </ion-content>
 		</ion-modal>
 	</template>
-	<ion-card v-else-if="showSupplyPipe" class="desktop-card"> </ion-card>
+	<ion-card v-else-if="showSupplyPipe" class="desktop-card">
+		<SupplyPipeCalculationHeader></SupplyPipeCalculationHeader
+	></ion-card>
 </template>
 
 <style scoped>
