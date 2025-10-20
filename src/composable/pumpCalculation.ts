@@ -1,11 +1,11 @@
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import L from 'leaflet';
+import L, { LatLng } from 'leaflet';
 const layer = new L.LayerGroup();
 
 let rootMap: L.Map | null = null;
-const suctionPoint: L.Marker = new L.Marker();
-const targetPoint: L.Marker = new L.Marker();
+let suctionPoint: L.Marker | null = null;
+let targetPoint: L.Marker | null = null;
 const wayPoints: L.Marker[] = [];
 const line = new L.Polyline([]);
 
@@ -18,7 +18,7 @@ const suctionPointSet = ref(false);
 const firePointSet = ref(false);
 
 const updatePolyline = () => {
-	if (!suctionPoint.getLatLng() || !targetPoint.getLatLng()) {
+	if (!suctionPoint || !targetPoint) {
 		return;
 	}
 	const allPoints = [suctionPoint, ...wayPoints, targetPoint];
@@ -29,7 +29,11 @@ const updatePolyline = () => {
 
 const setSuctionPoint = () => {
 	const latLng = rootMap?.getCenter();
-	suctionPoint.setLatLng(latLng);
+	if (!suctionPoint) {
+		suctionPoint = new L.Marker(latLng as LatLng);
+	} else {
+		suctionPoint.setLatLng(latLng as LatLng);
+	}
 	layer.addLayer(suctionPoint);
 	suctionPointSet.value = true;
 	updatePolyline();
@@ -37,7 +41,12 @@ const setSuctionPoint = () => {
 
 const setTargetPoint = () => {
 	const latLng = rootMap?.getCenter();
-	targetPoint.setLatLng(latLng);
+	if (!targetPoint) {
+		targetPoint = new L.Marker(latLng as LatLng);
+	} else {
+		targetPoint.setLatLng(latLng as LatLng);
+	}
+
 	layer.addLayer(targetPoint);
 	firePointSet.value = true;
 	updatePolyline();
@@ -45,7 +54,7 @@ const setTargetPoint = () => {
 
 const setWayPoint = () => {
 	const latLng = rootMap?.getCenter();
-	const wayPoint = new L.Marker(latLng);
+	const wayPoint = new L.Marker(latLng as LatLng);
 	wayPoints.push(wayPoint);
 	layer.addLayer(wayPoint);
 	updatePolyline();
