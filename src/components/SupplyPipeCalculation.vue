@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { IonContent, IonCard, IonModal } from '@ionic/vue';
+import { IonContent, IonCard, IonModal, IonIcon } from '@ionic/vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 import SupplyPipeCalculationHeader from '@/components/SupplyPipeCalculationHeader.vue';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
+import { locateOutline } from 'ionicons/icons';
 
 const modal = ref();
 const screenOrientation = useScreenOrientation();
@@ -37,6 +38,8 @@ watch(screenOrientation.orientation, () => {
 	<ion-card v-else-if="isActive" class="desktop-card">
 		<SupplyPipeCalculationHeader></SupplyPipeCalculationHeader
 	></ion-card>
+
+	<ion-icon v-if="isActive" :icon="locateOutline" class="center-locate" size="medium" />
 </template>
 
 <style scoped>
@@ -56,6 +59,17 @@ watch(screenOrientation.orientation, () => {
 
 	border-radius: 0;
 	overflow-y: auto;
+}
+
+.center-locate {
+	position: fixed;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	font-size: 48px;
+	z-index: 1200;
+	color: var(--ion-color-primary, #3880ff);
+	pointer-events: none;
 }
 
 @media (max-width: 767px) {
