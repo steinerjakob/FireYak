@@ -1,81 +1,75 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { IonContent, IonCard, IonModal, IonIcon } from '@ionic/vue';
-import { useScreenOrientation } from '@/composable/screenOrientation';
-import SupplyPipeCalculationHeader from '@/components/SupplyPipeCalculationHeader.vue';
-import { usePumpCalculation } from '@/composable/pumpCalculation';
+import { IonItem, IonLabel, IonList, IonIcon } from '@ionic/vue';
 import { locateOutline } from 'ionicons/icons';
+import { useI18n } from 'vue-i18n';
+import { usePumpCalculation } from '@/composable/pumpCalculation';
 
-const modal = ref();
-const screenOrientation = useScreenOrientation();
-const { isActive } = usePumpCalculation();
-
-const isMobile = ref(window.innerWidth < 768);
-
-watch(screenOrientation.orientation, () => {
-	isMobile.value = window.innerWidth < 768;
-});
+const { t } = useI18n();
+const pumpCalculation = usePumpCalculation();
 </script>
 
 <template>
-	<template v-if="isMobile">
-		<ion-modal
-			ref="modal"
-			:is-open="isActive"
-			:breakpoints="[0.25, 0.4, 0.5, 0.75]"
-			:initial-breakpoint="0.4"
-			:backdrop-dismiss="false"
-			:backdrop-opacity="0"
-			:showBackdrop="false"
-			:expand-to-scroll="false"
-			handle-behavior="cycle"
-			class="supply-pipe"
-		>
-			<SupplyPipeCalculationHeader></SupplyPipeCalculationHeader>
-			<ion-content> </ion-content>
-		</ion-modal>
-	</template>
-	<ion-card v-else-if="isActive" class="desktop-card">
-		<SupplyPipeCalculationHeader></SupplyPipeCalculationHeader
-	></ion-card>
-
-	<ion-icon v-if="isActive" :icon="locateOutline" class="center-locate" size="medium" />
+	<ion-list class="info-list">
+		<!-- Coordinates -->
+		<ion-item>
+			<ion-label>
+				{{ t('pumpCalculation.fireObject') }}
+			</ion-label>
+			<ion-button slot="end" @click="pumpCalculation.setTargetPoint()">
+				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
+				{{ t('pumpCalculation.setPosition') }}
+			</ion-button>
+		</ion-item>
+		<ion-item>
+			<ion-label>
+				{{ t('pumpCalculation.suctionPoint') }}
+			</ion-label>
+			<ion-button slot="end" @click="pumpCalculation.setSuctionPoint()">
+				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
+				{{ t('pumpCalculation.setPosition') }}
+			</ion-button>
+		</ion-item>
+		<ion-item>
+			<ion-label>
+				{{ t('pumpCalculation.wayPoint') }}
+			</ion-label>
+			<ion-button slot="end" @click="pumpCalculation.setWayPoint()">
+				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
+				{{ t('pumpCalculation.setPosition') }}
+			</ion-button>
+		</ion-item>
+	</ion-list>
 </template>
 
 <style scoped>
-.supply-pipe {
-	--height: 100%;
-	--width: 100%;
-	--backdrop-opacity: 0;
+.info-list {
+	background: transparent;
+	padding-top: 4px;
 }
 
-.desktop-card {
-	position: fixed;
-	left: 0;
-	top: 0;
-	bottom: 0;
-	width: 400px;
-	z-index: 1000;
-
-	border-radius: 0;
-	overflow-y: auto;
+ion-item {
+	--background: transparent;
+	--padding-start: 12px;
+	--padding-end: 12px;
+	--inner-padding-end: 0;
+	--min-height: 48px;
 }
 
-.center-locate {
-	position: fixed;
-	left: 50%;
-	top: 50%;
-	transform: translate(-50%, -50%);
-	font-size: 48px;
-	z-index: 1200;
-	color: var(--ion-color-primary, #3880ff);
-	pointer-events: none;
+ion-label h3 {
+	font-weight: 600;
+	font-size: 0.875rem;
+	color: var(--ion-color-medium);
+	margin-bottom: 2px;
 }
 
-@media (max-width: 767px) {
-	.supply-pipe::part(content) {
-		border-radius: 8px 8px 0 0;
-		box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
-	}
+ion-label p {
+	font-size: 1rem;
+	color: var(--ion-color-dark);
+	margin-top: 0;
+}
+
+.loading-note {
+	padding: 12px;
+	display: block;
 }
 </style>

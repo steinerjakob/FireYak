@@ -113,6 +113,10 @@
 		"openInfo": "Pump Calculation",
 		"buttons": {
 			"close": "close"
-		}
+		},
+		"suctionPoint": "Suction point",
+		"fireObject": "Fire object",
+		"wayPoint": "Way point",
+		"setPosition": "Set"
 	}
 }
