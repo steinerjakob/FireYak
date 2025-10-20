@@ -7,7 +7,8 @@ import {
 	IonIcon,
 	IonButton,
 	IonSelect,
-	IonSelectOption
+	IonSelectOption,
+	IonInput
 } from '@ionic/vue';
 import { locateOutline, calculator } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
@@ -27,6 +28,16 @@ const flowRateChanged = (event: CustomEvent) => {
 	const value = event.detail.value;
 	console.log(value);
 	pumpCalculation.PRESSURE_LOST.value = Number(value);
+};
+
+const inputPressureChanged = (event: CustomEvent) => {
+	const value = event.detail.value;
+	pumpCalculation.INPUT_PRESSURE.value = Number(value);
+};
+
+const outputPressureChanged = (event: CustomEvent) => {
+	const value = event.detail.value;
+	pumpCalculation.OUTPUT_PRESSURE.value = Number(value);
 };
 </script>
 
@@ -96,6 +107,22 @@ const flowRateChanged = (event: CustomEvent) => {
 				<ion-select-option value="2.5">1200 l/min</ion-select-option>
 				<ion-select-option value="4.5">1600l/min</ion-select-option>
 			</ion-select>
+		</ion-item>
+		<ion-item>
+			<ion-input
+				:label="t('pumpCalculation.pump.inputPressure')"
+				type="number"
+				:value="pumpCalculation.INPUT_PRESSURE.value"
+				@ionChange="inputPressureChanged"
+			></ion-input>
+		</ion-item>
+		<ion-item>
+			<ion-input
+				:label="t('pumpCalculation.pump.outputPressure')"
+				type="number"
+				:value="pumpCalculation.OUTPUT_PRESSURE.value"
+				@ionChange="outputPressureChanged"
+			></ion-input>
 		</ion-item>
 		<ion-button
 			expand="block"
