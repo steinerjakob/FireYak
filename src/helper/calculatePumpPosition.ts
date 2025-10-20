@@ -1,6 +1,6 @@
 import { ElevationPoint } from '@/helper/elevationData';
 import L from 'leaflet';
-import markerPump from '@/assets/markers/markerPump.png';
+import markerPump from '@/assets/markers/markerpump.png';
 
 const flowRateAndPressureLostTable: { flowRate: number; pressureLost: number }[] = [
 	{ flowRate: 0, pressureLost: 0 },
