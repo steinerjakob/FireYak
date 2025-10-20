@@ -81,7 +81,7 @@
 		},
 		"share": {
 			"title": "Share",
-			"text": "Check out this location: {title}",
+			"text": "Check out this water source: {title}",
 			"copiedToClipboard": "Link copied to clipboard!"
 		},
 		"messages": {

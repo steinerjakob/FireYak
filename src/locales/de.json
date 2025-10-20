@@ -81,7 +81,7 @@
 		},
 		"share": {
 			"title": "Teilen",
-			"text": "Schau dir diesen Standort an: {title}",
+			"text": "Schau dir diese Wasserentnahmestelle an: {title}",
 			"copiedToClipboard": "Link in Zwischenablage kopiert!"
 		},
 		"messages": {
