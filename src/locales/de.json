@@ -123,8 +123,8 @@
 		"updatePosition": "Update",
 		"pump": {
 			"title": "Tragkraftspritze",
-			"inputPressure": "Eingangsdruck",
-			"outputPressure": "Ausgangsdruck",
+			"inputPressure": "Eingangsdruck (bar)",
+			"outputPressure": "Ausgangsdruck (bar)",
 			"flowRate": "Durchfluss (l/min)",
 			"distanceFromStart": "Entfernung",
 			"elevationDifference": "Steigung"
