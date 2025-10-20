@@ -120,6 +120,14 @@
 		"fireObject": "Brandobjekt",
 		"wayPoint": "Wegpunkt",
 		"setPosition": "Set",
-		"updatePosition": "Update"
+		"updatePosition": "Update",
+		"pump": {
+			"title": "Tragkraftspritze",
+			"inputPressure": "Eingangsdruck",
+			"outputPressure": "Ausgangsdruck",
+			"flowRate": "Durchfluss (l/min)",
+			"distanceFromStart": "Entfernung",
+			"elevationDifference": "Steigung"
+		}
 	}
 }

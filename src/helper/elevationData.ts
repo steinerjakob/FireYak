@@ -1,7 +1,7 @@
 import { LatLng } from 'leaflet';
 
 const MAX_ELEVATION_POINTS_PER_REQUEST = 100;
-export const ELEVATION_RASTER = 90; // in meters
+export const ELEVATION_RASTER = 20; // in meters should be the tube length eg B = 20m
 
 export interface ElevationPoint {
 	latLng: LatLng;

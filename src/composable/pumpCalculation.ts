@@ -6,7 +6,8 @@ import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
 import { distanceBetweenMultiplePoints } from '@/helper/distanceCalculation';
 import { getElevationDataForPoints } from '@/helper/elevationData';
-import { calculatePumpPosition, getPumpLocationMarkers } from '@/helper/calculatePumpPosition';
+import { getPumpLocationMarkers } from '@/helper/calculatePumpPosition';
+import { useI18n } from 'vue-i18n';
 
 const PIPE_LENGTH = 20; // in meters
 
@@ -83,30 +84,31 @@ const getMarkerIcon = (type: 'firePoint' | 'suctionPoint' | 'wayPoint') => {
 	});
 };
 
-const calculatePumpRequirements = async () => {
-	if (!suctionPoint || !targetPoint) {
-		return;
-	}
-	const pointsToCalculate = [suctionPoint, ...wayPoints, targetPoint].map((point) =>
-		point.getLatLng()
-	);
-	const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
-	console.log('Full Distance', distance);
-	const elevationData = await getElevationDataForPoints(points);
-	const pumpMarkers = await getPumpLocationMarkers(elevationData);
-	pumpLayer.clearLayers();
-	pumpMarkers.forEach((marker) => {
-		pumpLayer.addLayer(marker);
-	});
-	layer.addLayer(pumpLayer);
-
-	console.log('Elevation Data', pumpMarkers);
-};
-
 export function usePumpCalculation() {
 	const route = useRoute();
+	const { t } = useI18n();
 
 	const isActive = computed(() => route.path.includes('supplyPipe'));
+
+	const calculatePumpRequirements = async () => {
+		if (!suctionPoint || !targetPoint) {
+			return;
+		}
+		const pointsToCalculate = [suctionPoint, ...wayPoints, targetPoint].map((point) =>
+			point.getLatLng()
+		);
+		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
+		console.log('Full Distance', distance);
+		const elevationData = await getElevationDataForPoints(points);
+		const pumpMarkers = await getPumpLocationMarkers(t, elevationData);
+		pumpLayer.clearLayers();
+		pumpMarkers.forEach((marker) => {
+			pumpLayer.addLayer(marker);
+		});
+		layer.addLayer(pumpLayer);
+
+		console.log('Elevation Data', pumpMarkers);
+	};
 
 	watch(isActive, (newValue) => {
 		if (!newValue) {
