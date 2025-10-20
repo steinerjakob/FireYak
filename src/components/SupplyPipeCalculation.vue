@@ -64,6 +64,7 @@ const calculationAllowed = computed(() => {
 		<ion-button
 			expand="block"
 			class="ion-margin-top ion-margin-horizontal"
+			@click="pumpCalculation.calculatePumpRequirements()"
 			:disabled="!calculationAllowed"
 		>
 			<ion-icon :icon="calculator" slot="start"></ion-icon>

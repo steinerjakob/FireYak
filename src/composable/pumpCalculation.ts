@@ -4,8 +4,12 @@ import L, { LatLng } from 'leaflet';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
-const layer = new L.LayerGroup();
+import { distanceBetweenMultiplePoints } from '@/helper/distanceCalculation';
 
+const ELEVATION_RASTER = 90; // in meters
+const PIPE_LENGTH = 20; // in meters
+
+const layer = new L.LayerGroup();
 let rootMap: L.Map | null = null;
 let suctionPoint: L.Marker | null = null;
 let targetPoint: L.Marker | null = null;
@@ -77,6 +81,15 @@ const getMarkerIcon = (type: 'firePoint' | 'suctionPoint' | 'wayPoint') => {
 	});
 };
 
+const calculatePumpRequirements = async () => {
+	if (!suctionPoint || !targetPoint) {
+		return;
+	}
+	const allPoints = [suctionPoint, ...wayPoints, targetPoint].map((point) => point.getLatLng());
+	const distance = distanceBetweenMultiplePoints(allPoints);
+	console.log('Full Distance', distance);
+};
+
 export function usePumpCalculation() {
 	const route = useRoute();
 
@@ -101,6 +114,7 @@ export function usePumpCalculation() {
 		setTargetPoint,
 		setWayPoint,
 		suctionPointSet,
-		firePointSet
+		firePointSet,
+		calculatePumpRequirements
 	};
 }
