@@ -1,6 +1,7 @@
 import { ElevationPoint } from '@/helper/elevationData';
 import L from 'leaflet';
 import markerPump from '@/assets/markers/markerPump.png';
+import { useI18n } from 'vue-i18n';
 
 const INPUT_PRESSURE = 1.5; // bar
 const OUTPUT_PRESSURE = 10; // bar
@@ -27,8 +28,6 @@ type PumpPosition = {
 };
 
 export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
-	if (!elevationPoints || elevationPoints.length < 2) return [] as PumpPosition[];
-
 	const pumps: PumpPosition[] = [];
 
 	const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -93,20 +92,18 @@ const pumpIcon = L.icon({
 	popupAnchor: [0, -48]
 });
 
-function provideMarkerPopup(pump: PumpPosition) {
+function provideMarkerPopup(t: any, pump: PumpPosition) {
 	const popup = L.popup({
 		maxWidth: 400
 	});
 
-	/*	const inpuPressure = t('pump.inputPressure', { value: INPUT_PRESSURE });
-	// const outputPressure = t('pump.outputPressure', { value: OUTPUT_PRESSURE });
-	// const pressureAtTrigger = t('pump.pressureAtTrigger', { value: pump.pressureAtTrigger.toFixed(2) });
-	const distanceFromStart = t('pump.distanceFromStart', { value: pump.distanceFromStart });
-	const riseFromStart = t('pump.riseFromStart', { value: pump.riseFromStart });*/
+	const inpuPressure = t('pumpCalculation.pump.inputPressure');
+	const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
+	const riseFromStart = t('pumpCalculation.pump.elevationDifference');
 
-	const title = 'Tragkraftspritze';
-	const snippet = `Entfernung: ~${pump.distanceFromStart}m<br>Steigung: ${pump.riseFromStart}m`;
-	const subDescription = `Eingangsdruck: ${pump.pressureAtTrigger.toFixed(2)}bar`;
+	const title = t('pumpCalculation.pump.title');
+	const snippet = `${distanceFromStart}: ~${pump.distanceFromStart}m<br>${riseFromStart}: ${pump.riseFromStart}m`;
+	const subDescription = `${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}bar`;
 
 	popup.setContent(`
 		<div class="pump-popup">
@@ -118,13 +115,13 @@ function provideMarkerPopup(pump: PumpPosition) {
 	return popup;
 }
 
-export async function getPumpLocationMarkers(elevationPoints: ElevationPoint[]) {
+export async function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]) {
 	const pumpPositions = await calculatePumpPosition(elevationPoints);
 	return pumpPositions.map((pump) => {
 		const marker = new L.Marker(L.latLng(pump.lat, pump.lon), {
 			icon: pumpIcon
 		});
-		marker.bindPopup(provideMarkerPopup(pump));
+		marker.bindPopup(provideMarkerPopup(t, pump));
 		return marker;
 	});
 }
