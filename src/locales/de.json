@@ -107,5 +107,27 @@
 		"version": "Version",
 		"buyMeCoffee": "Spendiere mir einen Kaffee",
 		"buyMeCoffeeDescription": "Wenn Sie diese App nützlich finden und ihre Entwicklung unterstützen möchten, können Sie mir einen Kaffee spendieren! Ihre Unterstützung hält das Projekt am Leben und ermöglicht neue Funktionen."
+	},
+	"pumpCalculation": {
+		"title": "Pumpenberechnung",
+		"openInfo": "Relaisleitung berechnen",
+		"buttons": {
+			"close": "Schließen",
+
+			"calculate": "Berechnen"
+		},
+		"suctionPoint": "Ansaugstelle",
+		"fireObject": "Brandobjekt",
+		"wayPoint": "Wegpunkt",
+		"setPosition": "Set",
+		"updatePosition": "Update",
+		"pump": {
+			"title": "Tragkraftspritze",
+			"inputPressure": "Eingangsdruck (bar)",
+			"outputPressure": "Ausgangsdruck (bar)",
+			"flowRate": "Durchfluss (l/min)",
+			"distanceFromStart": "Entfernung",
+			"elevationDifference": "Steigung"
+		}
 	}
 }
