@@ -45,6 +45,8 @@ export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
 	let elevationOld = startElevation;
 	let pressure = OUTPUT_PRESSURE;
 
+	elevationPoints[0].pressure = pressure;
+
 	for (let i = 1; i < elevationPoints.length; i++) {
 		const prev = elevationPoints[i - 1];
 		const curr = elevationPoints[i];
@@ -64,6 +66,9 @@ export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
 		pressure = pressure - delta / 10 - segment3D * PRESSURE_LOST;
 
 		elevationOld = curr.elevation;
+
+		elevationPoints[i].pressure = pressure;
+		elevationPoints[i].distance = realDistance;
 
 		if (pressure <= INPUT_PRESSURE) {
 			const roundedPressure = Math.floor(pressure * 100) / 100;
