@@ -5,10 +5,9 @@ import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
 import { distanceBetweenMultiplePoints } from '@/helper/distanceCalculation';
+import { getElevationDataForPoints } from '@/helper/elevationData';
 
-const ELEVATION_RASTER = 90; // in meters
 const PIPE_LENGTH = 20; // in meters
-const MAX_POINTS_PER_REQUEST = 100;
 
 const layer = new L.LayerGroup();
 let rootMap: L.Map | null = null;
@@ -86,9 +85,13 @@ const calculatePumpRequirements = async () => {
 	if (!suctionPoint || !targetPoint) {
 		return;
 	}
-	const allPoints = [suctionPoint, ...wayPoints, targetPoint].map((point) => point.getLatLng());
-	const { distance } = distanceBetweenMultiplePoints(allPoints);
+	const pointsToCalculate = [suctionPoint, ...wayPoints, targetPoint].map((point) =>
+		point.getLatLng()
+	);
+	const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
 	console.log('Full Distance', distance);
+	const elevationData = await getElevationDataForPoints(points);
+	console.log('Elevation Data', elevationData);
 };
 
 export function usePumpCalculation() {
