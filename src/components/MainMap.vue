@@ -12,6 +12,16 @@
 				<ion-icon :icon="informationCircle"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<ion-fab vertical="bottom" horizontal="start" slot="fixed">
+			<ion-fab-button
+				color="light"
+				size="small"
+				@click="router.push('/supplyPipe')"
+				:title="$t('pumpCalculation.openInfo')"
+			>
+				<ion-icon :icon="analyticsOutline"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 	</div>
 </template>
 <script lang="ts" setup>
@@ -32,7 +42,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/app';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
-import { informationCircle } from 'ionicons/icons';
+import { informationCircle, analyticsOutline } from 'ionicons/icons';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;

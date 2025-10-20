@@ -107,5 +107,8 @@
 		"version": "Version",
 		"buyMeCoffee": "Spendiere mir einen Kaffee",
 		"buyMeCoffeeDescription": "Wenn Sie diese App nützlich finden und ihre Entwicklung unterstützen möchten, können Sie mir einen Kaffee spendieren! Ihre Unterstützung hält das Projekt am Leben und ermöglicht neue Funktionen."
+	},
+	"pumpCalculation": {
+		"openInfo": "Relaisleitung berechnen"
 	}
 }
