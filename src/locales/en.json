@@ -107,5 +107,26 @@
 		"version": "Version",
 		"buyMeCoffee": "Buy Me a Coffee",
 		"buyMeCoffeeDescription": "If you find this app useful and want to support its development, consider buying me a coffee! Your support helps keep the project alive and enables new features."
+	},
+	"pumpCalculation": {
+		"title": "Pump Calculation",
+		"openInfo": "Pump Calculation",
+		"buttons": {
+			"close": "close",
+			"calculate": "Calculate"
+		},
+		"suctionPoint": "Suction point",
+		"fireObject": "Fire object",
+		"wayPoint": "Way point",
+		"setPosition": "Set",
+		"updatePosition": "Update",
+		"pump": {
+			"title": "Pump",
+			"inputPressure": "Input Pressure (bar)",
+			"outputPressure": "Output Pressure (bar)",
+			"flowRate": "Flow Rate (l/min)",
+			"distanceFromStart": "Distance",
+			"elevationDifference": "Elevation"
+		}
 	}
 }
