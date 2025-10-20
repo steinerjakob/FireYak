@@ -8,6 +8,7 @@ import { distanceBetweenMultiplePoints } from '@/helper/distanceCalculation';
 
 const ELEVATION_RASTER = 90; // in meters
 const PIPE_LENGTH = 20; // in meters
+const MAX_POINTS_PER_REQUEST = 100;
 
 const layer = new L.LayerGroup();
 let rootMap: L.Map | null = null;
@@ -86,7 +87,7 @@ const calculatePumpRequirements = async () => {
 		return;
 	}
 	const allPoints = [suctionPoint, ...wayPoints, targetPoint].map((point) => point.getLatLng());
-	const distance = distanceBetweenMultiplePoints(allPoints);
+	const { distance } = distanceBetweenMultiplePoints(allPoints);
 	console.log('Full Distance', distance);
 };
 
