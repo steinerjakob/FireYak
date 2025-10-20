@@ -2,10 +2,6 @@ import { ElevationPoint } from '@/helper/elevationData';
 import L from 'leaflet';
 import markerPump from '@/assets/markers/markerPump.png';
 
-const INPUT_PRESSURE = 1.5; // bar
-const OUTPUT_PRESSURE = 10; // bar
-const PRESSURE_LOST = 1.1 / 100; // bar per meter for 800l/min
-
 const flowRateAndPressureLostTable: { flowRate: number; pressureLost: number }[] = [
 	{ flowRate: 0, pressureLost: 0 },
 	{ flowRate: 200, pressureLost: 0.1 },
@@ -28,9 +24,9 @@ type PumpPosition = {
 
 async function calculatePumpPosition(
 	elevationPoints: ElevationPoint[],
-	pressureLost,
-	inputPressure,
-	outputPressure
+	pressureLost: number,
+	inputPressure: number,
+	outputPressure: number
 ): Promise<PumpPosition[]> {
 	const pumps: PumpPosition[] = [];
 
