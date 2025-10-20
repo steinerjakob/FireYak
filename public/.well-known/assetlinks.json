@@ -1,0 +1,15 @@
+[
+	{
+		"relation": [
+			"delegate_permission/common.handle_all_urls",
+			"delegate_permission/common.get_login_creds"
+		],
+		"target": {
+			"namespace": "android_app",
+			"package_name": "at.jst.fireyak",
+			"sha256_cert_fingerprints": [
+				"4C:84:BE:E6:85:0D:7A:1E:07:7B:E6:85:51:83:E8:EA:79:5D:43:D6:76:F8:9E:E1:D7:B2:9A:09:33:C5:B1:B9"
+			]
+		}
+	}
+]

@@ -1,6 +1,7 @@
 // Plugins
 import router from '@/router';
 import { registerPlugins } from '@/plugins';
+import { App as CapApp, URLOpenListenerEvent } from '@capacitor/app';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/vue/css/core.css';
@@ -42,4 +43,15 @@ registerPlugins(app);
 
 router.isReady().then(() => {
 	app.mount('#app');
+});
+
+CapApp.addListener('appUrlOpen', function (event: URLOpenListenerEvent) {
+	const slug = event.url.split('.org').pop();
+
+	// We only push to the route if there is a slug present
+	if (slug) {
+		router.push({
+			path: slug
+		});
+	}
 });
