@@ -4,6 +4,9 @@ import { IonItem, IonLabel, IonList, IonIcon, IonButton } from '@ionic/vue';
 import { locateOutline, calculator } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
+import suctionPointIcon from '@/assets/markers/suctionpoint.png';
+import firepointIcon from '@/assets/markers/firepoint.png';
+import wayPointIcon from '@/assets/markers/waypoint.png';
 
 const { t } = useI18n();
 const pumpCalculation = usePumpCalculation();
@@ -17,6 +20,7 @@ const calculationAllowed = computed(() => {
 	<ion-list class="info-list">
 		<!-- Coordinates -->
 		<ion-item>
+			<img slot="start" :src="firepointIcon" style="height: 24px" alt="Fire point" />
 			<ion-label>
 				{{ t('pumpCalculation.fireObject') }}
 			</ion-label>
@@ -35,6 +39,7 @@ const calculationAllowed = computed(() => {
 			</ion-button>
 		</ion-item>
 		<ion-item>
+			<img slot="start" :src="suctionPointIcon" style="height: 24px" alt="Suction point" />
 			<ion-label>
 				{{ t('pumpCalculation.suctionPoint') }}
 			</ion-label>
@@ -53,6 +58,7 @@ const calculationAllowed = computed(() => {
 			</ion-button>
 		</ion-item>
 		<ion-item :disabled="!calculationAllowed">
+			<img slot="start" :src="wayPointIcon" style="height: 24px" alt="Waypoint" />
 			<ion-label>
 				{{ t('pumpCalculation.wayPoint') }}
 			</ion-label>

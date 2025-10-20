@@ -100,7 +100,7 @@ export function usePumpCalculation() {
 		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
 		console.log('Full Distance', distance);
 		const elevationData = await getElevationDataForPoints(points);
-		const pumpMarkers = await getPumpLocationMarkers(t, elevationData);
+		const { pumpMarkers } = await getPumpLocationMarkers(t, elevationData);
 		pumpLayer.clearLayers();
 		pumpMarkers.forEach((marker) => {
 			pumpLayer.addLayer(marker);

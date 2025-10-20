@@ -1,7 +1,6 @@
 import { ElevationPoint } from '@/helper/elevationData';
 import L from 'leaflet';
 import markerPump from '@/assets/markers/markerPump.png';
-import { useI18n } from 'vue-i18n';
 
 const INPUT_PRESSURE = 1.5; // bar
 const OUTPUT_PRESSURE = 10; // bar
@@ -117,11 +116,12 @@ function provideMarkerPopup(t: any, pump: PumpPosition) {
 
 export async function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]) {
 	const pumpPositions = await calculatePumpPosition(elevationPoints);
-	return pumpPositions.map((pump) => {
+	const markers = pumpPositions.map((pump) => {
 		const marker = new L.Marker(L.latLng(pump.lat, pump.lon), {
 			icon: pumpIcon
 		});
 		marker.bindPopup(provideMarkerPopup(t, pump));
 		return marker;
 	});
+	return { pumpMarkers: markers, pumpPositions };
 }
