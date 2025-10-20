@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import L, { LatLng } from 'leaflet';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
@@ -81,6 +81,17 @@ export function usePumpCalculation() {
 	const route = useRoute();
 
 	const isActive = computed(() => route.path.includes('supplyPipe'));
+
+	watch(isActive, (newValue) => {
+		if (!newValue) {
+			layer.clearLayers();
+			suctionPoint = null;
+			targetPoint = null;
+			wayPoints.length = 0;
+			suctionPointSet.value = false;
+			firePointSet.value = false;
+		}
+	});
 
 	return {
 		isActive,

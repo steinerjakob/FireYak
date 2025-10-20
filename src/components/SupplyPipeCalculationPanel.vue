@@ -39,9 +39,10 @@ watch(screenOrientation.orientation, () => {
 		</ion-modal>
 	</template>
 	<ion-card v-else-if="isActive" class="desktop-card">
-		<SupplyPipeCalculationHeader>
-			<SupplyPipeCalculation></SupplyPipeCalculation> </SupplyPipeCalculationHeader
-	></ion-card>
+		<SupplyPipeCalculationHeader></SupplyPipeCalculationHeader>
+		<SupplyPipeCalculation></SupplyPipeCalculation>
+		></ion-card
+	>
 
 	<ion-icon v-if="isActive" :icon="locateOutline" class="center-locate" size="medium" />
 </template>
