@@ -24,7 +24,7 @@ const routes = [
 				component: HomeView
 			},
 			{
-				path: '/supplyPipe',
+				path: '/supplypipe',
 				name: 'Supply pipe calculation',
 				// route level code-splitting
 				// this generates a separate chunk (Home-[hash].js) for this route
