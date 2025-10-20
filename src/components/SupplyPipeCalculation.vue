@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { IonItem, IonLabel, IonList, IonIcon, IonButton } from '@ionic/vue';
+import {
+	IonItem,
+	IonLabel,
+	IonList,
+	IonIcon,
+	IonButton,
+	IonSelect,
+	IonSelectOption
+} from '@ionic/vue';
 import { locateOutline, calculator } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
@@ -14,6 +22,12 @@ const pumpCalculation = usePumpCalculation();
 const calculationAllowed = computed(() => {
 	return pumpCalculation.firePointSet.value && pumpCalculation.suctionPointSet.value;
 });
+
+const flowRateChanged = (event: CustomEvent) => {
+	const value = event.detail.value;
+	console.log(value);
+	pumpCalculation.PRESSURE_LOST.value = Number(value);
+};
 </script>
 
 <template>
@@ -66,6 +80,22 @@ const calculationAllowed = computed(() => {
 				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
 				{{ t('pumpCalculation.setPosition') }}
 			</ion-button>
+		</ion-item>
+		<ion-item>
+			<ion-select
+				:label="t('pumpCalculation.pump.flowRate')"
+				placeholder="Make a Selection"
+				:value="pumpCalculation.PRESSURE_LOST.value.toString()"
+				@ionChange="flowRateChanged"
+			>
+				<ion-select-option value="0.1">200 l/min</ion-select-option>
+				<ion-select-option value="0.2">400 l/min</ion-select-option>
+				<ion-select-option value="0.7">600 l/min</ion-select-option>
+				<ion-select-option value="1.1">800 l/min</ion-select-option>
+				<ion-select-option value="1.7">1000 l/min</ion-select-option>
+				<ion-select-option value="2.5">1200 l/min</ion-select-option>
+				<ion-select-option value="4.5">1600l/min</ion-select-option>
+			</ion-select>
 		</ion-item>
 		<ion-button
 			expand="block"
