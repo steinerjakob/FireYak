@@ -1,6 +1,5 @@
 import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
 import { Capacitor } from '@capacitor/core';
-import { StatusBar } from '@capacitor/status-bar';
 import { App } from '@capacitor/app';
 
 // Define your preferred colors for light and dark mode
