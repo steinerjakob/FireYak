@@ -3,7 +3,7 @@ import { LatLng } from 'leaflet';
 const MAX_ELEVATION_POINTS_PER_REQUEST = 100;
 export const ELEVATION_RASTER = 90; // in meters
 
-interface ElevationPoint {
+export interface ElevationPoint {
 	latLng: LatLng;
 	elevation: number;
 }
