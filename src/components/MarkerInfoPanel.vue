@@ -6,7 +6,6 @@ import MarkerInfo from '@/components/MarkerInfo.vue';
 import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 
-const router = useRouter();
 const route = useRoute();
 const modal = ref();
 const screenOrientation = useScreenOrientation();
@@ -22,10 +21,6 @@ watch(screenOrientation.orientation, () => {
 watch(showMarkerInfo, () => {
 	isMobile.value = window.innerWidth < 768;
 });
-
-const closeModal = () => {
-	router.push('/');
-};
 </script>
 
 <template>
@@ -44,13 +39,13 @@ const closeModal = () => {
 		>
 			<MarkerInfoHeader></MarkerInfoHeader>
 			<ion-content>
-				<MarkerInfo @close="closeModal"></MarkerInfo>
+				<MarkerInfo></MarkerInfo>
 			</ion-content>
 		</ion-modal>
 	</template>
 	<ion-card v-else-if="showMarkerInfo" class="desktop-card">
 		<MarkerInfoHeader></MarkerInfoHeader>
-		<MarkerInfo @close="closeModal"></MarkerInfo>
+		<MarkerInfo></MarkerInfo>
 	</ion-card>
 </template>
 
