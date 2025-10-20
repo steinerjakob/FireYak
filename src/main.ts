@@ -46,7 +46,7 @@ router.isReady().then(() => {
 });
 
 CapApp.addListener('appUrlOpen', function (event: URLOpenListenerEvent) {
-	const slug = event.url.split('.org').pop();
+	const slug = event.url.split('#').pop();
 
 	// We only push to the route if there is a slug present
 	if (slug) {
