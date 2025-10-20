@@ -26,7 +26,12 @@ type PumpPosition = {
 	riseFromStart: number; // meters
 };
 
-export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
+async function calculatePumpPosition(
+	elevationPoints: ElevationPoint[],
+	pressureLost,
+	inputPressure,
+	outputPressure
+): Promise<PumpPosition[]> {
 	const pumps: PumpPosition[] = [];
 
 	const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -43,7 +48,7 @@ export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
 	let realDistance = 0;
 	const startElevation = elevationPoints[0].elevation;
 	let elevationOld = startElevation;
-	let pressure = OUTPUT_PRESSURE;
+	let pressure = outputPressure;
 
 	elevationPoints[0].pressure = pressure;
 
@@ -63,14 +68,14 @@ export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
 		realDistance += segment3D;
 
 		// pressure change: elevation difference (m) -> bar via /10, plus friction loss per meter
-		pressure = pressure - delta / 10 - segment3D * PRESSURE_LOST;
+		pressure = pressure - delta / 10 - segment3D * pressureLost;
 
 		elevationOld = curr.elevation;
 
 		elevationPoints[i].pressure = pressure;
 		elevationPoints[i].distance = realDistance;
 
-		if (pressure <= INPUT_PRESSURE) {
+		if (pressure <= inputPressure) {
 			const roundedPressure = Math.floor(pressure * 100) / 100;
 			pumps.push({
 				lat: curr.latLng.lat,
@@ -82,7 +87,7 @@ export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
 			});
 
 			// reset pressure to output after placing pump
-			pressure = OUTPUT_PRESSURE;
+			pressure = outputPressure;
 		}
 	}
 
@@ -119,8 +124,19 @@ function provideMarkerPopup(t: any, pump: PumpPosition) {
 	return popup;
 }
 
-export async function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]) {
-	const pumpPositions = await calculatePumpPosition(elevationPoints);
+export async function getPumpLocationMarkers(
+	t: any,
+	elevationPoints: ElevationPoint[],
+	inputPressure: number,
+	outputPressure: number,
+	pressureLost: number
+) {
+	const pumpPositions = await calculatePumpPosition(
+		elevationPoints,
+		pressureLost / 100,
+		inputPressure,
+		outputPressure
+	);
 	const markers = pumpPositions.map((pump) => {
 		const marker = new L.Marker(L.latLng(pump.lat, pump.lon), {
 			icon: pumpIcon
