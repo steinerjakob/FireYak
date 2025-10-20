@@ -1,18 +1,13 @@
 <script setup lang="ts">
-import { useRoute, useRouter } from 'vue-router';
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { IonContent, IonCard, IonModal } from '@ionic/vue';
-import MarkerInfo from '@/components/MarkerInfo.vue';
-import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 import SupplyPipeCalculationHeader from '@/components/SupplyPipeCalculationHeader.vue';
+import { usePumpCalculation } from '@/composable/pumpCalculation';
 
-const router = useRouter();
-const route = useRoute();
 const modal = ref();
 const screenOrientation = useScreenOrientation();
-
-const showSupplyPipe = computed(() => route.path.includes('supplyPipe'));
+const { isActive } = usePumpCalculation();
 
 const isMobile = ref(window.innerWidth < 768);
 
@@ -25,7 +20,7 @@ watch(screenOrientation.orientation, () => {
 	<template v-if="isMobile">
 		<ion-modal
 			ref="modal"
-			:is-open="showSupplyPipe"
+			:is-open="isActive"
 			:breakpoints="[0.25, 0.4, 0.5, 0.75]"
 			:initial-breakpoint="0.4"
 			:backdrop-dismiss="false"
@@ -39,7 +34,7 @@ watch(screenOrientation.orientation, () => {
 			<ion-content> </ion-content>
 		</ion-modal>
 	</template>
-	<ion-card v-else-if="showSupplyPipe" class="desktop-card">
+	<ion-card v-else-if="isActive" class="desktop-card">
 		<SupplyPipeCalculationHeader></SupplyPipeCalculationHeader
 	></ion-card>
 </template>
