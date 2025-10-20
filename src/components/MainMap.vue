@@ -15,7 +15,7 @@
 		<ion-fab vertical="bottom" horizontal="start" slot="fixed">
 			<ion-fab-button
 				color="light"
-				@click="router.push('/supplyPipe')"
+				@click="router.push('/supplypipe')"
 				:title="$t('pumpCalculation.openInfo')"
 			>
 				<ion-icon :icon="analyticsOutline"></ion-icon>

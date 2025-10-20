@@ -92,7 +92,7 @@ export function usePumpCalculation() {
 	const route = useRoute();
 	const { t } = useI18n();
 
-	const isActive = computed(() => route.path.includes('supplyPipe'));
+	const isActive = computed(() => route.path.includes('supplypipe'));
 
 	const calculatePumpRequirements = async () => {
 		if (!suctionPoint || !targetPoint) {
