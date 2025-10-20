@@ -112,7 +112,9 @@
 		"title": "Pumpenberechnung",
 		"openInfo": "Relaisleitung berechnen",
 		"buttons": {
-			"close": "Schließen"
+			"close": "Schließen",
+
+			"calculate": "Berechnen"
 		},
 		"suctionPoint": "Ansaugstelle",
 		"fireObject": "Brandobjekt",

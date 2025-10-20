@@ -112,7 +112,8 @@
 		"title": "Pump Calculation",
 		"openInfo": "Pump Calculation",
 		"buttons": {
-			"close": "close"
+			"close": "close",
+			"calculate": "Calculate"
 		},
 		"suctionPoint": "Suction point",
 		"fireObject": "Fire object",
