@@ -28,8 +28,6 @@ export function distanceBetween2Points(start: LatLng, end: LatLng): number {
 	const kmRounded = Math.round(distanceKm);
 	const meters = Math.round((distanceKm - Math.floor(distanceKm)) * 1000);
 
-	console.info(`Distance: ${distanceKm} km  | ${kmRounded} km  ${meters} m`);
-
 	return distanceKm;
 }
 
