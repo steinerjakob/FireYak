@@ -43,6 +43,7 @@ import { useMapMarkerStore } from '@/store/app';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
 import { informationCircle, analyticsOutline } from 'ionicons/icons';
+import { usePumpCalculation } from '@/composable/pumpCalculation';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -52,6 +53,7 @@ const router = useRouter();
 const route = useRoute();
 const markerStore = useMapMarkerStore();
 const { isDarkMode } = useDarkMode();
+const pumpCalculation = usePumpCalculation();
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
@@ -170,6 +172,7 @@ async function initMap() {
 	rootMap.on('dragend', debouncedMapMove);
 
 	fireMapCluster.addTo(rootMap);
+	pumpCalculation.setMap(rootMap);
 }
 
 onMounted(async () => {
