@@ -17,16 +17,16 @@ const flowRateAndPressureLostTable: { flowRate: number; pressureLost: number }[]
 	{ flowRate: 1600, pressureLost: 4.5 }
 ];
 
-export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
-	type PumpPosition = {
-		lat: number;
-		lon: number;
-		elevation: number;
-		distanceFromStart: number; // meters (approx)
-		pressureAtTrigger: number; // bar
-		riseFromStart: number; // meters
-	};
+type PumpPosition = {
+	lat: number;
+	lon: number;
+	elevation: number;
+	distanceFromStart: number; // meters (approx)
+	pressureAtTrigger: number; // bar
+	riseFromStart: number; // meters
+};
 
+export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
 	if (!elevationPoints || elevationPoints.length < 2) return [] as PumpPosition[];
 
 	const pumps: PumpPosition[] = [];
@@ -89,14 +89,42 @@ export async function calculatePumpPosition(elevationPoints: ElevationPoint[]) {
 const pumpIcon = L.icon({
 	iconUrl: markerPump,
 	iconSize: [48, 48],
-	iconAnchor: [24, 48]
+	iconAnchor: [24, 48],
+	popupAnchor: [0, -48]
 });
+
+function provideMarkerPopup(pump: PumpPosition) {
+	const popup = L.popup({
+		maxWidth: 400
+	});
+
+	/*	const inpuPressure = t('pump.inputPressure', { value: INPUT_PRESSURE });
+	// const outputPressure = t('pump.outputPressure', { value: OUTPUT_PRESSURE });
+	// const pressureAtTrigger = t('pump.pressureAtTrigger', { value: pump.pressureAtTrigger.toFixed(2) });
+	const distanceFromStart = t('pump.distanceFromStart', { value: pump.distanceFromStart });
+	const riseFromStart = t('pump.riseFromStart', { value: pump.riseFromStart });*/
+
+	const title = 'Tragkraftspritze';
+	const snippet = `Entfernung: ~${pump.distanceFromStart}m<br>Steigung: ${pump.riseFromStart}m`;
+	const subDescription = `Eingangsdruck: ${pump.pressureAtTrigger.toFixed(2)}bar`;
+
+	popup.setContent(`
+		<div class="pump-popup">
+			<b>${title}</b>
+			<div>${snippet}</div>
+			<div>${subDescription}</div>
+		</div>
+	`);
+	return popup;
+}
 
 export async function getPumpLocationMarkers(elevationPoints: ElevationPoint[]) {
 	const pumpPositions = await calculatePumpPosition(elevationPoints);
-	return pumpPositions.map((pump, index) => {
-		return new L.Marker(L.latLng(pump.lat, pump.lon), {
+	return pumpPositions.map((pump) => {
+		const marker = new L.Marker(L.latLng(pump.lat, pump.lon), {
 			icon: pumpIcon
 		});
+		marker.bindPopup(provideMarkerPopup(pump));
+		return marker;
 	});
 }

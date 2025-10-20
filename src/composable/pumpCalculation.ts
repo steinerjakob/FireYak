@@ -87,7 +87,6 @@ const calculatePumpRequirements = async () => {
 	if (!suctionPoint || !targetPoint) {
 		return;
 	}
-	layer.removeLayer(pumpLayer);
 	const pointsToCalculate = [suctionPoint, ...wayPoints, targetPoint].map((point) =>
 		point.getLatLng()
 	);
@@ -95,6 +94,7 @@ const calculatePumpRequirements = async () => {
 	console.log('Full Distance', distance);
 	const elevationData = await getElevationDataForPoints(points);
 	const pumpMarkers = await getPumpLocationMarkers(elevationData);
+	pumpLayer.clearLayers();
 	pumpMarkers.forEach((marker) => {
 		pumpLayer.addLayer(marker);
 	});
@@ -111,6 +111,7 @@ export function usePumpCalculation() {
 	watch(isActive, (newValue) => {
 		if (!newValue) {
 			layer.clearLayers();
+			pumpLayer.clearLayers();
 			suctionPoint = null;
 			targetPoint = null;
 			wayPoints.length = 0;
