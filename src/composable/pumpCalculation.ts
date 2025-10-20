@@ -1,4 +1,4 @@
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import L from 'leaflet';
 const layer = new L.LayerGroup();
@@ -14,7 +14,8 @@ function setMap(map: L.Map) {
 	layer.addTo(rootMap);
 }
 
-console.log(suctionPoint.getLatLng());
+const suctionPointSet = ref(false);
+const firePointSet = ref(false);
 
 const updatePolyline = () => {
 	if (!suctionPoint.getLatLng() || !targetPoint.getLatLng()) {
@@ -30,6 +31,7 @@ const setSuctionPoint = () => {
 	const latLng = rootMap?.getCenter();
 	suctionPoint.setLatLng(latLng);
 	layer.addLayer(suctionPoint);
+	suctionPointSet.value = true;
 	updatePolyline();
 };
 
@@ -37,6 +39,7 @@ const setTargetPoint = () => {
 	const latLng = rootMap?.getCenter();
 	targetPoint.setLatLng(latLng);
 	layer.addLayer(targetPoint);
+	firePointSet.value = true;
 	updatePolyline();
 };
 
@@ -53,5 +56,14 @@ export function usePumpCalculation() {
 
 	const isActive = computed(() => route.path.includes('supplyPipe'));
 
-	return { isActive, layer, setMap, setSuctionPoint, setTargetPoint, setWayPoint };
+	return {
+		isActive,
+		layer,
+		setMap,
+		setSuctionPoint,
+		setTargetPoint,
+		setWayPoint,
+		suctionPointSet,
+		firePointSet
+	};
 }

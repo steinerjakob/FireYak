@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IonItem, IonLabel, IonList, IonIcon } from '@ionic/vue';
+import { IonItem, IonLabel, IonList, IonIcon, IonButton } from '@ionic/vue';
 import { locateOutline } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
@@ -15,18 +15,36 @@ const pumpCalculation = usePumpCalculation();
 			<ion-label>
 				{{ t('pumpCalculation.fireObject') }}
 			</ion-label>
-			<ion-button slot="end" @click="pumpCalculation.setTargetPoint()">
+			<ion-button
+				slot="end"
+				@click="pumpCalculation.setTargetPoint()"
+				:color="pumpCalculation.firePointSet.value ? 'medium' : 'primary'"
+			>
 				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
-				{{ t('pumpCalculation.setPosition') }}
+				<template v-if="pumpCalculation.firePointSet.value">
+					{{ t('pumpCalculation.updatePosition') }}
+				</template>
+				<template v-else>
+					{{ t('pumpCalculation.setPosition') }}
+				</template>
 			</ion-button>
 		</ion-item>
 		<ion-item>
 			<ion-label>
 				{{ t('pumpCalculation.suctionPoint') }}
 			</ion-label>
-			<ion-button slot="end" @click="pumpCalculation.setSuctionPoint()">
+			<ion-button
+				slot="end"
+				@click="pumpCalculation.setSuctionPoint()"
+				:color="pumpCalculation.suctionPointSet.value ? 'medium' : 'primary'"
+			>
 				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
-				{{ t('pumpCalculation.setPosition') }}
+				<template v-if="pumpCalculation.suctionPointSet.value">
+					{{ t('pumpCalculation.updatePosition') }}
+				</template>
+				<template v-else>
+					{{ t('pumpCalculation.setPosition') }}
+				</template>
 			</ion-button>
 		</ion-item>
 		<ion-item>
