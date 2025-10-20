@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { IonItem, IonLabel, IonList, IonIcon, IonButton } from '@ionic/vue';
-import { locateOutline } from 'ionicons/icons';
+import { locateOutline, calculator } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 
 const { t } = useI18n();
 const pumpCalculation = usePumpCalculation();
+
+const calculationAllowed = computed(() => {
+	return pumpCalculation.firePointSet.value && pumpCalculation.suctionPointSet.value;
+});
 </script>
 
 <template>
@@ -47,15 +52,23 @@ const pumpCalculation = usePumpCalculation();
 				</template>
 			</ion-button>
 		</ion-item>
-		<ion-item>
+		<ion-item :disabled="!calculationAllowed">
 			<ion-label>
 				{{ t('pumpCalculation.wayPoint') }}
 			</ion-label>
-			<ion-button slot="end" @click="pumpCalculation.setWayPoint()">
+			<ion-button slot="end" @click="pumpCalculation.setWayPoint()" :disabled="!calculationAllowed">
 				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
 				{{ t('pumpCalculation.setPosition') }}
 			</ion-button>
 		</ion-item>
+		<ion-button
+			expand="block"
+			class="ion-margin-top ion-margin-horizontal"
+			:disabled="!calculationAllowed"
+		>
+			<ion-icon :icon="calculator" slot="start"></ion-icon>
+			{{ t('pumpCalculation.buttons.calculate') }}
+		</ion-button>
 	</ion-list>
 </template>
 
