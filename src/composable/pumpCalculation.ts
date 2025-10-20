@@ -1,6 +1,9 @@
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import L, { LatLng } from 'leaflet';
+import suctionPointIcon from '@/assets/markers/suctionpoint.png';
+import firepointIcon from '@/assets/markers/firepoint.png';
+import wayPointIcon from '@/assets/markers/waypoint.png';
 const layer = new L.LayerGroup();
 
 let rootMap: L.Map | null = null;
@@ -30,7 +33,7 @@ const updatePolyline = () => {
 const setSuctionPoint = () => {
 	const latLng = rootMap?.getCenter();
 	if (!suctionPoint) {
-		suctionPoint = new L.Marker(latLng as LatLng);
+		suctionPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('suctionPoint') });
 	} else {
 		suctionPoint.setLatLng(latLng as LatLng);
 	}
@@ -42,7 +45,7 @@ const setSuctionPoint = () => {
 const setTargetPoint = () => {
 	const latLng = rootMap?.getCenter();
 	if (!targetPoint) {
-		targetPoint = new L.Marker(latLng as LatLng);
+		targetPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('firePoint') });
 	} else {
 		targetPoint.setLatLng(latLng as LatLng);
 	}
@@ -54,10 +57,24 @@ const setTargetPoint = () => {
 
 const setWayPoint = () => {
 	const latLng = rootMap?.getCenter();
-	const wayPoint = new L.Marker(latLng as LatLng);
+	const wayPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('wayPoint') });
 	wayPoints.push(wayPoint);
 	layer.addLayer(wayPoint);
 	updatePolyline();
+};
+
+const getMarkerIcon = (type: 'firePoint' | 'suctionPoint' | 'wayPoint') => {
+	let icon = suctionPointIcon;
+	if (type === 'firePoint') {
+		icon = firepointIcon;
+	} else if (type === 'wayPoint') {
+		icon = wayPointIcon;
+	}
+	return L.icon({
+		iconUrl: icon,
+		iconSize: type == 'wayPoint' ? [32, 32] : [48, 48],
+		iconAnchor: type !== 'wayPoint' ? [24, 48] : undefined
+	});
 };
 
 export function usePumpCalculation() {
