@@ -6,6 +6,8 @@ export const ELEVATION_RASTER = 20; // in meters should be the tube length eg B 
 export interface ElevationPoint {
 	latLng: LatLng;
 	elevation: number;
+	pressure?: number;
+	distance?: number;
 }
 
 export async function getElevationDataForPoints(points: LatLng[]) {

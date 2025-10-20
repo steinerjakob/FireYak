@@ -107,7 +107,7 @@ export function usePumpCalculation() {
 		});
 		layer.addLayer(pumpLayer);
 
-		console.log('Elevation Data', pumpMarkers);
+		console.log('Elevation Data', pumpMarkers, elevationData);
 	};
 
 	watch(isActive, (newValue) => {
