@@ -117,6 +117,7 @@
 		"suctionPoint": "Ansaugstelle",
 		"fireObject": "Brandobjekt",
 		"wayPoint": "Wegpunkt",
-		"setPosition": "Set"
+		"setPosition": "Set",
+		"updatePosition": "Update"
 	}
 }

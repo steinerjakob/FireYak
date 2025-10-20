@@ -117,6 +117,7 @@
 		"suctionPoint": "Suction point",
 		"fireObject": "Fire object",
 		"wayPoint": "Way point",
-		"setPosition": "Set"
+		"setPosition": "Set",
+		"updatePosition": "Update"
 	}
 }
