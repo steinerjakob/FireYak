@@ -2,7 +2,7 @@
 	<div :class="{ darkMap: isDarkMode }" style="height: 100%; width: 100%">
 		<div id="map" style="height: 100%; width: 100%"></div>
 		<!-- About FAB Button -->
-		<ion-fab vertical="top" horizontal="start" slot="fixed" class="safe-fab">
+		<ion-fab vertical="top" horizontal="start" slot="fixed">
 			<ion-fab-button
 				color="light"
 				size="small"
@@ -15,11 +15,15 @@
 		<ion-fab vertical="bottom" horizontal="start" slot="fixed">
 			<ion-fab-button
 				color="light"
-				size="small"
 				@click="router.push('/supplyPipe')"
 				:title="$t('pumpCalculation.openInfo')"
 			>
 				<ion-icon :icon="analyticsOutline"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
+		<ion-fab vertical="bottom" horizontal="end" slot="fixed">
+			<ion-fab-button color="light" @click="showUserLocation" title="Location">
+				<ion-icon :icon="navigate"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
 	</div>
@@ -42,7 +46,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/app';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
-import { informationCircle, analyticsOutline } from 'ionicons/icons';
+import { informationCircle, analyticsOutline, navigate } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 
 const MAP_ELEMENT_ID = 'map';
@@ -128,7 +132,21 @@ watch(
 		}
 	}
 );
+const locationControl = L.control.locate({
+	position: 'bottomright',
+	flyTo: true,
+	keepCurrentZoomLevel: true,
+	setView: false,
+	clickBehavior: { inView: 'setView', outOfView: 'setView', inViewNotFollowing: 'inView' }
+});
 
+function showUserLocation() {
+	try {
+		locationControl.setView();
+	} catch {
+		// do nothing.
+	}
+}
 async function initMap() {
 	await nextTick();
 	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
@@ -146,15 +164,7 @@ async function initMap() {
 			'© OpenStreetMap | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>'
 	}).addTo(rootMap);
 
-	const locationControl = L.control
-		.locate({
-			position: 'bottomright',
-			flyTo: true,
-			keepCurrentZoomLevel: true,
-			setView: false,
-			clickBehavior: { inView: 'setView', outOfView: 'setView', inViewNotFollowing: 'inView' }
-		})
-		.addTo(rootMap);
+	locationControl.addTo(rootMap);
 	locationControl.start();
 
 	// @ts-ignore: is a js plugin without any typings
@@ -190,12 +200,18 @@ onMounted(async () => {
 });
 </script>
 <style scoped>
-.safe-fab {
-	margin-top: env(safe-area-inset-top);
+ion-fab {
+	margin-top: var(--ion-safe-area-top, 0);
+	margin-bottom: var(--ion-safe-area-bottom, 0);
+	z-index: 1000;
 }
 
 :deep(.leaflet-bottom) {
 	margin-bottom: env(safe-area-inset-bottom);
+}
+
+:deep(.leaflet-control-locate) {
+	display: none;
 }
 </style>
 
