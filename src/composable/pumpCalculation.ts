@@ -97,9 +97,37 @@ const setTargetPoint = () => {
 	updatePolyline();
 };
 
+const removeWayPoint = (wayPointToRemove: L.Marker) => {
+	const index = wayPoints.indexOf(wayPointToRemove);
+	if (index > -1) {
+		wayPoints.splice(index, 1);
+		layer.removeLayer(wayPointToRemove);
+		updatePolyline();
+	}
+};
+
 const setWayPoint = () => {
 	const latLng = rootMap?.getCenter();
+	if (!latLng) return;
 	const wayPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('wayPoint') });
+
+	const popup = L.popup();
+	const popupContent = document.createElement('div');
+	popupContent.style.textAlign = 'center';
+	const removeButton = document.createElement('button');
+	removeButton.textContent = '🗑'; // Set the UTF-8 trash can icon directly as text content
+	removeButton.style.color = 'red'; // Colorize the icon
+	removeButton.style.backgroundColor = 'transparent'; // Remove default button background
+	removeButton.style.border = 'none'; // Remove default button border
+	removeButton.style.cursor = 'pointer'; // Indicate it's clickable
+	removeButton.style.fontSize = '2em'; // Make the icon larger for better visibility
+	removeButton.style.padding = '0'; // Remove default padding
+	removeButton.onclick = () => removeWayPoint(wayPoint);
+	popupContent.appendChild(removeButton);
+
+	popup.setContent(popupContent);
+	wayPoint.bindPopup(popup);
+
 	wayPoints.push(wayPoint);
 	layer.addLayer(wayPoint);
 	updatePolyline();
