@@ -31,10 +31,41 @@ function setMap(map: L.Map) {
 const suctionPointSet = ref(false);
 const firePointSet = ref(false);
 
+const sortWaypoints = (): void => {
+	if (!suctionPoint || wayPoints.length < 2) {
+		// No need to sort if there are 0 or 1 waypoints
+		return;
+	}
+
+	let lastPoint = suctionPoint;
+	const remainingWaypoints = [...wayPoints];
+	const sortedWaypoints: L.Marker[] = [];
+
+	while (remainingWaypoints.length > 0) {
+		let closestIndex = -1;
+		let minDistance = Infinity;
+
+		remainingWaypoints.forEach((point, index) => {
+			const distance = lastPoint.getLatLng().distanceTo(point.getLatLng());
+			if (distance < minDistance) {
+				minDistance = distance;
+				closestIndex = index;
+			}
+		});
+
+		const [closestPoint] = remainingWaypoints.splice(closestIndex, 1);
+		sortedWaypoints.push(closestPoint);
+		lastPoint = closestPoint;
+	}
+
+	wayPoints.splice(0, wayPoints.length, ...sortedWaypoints);
+};
+
 const updatePolyline = () => {
 	if (!suctionPoint || !targetPoint) {
 		return;
 	}
+	sortWaypoints();
 	const allPoints = [suctionPoint, ...wayPoints, targetPoint];
 	const latLngs = allPoints.map((point) => point.getLatLng());
 	line.setLatLngs(latLngs);
