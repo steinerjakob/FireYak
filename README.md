@@ -5,6 +5,14 @@
 A website for fire departments to provide easy and fast access to the nearest water source.  
 The data is from [OpenStreetMap](https://www.openstreetmap.org).
 
+## Apps
+
+You can access FireYak through the web app or Android app:
+
+- **Web:** [app.fireyak.org](https://app.fireyak.org)
+- **Android:** [Google Play](https://play.google.com/store/apps/details?id=at.jst.fireyak)
+- **iOS:** I do not have an Apple developer account (100€ per year) and no Mac
+
 ## Support
 
 If you find it useful, please consider supporting it.
