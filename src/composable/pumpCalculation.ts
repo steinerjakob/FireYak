@@ -170,7 +170,7 @@ export function usePumpCalculation() {
 		const title = t('pumpCalculation.fireObject');
 		const tubes = t('pumpCalculation.pump.tubes');
 		const pumps = t('pumpCalculation.pump.title');
-		const snippet = `B-${tubes}: ~${neededBTubes}<br>${pumps}: ~${pumpCount}<br>${riseFromStart}: ${elevation}m<br>${distanceFromStart}: ~${realDistance.toFixed(2)}m`;
+		const snippet = `B-${tubes}: ~${neededBTubes}<br>${pumps}: ~${pumpCount + 1}<br>${riseFromStart}: ${elevation}m<br>${distanceFromStart}: ~${realDistance.toFixed(2)}m`;
 		const subDescription = `${inpuPressure}: ${pressure?.toFixed(0)}`;
 
 		popup.setContent(`
