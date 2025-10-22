@@ -9,12 +9,6 @@ import { getElevationDataForPoints } from '@/helper/elevationData';
 import { getPumpLocationMarkers } from '@/helper/calculatePumpPosition';
 import { useI18n } from 'vue-i18n';
 
-const PIPE_LENGTH = 20; // in meters
-
-const INPUT_PRESSURE = ref(1.5); // bar
-const OUTPUT_PRESSURE = ref(10); // bar
-const PRESSURE_LOST = ref(1.1); // bar per meter for 800l/min
-
 const layer = new L.LayerGroup();
 const pumpLayer = new L.LayerGroup();
 let rootMap: L.Map | null = null;
@@ -163,13 +157,7 @@ export function usePumpCalculation() {
 		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
 		console.log('Full Distance', distance);
 		const elevationData = await getElevationDataForPoints(points);
-		const { pumpMarkers } = await getPumpLocationMarkers(
-			t,
-			elevationData,
-			INPUT_PRESSURE.value,
-			OUTPUT_PRESSURE.value,
-			PRESSURE_LOST.value
-		);
+		const { pumpMarkers } = await getPumpLocationMarkers(t, elevationData);
 		pumpLayer.clearLayers();
 		pumpMarkers.forEach((marker) => {
 			pumpLayer.addLayer(marker);
@@ -200,9 +188,6 @@ export function usePumpCalculation() {
 		setWayPoint,
 		suctionPointSet,
 		firePointSet,
-		calculatePumpRequirements,
-		INPUT_PRESSURE,
-		OUTPUT_PRESSURE,
-		PRESSURE_LOST
+		calculatePumpRequirements
 	};
 }
