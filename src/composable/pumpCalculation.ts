@@ -5,9 +5,10 @@ import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
 import { distanceBetweenMultiplePoints } from '@/helper/distanceCalculation';
-import { getElevationDataForPoints } from '@/helper/elevationData';
-import { getPumpLocationMarkers } from '@/helper/calculatePumpPosition';
+import { ElevationPoint, getElevationDataForPoints } from '@/helper/elevationData';
+import { getPumpLocationMarkers, PumpPosition } from '@/helper/calculatePumpPosition';
 import { useI18n } from 'vue-i18n';
+import { usePumpCalculationStore } from '@/store/pumpCalculation';
 
 const layer = new L.LayerGroup();
 const pumpLayer = new L.LayerGroup();
@@ -137,7 +138,8 @@ const getMarkerIcon = (type: 'firePoint' | 'suctionPoint' | 'wayPoint') => {
 	return L.icon({
 		iconUrl: icon,
 		iconSize: type == 'wayPoint' ? [32, 32] : [48, 48],
-		iconAnchor: type !== 'wayPoint' ? [24, 48] : undefined
+		iconAnchor: type !== 'wayPoint' ? [24, 48] : undefined,
+		popupAnchor: type !== 'wayPoint' ? [0, -48] : undefined
 	});
 };
 
@@ -146,6 +148,40 @@ export function usePumpCalculation() {
 	const { t } = useI18n();
 
 	const isActive = computed(() => route.path.includes('supplypipe'));
+
+	const updateTargetMarker = (
+		pumpCount: number,
+		realDistance: number,
+		elevations: ElevationPoint[]
+	) => {
+		const pumpStore = usePumpCalculationStore();
+		const popup = L.popup({
+			maxWidth: 400
+		});
+
+		const inpuPressure = t('pumpCalculation.pump.inputPressure');
+		const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
+		const riseFromStart = t('pumpCalculation.pump.elevationDifference');
+
+		const neededBTubes = Math.round(realDistance / pumpStore.tubeLength);
+		const elevation = elevations[elevations.length - 1].elevation - elevations[0].elevation;
+		const pressure = elevations[elevations.length - 1].pressure;
+
+		const title = t('pumpCalculation.fireObject');
+		const tubes = t('pumpCalculation.pump.tubes');
+		const pumps = t('pumpCalculation.pump.title');
+		const snippet = `B-${tubes}: ~${neededBTubes}<br>${pumps}: ~${pumpCount}<br>${riseFromStart}: ${elevation}m<br>${distanceFromStart}: ~${realDistance.toFixed(2)}m`;
+		const subDescription = `${inpuPressure}: ${pressure?.toFixed(0)}`;
+
+		popup.setContent(`
+		<div class="pump-popup">
+			<b>${title}</b>
+			<div>${snippet}</div>
+			<div>${subDescription}</div>
+		</div>
+	`);
+		targetPoint?.bindPopup(popup);
+	};
 
 	const calculatePumpRequirements = async () => {
 		if (!suctionPoint || !targetPoint) {
@@ -157,12 +193,15 @@ export function usePumpCalculation() {
 		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
 		console.log('Full Distance', distance);
 		const elevationData = await getElevationDataForPoints(points);
-		const { pumpMarkers } = await getPumpLocationMarkers(t, elevationData);
+		const { pumpMarkers, realDistance } = await getPumpLocationMarkers(t, elevationData);
+		updateTargetMarker(pumpMarkers.length, realDistance, elevationData);
 		pumpLayer.clearLayers();
 		pumpMarkers.forEach((marker) => {
 			pumpLayer.addLayer(marker);
 		});
 		layer.addLayer(pumpLayer);
+
+		targetPoint?.openPopup();
 
 		console.log('Elevation Data', pumpMarkers, elevationData);
 	};

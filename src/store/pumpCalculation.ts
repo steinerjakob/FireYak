@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import L from 'leaflet';
 
 export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 	const tubeLength = ref(20); // in meters
@@ -7,11 +8,15 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 	const outputPressure = ref(10); // bar
 	const pressureLost = ref(1.1); // bar per meter for 800l/min
 
+	const suctionPoint = ref<L.Marker | null>(null);
+	const targetPoint = ref<L.Marker | null>(null);
 	return {
 		// State
 		tubeLength,
 		inputPressure,
 		outputPressure,
-		pressureLost
+		pressureLost,
+		suctionPoint,
+		targetPoint
 	};
 });

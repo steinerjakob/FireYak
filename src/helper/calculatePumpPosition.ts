@@ -14,7 +14,7 @@ const flowRateAndPressureLostTable: { flowRate: number; pressureLost: number }[]
 	{ flowRate: 1600, pressureLost: 4.5 }
 ];
 
-type PumpPosition = {
+export type PumpPosition = {
 	lat: number;
 	lon: number;
 	elevation: number;
@@ -30,7 +30,7 @@ async function calculatePumpPosition(
 	pressureLost: number,
 	inputPressure: number,
 	outputPressure: number
-): Promise<PumpPosition[]> {
+): Promise<{ pumps: PumpPosition[]; realDistance: number }> {
 	const pumps: PumpPosition[] = [];
 
 	const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -85,7 +85,7 @@ async function calculatePumpPosition(
 				distanceFromPrev: Math.round(realDistance - (prevPump?.distanceFromStart || 0)),
 				pressureAtTrigger: roundedPressure,
 				riseFromStart: Math.round(curr.elevation - startElevation),
-				riseFromPrev: Math.round(curr.elevation - (prevPump?.elevation || 0))
+				riseFromPrev: Math.round(curr.elevation - (prevPump?.elevation || startElevation))
 			});
 
 			// reset pressure to output after placing pump
@@ -94,7 +94,7 @@ async function calculatePumpPosition(
 	}
 
 	// final rounding of pressure not strictly required here; return pump positions
-	return pumps;
+	return { pumps, realDistance };
 }
 const pumpIcon = L.icon({
 	iconUrl: markerPump,
@@ -132,7 +132,7 @@ function provideMarkerPopup(t: any, pump: PumpPosition) {
 
 export async function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]) {
 	const pumpCalculationStore = usePumpCalculationStore();
-	const pumpPositions = await calculatePumpPosition(
+	const { pumps: pumpPositions, realDistance } = await calculatePumpPosition(
 		elevationPoints,
 		pumpCalculationStore.pressureLost / 100,
 		pumpCalculationStore.inputPressure,
@@ -145,5 +145,5 @@ export async function getPumpLocationMarkers(t: any, elevationPoints: ElevationP
 		marker.bindPopup(provideMarkerPopup(t, pump));
 		return marker;
 	});
-	return { pumpMarkers: markers, pumpPositions };
+	return { pumpMarkers: markers, pumpPositions, realDistance };
 }
