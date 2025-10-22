@@ -16,9 +16,11 @@ import { usePumpCalculation } from '@/composable/pumpCalculation';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
+import { usePumpCalculationStore } from '@/store/pumpCalculation';
 
 const { t } = useI18n();
 const pumpCalculation = usePumpCalculation();
+const pumpCalculationStore = usePumpCalculationStore();
 
 const calculationAllowed = computed(() => {
 	return pumpCalculation.firePointSet.value && pumpCalculation.suctionPointSet.value;
@@ -27,17 +29,17 @@ const calculationAllowed = computed(() => {
 const flowRateChanged = (event: CustomEvent) => {
 	const value = event.detail.value;
 	console.log(value);
-	pumpCalculation.PRESSURE_LOST.value = Number(value);
+	pumpCalculationStore.pressureLost = Number(value);
 };
 
 const inputPressureChanged = (event: CustomEvent) => {
 	const value = event.detail.value;
-	pumpCalculation.INPUT_PRESSURE.value = Number(value);
+	pumpCalculationStore.inputPressure = Number(value);
 };
 
 const outputPressureChanged = (event: CustomEvent) => {
 	const value = event.detail.value;
-	pumpCalculation.OUTPUT_PRESSURE.value = Number(value);
+	pumpCalculationStore.outputPressure = Number(value);
 };
 </script>
 
@@ -96,7 +98,7 @@ const outputPressureChanged = (event: CustomEvent) => {
 			<ion-select
 				:label="t('pumpCalculation.pump.flowRate')"
 				placeholder="Make a Selection"
-				:value="pumpCalculation.PRESSURE_LOST.value.toString()"
+				:value="pumpCalculationStore.pressureLost.toString()"
 				@ionChange="flowRateChanged"
 			>
 				<ion-select-option value="0.1">200 l/min</ion-select-option>
@@ -112,7 +114,7 @@ const outputPressureChanged = (event: CustomEvent) => {
 			<ion-input
 				:label="t('pumpCalculation.pump.inputPressure')"
 				type="number"
-				:value="pumpCalculation.INPUT_PRESSURE.value"
+				:value="pumpCalculationStore.inputPressure"
 				@ionChange="inputPressureChanged"
 			></ion-input>
 		</ion-item>
@@ -120,7 +122,7 @@ const outputPressureChanged = (event: CustomEvent) => {
 			<ion-input
 				:label="t('pumpCalculation.pump.outputPressure')"
 				type="number"
-				:value="pumpCalculation.OUTPUT_PRESSURE.value"
+				:value="pumpCalculationStore.outputPressure"
 				@ionChange="outputPressureChanged"
 			></ion-input>
 		</ion-item>

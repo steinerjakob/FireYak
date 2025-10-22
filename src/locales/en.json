@@ -126,7 +126,8 @@
 			"outputPressure": "Output Pressure (bar)",
 			"flowRate": "Flow Rate (l/min)",
 			"distanceFromStart": "Distance",
-			"elevationDifference": "Elevation"
+			"elevationDifference": "Elevation",
+			"tubes": "Schläuche"
 		}
 	}
 }
