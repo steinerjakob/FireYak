@@ -139,7 +139,7 @@ const getMarkerIcon = (type: 'firePoint' | 'suctionPoint' | 'wayPoint') => {
 		iconUrl: icon,
 		iconSize: type == 'wayPoint' ? [32, 32] : [48, 48],
 		iconAnchor: type !== 'wayPoint' ? [24, 48] : undefined,
-		popupAnchor: type !== 'wayPoint' ? [0, -48] : undefined
+		popupAnchor: type !== 'wayPoint' ? [0, -48] : [0, -12]
 	});
 };
 
