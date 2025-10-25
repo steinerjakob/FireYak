@@ -16,7 +16,7 @@ import { usePumpCalculation } from '@/composable/pumpCalculation';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
-import { usePumpCalculationStore } from '@/store/pumpCalculation';
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 
 const { t } = useI18n();
 const pumpCalculation = usePumpCalculation();

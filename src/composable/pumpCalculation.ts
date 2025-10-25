@@ -6,9 +6,9 @@ import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
 import { distanceBetweenMultiplePoints } from '@/helper/distanceCalculation';
 import { ElevationPoint, getElevationDataForPoints } from '@/helper/elevationData';
-import { getPumpLocationMarkers, PumpPosition } from '@/helper/calculatePumpPosition';
+import { getPumpLocationMarkers } from '@/helper/calculatePumpPosition';
 import { useI18n } from 'vue-i18n';
-import { usePumpCalculationStore } from '@/store/pumpCalculation';
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 
 const layer = new L.LayerGroup();
 const pumpLayer = new L.LayerGroup();
@@ -163,6 +163,7 @@ export function usePumpCalculation() {
 		const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
 		const riseFromStart = t('pumpCalculation.pump.elevationDifference');
 
+		// todo real distance or distance from last point/pump?
 		const neededBTubes = Math.round(realDistance / pumpStore.tubeLength);
 		const elevation = elevations[elevations.length - 1].elevation - elevations[0].elevation;
 		const pressure = elevations[elevations.length - 1].pressure;
