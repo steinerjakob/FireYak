@@ -116,6 +116,9 @@
 			"calculate": "Berechnen",
 			"reset": "Reset"
 		},
+		"alert": {
+			"title": "Marker setzen"
+		},
 		"suctionPoint": "Ansaugstelle",
 		"fireObject": "Brandobjekt",
 		"wayPoint": "Wegpunkt",

@@ -116,6 +116,9 @@
 			"calculate": "Calculate",
 			"reset": "Reset"
 		},
+		"alert": {
+			"title": "Set marker"
+		},
 		"suctionPoint": "Suction point",
 		"fireObject": "Fire object",
 		"wayPoint": "Way point",
