@@ -113,8 +113,11 @@
 		"openInfo": "Relaisleitung berechnen",
 		"buttons": {
 			"close": "Schließen",
-
-			"calculate": "Berechnen"
+			"calculate": "Berechnen",
+			"reset": "Reset"
+		},
+		"alert": {
+			"title": "Marker setzen"
 		},
 		"suctionPoint": "Ansaugstelle",
 		"fireObject": "Brandobjekt",

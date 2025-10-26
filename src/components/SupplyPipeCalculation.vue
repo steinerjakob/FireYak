@@ -1,22 +1,24 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import {
+	IonButton,
+	IonIcon,
+	IonInput,
 	IonItem,
 	IonLabel,
 	IonList,
-	IonIcon,
-	IonButton,
 	IonSelect,
-	IonSelectOption,
-	IonInput
+	IonSelectOption
 } from '@ionic/vue';
-import { locateOutline, calculator } from 'ionicons/icons';
+import { calculator, locateOutline } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
-import { usePumpCalculationStore } from '@/store/pumpCalculation';
+import pumpIcon from '@/assets/markers/markerpump.png'; // Add pump icon import
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import { PumpPosition } from '@/helper/calculatePumpPosition';
 
 const { t } = useI18n();
 const pumpCalculation = usePumpCalculation();
@@ -41,10 +43,63 @@ const outputPressureChanged = (event: CustomEvent) => {
 	const value = event.detail.value;
 	pumpCalculationStore.outputPressure = Number(value);
 };
+
+const tubeCount = computed(() => {
+	return (
+		(pumpCalculation.calculationResult.value?.realDistance || 0) / pumpCalculationStore.tubeLength
+	).toFixed(0);
+});
+
+const selectPumpMarker = (pumpPosition: PumpPosition) => {
+	pumpPosition.marker.openPopup();
+};
+
+const selectTargetMarker = () => {
+	if (pumpCalculation.calculationResult.value?.targetPoint) {
+		pumpCalculation.calculationResult.value?.targetPoint.openPopup();
+	}
+};
+const selectSuctionPoint = () => {
+	if (pumpCalculation.calculationResult.value?.suctionPoint) {
+		pumpCalculation.calculationResult.value?.suctionPoint.openPopup();
+	}
+};
+
+const pumpPositions = computed(() => {
+	return (pumpCalculation.calculationResult.value?.pumpPositions || []).toReversed();
+});
+
+const pumpPositionInfo = (pump: PumpPosition) => {
+	const inpuPressure = t('pumpCalculation.pump.inputPressure');
+	const tubes = t('pumpCalculation.pump.tubes');
+	return `B-${tubes}: ~${pump.neededBTubes}; ${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}`;
+};
+
+const targetMarkerInfo = () => {
+	const pumpCalculationResult = pumpCalculation.calculationResult.value;
+	if (!pumpCalculationResult) {
+		return;
+	}
+
+	const lastPump =
+		pumpCalculationResult.pumpPositions[pumpCalculationResult.pumpPositions.length - 1];
+	const prevDistance = lastPump?.distanceFromStart || 0;
+
+	const distance = pumpCalculationResult.realDistance - prevDistance;
+
+	const neededBTubes = Math.round(distance / pumpCalculationStore.tubeLength);
+	const lastElevation =
+		pumpCalculationResult.elevationData[pumpCalculationResult.elevationData.length - 1];
+	const pressure = lastElevation.pressure || 0;
+
+	const inpuPressure = t('pumpCalculation.pump.inputPressure');
+	const tubes = t('pumpCalculation.pump.tubes');
+	return `B-${tubes}: ~${neededBTubes}; ${inpuPressure}: ${pressure.toFixed(2)}`;
+};
 </script>
 
 <template>
-	<ion-list class="info-list">
+	<ion-list v-if="!pumpCalculation.calculationResult.value" class="info-list">
 		<!-- Coordinates -->
 		<ion-item>
 			<img slot="start" :src="firepointIcon" style="height: 24px" alt="Fire point" />
@@ -136,6 +191,63 @@ const outputPressureChanged = (event: CustomEvent) => {
 			{{ t('pumpCalculation.buttons.calculate') }}
 		</ion-button>
 	</ion-list>
+
+	<ion-list v-else>
+		<ion-item>
+			<ion-label>
+				<div class="calculation-results">
+					<div class="result-row">
+						<span class="result-label">B-{{ t('pumpCalculation.pump.tubes') }}:</span>
+						<span class="result-value">~{{ tubeCount }}</span>
+					</div>
+					<div class="result-row">
+						<span class="result-label">{{ t('pumpCalculation.pump.title') }}:</span>
+						<span class="result-value"
+							>~{{ pumpCalculation.calculationResult.value.pumpCount }}</span
+						>
+					</div>
+					<div class="result-row">
+						<span class="result-label">{{ t('pumpCalculation.pump.distanceFromStart') }}:</span>
+						<span class="result-value"
+							>~{{ pumpCalculation.calculationResult.value.realDistance.toFixed(0) }}m</span
+						>
+					</div>
+					<div class="result-row">
+						<span class="result-label">{{ t('pumpCalculation.pump.elevationDifference') }}:</span>
+						<span class="result-value"
+							>~{{ pumpCalculation.calculationResult.value.elevation }}m</span
+						>
+					</div>
+				</div>
+			</ion-label>
+		</ion-item>
+
+		<!-- Marker navigation items todo center based on router -->
+		<ion-item button @click="selectTargetMarker()">
+			<img slot="start" :src="firepointIcon" style="height: 24px" alt="Target marker" />
+			<ion-label>
+				<h3>{{ t('pumpCalculation.fireObject') }}</h3>
+				<p>{{ targetMarkerInfo() }}</p>
+			</ion-label>
+		</ion-item>
+
+		<template v-for="position of pumpPositions" :key="position.distanceFromStart">
+			<ion-item button @click="selectPumpMarker(position as PumpPosition)">
+				<img slot="start" :src="pumpIcon" style="height: 24px" alt="Pump marker" />
+				<ion-label>
+					<h3>{{ t('pumpCalculation.pump.title') }}</h3>
+					<p>{{ pumpPositionInfo(position as PumpPosition) }}</p>
+				</ion-label>
+			</ion-item>
+		</template>
+
+		<ion-item button @click="selectSuctionPoint()">
+			<img slot="start" :src="suctionPointIcon" style="height: 24px" alt="Suction marker" />
+			<ion-label>
+				<h3>{{ t('pumpCalculation.suctionPoint') }}</h3>
+			</ion-label>
+		</ion-item>
+	</ion-list>
 </template>
 
 <style scoped>
@@ -152,21 +264,32 @@ ion-item {
 	--min-height: 48px;
 }
 
-ion-label h3 {
-	font-weight: 600;
-	font-size: 0.875rem;
-	color: var(--ion-color-medium);
-	margin-bottom: 2px;
+ion-item[button]:hover {
+	--background: rgba(var(--ion-color-primary-rgb), 0.1);
 }
 
-ion-label p {
-	font-size: 1rem;
+.calculation-results {
+	width: 100%;
+}
+
+.result-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.result-row:last-child {
+	margin-bottom: 0;
+}
+
+.result-label {
+	font-weight: bold;
 	color: var(--ion-color-dark);
-	margin-top: 0;
 }
 
-.loading-note {
-	padding: 12px;
-	display: block;
+.result-value {
+	color: var(--ion-color-dark);
+	text-align: right;
 }
 </style>
