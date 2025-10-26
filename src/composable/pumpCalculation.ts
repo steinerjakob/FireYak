@@ -80,25 +80,6 @@ const updatePolyline = () => {
 	layer.addLayer(line);
 };
 
-const setSuctionPoint = () => {
-	const latLng = rootMap?.getCenter();
-	if (!suctionPoint) {
-		suctionPoint = new L.Marker(latLng as LatLng, {
-			icon: getMarkerIcon('suctionPoint'),
-			draggable: true
-		});
-	} else {
-		suctionPoint.setLatLng(latLng as LatLng);
-	}
-
-	suctionPoint.on('dragend', () => {
-		updatePolyline();
-	});
-	layer.addLayer(suctionPoint);
-	suctionPointSet.value = true;
-	updatePolyline();
-};
-
 const setTargetPoint = () => {
 	const latLng = rootMap?.getCenter();
 	if (!targetPoint) {
@@ -181,6 +162,32 @@ export function usePumpCalculation() {
 	const { t } = useI18n();
 
 	const isActive = computed(() => route.path.includes('supplypipe'));
+
+	const setSuctionPoint = () => {
+		const latLng = rootMap?.getCenter();
+		if (!suctionPoint) {
+			suctionPoint = new L.Marker(latLng as LatLng, {
+				icon: getMarkerIcon('suctionPoint'),
+				draggable: true
+			});
+		} else {
+			suctionPoint.setLatLng(latLng as LatLng);
+		}
+
+		suctionPoint.on('dragend', () => {
+			updatePolyline();
+		});
+		const popup = L.popup();
+		popup.setContent(`
+		<div class="pump-popup">
+			<b>${t('pumpCalculation.suctionPoint')}</b>
+		</div>
+	`);
+		suctionPoint?.bindPopup(popup);
+		layer.addLayer(suctionPoint);
+		suctionPointSet.value = true;
+		updatePolyline();
+	};
 
 	const updateTargetMarker = (
 		pumpPositions: PumpPosition[],

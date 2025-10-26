@@ -64,6 +64,10 @@ const selectSuctionPoint = () => {
 		pumpCalculation.calculationResult.value?.suctionPoint.openPopup();
 	}
 };
+
+const pumpPositions = computed(() => {
+	return (pumpCalculation.calculationResult.value?.pumpPositions || []).toReversed();
+});
 </script>
 
 <template>
@@ -198,10 +202,7 @@ const selectSuctionPoint = () => {
 			</ion-label>
 		</ion-item>
 
-		<template
-			v-for="position of pumpCalculation.calculationResult.value.pumpPositions"
-			:key="position.distanceFromStart"
-		>
+		<template v-for="position of pumpPositions" :key="position.distanceFromStart">
 			<ion-item button @click="selectPumpMarker(position as PumpPosition)">
 				<img slot="start" :src="pumpIcon" style="height: 24px" alt="Pump marker" />
 				<ion-label>
