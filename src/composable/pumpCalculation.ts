@@ -29,6 +29,8 @@ export interface CalculationResult {
 	pumpPositions: PumpPosition[];
 }
 
+const calculationResult = ref<CalculationResult | null>(null);
+
 function setMap(map: L.Map) {
 	rootMap = map;
 	layer.addTo(rootMap);
@@ -219,9 +221,9 @@ export function usePumpCalculation() {
 		targetPoint?.bindPopup(popup);
 	};
 
-	const calculatePumpRequirements = async (): Promise<CalculationResult | null> => {
+	const calculatePumpRequirements = async () => {
 		if (!suctionPoint || !targetPoint) {
-			return null;
+			return;
 		}
 		const pointsToCalculate = [suctionPoint, ...wayPoints, targetPoint].map((point) =>
 			point.getLatLng()
@@ -244,7 +246,7 @@ export function usePumpCalculation() {
 
 		console.log('Elevation Data', pumpMarkers, elevationData);
 
-		return {
+		calculationResult.value = {
 			pumpMarkers,
 			pumpPositions,
 			elevationData,
@@ -277,6 +279,7 @@ export function usePumpCalculation() {
 		setWayPoint,
 		suctionPointSet,
 		firePointSet,
-		calculatePumpRequirements
+		calculatePumpRequirements,
+		calculationResult
 	};
 }
