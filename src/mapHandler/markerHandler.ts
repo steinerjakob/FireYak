@@ -11,6 +11,7 @@ import iconWaterTank from '../assets/markers/watertank.png';
 import { fetchMarkerData, OverPassElement } from './overPassApi';
 import { getMapNodesForView, storeMapNodes } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/app';
+import { NearbyMarker } from '@/composable/nearbyWaterSource';
 
 function getIconForNode(element: OverPassElement): L.Icon {
 	let iconData = iconHydrant;
@@ -78,11 +79,6 @@ export async function getMarkersForView(mapBounds: LatLngBounds) {
 	}
 
 	return markerList;
-}
-
-export interface NearbyMarker {
-	marker: L.Marker;
-	distance: number;
 }
 
 /**

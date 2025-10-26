@@ -27,7 +27,7 @@
 			</ion-fab-button>
 		</ion-fab>
 		<ion-fab vertical="top" horizontal="end" slot="fixed">
-			<ion-fab-button color="light" @click="searchNearbyMarkers" title="Location">
+			<ion-fab-button color="light" @click="router.push('/nearbysources')" title="Nearby">
 				<ion-icon :icon="nearbyMarker" size="large"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
@@ -54,6 +54,7 @@ import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
 import { informationCircle, analyticsOutline, navigate } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
+import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -64,6 +65,7 @@ const route = useRoute();
 const markerStore = useMapMarkerStore();
 const { isDarkMode } = useDarkMode();
 const pumpCalculation = usePumpCalculation();
+const nearbyWaterSource = useNearbyWaterSource();
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
@@ -160,15 +162,12 @@ async function searchNearbyMarkers() {
 	}
 	if (locationControl._event && locationControl._event.latlng) {
 		const userLocation = locationControl._event.latlng;
-		const markerList = await getNearbyMarkers(rootMap.getBounds(), userLocation);
-		console.log(markerList);
+		nearbyWaterSource.list.value = await getNearbyMarkers(rootMap.getBounds(), userLocation);
 	} else {
-		console.log('No current location available from location control');
 		// Fallback to map center or request location
 		const center = rootMap.getCenter();
 		if (center) {
-			const markerList = await getNearbyMarkers(rootMap.getBounds(), center);
-			console.log(markerList);
+			nearbyWaterSource.list.value = await getNearbyMarkers(rootMap.getBounds(), center);
 		}
 	}
 }
@@ -178,7 +177,7 @@ async function initMap() {
 
 	rootMap.on('click', () => {
 		// do not close if the supply pipe is open
-		if (route.path.includes('markers')) {
+		if (!route.path.includes('supplypipe')) {
 			router.push('/');
 		}
 	});
@@ -227,6 +226,17 @@ onMounted(async () => {
 			await markerStore.selectMarker(markerIdNumber);
 		},
 		{ immediate: true }
+	);
+
+	watch(
+		() => route.path,
+		async (path) => {
+			if (path.includes('nearbysources')) {
+				await searchNearbyMarkers();
+			} else {
+				nearbyWaterSource.list.value = [];
+			}
+		}
 	);
 });
 </script>
