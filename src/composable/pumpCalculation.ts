@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import L, { LatLng } from 'leaflet';
+import L, { LatLng, Marker } from 'leaflet';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
@@ -8,7 +8,8 @@ import { distanceBetweenMultiplePoints } from '@/helper/distanceCalculation';
 import { ElevationPoint, getElevationDataForPoints } from '@/helper/elevationData';
 import { getPumpLocationMarkers, PumpPosition } from '@/helper/calculatePumpPosition';
 import { useI18n } from 'vue-i18n';
-import { usePumpCalculationStore } from '@/store/pumpCalculation';
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import { alertController } from '@ionic/vue';
 
 const layer = new L.LayerGroup();
 const pumpLayer = new L.LayerGroup();
@@ -17,6 +18,19 @@ let suctionPoint: L.Marker | null = null;
 let targetPoint: L.Marker | null = null;
 const wayPoints: L.Marker[] = [];
 const line = new L.Polyline([]);
+
+export interface CalculationResult {
+	realDistance: number;
+	elevation: number;
+	wayPoints: Marker[];
+	suctionPoint: Marker;
+	targetPoint: Marker;
+	pumpCount: number;
+	elevationData: ElevationPoint[];
+	pumpPositions: PumpPosition[];
+}
+
+const calculationResult = ref<CalculationResult | null>(null);
 
 function setMap(map: L.Map) {
 	rootMap = map;
@@ -67,25 +81,20 @@ const updatePolyline = () => {
 	layer.addLayer(line);
 };
 
-const setSuctionPoint = () => {
-	const latLng = rootMap?.getCenter();
-	if (!suctionPoint) {
-		suctionPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('suctionPoint') });
-	} else {
-		suctionPoint.setLatLng(latLng as LatLng);
-	}
-	layer.addLayer(suctionPoint);
-	suctionPointSet.value = true;
-	updatePolyline();
-};
-
-const setTargetPoint = () => {
-	const latLng = rootMap?.getCenter();
+const setTargetPoint = (latlng?: LatLng) => {
+	const latLng = latlng || rootMap?.getCenter();
 	if (!targetPoint) {
-		targetPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('firePoint') });
+		targetPoint = new L.Marker(latLng as LatLng, {
+			icon: getMarkerIcon('firePoint'),
+			draggable: true
+		});
 	} else {
 		targetPoint.setLatLng(latLng as LatLng);
 	}
+
+	targetPoint.on('dragend', () => {
+		updatePolyline();
+	});
 
 	layer.addLayer(targetPoint);
 	firePointSet.value = true;
@@ -101,10 +110,16 @@ const removeWayPoint = (wayPointToRemove: L.Marker) => {
 	}
 };
 
-const setWayPoint = () => {
-	const latLng = rootMap?.getCenter();
+const setWayPoint = (latlng?: LatLng) => {
+	const latLng = latlng || rootMap?.getCenter();
 	if (!latLng) return;
-	const wayPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('wayPoint') });
+	const wayPoint = new L.Marker(latLng as LatLng, {
+		icon: getMarkerIcon('wayPoint'),
+		draggable: true
+	});
+	wayPoint.on('dragend', () => {
+		updatePolyline();
+	});
 
 	const popup = L.popup();
 	const popupContent = document.createElement('div');
@@ -149,8 +164,34 @@ export function usePumpCalculation() {
 
 	const isActive = computed(() => route.path.includes('supplypipe'));
 
+	const setSuctionPoint = (latlng?: LatLng) => {
+		const latLng = latlng || rootMap?.getCenter();
+		if (!suctionPoint) {
+			suctionPoint = new L.Marker(latLng as LatLng, {
+				icon: getMarkerIcon('suctionPoint'),
+				draggable: true
+			});
+		} else {
+			suctionPoint.setLatLng(latLng as LatLng);
+		}
+
+		suctionPoint.on('dragend', () => {
+			updatePolyline();
+		});
+		const popup = L.popup();
+		popup.setContent(`
+		<div class="pump-popup">
+			<b>${t('pumpCalculation.suctionPoint')}</b>
+		</div>
+	`);
+		suctionPoint?.bindPopup(popup);
+		layer.addLayer(suctionPoint);
+		suctionPointSet.value = true;
+		updatePolyline();
+	};
+
 	const updateTargetMarker = (
-		pumpCount: number,
+		pumpPositions: PumpPosition[],
 		realDistance: number,
 		elevations: ElevationPoint[]
 	) => {
@@ -163,14 +204,21 @@ export function usePumpCalculation() {
 		const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
 		const riseFromStart = t('pumpCalculation.pump.elevationDifference');
 
-		const neededBTubes = Math.round(realDistance / pumpStore.tubeLength);
-		const elevation = elevations[elevations.length - 1].elevation - elevations[0].elevation;
-		const pressure = elevations[elevations.length - 1].pressure;
+		const lastPump = pumpPositions[pumpPositions.length - 1];
+		const prevDistance = lastPump?.distanceFromStart || 0;
+		const prevElevation = lastPump?.elevation || elevations[0].elevation;
+
+		const distance = realDistance - prevDistance;
+
+		const neededBTubes = Math.round(distance / pumpStore.tubeLength);
+		const lastElevation = elevations[elevations.length - 1];
+		const elevation = lastElevation.elevation - prevElevation;
+		const pressure = lastElevation.pressure;
 
 		const title = t('pumpCalculation.fireObject');
 		const tubes = t('pumpCalculation.pump.tubes');
-		const pumps = t('pumpCalculation.pump.title');
-		const snippet = `B-${tubes}: ~${neededBTubes}<br>${pumps}: ~${pumpCount + 1}<br>${riseFromStart}: ${elevation}m<br>${distanceFromStart}: ~${realDistance.toFixed(2)}m`;
+
+		const snippet = `B-${tubes}: ~${neededBTubes}<br>${distanceFromStart}: ~${distance.toFixed(0)}m<br>${riseFromStart}: ${elevation}m`;
 		const subDescription = `${inpuPressure}: ${pressure?.toFixed(0)}`;
 
 		popup.setContent(`
@@ -193,17 +241,24 @@ export function usePumpCalculation() {
 		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
 		console.log('Full Distance', distance);
 		const elevationData = await getElevationDataForPoints(points);
-		const { pumpMarkers, realDistance } = await getPumpLocationMarkers(t, elevationData);
-		updateTargetMarker(pumpMarkers.length, realDistance, elevationData);
+		const { realDistance, pumpPositions } = await getPumpLocationMarkers(t, elevationData);
+		updateTargetMarker(pumpPositions, realDistance, elevationData);
 		pumpLayer.clearLayers();
-		pumpMarkers.forEach((marker) => {
+		pumpPositions.forEach(({ marker }) => {
 			pumpLayer.addLayer(marker);
 		});
 		layer.addLayer(pumpLayer);
 
-		targetPoint?.openPopup();
-
-		console.log('Elevation Data', pumpMarkers, elevationData);
+		calculationResult.value = {
+			pumpPositions,
+			elevationData,
+			pumpCount: pumpPositions.length + 1,
+			realDistance,
+			elevation: elevationData[elevationData.length - 1].elevation - elevationData[0].elevation,
+			suctionPoint,
+			targetPoint,
+			wayPoints
+		};
 	};
 
 	watch(isActive, (newValue) => {
@@ -218,6 +273,46 @@ export function usePumpCalculation() {
 		}
 	});
 
+	const markerSetAlert = async (latlng: LatLng) => {
+		const alert = await alertController.create({
+			header: t('pumpCalculation.alert.title'),
+			inputs: [
+				{
+					label: t('pumpCalculation.fireObject'),
+					type: 'radio',
+					value: 'fireObject'
+				},
+				{
+					label: t('pumpCalculation.suctionPoint'),
+					type: 'radio',
+					value: 'suctionPoint'
+				},
+				{
+					label: t('pumpCalculation.wayPoint'),
+					type: 'radio',
+					value: 'wayPoint'
+				}
+			],
+			buttons: [t('pumpCalculation.setPosition')]
+		});
+
+		alert.onDidDismiss().then((alertData) => {
+			if (!alertData.data) {
+				return;
+			}
+			const value = alertData.data.values;
+			if (value === 'fireObject') {
+				setTargetPoint(latlng);
+			} else if (value === 'suctionPoint') {
+				setSuctionPoint(latlng);
+			} else if (value === 'wayPoint') {
+				setWayPoint(latlng);
+			}
+		});
+
+		await alert.present();
+	};
+
 	return {
 		isActive,
 		layer,
@@ -227,6 +322,8 @@ export function usePumpCalculation() {
 		setWayPoint,
 		suctionPointSet,
 		firePointSet,
-		calculatePumpRequirements
+		calculatePumpRequirements,
+		calculationResult,
+		markerSetAlert
 	};
 }

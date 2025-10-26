@@ -158,6 +158,12 @@ async function initMap() {
 		}
 	});
 
+	rootMap.on('contextmenu', (e) => {
+		if (route.path.includes('supplypipe')) {
+			pumpCalculation.markerSetAlert(e.latlng);
+		}
+	});
+
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 		maxZoom: 19,
 		attribution:
