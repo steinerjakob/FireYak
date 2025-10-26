@@ -70,10 +70,17 @@ const updatePolyline = () => {
 const setSuctionPoint = () => {
 	const latLng = rootMap?.getCenter();
 	if (!suctionPoint) {
-		suctionPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('suctionPoint') });
+		suctionPoint = new L.Marker(latLng as LatLng, {
+			icon: getMarkerIcon('suctionPoint'),
+			draggable: true
+		});
 	} else {
 		suctionPoint.setLatLng(latLng as LatLng);
 	}
+
+	suctionPoint.on('dragend', () => {
+		updatePolyline();
+	});
 	layer.addLayer(suctionPoint);
 	suctionPointSet.value = true;
 	updatePolyline();
@@ -82,10 +89,17 @@ const setSuctionPoint = () => {
 const setTargetPoint = () => {
 	const latLng = rootMap?.getCenter();
 	if (!targetPoint) {
-		targetPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('firePoint') });
+		targetPoint = new L.Marker(latLng as LatLng, {
+			icon: getMarkerIcon('firePoint'),
+			draggable: true
+		});
 	} else {
 		targetPoint.setLatLng(latLng as LatLng);
 	}
+
+	targetPoint.on('dragend', () => {
+		updatePolyline();
+	});
 
 	layer.addLayer(targetPoint);
 	firePointSet.value = true;
@@ -104,7 +118,13 @@ const removeWayPoint = (wayPointToRemove: L.Marker) => {
 const setWayPoint = () => {
 	const latLng = rootMap?.getCenter();
 	if (!latLng) return;
-	const wayPoint = new L.Marker(latLng as LatLng, { icon: getMarkerIcon('wayPoint') });
+	const wayPoint = new L.Marker(latLng as LatLng, {
+		icon: getMarkerIcon('wayPoint'),
+		draggable: true
+	});
+	wayPoint.on('dragend', () => {
+		updatePolyline();
+	});
 
 	const popup = L.popup();
 	const popupContent = document.createElement('div');
@@ -186,7 +206,7 @@ export function usePumpCalculation() {
 
 	const calculatePumpRequirements = async () => {
 		if (!suctionPoint || !targetPoint) {
-			return;
+			return null;
 		}
 		const pointsToCalculate = [suctionPoint, ...wayPoints, targetPoint].map((point) =>
 			point.getLatLng()
