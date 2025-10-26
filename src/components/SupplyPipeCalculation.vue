@@ -142,25 +142,34 @@ const tubeCount = computed(() => {
 			{{ t('pumpCalculation.buttons.calculate') }}
 		</ion-button>
 	</ion-list>
+
 	<ion-list v-else>
 		<ion-item>
 			<ion-label>
-				<p>B-{{ t('pumpCalculation.pump.tubes') }}: ~{{ tubeCount }}</p>
-				<p>
-					{{ t('pumpCalculation.pump.title') }}: ~{{
-						pumpCalculation.calculationResult.value.pumpCount
-					}}
-				</p>
-				<p>
-					{{ t('pumpCalculation.pump.distanceFromStart') }}: ~{{
-						pumpCalculation.calculationResult.value.realDistance.toFixed(0)
-					}}m
-				</p>
-				<p>
-					{{ t('pumpCalculation.pump.elevationDifference') }}: ~{{
-						pumpCalculation.calculationResult.value.elevation
-					}}m
-				</p>
+				<div class="calculation-results">
+					<div class="result-row">
+						<span class="result-label">B-{{ t('pumpCalculation.pump.tubes') }}:</span>
+						<span class="result-value">~{{ tubeCount }}</span>
+					</div>
+					<div class="result-row">
+						<span class="result-label">{{ t('pumpCalculation.pump.title') }}:</span>
+						<span class="result-value"
+							>~{{ pumpCalculation.calculationResult.value.pumpCount }}</span
+						>
+					</div>
+					<div class="result-row">
+						<span class="result-label">{{ t('pumpCalculation.pump.distanceFromStart') }}:</span>
+						<span class="result-value"
+							>~{{ pumpCalculation.calculationResult.value.realDistance.toFixed(0) }}m</span
+						>
+					</div>
+					<div class="result-row">
+						<span class="result-label">{{ t('pumpCalculation.pump.elevationDifference') }}:</span>
+						<span class="result-value"
+							>~{{ pumpCalculation.calculationResult.value.elevation }}m</span
+						>
+					</div>
+				</div>
 			</ion-label>
 		</ion-item>
 	</ion-list>
@@ -179,22 +188,28 @@ ion-item {
 	--inner-padding-end: 0;
 	--min-height: 48px;
 }
-
-ion-label h3 {
-	font-weight: 600;
-	font-size: 0.875rem;
-	color: var(--ion-color-medium);
-	margin-bottom: 2px;
+.calculation-results {
+	width: 100%;
 }
 
-ion-label p {
-	font-size: 1rem;
+.result-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.result-row:last-child {
+	margin-bottom: 0;
+}
+
+.result-label {
+	font-weight: bold;
 	color: var(--ion-color-dark);
-	margin-top: 0;
 }
 
-.loading-note {
-	padding: 12px;
-	display: block;
+.result-value {
+	color: var(--ion-color-dark);
+	text-align: right;
 }
 </style>
