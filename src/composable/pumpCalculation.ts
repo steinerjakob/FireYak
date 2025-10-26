@@ -9,6 +9,7 @@ import { ElevationPoint, getElevationDataForPoints } from '@/helper/elevationDat
 import { getPumpLocationMarkers, PumpPosition } from '@/helper/calculatePumpPosition';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import { alertController } from '@ionic/vue';
 
 const layer = new L.LayerGroup();
 const pumpLayer = new L.LayerGroup();
@@ -80,8 +81,8 @@ const updatePolyline = () => {
 	layer.addLayer(line);
 };
 
-const setTargetPoint = () => {
-	const latLng = rootMap?.getCenter();
+const setTargetPoint = (latlng?: LatLng) => {
+	const latLng = latlng || rootMap?.getCenter();
 	if (!targetPoint) {
 		targetPoint = new L.Marker(latLng as LatLng, {
 			icon: getMarkerIcon('firePoint'),
@@ -109,8 +110,8 @@ const removeWayPoint = (wayPointToRemove: L.Marker) => {
 	}
 };
 
-const setWayPoint = () => {
-	const latLng = rootMap?.getCenter();
+const setWayPoint = (latlng?: LatLng) => {
+	const latLng = latlng || rootMap?.getCenter();
 	if (!latLng) return;
 	const wayPoint = new L.Marker(latLng as LatLng, {
 		icon: getMarkerIcon('wayPoint'),
@@ -163,8 +164,8 @@ export function usePumpCalculation() {
 
 	const isActive = computed(() => route.path.includes('supplypipe'));
 
-	const setSuctionPoint = () => {
-		const latLng = rootMap?.getCenter();
+	const setSuctionPoint = (latlng?: LatLng) => {
+		const latLng = latlng || rootMap?.getCenter();
 		if (!suctionPoint) {
 			suctionPoint = new L.Marker(latLng as LatLng, {
 				icon: getMarkerIcon('suctionPoint'),
@@ -272,6 +273,46 @@ export function usePumpCalculation() {
 		}
 	});
 
+	const markerSetAlert = async (latlng: LatLng) => {
+		const alert = await alertController.create({
+			header: t('pumpCalculation.alert.title'),
+			inputs: [
+				{
+					label: t('pumpCalculation.fireObject'),
+					type: 'radio',
+					value: 'fireObject'
+				},
+				{
+					label: t('pumpCalculation.suctionPoint'),
+					type: 'radio',
+					value: 'suctionPoint'
+				},
+				{
+					label: t('pumpCalculation.wayPoint'),
+					type: 'radio',
+					value: 'wayPoint'
+				}
+			],
+			buttons: [t('pumpCalculation.setPosition')]
+		});
+
+		alert.onDidDismiss().then((alertData) => {
+			if (!alertData.data) {
+				return;
+			}
+			const value = alertData.data.values;
+			if (value === 'fireObject') {
+				setTargetPoint(latlng);
+			} else if (value === 'suctionPoint') {
+				setSuctionPoint(latlng);
+			} else if (value === 'wayPoint') {
+				setWayPoint(latlng);
+			}
+		});
+
+		await alert.present();
+	};
+
 	return {
 		isActive,
 		layer,
@@ -282,6 +323,7 @@ export function usePumpCalculation() {
 		suctionPointSet,
 		firePointSet,
 		calculatePumpRequirements,
-		calculationResult
+		calculationResult,
+		markerSetAlert
 	};
 }
