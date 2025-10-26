@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { IonButton, IonIcon, IonHeader, IonToolbar, IonTitle, IonButtons } from '@ionic/vue';
-import { close } from 'ionicons/icons';
+import { close, arrowBack } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import router from '@/router';
+import { usePumpCalculation } from '@/composable/pumpCalculation';
+const pumpCalculation = usePumpCalculation();
 
 const { t } = useI18n();
 
@@ -18,6 +20,16 @@ const closeSupplyPipe = () => {
 <template>
 	<ion-header class="ion-no-border">
 		<ion-toolbar>
+			<ion-buttons slot="start">
+				<ion-button
+					v-show="pumpCalculation.calculationResult.value"
+					@click="pumpCalculation.calculationResult.value = null"
+					:title="t('pumpCalculation.buttons.reset')"
+				>
+					<ion-icon :icon="arrowBack" />
+				</ion-button>
+			</ion-buttons>
+
 			<ion-title>{{ getTitle() }}</ion-title>
 			<ion-buttons slot="end">
 				<ion-button @click="closeSupplyPipe" :title="t('pumpCalculation.buttons.close')">

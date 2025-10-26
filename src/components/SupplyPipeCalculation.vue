@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import {
+	IonButton,
+	IonIcon,
+	IonInput,
 	IonItem,
 	IonLabel,
 	IonList,
-	IonIcon,
-	IonButton,
 	IonSelect,
-	IonSelectOption,
-	IonInput
+	IonSelectOption
 } from '@ionic/vue';
-import { locateOutline, calculator } from 'ionicons/icons';
+import { calculator, locateOutline } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
@@ -44,7 +44,7 @@ const outputPressureChanged = (event: CustomEvent) => {
 </script>
 
 <template>
-	<ion-list class="info-list">
+	<ion-list v-if="!pumpCalculation.calculationResult.value" class="info-list">
 		<!-- Coordinates -->
 		<ion-item>
 			<img slot="start" :src="firepointIcon" style="height: 24px" alt="Fire point" />
