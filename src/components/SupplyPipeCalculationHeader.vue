@@ -14,6 +14,7 @@ const getTitle = () => {
 
 const closeSupplyPipe = () => {
 	router.push('/');
+	pumpCalculation.calculationResult.value = null;
 };
 </script>
 

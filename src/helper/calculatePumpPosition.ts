@@ -24,6 +24,7 @@ export type PumpPosition = {
 	riseFromStart: number; // meters
 	riseFromPrev: number; //meters
 	marker: Marker;
+	neededBTubes: number;
 };
 
 async function calculatePumpPosition(
@@ -77,20 +78,24 @@ async function calculatePumpPosition(
 		elevationPoints[i].distance = realDistance;
 
 		if (pressure <= inputPressure) {
+			const pumpStore = usePumpCalculationStore();
 			const roundedPressure = Math.floor(pressure * 100) / 100;
 			const prevPump = pumps[pumps.length - 1];
 			const marker = new Marker(L.latLng(curr.latLng.lat, curr.latLng.lng), {
 				icon: pumpIcon
 			});
+			const distanceFromPrev = Math.round(realDistance - (prevPump?.distanceFromStart || 0));
+			const neededBTubes = Math.round(distanceFromPrev / pumpStore.tubeLength);
 			const pumpInfo = {
 				lat: curr.latLng.lat,
 				lon: curr.latLng.lng,
 				elevation: curr.elevation,
 				distanceFromStart: Math.round(realDistance),
-				distanceFromPrev: Math.round(realDistance - (prevPump?.distanceFromStart || 0)),
+				distanceFromPrev,
 				pressureAtTrigger: roundedPressure,
 				riseFromStart: Math.round(curr.elevation - startElevation),
 				riseFromPrev: Math.round(curr.elevation - (prevPump?.elevation || startElevation)),
+				neededBTubes,
 				marker
 			};
 			marker.bindPopup(provideMarkerPopup(t, pumpInfo));
@@ -112,7 +117,6 @@ const pumpIcon = L.icon({
 });
 
 function provideMarkerPopup(t: any, pump: PumpPosition) {
-	const pumpStore = usePumpCalculationStore();
 	const popup = L.popup({
 		maxWidth: 400
 	});
@@ -121,11 +125,9 @@ function provideMarkerPopup(t: any, pump: PumpPosition) {
 	const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
 	const riseFromStart = t('pumpCalculation.pump.elevationDifference');
 
-	const neededBTubes = Math.round(pump.distanceFromPrev / pumpStore.tubeLength);
-
 	const title = t('pumpCalculation.pump.title');
 	const tubes = t('pumpCalculation.pump.tubes');
-	const snippet = `B-${tubes}: ~${neededBTubes}<br>${distanceFromStart}: ~${pump.distanceFromPrev}m<br>${riseFromStart}: ${pump.riseFromPrev}m`;
+	const snippet = `B-${tubes}: ~${pump.neededBTubes}<br>${distanceFromStart}: ~${pump.distanceFromPrev}m<br>${riseFromStart}: ${pump.riseFromPrev}m`;
 	const subDescription = `${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}`;
 
 	popup.setContent(`
