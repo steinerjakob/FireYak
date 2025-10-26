@@ -20,6 +20,7 @@ const line = new L.Polyline([]);
 
 export interface CalculationResult {
 	realDistance: number;
+	elevation: number;
 	pumpMarkers: Marker[];
 	wayPoints: Marker[];
 	suctionPoint: Marker;
@@ -252,6 +253,7 @@ export function usePumpCalculation() {
 			elevationData,
 			pumpCount: pumpMarkers.length + 1,
 			realDistance,
+			elevation: elevationData[elevationData.length - 1].elevation - elevationData[0].elevation,
 			suctionPoint,
 			targetPoint,
 			wayPoints
