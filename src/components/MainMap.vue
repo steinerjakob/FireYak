@@ -26,6 +26,11 @@
 				<ion-icon :icon="navigate"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<ion-fab vertical="top" horizontal="end" slot="fixed">
+			<ion-fab-button color="light" @click="searchNearbyMarkers" title="Location">
+				<ion-icon :icon="nearbyMarker" size="large"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 	</div>
 </template>
 <script lang="ts" setup>
@@ -41,13 +46,14 @@ import 'leaflet.locatecontrol';
 import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
 import { nextTick, onMounted, watch } from 'vue';
 import { debounce } from '@/helper/helper';
-import { getMarkersForView } from '@/mapHandler/markerHandler';
+import { getMarkersForView, getNearbyMarkers } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/app';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
 import { informationCircle, analyticsOutline, navigate } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
+import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -145,6 +151,25 @@ function showUserLocation() {
 		locationControl.setView();
 	} catch {
 		// do nothing.
+	}
+}
+
+async function searchNearbyMarkers() {
+	if (!rootMap) {
+		return;
+	}
+	if (locationControl._event && locationControl._event.latlng) {
+		const userLocation = locationControl._event.latlng;
+		const markerList = await getNearbyMarkers(rootMap.getBounds(), userLocation);
+		console.log(markerList);
+	} else {
+		console.log('No current location available from location control');
+		// Fallback to map center or request location
+		const center = rootMap.getCenter();
+		if (center) {
+			const markerList = await getNearbyMarkers(rootMap.getBounds(), center);
+			console.log(markerList);
+		}
 	}
 }
 async function initMap() {
