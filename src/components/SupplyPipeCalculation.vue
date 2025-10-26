@@ -68,6 +68,34 @@ const selectSuctionPoint = () => {
 const pumpPositions = computed(() => {
 	return (pumpCalculation.calculationResult.value?.pumpPositions || []).toReversed();
 });
+
+const pumpPositionInfo = (pump: PumpPosition) => {
+	const inpuPressure = t('pumpCalculation.pump.inputPressure');
+	const tubes = t('pumpCalculation.pump.tubes');
+	return `B-${tubes}: ~${pump.neededBTubes}; ${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}`;
+};
+
+const targetMarkerInfo = () => {
+	const pumpCalculationResult = pumpCalculation.calculationResult.value;
+	if (!pumpCalculationResult) {
+		return;
+	}
+
+	const lastPump =
+		pumpCalculationResult.pumpPositions[pumpCalculationResult.pumpPositions.length - 1];
+	const prevDistance = lastPump?.distanceFromStart || 0;
+
+	const distance = pumpCalculationResult.realDistance - prevDistance;
+
+	const neededBTubes = Math.round(distance / pumpCalculationStore.tubeLength);
+	const lastElevation =
+		pumpCalculationResult.elevationData[pumpCalculationResult.elevationData.length - 1];
+	const pressure = lastElevation.pressure || 0;
+
+	const inpuPressure = t('pumpCalculation.pump.inputPressure');
+	const tubes = t('pumpCalculation.pump.tubes');
+	return `B-${tubes}: ~${neededBTubes}; ${inpuPressure}: ${pressure.toFixed(2)}`;
+};
 </script>
 
 <template>
@@ -199,6 +227,7 @@ const pumpPositions = computed(() => {
 			<img slot="start" :src="firepointIcon" style="height: 24px" alt="Target marker" />
 			<ion-label>
 				<h3>{{ t('pumpCalculation.fireObject') }}</h3>
+				<p>{{ targetMarkerInfo() }}</p>
 			</ion-label>
 		</ion-item>
 
@@ -207,6 +236,7 @@ const pumpPositions = computed(() => {
 				<img slot="start" :src="pumpIcon" style="height: 24px" alt="Pump marker" />
 				<ion-label>
 					<h3>{{ t('pumpCalculation.pump.title') }}</h3>
+					<p>{{ pumpPositionInfo(position as PumpPosition) }}</p>
 				</ion-label>
 			</ion-item>
 		</template>
