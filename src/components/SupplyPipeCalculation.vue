@@ -41,6 +41,12 @@ const outputPressureChanged = (event: CustomEvent) => {
 	const value = event.detail.value;
 	pumpCalculationStore.outputPressure = Number(value);
 };
+
+const tubeCount = computed(() => {
+	return (
+		(pumpCalculation.calculationResult.value?.realDistance || 0) / pumpCalculationStore.tubeLength
+	).toFixed(0);
+});
 </script>
 
 <template>
@@ -135,6 +141,28 @@ const outputPressureChanged = (event: CustomEvent) => {
 			<ion-icon :icon="calculator" slot="start"></ion-icon>
 			{{ t('pumpCalculation.buttons.calculate') }}
 		</ion-button>
+	</ion-list>
+	<ion-list v-else>
+		<ion-item>
+			<ion-label>
+				<p>B-{{ t('pumpCalculation.pump.tubes') }}: ~{{ tubeCount }}</p>
+				<p>
+					{{ t('pumpCalculation.pump.title') }}: ~{{
+						pumpCalculation.calculationResult.value.pumpCount
+					}}
+				</p>
+				<p>
+					{{ t('pumpCalculation.pump.distanceFromStart') }}: ~{{
+						pumpCalculation.calculationResult.value.realDistance.toFixed(0)
+					}}m
+				</p>
+				<p>
+					{{ t('pumpCalculation.pump.elevationDifference') }}: ~{{
+						pumpCalculation.calculationResult.value.elevation
+					}}m
+				</p>
+			</ion-label>
+		</ion-item>
 	</ion-list>
 </template>
 
