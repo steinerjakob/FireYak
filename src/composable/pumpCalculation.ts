@@ -201,7 +201,9 @@ export function usePumpCalculation() {
 		const prevDistance = lastPump?.distanceFromStart || 0;
 		const prevElevation = lastPump?.elevation || elevations[0].elevation;
 
-		const neededBTubes = Math.round((realDistance - prevDistance) / pumpStore.tubeLength);
+		const distance = realDistance - prevDistance;
+
+		const neededBTubes = Math.round(distance / pumpStore.tubeLength);
 		const lastElevation = elevations[elevations.length - 1];
 		const elevation = lastElevation.elevation - prevElevation;
 		const pressure = lastElevation.pressure;
@@ -209,7 +211,7 @@ export function usePumpCalculation() {
 		const title = t('pumpCalculation.fireObject');
 		const tubes = t('pumpCalculation.pump.tubes');
 
-		const snippet = `B-${tubes}: ~${neededBTubes}<br>${distanceFromStart}: ~${realDistance.toFixed(2)}m<br>${riseFromStart}: ${elevation}m`;
+		const snippet = `B-${tubes}: ~${neededBTubes}<br>${distanceFromStart}: ~${distance.toFixed(0)}m<br>${riseFromStart}: ${elevation}m`;
 		const subDescription = `${inpuPressure}: ${pressure?.toFixed(0)}`;
 
 		popup.setContent(`
@@ -242,8 +244,6 @@ export function usePumpCalculation() {
 			pumpLayer.addLayer(marker);
 		});
 		layer.addLayer(pumpLayer);
-
-		targetPoint?.openPopup();
 
 		console.log('Elevation Data', pumpMarkers, elevationData);
 
