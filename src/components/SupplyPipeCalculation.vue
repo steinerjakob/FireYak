@@ -16,7 +16,9 @@ import { usePumpCalculation } from '@/composable/pumpCalculation';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
+import pumpIcon from '@/assets/markers/markerpump.png'; // Add pump icon import
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import { PumpPosition } from '@/helper/calculatePumpPosition';
 
 const { t } = useI18n();
 const pumpCalculation = usePumpCalculation();
@@ -47,6 +49,21 @@ const tubeCount = computed(() => {
 		(pumpCalculation.calculationResult.value?.realDistance || 0) / pumpCalculationStore.tubeLength
 	).toFixed(0);
 });
+
+const selectPumpMarker = (pumpPosition: PumpPosition) => {
+	pumpPosition.marker.openPopup();
+};
+
+const selectTargetMarker = () => {
+	if (pumpCalculation.calculationResult.value?.targetPoint) {
+		pumpCalculation.calculationResult.value?.targetPoint.openPopup();
+	}
+};
+const selectSuctionPoint = () => {
+	if (pumpCalculation.calculationResult.value?.suctionPoint) {
+		pumpCalculation.calculationResult.value?.suctionPoint.openPopup();
+	}
+};
 </script>
 
 <template>
@@ -172,6 +189,33 @@ const tubeCount = computed(() => {
 				</div>
 			</ion-label>
 		</ion-item>
+
+		<!-- Marker navigation items todo center based on router -->
+		<ion-item button @click="selectTargetMarker()">
+			<img slot="start" :src="firepointIcon" style="height: 24px" alt="Target marker" />
+			<ion-label>
+				<h3>{{ t('pumpCalculation.fireObject') }}</h3>
+			</ion-label>
+		</ion-item>
+
+		<template
+			v-for="position of pumpCalculation.calculationResult.value.pumpPositions"
+			:key="position.distanceFromStart"
+		>
+			<ion-item button @click="selectPumpMarker(position as PumpPosition)">
+				<img slot="start" :src="pumpIcon" style="height: 24px" alt="Pump marker" />
+				<ion-label>
+					<h3>{{ t('pumpCalculation.pump.title') }}</h3>
+				</ion-label>
+			</ion-item>
+		</template>
+
+		<ion-item button @click="selectSuctionPoint()">
+			<img slot="start" :src="suctionPointIcon" style="height: 24px" alt="Suction marker" />
+			<ion-label>
+				<h3>{{ t('pumpCalculation.suctionPoint') }}</h3>
+			</ion-label>
+		</ion-item>
 	</ion-list>
 </template>
 
@@ -188,6 +232,11 @@ ion-item {
 	--inner-padding-end: 0;
 	--min-height: 48px;
 }
+
+ion-item[button]:hover {
+	--background: rgba(var(--ion-color-primary-rgb), 0.1);
+}
+
 .calculation-results {
 	width: 100%;
 }
