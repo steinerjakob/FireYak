@@ -1,5 +1,5 @@
 import { ElevationPoint } from '@/helper/elevationData';
-import L from 'leaflet';
+import L, { Marker } from 'leaflet';
 import markerPump from '@/assets/markers/markerpump.png';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 
@@ -23,9 +23,11 @@ export type PumpPosition = {
 	pressureAtTrigger: number; // bar
 	riseFromStart: number; // meters
 	riseFromPrev: number; //meters
+	marker: Marker;
 };
 
 async function calculatePumpPosition(
+	t: any,
 	elevationPoints: ElevationPoint[],
 	pressureLost: number,
 	inputPressure: number,
@@ -77,7 +79,10 @@ async function calculatePumpPosition(
 		if (pressure <= inputPressure) {
 			const roundedPressure = Math.floor(pressure * 100) / 100;
 			const prevPump = pumps[pumps.length - 1];
-			pumps.push({
+			const marker = new Marker(L.latLng(curr.latLng.lat, curr.latLng.lng), {
+				icon: pumpIcon
+			});
+			const pumpInfo = {
 				lat: curr.latLng.lat,
 				lon: curr.latLng.lng,
 				elevation: curr.elevation,
@@ -85,8 +90,11 @@ async function calculatePumpPosition(
 				distanceFromPrev: Math.round(realDistance - (prevPump?.distanceFromStart || 0)),
 				pressureAtTrigger: roundedPressure,
 				riseFromStart: Math.round(curr.elevation - startElevation),
-				riseFromPrev: Math.round(curr.elevation - (prevPump?.elevation || startElevation))
-			});
+				riseFromPrev: Math.round(curr.elevation - (prevPump?.elevation || startElevation)),
+				marker
+			};
+			marker.bindPopup(provideMarkerPopup(t, pumpInfo));
+			pumps.push(pumpInfo);
 
 			// reset pressure to output after placing pump
 			pressure = outputPressure;
@@ -133,17 +141,11 @@ function provideMarkerPopup(t: any, pump: PumpPosition) {
 export async function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]) {
 	const pumpCalculationStore = usePumpCalculationStore();
 	const { pumps: pumpPositions, realDistance } = await calculatePumpPosition(
+		t,
 		elevationPoints,
 		pumpCalculationStore.pressureLost / 100,
 		pumpCalculationStore.inputPressure,
 		pumpCalculationStore.outputPressure
 	);
-	const markers = pumpPositions.map((pump) => {
-		const marker = new L.Marker(L.latLng(pump.lat, pump.lon), {
-			icon: pumpIcon
-		});
-		marker.bindPopup(provideMarkerPopup(t, pump));
-		return marker;
-	});
-	return { pumpMarkers: markers, pumpPositions, realDistance };
+	return { pumpPositions, realDistance };
 }

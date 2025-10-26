@@ -21,7 +21,6 @@ const line = new L.Polyline([]);
 export interface CalculationResult {
 	realDistance: number;
 	elevation: number;
-	pumpMarkers: Marker[];
 	wayPoints: Marker[];
 	suctionPoint: Marker;
 	targetPoint: Marker;
@@ -234,24 +233,18 @@ export function usePumpCalculation() {
 		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
 		console.log('Full Distance', distance);
 		const elevationData = await getElevationDataForPoints(points);
-		const { pumpMarkers, realDistance, pumpPositions } = await getPumpLocationMarkers(
-			t,
-			elevationData
-		);
+		const { realDistance, pumpPositions } = await getPumpLocationMarkers(t, elevationData);
 		updateTargetMarker(pumpPositions, realDistance, elevationData);
 		pumpLayer.clearLayers();
-		pumpMarkers.forEach((marker) => {
+		pumpPositions.forEach(({ marker }) => {
 			pumpLayer.addLayer(marker);
 		});
 		layer.addLayer(pumpLayer);
 
-		console.log('Elevation Data', pumpMarkers, elevationData);
-
 		calculationResult.value = {
-			pumpMarkers,
 			pumpPositions,
 			elevationData,
-			pumpCount: pumpMarkers.length + 1,
+			pumpCount: pumpPositions.length + 1,
 			realDistance,
 			elevation: elevationData[elevationData.length - 1].elevation - elevationData[0].elevation,
 			suctionPoint,
