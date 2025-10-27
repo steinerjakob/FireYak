@@ -50,6 +50,5 @@ jobs:
         run: |
           echo "${{ secrets.PLAY_STORE_JSON_KEY }}" > play-credentials.json
           fastlane supply --aab ./android/app/build/outputs/bundle/release/app-release.aab \
-                          --track beta \
-                          --json_key ./play-credentials.json
+                          --track beta
 
