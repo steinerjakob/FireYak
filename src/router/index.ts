@@ -38,6 +38,14 @@ const routes = [
 				// this generates a separate chunk (Home-[hash].js) for this route
 				// which is lazy-loaded when the route is visited.
 				component: HomeView
+			},
+			{
+				path: '/nearbysources/:markerId',
+				name: 'Nearby water source',
+				// route level code-splitting
+				// this generates a separate chunk (Home-[hash].js) for this route
+				// which is lazy-loaded when the route is visited.
+				component: HomeView
 			}
 		]
 	},

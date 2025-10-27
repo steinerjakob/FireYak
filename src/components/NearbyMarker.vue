@@ -3,14 +3,37 @@ import { IonItem, IonLabel, IonList } from '@ionic/vue';
 
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { OverPassElement } from '@/mapHandler/overPassApi';
+import { useI18n } from 'vue-i18n';
 
 const { list } = useNearbyWaterSource();
+const router = useRouter();
+const { t } = useI18n();
+
+const getTitle = (markerData: OverPassElement) => {
+	if (!markerData) return t('markerInfo.title.locationInfo');
+
+	const emergency = markerData.tags?.emergency;
+	const amenity = markerData.tags?.amenity;
+	const name = markerData.tags?.name;
+
+	if (name) return name;
+	if (emergency === 'fire_hydrant') return t('markerInfo.title.fireHydrant');
+	if (emergency === 'water_tank') return t('markerInfo.title.waterTank');
+	if (emergency === 'suction_point') return t('markerInfo.title.suctionPoint');
+	if (emergency === 'fire_water_pond') return t('markerInfo.title.fireWaterPond');
+	if (amenity === 'fire_station') return t('markerInfo.title.fireStation');
+
+	return t('markerInfo.title.locationInfo');
+};
 
 const formattedList = computed(() => {
 	console.log(list.value);
 	return list.value.map((nearbyMarker) => ({
-		key: nearbyMarker.marker.options.title || 'marker',
-		marker: nearbyMarker.marker,
+		id: nearbyMarker.element.id,
+		title: getTitle(nearbyMarker.element),
+		icon: nearbyMarker.icon,
 		distance: nearbyMarker.distance,
 		distanceText:
 			nearbyMarker.distance < 1000
@@ -23,15 +46,15 @@ const formattedList = computed(() => {
 <template>
 	<ion-list class="info-list">
 		<!-- Nearby Water Sources -->
-		<ion-item v-for="item in formattedList" :key="item.key" lines="none">
-			<img
-				slot="start"
-				:src="item.marker.getIcon().options.iconUrl"
-				style="height: 24px"
-				alt="Target marker"
-			/>
+		<ion-item
+			v-for="item in formattedList"
+			:key="item.id"
+			button
+			@click="router.push(`/nearbysources/${item.id}`)"
+		>
+			<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
 			<ion-label>
-				<h3>Water Source</h3>
+				<h3>{{ item.title }}</h3>
 				<p>{{ item.distanceText }} away</p>
 			</ion-label>
 		</ion-item>

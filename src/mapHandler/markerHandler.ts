@@ -84,18 +84,25 @@ export async function getMarkersForView(mapBounds: LatLngBounds) {
 /**
  * Sorts a list of map markers by their distance from a specified geographic location.
  *
- * @param {L.Marker[]} markers - An array of Leaflet markers to be sorted.
+ * @param elements
  * @param {L.LatLng} latLng - The reference geographic location used to calculate distances from each marker.
  * @return {Promise<NearbyMarker[]>} A promise that resolves to an array of objects, each containing a marker and its distance from the specified location, sorted in ascending order by distance.
  */
-async function sortMarkersByDistance(
-	markers: L.Marker[],
+async function sortElementsByDistance(
+	elements: OverPassElement[],
 	latLng: L.LatLng
 ): Promise<NearbyMarker[]> {
-	const markersWithDistance: NearbyMarker[] = markers.map((marker) => ({
-		marker,
-		distance: latLng.distanceTo(marker.getLatLng())
-	}));
+	const markersWithDistance: NearbyMarker[] = elements.map((element) => {
+		const elementLatLng = L.latLng(
+			(element?.lat || element.center?.lat) as number,
+			(element.lon || element.center?.lon) as number
+		);
+		return {
+			element,
+			distance: latLng.distanceTo(elementLatLng),
+			icon: getIconForNode(element).options.iconUrl
+		};
+	});
 
 	return markersWithDistance.sort((a, b) => a.distance - b.distance);
 }
@@ -112,8 +119,8 @@ export async function getNearbyMarkers(
 	mapBounds: LatLngBounds,
 	latLng: L.LatLng
 ): Promise<NearbyMarker[]> {
-	const markers = await getMarkersForView(mapBounds);
-	return sortMarkersByDistance(markers, latLng);
+	const elements = await getMapNodesForView(mapBounds);
+	return sortElementsByDistance(elements, latLng);
 }
 
 export async function getMarkerById(markerId: number) {
