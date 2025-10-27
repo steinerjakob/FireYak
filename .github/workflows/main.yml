@@ -38,11 +38,17 @@ jobs:
         working-directory: ./android
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > ./app/keystore.jks
+      - name: Verify Keystore
+        working-directory: ./android
+        run: |
+          ls -la app/keystore.jks
+          echo "Keystore file exists and size: $(wc -c < app/keystore.jks) bytes"
+
       - name: Build Release APK
         working-directory: ./android
         run: |
           ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file=./app/keystore.jks \
+            -Pandroid.injected.signing.store.file=app/keystore.jks \
             -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
             -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
