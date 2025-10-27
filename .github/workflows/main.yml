@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -44,7 +46,7 @@ jobs:
           ls -la app/keystore.jks
           echo "Keystore file exists and size: $(wc -c < app/keystore.jks) bytes"
           # Test if keystore is valid
-          keytool -list -keystore app/keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -v || echo "Keystore verification failed"
+          # keytool -list -keystore app/keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -v || echo "Keystore verification failed"
 
       - name: Build Release APK
         working-directory: ./android
@@ -68,7 +70,6 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git checkout ${{ github.head_ref || github.ref_name }}
           git add android/app/build.gradle
           git commit -m "chore: Bump Android versionCode"
           git push origin ${{ github.head_ref || github.ref_name }}
