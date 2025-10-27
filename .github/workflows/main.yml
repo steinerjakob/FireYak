@@ -29,34 +29,23 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         working-directory: ./android
         run: chmod +x gradlew
+      - name: Bump Android Version Code
+        uses: Devofure/advance-android-version-actions@v1.4
+        with:
+          gradlePath: android/app/build.gradle
+          versionName: 2.0.0
       - name: Decode Keystore
         working-directory: ./android
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/keystore.jks
-#      - name: Bump Android Version Code
-#        uses: DoubleSymmetry/android-version-actions@v1.3
-#        with:
-#          # Specify the path to your build.gradle file
-#          gradlePath: /android/app/build.gradle
-#          # Auto-increment the existing versionCode in the file by 1
-#          # Or, you can set it directly to the run number:
-#          # versionCode: ${{ github.run_number }}
-#
-#      - name: Commit & Push Version Code Change
-#        run: |
-#          git config user.name github-actions
-#          git config user.email github-actions@github.com
-#          git add android/app/build.gradle
-#          git commit -m "chore: Bump Android versionCode"
-#          git push
       - name: Build Release APK
         working-directory: ./android
-        run: ./gradlew bundleRelease
-        env:
-          KEYSTORE_FILE: app/keystore.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=app/keystore.jks \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
@@ -67,4 +56,11 @@ jobs:
           printf '%s\n' '${{ secrets.PLAY_STORE_JSON_KEY }}' > play-credentials.json
           fastlane supply --aab ./android/app/build/outputs/bundle/release/app-release.aab \
                           --track beta
+      - name: Commit & Push Version Code Change
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/build.gradle
+          git commit -m "chore: Bump Android versionCode"
+          git push
 
