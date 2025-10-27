@@ -37,12 +37,14 @@ jobs:
       - name: Decode Keystore
         working-directory: ./android
         run: |
-          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > ./app/keystore.jks
+          echo "${{ secrets.KEYSTORE_FILE }}" | tr -d '\n' | base64 --decode > ./app/keystore.jks
       - name: Verify Keystore
         working-directory: ./android
-        run: |
+        run: | 
           ls -la app/keystore.jks
           echo "Keystore file exists and size: $(wc -c < app/keystore.jks) bytes"
+          # Test if keystore is valid
+          keytool -list -keystore app/keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -v || echo "Keystore verification failed"
 
       - name: Build Release APK
         working-directory: ./android
