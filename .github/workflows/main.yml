@@ -3,6 +3,8 @@ name: Android CI/CD Pipeline
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -38,9 +40,11 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/$GITHUB_REPOSITORY
+          git checkout "${GITHUB_REF:11}"
           git add android/app/build.gradle
           git commit -m "chore: Bump Android versionCode"
-          git push origin HEAD
+          git push
       - name: Decode Keystore
         working-directory: ./android
         run: |
