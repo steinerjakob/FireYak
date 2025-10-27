@@ -1,0 +1,6 @@
+Durch die GPS-Positionierung können Wasserentnahmestellen in der Nähe rasch gefunden werden.
+
+<b>Funktionen:</b>
+
+- Anzeige der Wasserentnahmestellen von OpenStreetMap
+- Berechnung einer Löschleitung zur Wasserversorgung
