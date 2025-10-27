@@ -36,6 +36,13 @@ jobs:
         with:
           gradlePath: android/app/build.gradle
           versionName: 2.0.0
+      - name: Commit & Push Version Code Change
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/build.gradle
+          git commit -m "chore: Bump Android versionCode"
+          git push origin HEAD
       - name: Decode Keystore
         working-directory: ./android
         run: |
@@ -66,10 +73,3 @@ jobs:
           printf '%s\n' '${{ secrets.PLAY_STORE_JSON_KEY }}' > play-credentials.json
           fastlane supply --aab ./android/app/build/outputs/bundle/release/app-release.aab \
                           --track beta
-      - name: Commit & Push Version Code Change
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add android/app/build.gradle
-          git commit -m "chore: Bump Android versionCode"
-          git push origin HEAD
