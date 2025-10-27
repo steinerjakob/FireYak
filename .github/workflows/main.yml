@@ -33,6 +33,22 @@ jobs:
         working-directory: ./android
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/keystore.jks
+      - name: Bump Android Version Code
+        uses: DoubleSymmetry/android-version-actions@v1.3
+        with:
+          # Specify the path to your build.gradle file
+          gradlePath: /android/app/build.gradle
+          # Auto-increment the existing versionCode in the file by 1
+          # Or, you can set it directly to the run number:
+          # versionCode: ${{ github.run_number }}
+
+      - name: Commit & Push Version Code Change
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/build.gradle
+          git commit -m "chore: Bump Android versionCode"
+          git push
       - name: Build Release APK
         working-directory: ./android
         run: ./gradlew bundleRelease
