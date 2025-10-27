@@ -34,7 +34,7 @@ jobs:
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/keystore.jks
       - name: Build Release APK
         working-directory: ./android
-        run: ./gradlew assembleRelease
+        run: ./gradlew bundleRelease
         env:
           KEYSTORE_FILE: app/keystore.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -44,4 +44,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: ./android/app/release/app-release.apk
+          path: ./android/app/release/app-release.aab
