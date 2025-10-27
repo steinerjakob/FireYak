@@ -25,6 +25,7 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '21'
+          cache: 'gradle'
       - name: Grant Execute Permission for Gradlew
         working-directory: ./android
         run: chmod +x gradlew
@@ -43,5 +44,5 @@ jobs:
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: ./android/app/release/app-release.aab
+          name: release-aab
+          path: ./android/app/build/outputs/bundle/release/app-release.aab
