@@ -72,4 +72,4 @@ jobs:
           git config user.email github-actions@github.com
           git add android/app/build.gradle
           git commit -m "chore: Bump Android versionCode"
-          git push origin ${{ github.head_ref || github.ref_name }}
+          git push origin HEAD
