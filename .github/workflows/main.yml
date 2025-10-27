@@ -20,11 +20,11 @@ jobs:
         run: npm install
       - name: Build
         run: npm run buildAndSync
-      - name: Set Up JDK 17
+      - name: Set Up JDK 21
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21'
       - name: Grant Execute Permission for Gradlew
         working-directory: ./android
         run: chmod +x gradlew
