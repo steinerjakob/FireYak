@@ -29,6 +29,7 @@ jobs:
         working-directory: ./android
         run: chmod +x gradlew
       - name: Decode Keystore
+        working-directory: ./android
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/keystore.jks
       - name: Build Release APK
