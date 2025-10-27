@@ -23,7 +23,7 @@ jobs:
       - name: Set Up JDK 25
         uses: actions/setup-java@v3
         with:
-          distribution: 'microsoft'
+          distribution: 'zulu'
           java-version: '25'
       - name: Grant Execute Permission for Gradlew
         working-directory: ./android
