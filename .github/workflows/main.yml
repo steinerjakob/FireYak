@@ -26,9 +26,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       - name: Grant Execute Permission for Gradlew
-        run: chmod +x ./android/gradlew
+        working-directory: ./android
+        run: chmod +x gradlew
       - name: Build Debug APK
-        run: ./android/gradlew assembleDebug
+        working-directory: ./android
+        run: gradlew assembleDebug
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
