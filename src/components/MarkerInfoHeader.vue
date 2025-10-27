@@ -44,11 +44,17 @@ const openNavigation = () => {
 
 	if (lat && lon) {
 		if (isPlatform('mobile')) {
-			// Create a universal geo URL that works on both iOS and Android
-			// iOS will open Apple Maps, Android will show options including Google Maps
-			const geoUrl = `geo:${lat},${lon}?q=${lat},${lon}`;
-			window.open(geoUrl, '_system');
+			if (isPlatform('ios')) {
+				// For iOS - use Apple Maps URL scheme
+				const appleMapsUrl = `https://maps.apple.com/?daddr=${lat},${lon}&dirflg=d`;
+				window.open(appleMapsUrl, '_system');
+			} else {
+				// For Android - use geo scheme (works with Google Maps)
+				const geoUrl = `geo:${lat},${lon}?q=${lat},${lon}`;
+				window.open(geoUrl, '_system');
+			}
 		} else {
+			// For web/desktop - use Google Maps web URL
 			const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
 			window.open(googleMapsUrl, '_system');
 		}
