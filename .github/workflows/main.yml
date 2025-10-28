@@ -43,7 +43,7 @@ jobs:
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add android/app/build.gradle
-          git commit -m "chore: Bump Android versionCode"
+          git commit -m "chore: bump Android versionCode [skip ci]"
           git push
       - name: Decode Keystore
         working-directory: ./android
