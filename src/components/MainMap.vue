@@ -128,10 +128,14 @@ watch(
 				rootMap?.addLayer(selectedMarker);
 			}
 
-			if (isFirstWatch) {
-				rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
+			if (nearbyWaterSource.isActive) {
+				// update polyline to show a direct connection!
 			} else {
-				rootMap?.panTo(latLng);
+				if (isFirstWatch) {
+					rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
+				} else {
+					rootMap?.panTo(latLng);
+				}
 			}
 		} catch (e) {
 			console.error(e);
@@ -162,12 +166,12 @@ async function searchNearbyMarkers() {
 	}
 	if (locationControl._event && locationControl._event.latlng) {
 		const userLocation = locationControl._event.latlng;
-		nearbyWaterSource.list.value = await getNearbyMarkers(rootMap.getBounds(), userLocation);
+		nearbyWaterSource.list.value = await getNearbyMarkers(userLocation);
 	} else {
 		// Fallback to map center or request location
 		const center = rootMap.getCenter();
 		if (center) {
-			nearbyWaterSource.list.value = await getNearbyMarkers(rootMap.getBounds(), center);
+			nearbyWaterSource.list.value = await getNearbyMarkers(center);
 		}
 	}
 }
@@ -230,13 +234,14 @@ onMounted(async () => {
 
 	watch(
 		() => route.path,
-		async (path) => {
-			if (path.includes('nearbysources')) {
+		async (path, prevPath) => {
+			if (path.includes('nearbysources') && !prevPath?.includes('nearbysources')) {
 				await searchNearbyMarkers();
-			} else {
+			} else if (!path.includes('nearbysources')) {
 				nearbyWaterSource.list.value = [];
 			}
-		}
+		},
+		{ immediate: true }
 	);
 });
 </script>
