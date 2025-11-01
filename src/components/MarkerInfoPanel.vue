@@ -5,12 +5,16 @@ import { IonContent, IonCard, IonModal } from '@ionic/vue';
 import MarkerInfo from '@/components/MarkerInfo.vue';
 import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
+import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 
 const route = useRoute();
 const modal = ref();
 const screenOrientation = useScreenOrientation();
+const nearbyWaterSource = useNearbyWaterSource();
 
-const showMarkerInfo = computed(() => !!route.params.markerId);
+const showMarkerInfo = computed(() => {
+	return !!route.params.markerId && !nearbyWaterSource.isActive.value;
+});
 
 const isMobile = ref(window.innerWidth < 768);
 
