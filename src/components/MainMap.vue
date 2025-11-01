@@ -35,7 +35,7 @@
 </template>
 <script lang="ts" setup>
 import 'leaflet/dist/leaflet.css';
-import L, { LeafletMouseEvent } from 'leaflet';
+import L, { LatLng, LeafletMouseEvent } from 'leaflet';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 // @ts-ignore: does not find typings
@@ -97,6 +97,7 @@ const markerIcon = L.icon({
 });
 
 const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
+const selectedMarkerPath = new L.Polyline([]);
 
 function onMapMarkerClick(event: LeafletMouseEvent) {
 	router.push(`/markers/${event.target.options.title}`);
@@ -113,6 +114,7 @@ watch(
 			// Remove marker from map if no selection
 			if (rootMap?.hasLayer(selectedMarker)) {
 				rootMap?.removeLayer(selectedMarker);
+				rootMap?.removeLayer(selectedMarkerPath);
 			}
 			return;
 		}
@@ -128,9 +130,15 @@ watch(
 				rootMap?.addLayer(selectedMarker);
 			}
 
-			if (nearbyWaterSource.isActive) {
+			if (nearbyWaterSource.isActive.value) {
+				const currentLocation = getCurrentLocation()!;
+				selectedMarkerPath.setLatLngs([currentLocation, latLng]);
+				if (!rootMap?.hasLayer(selectedMarkerPath)) {
+					rootMap?.addLayer(selectedMarkerPath);
+				}
 				// update polyline to show a direct connection!
 			} else {
+				rootMap?.removeLayer(selectedMarkerPath);
 				if (isFirstWatch) {
 					rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
 				} else {
@@ -160,20 +168,24 @@ function showUserLocation() {
 	}
 }
 
-async function searchNearbyMarkers() {
+function getCurrentLocation(): LatLng | null {
 	if (!rootMap) {
-		return;
+		return null;
 	}
 	if (locationControl._event && locationControl._event.latlng) {
-		const userLocation = locationControl._event.latlng;
-		nearbyWaterSource.list.value = await getNearbyMarkers(userLocation);
+		return locationControl._event.latlng;
 	} else {
 		// Fallback to map center or request location
-		const center = rootMap.getCenter();
-		if (center) {
-			nearbyWaterSource.list.value = await getNearbyMarkers(center);
-		}
+		return rootMap.getCenter();
 	}
+}
+
+async function searchNearbyMarkers() {
+	const location = getCurrentLocation();
+	if (!location) {
+		return;
+	}
+	nearbyWaterSource.list.value = await getNearbyMarkers(location);
 }
 async function initMap() {
 	await nextTick();
