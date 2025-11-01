@@ -30,7 +30,6 @@ const getTitle = (markerData: OverPassElement) => {
 };
 
 const formattedList = computed(() => {
-	console.log(list.value);
 	return list.value.map((nearbyMarker) => ({
 		id: nearbyMarker.element.id,
 		title: getTitle(nearbyMarker.element),
