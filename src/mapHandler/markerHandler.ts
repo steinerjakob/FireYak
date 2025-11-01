@@ -9,7 +9,7 @@ import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
 import { fetchMarkerData, OverPassElement } from './overPassApi';
-import { getMapNodesForView, storeMapNodes } from '@/mapHandler/databaseHandler';
+import { getMapNodesForView, getNearbyMapNodes, storeMapNodes } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/app';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 
@@ -108,18 +108,15 @@ async function sortElementsByDistance(
 }
 
 /**
- * Retrieves a list of nearby markers within the specified map bounds,
- * sorted by their distance from a given latitude and longitude.
+ * Retrieves a list of nearby markers within the specified radius around a point,
+ * sorted by their distance from the given coordinates.
  *
- * @param {LatLngBounds} mapBounds - The geographical bounds of the map view within which markers are searched.
- * @param {L.LatLng} latLng - The latitude and longitude coordinates used to sort the markers by proximity.
- * @return {Promise<NearbyMarker[]>} A promise that resolves with a list of sorted markers that fall within the specified bounds.
+ * @param {L.LatLng} latLng - The latitude and longitude coordinates used as the center point.
+ * @param {number} radius - The search radius in meters around the center point (default: 5000 meters).
+ * @return {Promise<NearbyMarker[]>} A promise that resolves with a list of sorted markers containing their distance and icons.
  */
-export async function getNearbyMarkers(
-	mapBounds: LatLngBounds,
-	latLng: L.LatLng
-): Promise<NearbyMarker[]> {
-	const elements = await getMapNodesForView(mapBounds);
+export async function getNearbyMarkers(latLng: L.LatLng, radius = 2000): Promise<NearbyMarker[]> {
+	const elements = await getNearbyMapNodes(latLng, radius);
 	return sortElementsByDistance(elements, latLng);
 }
 
