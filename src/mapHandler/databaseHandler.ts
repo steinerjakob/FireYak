@@ -1,6 +1,6 @@
 import { openDB } from 'idb';
 import { OverPassElement } from '@/mapHandler/overPassApi';
-import L, { LatLngBounds } from 'leaflet';
+import L, { LatLng, LatLngBounds } from 'leaflet';
 
 const markerStoreName = 'fireMarker';
 
@@ -73,6 +73,52 @@ export async function getMapNodesForView(mapBounds: LatLngBounds) {
 		return results;
 	} catch (e) {
 		console.error(e);
+		return [];
+	}
+}
+
+export async function getNearbyMapNodes(location: LatLng, radius: number) {
+	try {
+		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
+		const markerStore = transaction.objectStore(markerStoreName);
+
+		// Calculate approximate bounding box to reduce the search space
+		// This is a rough approximation: 1 degree ≈ 111km at equator
+		const latDelta = radius / 111000; // Convert meters to degrees (approximate)
+		const lngDelta = radius / (111000 * Math.cos((location.lat * Math.PI) / 180));
+
+		const southWest = L.latLng(location.lat - latDelta, location.lng - lngDelta);
+		const northEast = L.latLng(location.lat + latDelta, location.lng + lngDelta);
+
+		// Use the existing index for initial filtering
+		const index = markerStore.index('lat, lon');
+		const range = IDBKeyRange.bound([southWest.lat, southWest.lng], [northEast.lat, northEast.lng]);
+
+		const results: OverPassElement[] = [];
+		let cursor = await index.openCursor(range);
+
+		while (cursor) {
+			const mapMarker = cursor.value as OverPassElement;
+
+			// Get the marker's coordinates
+			const markerLatLng = new L.LatLng(
+				mapMarker.lat || mapMarker.center?.lat || 0,
+				mapMarker.lon || mapMarker.center?.lon || 0
+			);
+
+			// Calculate precise distance and check if within radius
+			const distance = location.distanceTo(markerLatLng);
+
+			if (distance <= radius) {
+				results.push(mapMarker);
+			}
+
+			cursor = await cursor.continue();
+		}
+
+		return results;
+	} catch (e) {
+		console.error('Error getting nearby map nodes:', e);
 		return [];
 	}
 }

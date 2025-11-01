@@ -74,4 +74,4 @@ jobs:
         run: |
           printf '%s\n' '${{ secrets.PLAY_STORE_JSON_KEY }}' > play-credentials.json
           fastlane supply --aab ./android/app/build/outputs/bundle/release/app-release.aab \
-                          --track beta
+                          --track production

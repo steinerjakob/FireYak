@@ -133,5 +133,9 @@
 			"elevationDifference": "Steigung",
 			"tubes": "Schläuche"
 		}
+	},
+	"nearbyMarker": {
+		"title": "Nächste Wasserentnahmestelle",
+		"away": "entfernt"
 	}
 }

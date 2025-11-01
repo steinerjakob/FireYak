@@ -4,6 +4,7 @@
 			<MainMap></MainMap>
 			<MarkerInfoPanel></MarkerInfoPanel>
 			<SupplyPipeCalculationPanel></SupplyPipeCalculationPanel>
+			<NearbyMarkerPanel></NearbyMarkerPanel>
 		</ion-content>
 	</ion-page>
 </template>
@@ -13,6 +14,7 @@ import { IonPage, IonContent } from '@ionic/vue';
 import MainMap from '@/components/MainMap.vue';
 import MarkerInfoPanel from '@/components/MarkerInfoPanel.vue';
 import SupplyPipeCalculationPanel from '@/components/SupplyPipeCalculationPanel.vue';
+import NearbyMarkerPanel from '@/components/NearbyMarkerPanel.vue';
 </script>
 
 <style scoped>
