@@ -133,5 +133,8 @@
 			"elevationDifference": "Elevation",
 			"tubes": "Tubes"
 		}
+	},
+	"nearbyMarker": {
+		"away": "away"
 	}
 }

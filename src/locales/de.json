@@ -133,5 +133,8 @@
 			"elevationDifference": "Steigung",
 			"tubes": "Schläuche"
 		}
+	},
+	"nearbyMarker": {
+		"away": "entfernt"
 	}
 }

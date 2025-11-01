@@ -55,7 +55,7 @@ const formattedList = computed(() => {
 			<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
 			<ion-label>
 				<h3>{{ item.title }}</h3>
-				<p>{{ item.distanceText }} away</p>
+				<p>{{ item.distanceText }} {{ t('nearbyMarker.away') }}</p>
 			</ion-label>
 		</ion-item>
 	</ion-list>
