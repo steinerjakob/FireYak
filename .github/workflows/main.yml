@@ -70,7 +70,7 @@ jobs:
         with:
           name: release-aab
           path: ./android/app/build/outputs/bundle/release/app-release.aab
-      - name: Deploy to Google Play (Beta)
+      - name: Deploy to Google Play
         run: |
           printf '%s\n' '${{ secrets.PLAY_STORE_JSON_KEY }}' > play-credentials.json
           fastlane supply --aab ./android/app/build/outputs/bundle/release/app-release.aab \
