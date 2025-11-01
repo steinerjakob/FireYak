@@ -26,11 +26,16 @@
 				<ion-icon :icon="navigate"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<ion-fab vertical="top" horizontal="end" slot="fixed">
+			<ion-fab-button color="light" @click="router.push('/nearbysources')" title="Nearby">
+				<ion-icon :icon="nearbyMarker" size="large"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 	</div>
 </template>
 <script lang="ts" setup>
 import 'leaflet/dist/leaflet.css';
-import L, { LeafletMouseEvent } from 'leaflet';
+import L, { LatLng, LeafletMouseEvent } from 'leaflet';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 // @ts-ignore: does not find typings
@@ -41,13 +46,15 @@ import 'leaflet.locatecontrol';
 import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
 import { nextTick, onMounted, watch } from 'vue';
 import { debounce } from '@/helper/helper';
-import { getMarkersForView } from '@/mapHandler/markerHandler';
+import { getMarkersForView, getNearbyMarkers } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/app';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
 import { informationCircle, analyticsOutline, navigate } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
+import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
+import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -58,6 +65,7 @@ const route = useRoute();
 const markerStore = useMapMarkerStore();
 const { isDarkMode } = useDarkMode();
 const pumpCalculation = usePumpCalculation();
+const nearbyWaterSource = useNearbyWaterSource();
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
@@ -89,6 +97,7 @@ const markerIcon = L.icon({
 });
 
 const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
+const selectedMarkerPath = new L.Polyline([]);
 
 function onMapMarkerClick(event: LeafletMouseEvent) {
 	router.push(`/markers/${event.target.options.title}`);
@@ -105,6 +114,7 @@ watch(
 			// Remove marker from map if no selection
 			if (rootMap?.hasLayer(selectedMarker)) {
 				rootMap?.removeLayer(selectedMarker);
+				rootMap?.removeLayer(selectedMarkerPath);
 			}
 			return;
 		}
@@ -120,10 +130,20 @@ watch(
 				rootMap?.addLayer(selectedMarker);
 			}
 
-			if (isFirstWatch) {
-				rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
+			if (nearbyWaterSource.isActive.value) {
+				const currentLocation = getCurrentLocation()!;
+				selectedMarkerPath.setLatLngs([currentLocation, latLng]);
+				if (!rootMap?.hasLayer(selectedMarkerPath)) {
+					rootMap?.addLayer(selectedMarkerPath);
+				}
+				// update polyline to show a direct connection!
 			} else {
-				rootMap?.panTo(latLng);
+				rootMap?.removeLayer(selectedMarkerPath);
+				if (isFirstWatch) {
+					rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
+				} else {
+					rootMap?.panTo(latLng);
+				}
 			}
 		} catch (e) {
 			console.error(e);
@@ -147,13 +167,36 @@ function showUserLocation() {
 		// do nothing.
 	}
 }
+
+function getCurrentLocation(): LatLng | null {
+	if (!rootMap) {
+		return null;
+	}
+	if (locationControl._event && locationControl._event.latlng) {
+		return locationControl._event.latlng;
+	} else {
+		// Fallback to map center or request location
+		return rootMap.getCenter();
+	}
+}
+
+async function searchNearbyMarkers() {
+	if (!nearbyWaterSource.isActive.value) {
+		return;
+	}
+	const location = getCurrentLocation();
+	if (!location) {
+		return;
+	}
+	nearbyWaterSource.list.value = await getNearbyMarkers(location);
+}
 async function initMap() {
 	await nextTick();
 	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
 
 	rootMap.on('click', () => {
 		// do not close if the supply pipe is open
-		if (route.path.includes('markers')) {
+		if (!route.path.includes('supplypipe')) {
 			router.push('/');
 		}
 	});
@@ -162,6 +205,10 @@ async function initMap() {
 		if (route.path.includes('supplypipe')) {
 			pumpCalculation.markerSetAlert(e.latlng);
 		}
+	});
+
+	rootMap.on('locationfound', () => {
+		searchNearbyMarkers();
 	});
 
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -200,6 +247,18 @@ onMounted(async () => {
 		async (markerId) => {
 			const markerIdNumber = markerId ? Number(markerId) : null;
 			await markerStore.selectMarker(markerIdNumber);
+		},
+		{ immediate: true }
+	);
+
+	watch(
+		() => route.path,
+		async (path, prevPath) => {
+			if (path.includes('nearbysources') && !prevPath?.includes('nearbysources')) {
+				await searchNearbyMarkers();
+			} else if (!path.includes('nearbysources')) {
+				nearbyWaterSource.list.value = [];
+			}
 		},
 		{ immediate: true }
 	);

@@ -133,5 +133,9 @@
 			"elevationDifference": "Elevation",
 			"tubes": "Tubes"
 		}
+	},
+	"nearbyMarker": {
+		"title": "Next water source",
+		"away": "away"
 	}
 }
