@@ -3,12 +3,13 @@ import { IonItem, IonLabel, IonList } from '@ionic/vue';
 
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useI18n } from 'vue-i18n';
 
 const { list } = useNearbyWaterSource();
 const router = useRouter();
+const route = useRoute();
 const { t } = useI18n();
 
 const getTitle = (markerData: OverPassElement) => {
@@ -41,6 +42,8 @@ const formattedList = computed(() => {
 				: `${(nearbyMarker.distance / 1000).toFixed(1)}km`
 	}));
 });
+
+const selectedMarkerId = computed(() => route.params.markerId || null);
 </script>
 
 <template>
@@ -51,6 +54,7 @@ const formattedList = computed(() => {
 			:key="item.id"
 			button
 			@click="router.push(`/nearbysources/${item.id}`)"
+			:class="{ selected: selectedMarkerId === String(item.id) }"
 		>
 			<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
 			<ion-label>
@@ -96,5 +100,15 @@ ion-label p {
 .loading-note {
 	padding: 12px;
 	display: block;
+}
+
+.md ion-item.selected {
+	--background: rgba(var(--ion-color-primary-rgb), 0.14);
+}
+.md ion-item.selected ion-icon {
+	color: var(--ion-color-primary);
+}
+.ios ion-item.selected ion-icon {
+	color: var(--ion-color-primary);
 }
 </style>
