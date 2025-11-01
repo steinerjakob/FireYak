@@ -135,6 +135,7 @@
 		}
 	},
 	"nearbyMarker": {
+		"title": "Next water source",
 		"away": "away"
 	}
 }

@@ -135,6 +135,7 @@
 		}
 	},
 	"nearbyMarker": {
+		"title": "Nächste Wasserentnahmestelle",
 		"away": "entfernt"
 	}
 }

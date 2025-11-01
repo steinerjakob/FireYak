@@ -4,6 +4,7 @@ import { IonContent, IonCard, IonModal } from '@ionic/vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import NearbyMarker from '@/components/NearbyMarker.vue';
+import NearbyMarkerHeader from '@/components/NearbyMarkerHeader.vue';
 
 const modal = ref();
 const screenOrientation = useScreenOrientation();
@@ -30,12 +31,14 @@ watch(screenOrientation.orientation, () => {
 			handle-behavior="cycle"
 			class="nearby-source"
 		>
+			<NearbyMarkerHeader></NearbyMarkerHeader>
 			<ion-content>
 				<NearbyMarker></NearbyMarker>
 			</ion-content>
 		</ion-modal>
 	</template>
 	<ion-card v-else-if="isActive" class="desktop-card">
+		<NearbyMarkerHeader></NearbyMarkerHeader>
 		<NearbyMarker></NearbyMarker>
 	</ion-card>
 </template>
