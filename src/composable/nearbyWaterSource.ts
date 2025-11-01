@@ -3,9 +3,6 @@ import L, { LayerGroup, Marker } from 'leaflet';
 import { useRoute } from 'vue-router';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 
-const layer = new LayerGroup();
-const line = new L.Polyline([]);
-
 export interface NearbyMarker {
 	element: OverPassElement;
 	distance: number;
@@ -17,5 +14,5 @@ export function useNearbyWaterSource() {
 	const route = useRoute();
 	const isActive = computed(() => route.path.includes('nearbysources'));
 
-	return { isActive, list, layer };
+	return { isActive, list };
 }

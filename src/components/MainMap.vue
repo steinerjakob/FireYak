@@ -181,6 +181,9 @@ function getCurrentLocation(): LatLng | null {
 }
 
 async function searchNearbyMarkers() {
+	if (!nearbyWaterSource.isActive.value) {
+		return;
+	}
 	const location = getCurrentLocation();
 	if (!location) {
 		return;
@@ -202,6 +205,10 @@ async function initMap() {
 		if (route.path.includes('supplypipe')) {
 			pumpCalculation.markerSetAlert(e.latlng);
 		}
+	});
+
+	rootMap.on('locationfound', () => {
+		searchNearbyMarkers();
 	});
 
 	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
