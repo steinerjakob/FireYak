@@ -1,58 +1,41 @@
 import { createRouter, createWebHashHistory } from '@ionic/vue-router';
-import AboutView from '@/views/AboutView.vue';
-import HomeView from '@/views/HomeView.vue';
 
 const routes = [
 	{
 		path: '/',
-		component: HomeView,
+		component: () => import('@/views/HomeView.vue'),
 		children: [
 			{
 				path: '',
 				name: 'Map',
-				// route level code-splitting
-				// this generates a separate chunk (Home-[hash].js) for this route
-				// which is lazy-loaded when the route is visited.
-				component: HomeView
+				component: () => import('@/views/HomeView.vue')
 			},
 			{
-				path: '/markers/:markerId',
+				path: 'markers/:markerId',
 				name: 'Selected marker',
-				// route level code-splitting
-				// this generates a separate chunk (Home-[hash].js) for this route
-				// which is lazy-loaded when the route is visited.
-				component: HomeView
+				component: () => import('@/views/HomeView.vue')
 			},
 			{
-				path: '/supplypipe',
+				path: 'supplypipe',
 				name: 'Supply pipe calculation',
-				// route level code-splitting
-				// this generates a separate chunk (Home-[hash].js) for this route
-				// which is lazy-loaded when the route is visited.
-				component: HomeView
+				component: () => import('@/views/HomeView.vue')
 			},
 			{
-				path: '/nearbysources',
+				path: 'nearbysources',
 				name: 'Nearby water source',
-				// route level code-splitting
-				// this generates a separate chunk (Home-[hash].js) for this route
-				// which is lazy-loaded when the route is visited.
-				component: HomeView
+				component: () => import('@/views/HomeView.vue')
 			},
 			{
-				path: '/nearbysources/:markerId',
-				name: 'Nearby water source',
-				// route level code-splitting
-				// this generates a separate chunk (Home-[hash].js) for this route
-				// which is lazy-loaded when the route is visited.
-				component: HomeView
+				path: 'nearbysources/:markerId',
+				name: 'Nearby water source details',
+				component: () => import('@/views/HomeView.vue')
 			}
 		]
 	},
 	{
 		path: '/about',
 		name: 'about',
-		component: AboutView
+		component: () => import('@/views/AboutView.vue')
 	}
 ];
 
