@@ -11,8 +11,8 @@ import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { alertController } from '@ionic/vue';
 
-const layer = new L.LayerGroup();
-const pumpLayer = new L.LayerGroup();
+const layer = new L.FeatureGroup();
+const pumpLayer = new L.FeatureGroup();
 let rootMap: L.Map | null = null;
 let suctionPoint: L.Marker | null = null;
 let targetPoint: L.Marker | null = null;
@@ -248,6 +248,8 @@ export function usePumpCalculation() {
 			pumpLayer.addLayer(marker);
 		});
 		layer.addLayer(pumpLayer);
+
+		rootMap?.fitBounds(layer.getBounds(), { padding: [15, 10] });
 
 		calculationResult.value = {
 			pumpPositions,
