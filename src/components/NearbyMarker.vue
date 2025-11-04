@@ -6,11 +6,13 @@ import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useI18n } from 'vue-i18n';
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 
 const { list } = useNearbyWaterSource();
 const router = useRouter();
 const route = useRoute();
 const { t } = useI18n();
+const pumpCalculationStore = usePumpCalculationStore();
 
 const getTitle = (markerData: OverPassElement) => {
 	if (!markerData) return t('markerInfo.title.locationInfo');
@@ -29,16 +31,29 @@ const getTitle = (markerData: OverPassElement) => {
 	return t('markerInfo.title.locationInfo');
 };
 
+const getBTubes = (distance: number) => {
+	const tubes = t('pumpCalculation.pump.tubes');
+	const neededBTubes = Math.round(distance / pumpCalculationStore.tubeLength);
+	return `~${neededBTubes} B-${tubes}`;
+};
+
+const getDistanceText = (distance: number) => {
+	let text = '';
+	if (distance < 1000) {
+		text = `${Math.round(distance)}m ${t('nearbyMarker.away')}`;
+	} else {
+		text = `${(distance / 1000).toFixed(1)}km ${t('nearbyMarker.away')}`;
+	}
+	return `${text} ${getBTubes(distance)}`;
+};
+
 const formattedList = computed(() => {
 	return list.value.map((nearbyMarker) => ({
 		id: nearbyMarker.element.id,
 		title: getTitle(nearbyMarker.element),
 		icon: nearbyMarker.icon,
 		distance: nearbyMarker.distance,
-		distanceText:
-			nearbyMarker.distance < 1000
-				? `${Math.round(nearbyMarker.distance)}m`
-				: `${(nearbyMarker.distance / 1000).toFixed(1)}km`
+		distanceText: getDistanceText(nearbyMarker.distance)
 	}));
 });
 
@@ -58,7 +73,7 @@ const selectedMarkerId = computed(() => route.params.markerId || null);
 			<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
 			<ion-label>
 				<h3>{{ item.title }}</h3>
-				<p>{{ item.distanceText }} {{ t('nearbyMarker.away') }}</p>
+				<p>{{ item.distanceText }}</p>
 			</ion-label>
 		</ion-item>
 	</ion-list>
