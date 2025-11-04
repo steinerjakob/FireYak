@@ -101,7 +101,7 @@ const targetMarkerInfo = () => {
 <template>
 	<ion-list v-if="!pumpCalculation.calculationResult.value" class="info-list">
 		<!-- Coordinates -->
-		<ion-item>
+		<ion-item button @click="pumpCalculation.setTargetPoint()">
 			<img slot="start" :src="firepointIcon" style="height: 24px" alt="Fire point" />
 			<ion-label>
 				{{ t('pumpCalculation.fireObject') }}
@@ -120,7 +120,7 @@ const targetMarkerInfo = () => {
 				</template>
 			</ion-button>
 		</ion-item>
-		<ion-item>
+		<ion-item button @click="pumpCalculation.setSuctionPoint()">
 			<img slot="start" :src="suctionPointIcon" style="height: 24px" alt="Suction point" />
 			<ion-label>
 				{{ t('pumpCalculation.suctionPoint') }}
@@ -139,7 +139,7 @@ const targetMarkerInfo = () => {
 				</template>
 			</ion-button>
 		</ion-item>
-		<ion-item :disabled="!calculationAllowed">
+		<ion-item button @click="pumpCalculation.setWayPoint()" :disabled="!calculationAllowed">
 			<img slot="start" :src="wayPointIcon" style="height: 24px" alt="Waypoint" />
 			<ion-label>
 				{{ t('pumpCalculation.wayPoint') }}
