@@ -41,8 +41,7 @@ watch(screenOrientation.orientation, () => {
 	<ion-card v-else-if="isActive" class="desktop-card">
 		<SupplyPipeCalculationHeader></SupplyPipeCalculationHeader>
 		<SupplyPipeCalculation></SupplyPipeCalculation>
-		></ion-card
-	>
+	</ion-card>
 
 	<ion-icon v-if="isActive" :icon="locateOutline" class="center-locate" size="medium" />
 </template>
