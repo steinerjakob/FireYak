@@ -58,7 +58,7 @@ import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
-const DISABLE_CLUSTERING_ZOOM = 16;
+const DISABLE_CLUSTERING_ZOOM = 14;
 
 const router = useRouter();
 const route = useRoute();
@@ -103,6 +103,29 @@ function onMapMarkerClick(event: LeafletMouseEvent) {
 	router.push(`/markers/${event.target.options.title}`);
 }
 
+function fitToSelectedMarkerPath() {
+	if (rootMap) {
+		// Calculate the effective visible bounds (top 2/3 of the map)
+		const mapHeight = rootMap.getSize().y;
+		const visibleHeightPixels = mapHeight - window.innerHeight / 2; // Top edge of the bottom 1/3
+
+		const northWestLatLng = rootMap.getBounds().getNorthWest();
+		// Convert the pixel point (full width, visibleHeightPixels) to LatLng
+		const southEastVisiblePoint = L.point(rootMap.getSize().x, visibleHeightPixels);
+		const southEastVisibleLatLng = rootMap.containerPointToLatLng(southEastVisiblePoint);
+
+		const effectiveVisibleBounds = L.latLngBounds(northWestLatLng, southEastVisibleLatLng);
+
+		// Only fit bounds if the path is not fully visible within the top 2/3 of the screen
+		if (!effectiveVisibleBounds.contains(selectedMarkerPath.getBounds())) {
+			rootMap.fitBounds(selectedMarkerPath.getBounds(), {
+				paddingTopLeft: [0, 0], // Adjust padding to fit in upper 1/3
+				paddingBottomRight: [0, window.innerHeight / 2]
+			});
+		}
+	}
+}
+
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
 
 let isFirstWatch = true;
@@ -133,6 +156,9 @@ watch(
 			if (nearbyWaterSource.isActive.value) {
 				const currentLocation = getCurrentLocation()!;
 				selectedMarkerPath.setLatLngs([currentLocation, latLng]);
+
+				fitToSelectedMarkerPath();
+
 				if (!rootMap?.hasLayer(selectedMarkerPath)) {
 					rootMap?.addLayer(selectedMarkerPath);
 				}
