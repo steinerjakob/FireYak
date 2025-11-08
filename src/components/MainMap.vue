@@ -58,7 +58,7 @@ import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
-const DISABLE_CLUSTERING_ZOOM = 14;
+const DISABLE_CLUSTERING_ZOOM = 15;
 
 const router = useRouter();
 const route = useRoute();
@@ -69,7 +69,11 @@ const nearbyWaterSource = useNearbyWaterSource();
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
-	disableClusteringAtZoom: DISABLE_CLUSTERING_ZOOM
+	disableClusteringAtZoom: DISABLE_CLUSTERING_ZOOM,
+	spiderfyOnMaxZoom: false,
+	showCoverageOnHover: false,
+	zoomToBoundsOnClick: true,
+	maxClusterRadius: 50
 });
 
 // Ensure Leaflet recalculates the map size once layout is settled
@@ -259,6 +263,7 @@ async function initMap() {
 	// watch map movement
 	rootMap.on('zoomend', debouncedMapMove);
 	rootMap.on('dragend', debouncedMapMove);
+	rootMap.on('moveend', debouncedMapMove);
 
 	fireMapCluster.addTo(rootMap);
 	pumpCalculation.setMap(rootMap);
