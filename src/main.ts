@@ -29,6 +29,8 @@ import '@ionic/vue/css/display.css';
 /* @import '@ionic/vue/css/palettes/dark.class.css'; */
 import '@ionic/vue/css/palettes/dark.system.css';
 
+import '@/theme/variables.scss';
+
 import '@/plugins/statusBarHandling.ts';
 
 // Components
@@ -36,12 +38,14 @@ import App from './App.vue';
 
 // Composables
 import { createApp } from 'vue';
+import { updateEdge2Edge } from '@/plugins/statusBarHandling';
 
 const app = createApp(App);
 
 registerPlugins(app);
 
-router.isReady().then(() => {
+router.isReady().then(async () => {
+	await updateEdge2Edge();
 	app.mount('#app');
 });
 
