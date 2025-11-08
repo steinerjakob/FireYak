@@ -44,5 +44,9 @@ const closeSupplyPipe = () => {
 <style scoped>
 ion-header {
 	border-bottom: 1px solid var(--ion-color-light-shade);
+	--ion-safe-area-top: 0;
+	--ion-safe-area-bottom: 0;
+	--ion-safe-area-left: 0;
+	--ion-safe-area-right: 0;
 }
 </style>

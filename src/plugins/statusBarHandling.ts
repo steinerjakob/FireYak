@@ -1,52 +1,32 @@
-import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
-
-// Define your preferred colors for light and dark mode
-const LIGHT_MODE_COLOR = '#ffffff';
-const DARK_MODE_COLOR = '#121212';
-
-function getThemeStatusBarColor(isDark: boolean) {
-	return isDark ? DARK_MODE_COLOR : LIGHT_MODE_COLOR;
-}
-
-async function setAndroidStatusBarColor(isDark: boolean) {
-	const color = getThemeStatusBarColor(isDark);
-	try {
-		await EdgeToEdge.setBackgroundColor({ color });
-	} catch (e) {
-		console.error('Failed to set Android status bar color: ', e);
-	}
-}
+import { SafeArea } from '@capacitor-community/safe-area';
 
 const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-function updateStatusBarColor() {
+export async function updateEdge2Edge() {
 	if (Capacitor.getPlatform() === 'android') {
-		setAndroidStatusBarColor(mediaQuery.matches);
-	}
-}
-
-async function initializeEdgeToEdge() {
-	if (Capacitor.getPlatform() === 'android') {
+		const isDark = mediaQuery.matches;
 		try {
-			await EdgeToEdge.enable();
-
-			// Set initial status bar color
-			updateStatusBarColor();
+			await SafeArea.enable({
+				config: {
+					customColorsForSystemBars: true,
+					statusBarColor: '#00ffffff', // transparent
+					statusBarContent: isDark ? 'light' : 'dark',
+					navigationBarColor: '#00ffffff', // transparent
+					navigationBarContent: isDark ? 'light' : 'dark'
+				}
+			});
 		} catch (e) {
-			console.error('Failed to configure Android Edge to Edge support: ', e);
+			console.error(e);
 		}
 	}
 }
 
 // Listen for theme changes
-mediaQuery.addEventListener('change', updateStatusBarColor);
+mediaQuery.addEventListener('change', updateEdge2Edge);
 
 // Listen for app state changes (when app resumes from background)
 App.addListener('resume', () => {
-	initializeEdgeToEdge();
+	updateEdge2Edge()
 });
-
-// Initial setup on app load
-initializeEdgeToEdge();
