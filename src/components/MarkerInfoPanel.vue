@@ -91,7 +91,7 @@ watch(showMarkerInfo, () => {
 	transform: translateY(calc(-100% - 8px));
 	--size: 100px;
 	--border-radius: 12px;
-	z-index: 1;
+	z-index: 1000;
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 	cursor: pointer;
 	border: 3px solid white;
