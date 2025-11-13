@@ -36,6 +36,11 @@ const routes = [
 		path: '/about',
 		name: 'about',
 		component: () => import('@/views/AboutView.vue')
+	},
+	{
+		path: '/markerimages/:relatedId',
+		name: 'markerimages',
+		component: () => import('@/views/MarkerImageViewer.vue')
 	}
 ];
 

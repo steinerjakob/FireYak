@@ -6,6 +6,11 @@ const config: CapacitorConfig = {
 	webDir: 'dist',
 	android: {
 		adjustMarginsForEdgeToEdge: 'disable'
+	},
+	plugins: {
+		CapacitorHttp: {
+			enabled: true
+		}
 	}
 };
 
