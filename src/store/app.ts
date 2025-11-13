@@ -1,44 +1,23 @@
 // Utilities
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { fetchNodeById } from '@/mapHandler/overPassApi';
 import { getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
+import { fetchMediaWikiFiles, ImageInfo } from '@/mapHandler/markerImageHandler';
 
 export const useMapMarkerStore = defineStore('marker', () => {
 	// State
-	const markers = ref<Map<number, OverPassElement>>(new Map());
-	const loadingMarkers = ref<Set<number>>(new Set());
 	const fetchPromises = ref<Map<number, Promise<OverPassElement | null>>>(new Map());
 	const selectedMarker = ref<OverPassElement | null>(null);
-
-	// Getters
-	const getMarkerById = computed(() => {
-		return (markerId: number) => {
-			return markers.value.get(markerId) || null;
-		};
-	});
-
-	const isMarkerLoading = computed(() => {
-		return (markerId: number) => {
-			return loadingMarkers.value.has(markerId);
-		};
-	});
+	const selectedMarkerImages = ref<ImageInfo[]>([]);
 
 	// Actions
 	async function fetchMarkerById(markerId: number): Promise<OverPassElement | null> {
-		// Return cached data if available
-		if (markers.value.has(markerId)) {
-			return markers.value.get(markerId) || null;
-		}
-
 		// Return in-flight promise if already fetching
 		if (fetchPromises.value.has(markerId)) {
 			return fetchPromises.value.get(markerId) || null;
 		}
-
-		// Mark as loading
-		loadingMarkers.value.add(markerId);
 
 		// Create fetch promise
 		const fetchPromise = (async () => {
@@ -55,15 +34,9 @@ export const useMapMarkerStore = defineStore('marker', () => {
 					}
 				}
 
-				// Store in state if found
-				if (node) {
-					markers.value.set(markerId, node);
-				}
-
 				return node;
 			} finally {
 				// Cleanup
-				loadingMarkers.value.delete(markerId);
 				fetchPromises.value.delete(markerId);
 			}
 		})();
@@ -74,26 +47,37 @@ export const useMapMarkerStore = defineStore('marker', () => {
 		return fetchPromise;
 	}
 
+	async function fetchMarkerImageInfoById(markerId: number) {
+		const imageData = await fetchMediaWikiFiles(markerId);
+		if (selectedMarker.value) {
+			const imageDataList: ImageInfo[] = [];
+			imageData.forEach((image) => {
+				imageDataList.push(...image.imageinfo);
+			});
+			selectedMarkerImages.value = imageDataList;
+		} else {
+			selectedMarkerImages.value.length = 0;
+		}
+	}
+
 	async function selectMarker(markerId: number | null) {
 		if (markerId) {
 			const marker = await fetchMarkerById(markerId);
 			if (marker) {
 				selectedMarker.value = marker;
+				fetchMarkerImageInfoById(markerId);
 			}
 		} else {
 			selectedMarker.value = null;
+			selectedMarkerImages.value.length = 0;
 		}
 	}
 
 	return {
 		// State
-		markers,
-		loadingMarkers,
 		fetchPromises,
 		selectedMarker,
-		// Getters
-		getMarkerById,
-		isMarkerLoading,
+		selectedMarkerImages,
 		// Actions
 		fetchMarkerById,
 		selectMarker

@@ -20,6 +20,7 @@
 		]
 	},
 	"dependencies": {
+		"@capacitor-community/photoviewer": "^7.1.0",
 		"@capacitor-community/safe-area": "^7.0.0-alpha.1",
 		"@capacitor/android": "^7.4.3",
 		"@capacitor/app": "^7.1.0",
@@ -60,6 +61,7 @@
 		"eslint-plugin-sonarjs": "^0.23.0",
 		"eslint-plugin-vue": "^9.3.0",
 		"husky": "^8.0.3",
+		"jeep-photoviewer": "^1.2.3",
 		"lint-staged": "^15.2.0",
 		"prettier": "^3.1.0",
 		"sass": "^1.60.0",
