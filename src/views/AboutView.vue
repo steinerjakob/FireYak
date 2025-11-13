@@ -26,27 +26,40 @@
 					</ion-card-content>
 				</ion-card>
 
+				<!-- How to add hydrants to OpenStreetMap -->
 				<ion-card>
 					<ion-card-header>
 						<ion-card-title>
 							<ion-icon
-								:icon="logoGithub"
+								:icon="documentText"
 								style="vertical-align: middle; margin-right: 8px"
 							></ion-icon>
-							{{ $t('about.openSource') }}
+							{{ $t('about.addHydrantsTitle') }}
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
-						<p>{{ $t('about.openSourceDescription') }}</p>
+						<p class="ion-text-wrap">
+							{{ $t('about.addHydrantsDescription') }}
+						</p>
+
+						<ion-button
+							expand="block"
+							fill="outline"
+							href="https://github.com/steinerjakob/FireYak#how-to-add-a-fire-hydrant-or-other-water-source-to-openstreetmap"
+							target="_blank"
+						>
+							<ion-icon :icon="documentText" slot="start"></ion-icon>
+							{{ $t('about.addHydrantsOpenReadme') }}
+						</ion-button>
 					</ion-card-content>
 				</ion-card>
 
-				<!-- Buy Me a Coffee Card -->
-				<ion-card class="coffee-card">
+				<!-- Combined Support Card (Buy Me a Coffee + Support) -->
+				<ion-card>
 					<ion-card-header>
 						<ion-card-title>
-							<ion-icon :icon="cafe" style="vertical-align: middle; margin-right: 8px"></ion-icon>
-							{{ $t('about.buyMeCoffee') }}
+							<ion-icon :icon="heart" style="vertical-align: middle; margin-right: 8px"></ion-icon>
+							{{ $t('about.support') }}
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
@@ -59,18 +72,6 @@
 								class="coffee-button-img"
 							/>
 						</a>
-					</ion-card-content>
-				</ion-card>
-
-				<ion-card>
-					<ion-card-header>
-						<ion-card-title>
-							<ion-icon :icon="heart" style="vertical-align: middle; margin-right: 8px"></ion-icon>
-							{{ $t('about.support') }}
-						</ion-card-title>
-					</ion-card-header>
-					<ion-card-content>
-						<p>{{ $t('about.supportDescription') }}</p>
 
 						<ion-list>
 							<ion-item>
@@ -102,8 +103,6 @@
 						</ion-button>
 					</ion-card-content>
 				</ion-card>
-
-
 
 				<ion-card>
 					<ion-card-header>
