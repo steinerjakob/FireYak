@@ -54,27 +54,12 @@
 					</ion-card-content>
 				</ion-card>
 
+				<!-- Combined Support Card (Buy Me a Coffee + Support) -->
 				<ion-card>
 					<ion-card-header>
 						<ion-card-title>
-							<ion-icon
-								:icon="logoGithub"
-								style="vertical-align: middle; margin-right: 8px"
-							></ion-icon>
-							{{ $t('about.openSource') }}
-						</ion-card-title>
-					</ion-card-header>
-					<ion-card-content>
-						<p>{{ $t('about.openSourceDescription') }}</p>
-					</ion-card-content>
-				</ion-card>
-
-				<!-- Buy Me a Coffee Card -->
-				<ion-card class="coffee-card">
-					<ion-card-header>
-						<ion-card-title>
-							<ion-icon :icon="cafe" style="vertical-align: middle; margin-right: 8px"></ion-icon>
-							{{ $t('about.buyMeCoffee') }}
+							<ion-icon :icon="heart" style="vertical-align: middle; margin-right: 8px"></ion-icon>
+							{{ $t('about.support') }}
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
@@ -87,18 +72,6 @@
 								class="coffee-button-img"
 							/>
 						</a>
-					</ion-card-content>
-				</ion-card>
-
-				<ion-card>
-					<ion-card-header>
-						<ion-card-title>
-							<ion-icon :icon="heart" style="vertical-align: middle; margin-right: 8px"></ion-icon>
-							{{ $t('about.support') }}
-						</ion-card-title>
-					</ion-card-header>
-					<ion-card-content>
-						<p>{{ $t('about.supportDescription') }}</p>
 
 						<ion-list>
 							<ion-item>
