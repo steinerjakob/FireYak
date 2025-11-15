@@ -10,15 +10,16 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useIonRouter } from '@ionic/vue';
 import { IonContent, IonPage } from '@ionic/vue';
-import { fetchMediaWikiFiles, ImageInfo } from '@/mapHandler/markerImageHandler';
 import { useRoute } from 'vue-router';
 
 // PhotoSwipe imports
 import PhotoSwipeLightbox from 'photoswipe/lightbox';
 import 'photoswipe/photoswipe.css';
+import { useMapMarkerStore } from '@/store/app';
 
 const ionRouter = useIonRouter();
 const route = useRoute();
+const { selectedMarkerImages, fetchMarkerImageInfoById } = useMapMarkerStore();
 
 const lightbox = ref<PhotoSwipeLightbox | null>(null);
 
@@ -26,18 +27,19 @@ const lightbox = ref<PhotoSwipeLightbox | null>(null);
 const handleClose = () => {
 	if (ionRouter.canGoBack()) {
 		ionRouter.back();
+	} else {
+		ionRouter.replace(`/markers/${route.params.relatedId}`);
 	}
 };
 
 onMounted(async () => {
-	const imageData = await fetchMediaWikiFiles(parseInt(route.params.relatedId as string));
-	const imageDataList: ImageInfo[] = [];
-	imageData.forEach((image) => {
-		imageDataList.push(...image.imageinfo);
-	});
+	let markerImages = selectedMarkerImages;
+	if (!markerImages.length) {
+		markerImages = await fetchMarkerImageInfoById(parseInt(route.params.relatedId as string));
+	}
 
 	// Map fetched image data to PhotoSwipe item format
-	const pswpItems = imageDataList.map((image) => {
+	const pswpItems = markerImages.map((image) => {
 		return {
 			src: image.url,
 			width: image.width, // Placeholder width
