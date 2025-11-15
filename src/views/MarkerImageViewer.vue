@@ -1,120 +1,81 @@
 <template>
 	<ion-page>
 		<ion-content :fullscreen="true">
-			<div id="container">
-				<div id="photoviewer-container"></div>
-			</div>
+			<div id="container"></div>
 		</ion-content>
 	</ion-page>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useIonRouter } from '@ionic/vue';
 import { IonContent, IonPage } from '@ionic/vue';
-import {
-	PhotoViewer,
-	Image,
-	ViewerOptions,
-	capEchoResult,
-	capShowResult,
-	capShowOptions
-} from '@capacitor-community/photoviewer';
-import { fetchMediaWikiFiles, ImageInfo } from '@/mapHandler/markerImageHandler';
 import { useRoute } from 'vue-router';
 
-const viewerOptions: ViewerOptions = {
-	customHeaders: {
-		accept: 'image/jpeg, image/png, image/gif, image/webp, image/svg+xml, image/*;q=0.8, */*;q=0.5',
-		cookie: 'session=foo;'
-	},
-	share: false,
-	title: false
-};
+// PhotoSwipe imports
+import PhotoSwipeLightbox from 'photoswipe/lightbox';
+import 'photoswipe/photoswipe.css';
+import { useMapMarkerStore } from '@/store/app';
 
 const ionRouter = useIonRouter();
 const route = useRoute();
-let listenerExit: any;
-const pvPlugin: any = PhotoViewer;
+const { selectedMarkerImages, fetchMarkerImageInfoById } = useMapMarkerStore();
 
-const addListener = async () => {
-	listenerExit = await pvPlugin.addListener('jeepCapPhotoViewerExit', (e: any) => {
-		const data: any = {};
-		data.result = e.result;
-		data.imageIndex = e.imageIndex;
-		data.message = e.message;
-		console.log('jeepCapPhotoViewerExit', data);
-		if (ionRouter.canGoBack()) {
-			ionRouter.back();
-		}
-	});
-};
+const lightbox = ref<PhotoSwipeLightbox | null>(null);
 
-async (value: string): Promise<capEchoResult> => {
-	const val: any = {};
-	val.value = value;
-	return await pvPlugin.echo(val);
-};
-
-const show = async (
-	images: Image[],
-	mode: string,
-	startFrom: number,
-	options?: ViewerOptions
-): Promise<capShowResult> => {
-	const opts: capShowOptions = {
-		images: images,
-		mode: images.length === 1 ? 'one' : mode,
-		startFrom: startFrom
-	};
-	if (options != null && Object.keys(options).length != 0) {
-		opts.options = options;
-	}
-	try {
-		const ret = await pvPlugin.show(opts);
-		return Promise.resolve(ret);
-	} catch (err: any) {
-		const ret: capShowResult = {} as capShowResult;
-		ret.result = false;
-		ret.message = err.message;
-		return Promise.resolve(ret);
+// Function to handle gallery close event, navigating back
+const handleClose = () => {
+	if (ionRouter.canGoBack()) {
+		ionRouter.back();
+	} else {
+		ionRouter.replace(`/markers/${route.params.relatedId}`);
 	}
 };
 
 onMounted(async () => {
-	const header = document.querySelector('.viewer-header');
-	header?.classList.add('hidden');
+	let markerImages = selectedMarkerImages;
+	if (!markerImages.length) {
+		markerImages = await fetchMarkerImageInfoById(parseInt(route.params.relatedId as string));
+	}
 
-	const imageData = await fetchMediaWikiFiles(parseInt(route.params.relatedId as string));
-	const imageDataList: ImageInfo[] = [];
-	imageData.forEach((image) => {
-		imageDataList.push(...image.imageinfo);
-	});
-
-	const imagesToShow: Image[] = imageDataList.map((image) => {
+	// Map fetched image data to PhotoSwipe item format
+	const pswpItems = markerImages.map((image) => {
 		return {
-			url: image.url
+			src: image.url,
+			width: image.width, // Placeholder width
+			height: image.height, // Placeholder height
+			alt: 'Hydrant image' // Use title if available, otherwise a generic alt
 		};
 	});
-	const mode = 'gallery';
-	const startFrom = 0;
 
-	await addListener();
+	lightbox.value = new PhotoSwipeLightbox({
+		gallery: '#container',
+		dataSource: pswpItems,
+		pswpModule: () => import('photoswipe'),
+		clickToCloseNonZoomable: false
+	});
 
-	await show(imagesToShow, mode, startFrom, viewerOptions);
+	// Add a close event listener to navigate back
+	lightbox.value.on('close', handleClose);
+
+	lightbox.value.init();
+	// Open the gallery immediately if there are items
+	if (pswpItems.length > 0) {
+		lightbox.value.loadAndOpen(0); // Open from the first image (index 0)
+	}
 });
 
-onUnmounted(async () => {
-	await listenerExit.remove();
+onUnmounted(() => {
+	// Destroy the PhotoSwipe instance to clean up resources
+	if (lightbox.value) {
+		lightbox.value.destroy();
+		lightbox.value = null;
+	}
 });
 </script>
 
-<style scoped>
-#container {
-	position: absolute;
-	left: var(--ion-safe-area-left, 0);
-	right: var(--ion-safe-area-right, 0);
-	top: var(--ion-safe-area-top, 0);
-	bottom: var(--ion-safe-area-bottom, 0);
+<style>
+.pswp__top-bar {
+	margin-top: var(--ion-safe-area-top, 0);
 }
 </style>

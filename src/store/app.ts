@@ -49,27 +49,25 @@ export const useMapMarkerStore = defineStore('marker', () => {
 
 	async function fetchMarkerImageInfoById(markerId: number) {
 		const imageData = await fetchMediaWikiFiles(markerId);
-		if (selectedMarker.value) {
-			const imageDataList: ImageInfo[] = [];
-			imageData.forEach((image) => {
-				imageDataList.push(...image.imageinfo);
-			});
-			selectedMarkerImages.value = imageDataList;
-		} else {
-			selectedMarkerImages.value.length = 0;
-		}
+		const imageDataList: ImageInfo[] = [];
+		imageData.forEach((image) => {
+			imageDataList.push(...image.imageinfo);
+		});
+		selectedMarkerImages.value = imageDataList;
+		return imageDataList;
 	}
 
 	async function selectMarker(markerId: number | null) {
+		selectedMarker.value = null;
+		selectedMarkerImages.value.length = 0;
+
 		if (markerId) {
+			selectedMarkerImages.value.length = 0;
 			const marker = await fetchMarkerById(markerId);
 			if (marker) {
 				selectedMarker.value = marker;
 				fetchMarkerImageInfoById(markerId);
 			}
-		} else {
-			selectedMarker.value = null;
-			selectedMarkerImages.value.length = 0;
 		}
 	}
 
@@ -80,6 +78,7 @@ export const useMapMarkerStore = defineStore('marker', () => {
 		selectedMarkerImages,
 		// Actions
 		fetchMarkerById,
-		selectMarker
+		selectMarker,
+		fetchMarkerImageInfoById
 	};
 });

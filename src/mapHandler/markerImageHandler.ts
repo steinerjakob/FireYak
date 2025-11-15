@@ -3,10 +3,10 @@ export interface ImageInfo {
 	// Original file details
 	url: string;
 	size: number;
-	dimensions: {
-		width: number;
-		height: number;
-	};
+	width: number;
+	height: number;
+	descriptionshorturl: string;
+	descriptionurl: string;
 	// Thumbnail details
 	thumburl: string;
 	thumbwidth: number;
