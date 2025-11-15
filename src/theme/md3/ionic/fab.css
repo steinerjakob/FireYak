@@ -1,0 +1,63 @@
+/* Floating Action Buttons (FAB): https://m3.material.io/components/floating-action-button/overview */
+:root[mode=md] {
+  ion-fab-button {
+    --background: var(--ion-color-base, var(--md-sys-primary-container));
+    --color: var(--ion-color-contrast, var(--md-sys-on-primary-container));
+
+    --box-shadow: var(--md-sys-level3);
+    --border-radius: var(--md-sys-corner-large);
+
+    --transition:
+      border-radius var(--md-sys-expressive-default-spring-duration) var(--md-sys-expressive-default-spring);
+
+    --padding-start: 16px;
+    --padding-end: 16px;
+    --padding-top: 16px;
+    --padding-bottom: 16px;
+
+    width: 56px;
+    height: 56px;
+
+    ion-icon {
+      width: 24px;
+      height: 24px;
+    }
+
+    &.md-small,
+    &[size=small] {
+      --padding-start: 10px;
+      --padding-end: 10px;
+      --padding-top: 10px;
+      --padding-bottom: 10px;
+      --border-radius: var(--md-sys-corner-medium);
+
+      width: 40px;
+      height: 40px;
+
+      ion-icon {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    &.md-large,
+    &[size=large] {
+      --border-radius: var(--md-sys-corner-extra-large);
+      width: 96px;
+      height: 96px;
+
+      ion-icon {
+        width: 36px;
+        height: 36px;
+      }
+    }
+
+    &.fab-button-close-active {
+      --border-radius: 50px;
+    }
+
+    &.fab-button-in-list {
+      --border-radius: var(--md-sys-corner-full);
+    }
+  }
+}

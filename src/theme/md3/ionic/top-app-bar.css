@@ -1,0 +1,42 @@
+/* Top app bar: https://m3.material.io/components/top-app-bar/specs */
+:root[mode=md] {
+  ion-toolbar {
+    --background: var(--md-sys-surface-container);
+    --color: var(--md-sys-on-surface);
+
+    --min-height: 64px;
+    --padding-start: 16px;
+    --padding-end: 16px;
+  }
+
+  ion-toolbar,
+  ion-toolbar ion-title {
+    font: var(--md-sys-title-large);
+    letter-spacing: var(--md-sys-title-large-letter-spacing);
+  }
+
+  ion-toolbar *[slot=start] {
+    color: var(--md-sys-on-surface);
+  }
+
+  ion-toolbar *[slot=end] {
+    color: var(--md-sys-on-surface-variant);
+  }
+
+  ion-header {
+    box-shadow: none;
+
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+
+  ion-header.scrolled {
+    box-shadow: var(--md-sys-level2);
+  }
+
+  ion-header.scrolled ion-toolbar {
+    --background: var(--md-sys-surface-container);
+  }
+}

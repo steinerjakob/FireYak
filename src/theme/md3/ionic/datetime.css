@@ -1,0 +1,11 @@
+/* Time pickers: https://m3.material.io/components/time-pickers/overview */
+:root[mode=md] {
+  ion-datetime {
+    --background: var(--md-sys-surface);
+    border-radius: var(--md-sys-corner-extra-large);
+  }
+
+  ion-datetime-button::part(native) {
+    background: var(--md-sys-surface-container-high);
+  }
+}

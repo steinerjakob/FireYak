@@ -1,0 +1,77 @@
+/* Lists: https://m3.material.io/components/lists/specs */
+:root[mode=md] {
+  ion-list {
+    background: var(--md-sys-surface);
+    color: var(--md-sys-on-surface);
+  }
+
+  ion-item {
+    --background: var(--md-sys-surface);
+    --color: var(--md-sys-on-surface);
+    --border-color: var(--md-sys-surface-variant);
+
+    font: var(--md-sys-body-large);
+    letter-spacing: var(--md-sys-body-large-letter-spacing);
+
+    ion-icon[slot='start'] {
+      color: var(--md-sys-on-surface-variant);
+    }
+
+    ion-icon[slot='end'] {
+      color: var(--md-sys-on-surface-variant);
+      font-size: 24px;
+    }
+
+    ion-label {
+      h1 {
+        font: var(--md-sys-title-large);
+        letter-spacing: var(--md-sys-title-large-letter-spacing);
+      }
+
+      h2 {
+        font: var(--md-sys-title-medium);
+        letter-spacing: var(--md-sys-title-medium-letter-spacing);
+      }
+
+      h3 {
+        font: var(--md-sys-body-large);
+        letter-spacing: var(--md-sys-body-large-letter-spacing);
+      }
+
+      p {
+        color: var(--md-sys-on-surface-variant);
+        font: var(--md-sys-body-medium);
+        letter-spacing: var(--md-sys-body-medium-letter-spacing);
+      }
+    }
+  }
+
+  ion-item-divider {
+    --background: var(--md-sys-background);
+    --color: var(--md-sys-on-background);
+
+    color: var(--md-sys-on-background);
+    padding-top: 8px;
+    padding-bottom: 8px;
+    font-size: inherit;
+    border: none;
+
+    ion-icon {
+      font-size: 24px;
+      color: inherit;
+    }
+  }
+
+  ion-card,
+  ion-popover {
+    ion-list {
+      background: inherit;
+      color: inherit;
+    }
+
+    ion-item {
+      --background: inherit;
+      --color: inherit;
+    }
+  }
+}

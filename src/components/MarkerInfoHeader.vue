@@ -110,5 +110,18 @@ ion-header {
 	--ion-safe-area-bottom: 0;
 	--ion-safe-area-left: 0;
 	--ion-safe-area-right: 0;
+
+	ion-toolbar {
+		border-top-left-radius: var(--border-radius);
+
+		border-top-right-radius: var(--border-radius);
+	}
+
+	.md {
+		--border-radius: 28px;
+	}
+	.ios {
+		--border-radius: 10px;
+	}
 }
 </style>

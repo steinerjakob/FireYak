@@ -1,0 +1,15 @@
+:root[mode=md] {
+  ion-searchbar {
+    --background: var(--md-sys-surface-container-high);
+    --border-radius: var(--md-sys-corner-full);
+    --box-shadow: none;
+    --cancel-button-color: var(--md-sys-on-surface-variant);
+    --clear-button-color: var(--md-sys-on-surface);
+    --color: var(--md-sys-on-surface);
+    --icon-color: var(--md-sys-on-surface);
+
+    .searchbar-input {
+      border: 1px solid var(--md-sys-outline-variant);
+    }
+  }
+}

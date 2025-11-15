@@ -87,7 +87,7 @@ watch(showMarkerInfo, () => {
 .floating-thumbnail {
 	position: absolute;
 	top: 0;
-	left: 16px;
+	left: 8px;
 	transform: translateY(calc(-100% - 8px));
 	--size: 100px;
 	--border-radius: 12px;

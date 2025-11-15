@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import {
 	IonButton,
 	IonIcon,
@@ -10,7 +10,7 @@ import {
 	IonSelect,
 	IonSelectOption
 } from '@ionic/vue';
-import { calculator, locateOutline } from 'ionicons/icons';
+import { calculator, locate } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
@@ -111,7 +111,7 @@ const targetMarkerInfo = () => {
 				@click="pumpCalculation.setTargetPoint()"
 				:color="pumpCalculation.firePointSet.value ? 'medium' : 'primary'"
 			>
-				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
+				<ion-icon :icon="locate" slot="end"></ion-icon>
 				<template v-if="pumpCalculation.firePointSet.value">
 					{{ t('pumpCalculation.updatePosition') }}
 				</template>
@@ -130,7 +130,7 @@ const targetMarkerInfo = () => {
 				@click="pumpCalculation.setSuctionPoint()"
 				:color="pumpCalculation.suctionPointSet.value ? 'medium' : 'primary'"
 			>
-				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
+				<ion-icon :icon="locate" slot="end"></ion-icon>
 				<template v-if="pumpCalculation.suctionPointSet.value">
 					{{ t('pumpCalculation.updatePosition') }}
 				</template>
@@ -145,8 +145,8 @@ const targetMarkerInfo = () => {
 				{{ t('pumpCalculation.wayPoint') }}
 			</ion-label>
 			<ion-button slot="end" @click="pumpCalculation.setWayPoint()" :disabled="!calculationAllowed">
-				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
 				{{ t('pumpCalculation.setPosition') }}
+				<ion-icon :icon="locate" slot="end"></ion-icon>
 			</ion-button>
 		</ion-item>
 		<ion-item>
@@ -264,9 +264,6 @@ ion-item {
 	--min-height: 48px;
 }
 
-ion-item[button]:hover {
-	--background: rgba(var(--ion-color-primary-rgb), 0.1);
-}
 
 .calculation-results {
 	width: 100%;
@@ -285,11 +282,9 @@ ion-item[button]:hover {
 
 .result-label {
 	font-weight: bold;
-	color: var(--ion-color-dark);
 }
 
 .result-value {
-	color: var(--ion-color-dark);
 	text-align: right;
 }
 </style>
