@@ -74,12 +74,8 @@ onUnmounted(() => {
 });
 </script>
 
-<style scoped>
-#container {
-	position: absolute;
-	left: var(--ion-safe-area-left, 0);
-	right: var(--ion-safe-area-right, 0);
-	top: var(--ion-safe-area-top, 0);
-	bottom: var(--ion-safe-area-bottom, 0);
+<style>
+.pswp__top-bar {
+	margin-top: var(--ion-safe-area-top, 0);
 }
 </style>
