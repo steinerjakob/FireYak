@@ -1,24 +1,22 @@
 /* Common Buttons: https://m3.material.io/components/buttons/specs */
-:root[mode=md] {
+:root[mode="md"] {
   button {
-    color: inherit;
+    color: inherit !important;
     text-transform: none;
     border-radius: var(--md-sys-corner-full);
   }
 
   ion-button,
   ion-button.md-filled,
-  ion-button[fill=solid] {
+  ion-button[fill="solid"] {
     --background: var(--ion-color-base, var(--md-sys-primary));
     --background-hover: var(--ion-color-base, var(--md-sys-primary));
     --background-focused: var(--ion-color-base, var(--md-sys-primary));
     --background-activated: var(--ion-color-base, var(--md-sys-primary));
-
     --color: var(--ion-color-contrast, var(--md-sys-on-primary));
     --color-hover: var(--ion-color-contrast, var(--md-sys-on-primary));
     --color-focused: var(--ion-color-contrast, var(--md-sys-on-primary));
     --color-activated: var(--ion-color-contrast, var(--md-sys-on-primary));
-
     --box-shadow: none;
     --border-width: 1px;
     --border-radius: 28px;
@@ -29,13 +27,12 @@
 
     font: var(--md-sys-label-large);
     letter-spacing: var(--md-sys-label-large-letter-spacing);
-
     height: 56px;
     text-transform: none;
 
     &.button-full,
     &.md-square,
-    &[shape=square] {
+    &[shape="square"] {
       --border-radius: var(--md-sys-corner-large);
 
       &::part(native) {
@@ -48,15 +45,15 @@
     }
 
     ion-icon {
-      color: inherit;
+      color: inherit !important;
       width: 24px;
       height: 24px;
 
-      &[slot=start] {
+      &[slot="start"] {
         margin-right: 8px;
       }
 
-      &[slot=end] {
+      &[slot="end"] {
         margin-left: 8px;
       }
     }
@@ -64,18 +61,17 @@
 
   ion-button.button-small {
     height: 40px;
-    font: var(--md-sys-label-small);
-    letter-spacing: var(--md-sys-label-small-letter-spacing);
+    font: var(--md-sys-label-small) !important;
+    letter-spacing: var(--md-sys-label-small-letter-spacing) !important;
 
     --border-width: 1px;
     --border-radius: 20px;
-
     --padding-start: 16px;
     --padding-end: 16px;
 
     &.button-full,
     &.md-square,
-    &[shape=square] {
+    &[shape="square"] {
       --border-radius: var(--md-sys-corner-medium);
     }
 
@@ -96,13 +92,12 @@
 
     --border-width: 2px;
     --border-radius: 48px;
-
     --padding-start: 48px;
     --padding-end: 48px;
 
     &.button-full,
     &.md-square,
-    &[shape=square] {
+    &[shape="square"] {
       --border-radius: var(--md-sys-corner-extra-large);
     }
 
@@ -114,11 +109,11 @@
       width: 32px;
       height: 32px;
 
-      &[slot=start] {
+      &[slot="start"] {
         margin-right: 12px;
       }
 
-      &[slot=end] {
+      &[slot="end"] {
         margin-left: 12px;
       }
     }
@@ -133,12 +128,10 @@
     --background-hover: var(--md-sys-secondary-container);
     --background-focused: var(--md-sys-secondary-container);
     --background-activated: var(--md-sys-secondary-container);
-
     --color: var(--md-sys-on-secondary-container);
     --color-hover: var(--md-sys-on-secondary-container);
     --color-focused: var(--md-sys-on-secondary-container);
     --color-activated: var(--md-sys-on-secondary-container);
-
     --box-shadow: var(--md-sys-level0);
   }
 
@@ -151,12 +144,10 @@
     --background-hover: var(--md-sys-surface-container);
     --background-focused: var(--md-sys-surface-container);
     --background-activated: var(--md-sys-surface-container);
-
     --color: var(--md-sys-primary);
     --color-hover: var(--md-sys-primary);
     --color-focused: var(--md-sys-primary);
     --color-activated: var(--md-sys-primary);
-
     --box-shadow: var(--md-sys-level1);
   }
 
@@ -171,19 +162,16 @@
   }
 
   ion-button.md-outlined,
-  ion-button[fill=outline] {
+  ion-button[fill="outline"] {
     --background: var(--md-sys-surface);
     --background-hover: var(--md-sys-surface);
     --background-focused: var(--md-sys-surface);
     --background-activated: var(--md-sys-surface);
-
     --color: var(--md-sys-primary);
     --color-hover: var(--md-sys-primary);
     --color-focused: var(--md-sys-primary);
     --color-activated: var(--md-sys-primary);
-
     --box-shadow: var(--md-sys-level0);
-
     --border-color: var(--md-sys-outline);
     --border-style: solid;
     --border-width: 1px;
@@ -191,16 +179,14 @@
 
   ion-button.md-text,
   ion-button.button-clear,
-  ion-button[fill=clear] {
+  ion-button[fill="clear"] {
     --background: transparent;
     --background-hover: transparent;
     --background-focused: transparent;
-
     --color: var(--md-sys-primary);
     --color-hover: var(--md-sys-primary);
     --color-focused: var(--md-sys-primary);
     --color-activated: var(--md-sys-primary);
-
     --box-shadow: var(--md-sys-level0);
   }
 }

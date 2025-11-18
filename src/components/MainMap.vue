@@ -4,6 +4,7 @@
 		<!-- About FAB Button -->
 		<ion-fab vertical="top" horizontal="start" slot="fixed">
 			<ion-fab-button
+				class="md-small"
 				color="light"
 				size="small"
 				@click="router.push('/about')"
