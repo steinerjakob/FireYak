@@ -1,0 +1,9 @@
+:root[mode=md] {
+  ion-label {
+    color: inherit;
+
+    &.ion-color {
+      color: var(--ion-color-base, var(--md-sys-primary));
+    }
+  }
+}

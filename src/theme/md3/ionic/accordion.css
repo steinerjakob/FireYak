@@ -1,0 +1,10 @@
+:root[mode=md] {
+  ion-accordion-group {
+    border-radius: var(--md-sys-corner-medium);
+    border: 1px solid var(--md-sys-outline-variant);
+    background: var(--md-sys-surface);
+    color: var(--md-sys-on-surface);
+    overflow: hidden;
+    margin: 16px;
+  }
+}

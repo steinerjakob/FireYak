@@ -13,7 +13,7 @@ const getTitle = () => {
 };
 
 const closeSupplyPipe = () => {
-	router.push('/');
+	router.replace('/');
 	pumpCalculation.calculationResult.value = null;
 };
 </script>

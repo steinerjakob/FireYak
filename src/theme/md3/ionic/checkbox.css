@@ -1,0 +1,12 @@
+/* Checkboxes: https://m3.material.io/components/checkbox/specs */
+:root[mode=md] {
+  ion-checkbox {
+    --border-radius: 2px;
+    --border-width: 2px;
+    --border-color: var(--md-sys-on-surface-variant);
+    --border-color-checked: var(--ion-color-base, var(--md-sys-primary));
+    --checkbox-background: var(--md-sys-surface);
+    --checkbox-background-checked: var(--ion-color-base, var(--md-sys-primary));
+    --checkmark-color: var(--ion-color-contrast, var(--md-sys-on-primary));
+  }
+}

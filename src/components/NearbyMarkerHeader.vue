@@ -7,7 +7,7 @@ import router from '@/router';
 const { t } = useI18n();
 
 const closePanel = () => {
-	router.push('/');
+	router.replace('/');
 };
 </script>
 

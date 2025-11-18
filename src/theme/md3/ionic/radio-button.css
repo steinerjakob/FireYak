@@ -1,0 +1,7 @@
+/* Radio buttons: https://m3.material.io/components/radio-button/specs */
+:root[mode=md] {
+  ion-radio {
+    --color: var(--md-sys-outline);
+    --color-checked: var(--md-sys-primary);
+  }
+}

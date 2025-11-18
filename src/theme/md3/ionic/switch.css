@@ -1,0 +1,48 @@
+/* Radio buttons: https://m3.material.io/components/switch/specs */
+:root[mode=md] {
+  ion-toggle {
+    --handle-width: 16px;
+    --handle-height: 16px;
+    --handle-max-height: 28px;
+    --handle-transition:
+      transform var(--md-sys-expressive-default-effects-duration) var(--md-sys-expressive-default-effects),
+      background-color var(--md-sys-expressive-default-effects-duration) var(--md-sys-expressive-default-effects);
+    --handle-background: var(--md-sys-outline);
+    --handle-background-checked: var(--ion-color-contrast);
+    --handle-border-radius: var(--md-sys-corner-full);
+    --handle-box-shadow: none;
+    --handle-spacing: 6px;
+
+    --track-background: var(--md-sys-surface-container-highest) !important;
+    --track-background-checked: var(--ion-color-base) !important;
+
+    --border-radius: var(--md-sys-corner-full);
+  }
+
+  ion-toggle.toggle-checked {
+    --handle-width: 24px;
+    --handle-height: 24px;
+    --handle-spacing: 2px;
+  }
+
+  ion-toggle::part(track) {
+    box-sizing: border-box;
+    min-height: 32px;
+    min-width: 52px;
+    border: 2px solid var(--md-sys-outline);
+    background: var(--md-sys-surface-container-highest);
+  }
+
+  ion-toggle.toggle-checked::part(track) {
+    border-color: var(--ion-color-base, var(--md-sys-primary));
+    background: var(--ion-color-base, var(--md-sys-primary));
+  }
+
+  ion-toggle::part(handle) {
+    background: var(--md-sys-outline);
+  }
+
+  ion-toggle.toggle-checked::part(handle) {
+    background: var(--ion-color-contrast, var(--md-sys-on-primary));
+  }
+}

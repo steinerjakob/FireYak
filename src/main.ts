@@ -30,6 +30,7 @@ import '@ionic/vue/css/display.css';
 import '@ionic/vue/css/palettes/dark.system.css';
 
 import '@/theme/variables.scss';
+import '@/theme/md3/theme.css';
 
 import '@/plugins/statusBarHandling.ts';
 
