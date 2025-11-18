@@ -102,6 +102,7 @@ watch(showMarkerInfo, () => {
 	&.desktop {
 		left: 424px;
 		top: calc(100% - 8px);
+		bottom: var(--ion-safe-area-bottom, 0);
 	}
 }
 

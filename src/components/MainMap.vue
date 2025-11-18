@@ -21,12 +21,12 @@
 				<ion-icon :icon="analyticsOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
-		<ion-fab vertical="bottom" horizontal="end" slot="fixed">
+		<ion-fab class="location-fab" vertical="bottom" horizontal="end" slot="fixed" size="small">
 			<ion-fab-button color="light" @click="showUserLocation" title="Location">
 				<ion-icon :icon="navigate"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
-		<ion-fab vertical="top" horizontal="end" slot="fixed">
+		<ion-fab vertical="bottom" horizontal="end" slot="fixed">
 			<ion-fab-button color="light" @click="router.push('/nearbysources')" title="Nearby">
 				<ion-icon :icon="nearbyMarker" size="large"></ion-icon>
 			</ion-fab-button>
@@ -227,7 +227,7 @@ async function initMap() {
 	rootMap.on('click', () => {
 		// do not close if the supply pipe is open
 		if (!route.path.includes('supplypipe')) {
-			router.push('/');
+			router.replace('/');
 		}
 	});
 
@@ -300,6 +300,10 @@ ion-fab {
 	margin-top: var(--ion-safe-area-top, 0);
 	margin-bottom: var(--ion-safe-area-bottom, 0);
 	z-index: 1000;
+}
+
+.location-fab {
+	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + 56px + 16px);
 }
 
 :deep(.leaflet-bottom) {
