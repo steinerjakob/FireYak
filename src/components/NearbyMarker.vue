@@ -101,13 +101,11 @@ ion-icon {
 ion-label h3 {
 	font-weight: 600;
 	font-size: 0.875rem;
-	color: var(--ion-color-medium);
 	margin-bottom: 2px;
 }
 
 ion-label p {
-	font-size: 1rem;
-	color: var(--ion-color-dark);
+	font-size: 1rem !important;
 	margin-top: 0;
 }
 

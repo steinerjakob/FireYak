@@ -1,0 +1,14 @@
+/* Menus: https://m3.material.io/components/menus/specs */
+:root[mode=md] {
+  ion-popover {
+    --background: var(--md-sys-surface-container);
+    --color: var(--md-sys-on-surface);
+    --box-shadow: var(--md-sys-level2);
+  }
+
+  ion-popover ion-item {
+    --background: var(--md-sys-surface-container);
+    --color: var(--md-sys-on-surface);
+  }
+}
+

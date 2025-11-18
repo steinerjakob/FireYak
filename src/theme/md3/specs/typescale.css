@@ -1,0 +1,137 @@
+:root {
+  
+  /* Display - Large */
+  --md-sys-display-large-font-family-name: Roboto;
+  --md-sys-display-large-font-family-style: Regular;
+  --md-sys-display-large-font-weight: 400;
+  --md-sys-display-large-font-size: 3.5625rem;
+  --md-sys-display-large-line-height: 4rem;
+  --md-sys-display-large-letter-spacing: -0.015625rem;
+  --md-sys-display-large: normal 400 3.5625rem/4rem Roboto;
+  
+  /* Display - Medium */
+  --md-sys-display-medium-font-family-name: Roboto;
+  --md-sys-display-medium-font-family-style: Regular;
+  --md-sys-display-medium-font-weight: 400;
+  --md-sys-display-medium-font-size: 2.8125rem;
+  --md-sys-display-medium-line-height: 3.25rem;
+  --md-sys-display-medium-letter-spacing: 0;
+  --md-sys-display-medium: normal 400 2.8125rem/3.25rem Roboto;
+  
+  /* Display - Small */
+  --md-sys-display-small-font-family-name: Roboto;
+  --md-sys-display-small-font-family-style: Regular;
+  --md-sys-display-small-font-weight: 400;
+  --md-sys-display-small-font-size: 2.25rem;
+  --md-sys-display-small-line-height: 2.75rem;
+  --md-sys-display-small-letter-spacing: 0;
+  --md-sys-display-small: normal 400 2.25rem/2.75rem Roboto;
+  
+  /* Headline - Large */
+  --md-sys-headline-large-font-family-name: Roboto;
+  --md-sys-headline-large-font-family-style: Regular;
+  --md-sys-headline-large-font-weight: 400;
+  --md-sys-headline-large-font-size: 2rem;
+  --md-sys-headline-large-line-height: 2.5rem;
+  --md-sys-headline-large-letter-spacing: 0;
+  --md-sys-headline-large: normal 400 2rem/2.5rem Roboto;
+  
+  /* Headline - Medium */
+  --md-sys-headline-medium-font-family-name: Roboto;
+  --md-sys-headline-medium-font-family-style: Regular;
+  --md-sys-headline-medium-font-weight: 400;
+  --md-sys-headline-medium-font-size: 1.75rem;
+  --md-sys-headline-medium-line-height: 2.25rem;
+  --md-sys-headline-medium-letter-spacing: 0;
+  --md-sys-headline-medium: normal 400 1.75rem/2.25rem Roboto;
+  
+  /* Headline - Small */
+  --md-sys-headline-small-font-family-name: Roboto;
+  --md-sys-headline-small-font-family-style: Regular;
+  --md-sys-headline-small-font-weight: 400;
+  --md-sys-headline-small-font-size: 1.5rem;
+  --md-sys-headline-small-line-height: 2rem;
+  --md-sys-headline-small-letter-spacing: 0;
+  --md-sys-headline-small: normal 400 1.5rem/2rem Roboto;
+  
+  /* Body - Large */
+  --md-sys-body-large-font-family-name: Roboto;
+  --md-sys-body-large-font-family-style: Regular;
+  --md-sys-body-large-font-weight: 400;
+  --md-sys-body-large-font-size: 1rem;
+  --md-sys-body-large-line-height: 1.5rem;
+  --md-sys-body-large-letter-spacing: 0.03125rem;
+  --md-sys-body-large: normal 400 1rem/1.5rem Roboto;
+  
+  /* Body - Medium */
+  --md-sys-body-medium-font-family-name: Roboto;
+  --md-sys-body-medium-font-family-style: Regular;
+  --md-sys-body-medium-font-weight: 400;
+  --md-sys-body-medium-font-size: 0.875rem;
+  --md-sys-body-medium-line-height: 1.25rem;
+  --md-sys-body-medium-letter-spacing: 0.015625rem;
+  --md-sys-body-medium: normal 400 0.875rem/1.25rem Roboto;
+  
+  /* Body - Small */
+  --md-sys-body-small-font-family-name: Roboto;
+  --md-sys-body-small-font-family-style: Regular;
+  --md-sys-body-small-font-weight: 400;
+  --md-sys-body-small-font-size: 0.75rem;
+  --md-sys-body-small-line-height: 1rem;
+  --md-sys-body-small-letter-spacing: 0.025rem;
+  --md-sys-body-small: normal 400 0.75rem/1rem Roboto;
+  
+  /* Label - Large */
+  --md-sys-label-large-font-family-name: Roboto;
+  --md-sys-label-large-font-family-style: Medium;
+  --md-sys-label-large-font-weight: 500;
+  --md-sys-label-large-font-size: 0.875rem;
+  --md-sys-label-large-line-height: 1.25rem;
+  --md-sys-label-large-letter-spacing: 0.00625rem;
+  --md-sys-label-large: normal 500 0.875rem/1.25rem Roboto;
+  
+  /* Label - Medium */
+  --md-sys-label-medium-font-family-name: Roboto;
+  --md-sys-label-medium-font-family-style: Medium;
+  --md-sys-label-medium-font-weight: 500;
+  --md-sys-label-medium-font-size: 0.75rem;
+  --md-sys-label-medium-line-height: 1rem;
+  --md-sys-label-medium-letter-spacing: 0.03125rem;
+  --md-sys-label-medium: normal 500 0.75rem/1rem Roboto;
+  
+  /* Label - Small */
+  --md-sys-label-small-font-family-name: Roboto;
+  --md-sys-label-small-font-family-style: Medium;
+  --md-sys-label-small-font-weight: 500;
+  --md-sys-label-small-font-size: 0.6875rem;
+  --md-sys-label-small-line-height: 1rem;
+  --md-sys-label-small-letter-spacing: 0.03125rem;
+  --md-sys-label-small: normal 500 0.6875rem/1rem Roboto;
+  
+  /* Title - Large */
+  --md-sys-title-large-font-family-name: Roboto;
+  --md-sys-title-large-font-family-style: Regular;
+  --md-sys-title-large-font-weight: 400;
+  --md-sys-title-large-font-size: 1.375rem;
+  --md-sys-title-large-line-height: 1.75rem;
+  --md-sys-title-large-letter-spacing: 0;
+  --md-sys-title-large: normal 400 1.375rem/1.75rem Roboto;
+  
+  /* Title - Medium */
+  --md-sys-title-medium-font-family-name: Roboto;
+  --md-sys-title-medium-font-family-style: Medium;
+  --md-sys-title-medium-font-weight: 500;
+  --md-sys-title-medium-font-size: 1rem;
+  --md-sys-title-medium-line-height: 1.5rem;
+  --md-sys-title-medium-letter-spacing: 0.009375rem;
+  --md-sys-title-medium: normal 500 1rem/1.5rem Roboto;
+  
+  /* Title - Small */
+  --md-sys-title-small-font-family-name: Roboto;
+  --md-sys-title-small-font-family-style: Medium;
+  --md-sys-title-small-font-weight: 500;
+  --md-sys-title-small-font-size: 0.875rem;
+  --md-sys-title-small-line-height: 1.25rem;
+  --md-sys-title-small-letter-spacing: 0.00625rem;
+  --md-sys-title-small: normal 500 0.875rem/1.25rem Roboto;
+}

@@ -175,7 +175,6 @@ import { logoGithub, heart, star, bug, code, documentText, map, cafe } from 'ion
 }
 
 .version {
-	color: var(--ion-color-medium);
 	margin-top: 4px;
 }
 
@@ -190,16 +189,6 @@ ion-card {
 ion-list {
 	margin-top: 16px;
 	margin-bottom: 0;
-}
-
-/* Buy Me a Coffee Styles */
-.coffee-card {
-	background: linear-gradient(135deg, #ffdd00 0%, #fbb034 100%);
-}
-
-.coffee-card ion-card-header,
-.coffee-card ion-card-content {
-	color: #000;
 }
 
 .coffee-link {

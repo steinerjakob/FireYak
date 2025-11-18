@@ -1,0 +1,56 @@
+:root[mode=md] {
+  ion-toolbar ion-segment ion-segment-button {
+    margin-top: 8px;
+    margin-bottom: 8px;
+  }
+
+  ion-segment ion-segment-button {
+    font: var(--md-sys-title-small);
+    letter-spacing: var(--md-sys-title-small-letter-spacing);
+    text-transform: unset;
+
+    --ripple-color: transparent !important;
+    --color: var(--md-sys-on-surface-variant);
+    --color-checked: var(--ion-color-contrast, var(--md-sys-on-secondary));
+    --transition: color var(--md-sys-expressive-default-spring-duration) var(--md-sys-expressive-slow-spring);
+    --indicator-transition: transform var(--md-sys-expressive-default-spring-duration) var(--md-sys-expressive-slow-spring);
+    --indicator-color: var(--ion-color-base, var(--md-sys-secondary));
+    --border-radius: var(--md-sys-corner-extra-large);
+
+    --padding-start: 24px;
+    --padding-end: 24px;
+
+    color: var(--color);
+
+    ion-icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    ion-label, ion-icon {
+      color: var(--color);
+      transition-property: color;
+      transition-duration: var(--md-sys-expressive-default-spring-duration);
+      transition-timing-function: var(--md-sys-expressive-slow-spring);
+    }
+
+    &.segment-button-checked {
+      color: var(--color-checked);
+
+      ion-label, ion-icon {
+        color: var(--color-checked);
+      }
+    }
+
+    &::part(indicator) {
+      overflow: hidden;
+      border-radius: var(--md-sys-corner-extra-large);
+      inset: 0;
+    }
+
+    &::part(indicator-background) {
+      width: 100%;
+      height: 100%;
+    }
+  }
+}

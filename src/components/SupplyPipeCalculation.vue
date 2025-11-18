@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import {
 	IonButton,
 	IonIcon,
@@ -10,7 +10,7 @@ import {
 	IonSelect,
 	IonSelectOption
 } from '@ionic/vue';
-import { calculator, locateOutline } from 'ionicons/icons';
+import { calculator, locate } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
@@ -101,7 +101,7 @@ const targetMarkerInfo = () => {
 <template>
 	<ion-list v-if="!pumpCalculation.calculationResult.value" class="info-list">
 		<!-- Coordinates -->
-		<ion-item button @click="pumpCalculation.setTargetPoint()">
+		<ion-item button @click="pumpCalculation.setTargetPoint()" :detail="false">
 			<img slot="start" :src="firepointIcon" style="height: 24px" alt="Fire point" />
 			<ion-label>
 				{{ t('pumpCalculation.fireObject') }}
@@ -111,7 +111,7 @@ const targetMarkerInfo = () => {
 				@click="pumpCalculation.setTargetPoint()"
 				:color="pumpCalculation.firePointSet.value ? 'medium' : 'primary'"
 			>
-				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
+				<ion-icon :icon="locate" slot="end"></ion-icon>
 				<template v-if="pumpCalculation.firePointSet.value">
 					{{ t('pumpCalculation.updatePosition') }}
 				</template>
@@ -120,7 +120,7 @@ const targetMarkerInfo = () => {
 				</template>
 			</ion-button>
 		</ion-item>
-		<ion-item button @click="pumpCalculation.setSuctionPoint()">
+		<ion-item button @click="pumpCalculation.setSuctionPoint()" :detail="false">
 			<img slot="start" :src="suctionPointIcon" style="height: 24px" alt="Suction point" />
 			<ion-label>
 				{{ t('pumpCalculation.suctionPoint') }}
@@ -130,7 +130,7 @@ const targetMarkerInfo = () => {
 				@click="pumpCalculation.setSuctionPoint()"
 				:color="pumpCalculation.suctionPointSet.value ? 'medium' : 'primary'"
 			>
-				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
+				<ion-icon :icon="locate" slot="end"></ion-icon>
 				<template v-if="pumpCalculation.suctionPointSet.value">
 					{{ t('pumpCalculation.updatePosition') }}
 				</template>
@@ -139,14 +139,14 @@ const targetMarkerInfo = () => {
 				</template>
 			</ion-button>
 		</ion-item>
-		<ion-item button @click="pumpCalculation.setWayPoint()" :disabled="!calculationAllowed">
+		<ion-item button @click="pumpCalculation.setWayPoint()" :detail="false">
 			<img slot="start" :src="wayPointIcon" style="height: 24px" alt="Waypoint" />
 			<ion-label>
 				{{ t('pumpCalculation.wayPoint') }}
 			</ion-label>
-			<ion-button slot="end" @click="pumpCalculation.setWayPoint()" :disabled="!calculationAllowed">
-				<ion-icon :icon="locateOutline" slot="end"></ion-icon>
+			<ion-button slot="end" @click="pumpCalculation.setWayPoint()">
 				{{ t('pumpCalculation.setPosition') }}
+				<ion-icon :icon="locate" slot="end"></ion-icon>
 			</ion-button>
 		</ion-item>
 		<ion-item>
@@ -264,10 +264,6 @@ ion-item {
 	--min-height: 48px;
 }
 
-ion-item[button]:hover {
-	--background: rgba(var(--ion-color-primary-rgb), 0.1);
-}
-
 .calculation-results {
 	width: 100%;
 }
@@ -285,11 +281,9 @@ ion-item[button]:hover {
 
 .result-label {
 	font-weight: bold;
-	color: var(--ion-color-dark);
 }
 
 .result-value {
-	color: var(--ion-color-dark);
 	text-align: right;
 }
 </style>
