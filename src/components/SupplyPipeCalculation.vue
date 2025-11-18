@@ -128,7 +128,7 @@ const targetMarkerInfo = () => {
 			<ion-button
 				slot="end"
 				@click="pumpCalculation.setSuctionPoint()"
-				:color="pumpCalculation.suctionPointSet.value ? 'medium' : 'secondary'"
+				:color="pumpCalculation.suctionPointSet.value ? 'medium' : 'primary'"
 			>
 				<ion-icon :icon="locate" slot="end"></ion-icon>
 				<template v-if="pumpCalculation.suctionPointSet.value">
@@ -144,7 +144,7 @@ const targetMarkerInfo = () => {
 			<ion-label>
 				{{ t('pumpCalculation.wayPoint') }}
 			</ion-label>
-			<ion-button slot="end" @click="pumpCalculation.setWayPoint()" >
+			<ion-button slot="end" @click="pumpCalculation.setWayPoint()">
 				{{ t('pumpCalculation.setPosition') }}
 				<ion-icon :icon="locate" slot="end"></ion-icon>
 			</ion-button>
