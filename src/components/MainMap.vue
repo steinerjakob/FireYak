@@ -56,6 +56,8 @@ import { informationCircle, analyticsOutline, navigate } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
+import icon from 'leaflet/dist/images/marker-icon-2x.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -101,8 +103,20 @@ const markerIcon = L.icon({
 	iconSize: [56, 56]
 });
 
+//http://localhost:5173/#/?lat=48.1292912&lng=15.2728629&zoom=15&external=true
+
+const DefaultIcon = L.icon({
+	iconUrl: icon,
+	shadowUrl: iconShadow,
+	iconSize: [25, 41],
+	iconAnchor: [12, 41]
+});
+
 const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
 const selectedMarkerPath = new L.Polyline([]);
+
+// Custom external location marker
+let customLocationMarker: L.Marker | null = null;
 
 function onMapMarkerClick(event: LeafletMouseEvent) {
 	router.push(`/markers/${event.target.options.title}`);
@@ -225,36 +239,10 @@ async function initMap() {
 	await nextTick();
 	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
 
-	rootMap.on('click', () => {
-		// do not close if the supply pipe is open
-		if (!route.path.includes('supplypipe')) {
-			router.replace('/');
-		}
-	});
-
-	rootMap.on('contextmenu', (e) => {
-		if (route.path.includes('supplypipe')) {
-			pumpCalculation.markerSetAlert(e.latlng);
-		}
-	});
-
-	rootMap.on('locationfound', () => {
-		searchNearbyMarkers();
-	});
-
-	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-		maxZoom: 19,
-		attribution:
-			'© OpenStreetMap | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>'
-	}).addTo(rootMap);
-
-	locationControl.addTo(rootMap);
-	locationControl.start();
-
-	// @ts-ignore: is a js plugin without any typings
-	if (!rootMap.restoreView()) {
-		rootMap.setView([48.135314, 15.274102], 13);
-	}
+	setupMapEventListeners();
+	addTileLayer();
+	setupLocationControl();
+	restoreMapView();
 
 	// Important: force Leaflet to recalc size after layout is ready
 	await ensureMapSize();
@@ -268,6 +256,88 @@ async function initMap() {
 
 	fireMapCluster.addTo(rootMap);
 	pumpCalculation.setMap(rootMap);
+
+	watchExternalLocationQuery();
+}
+
+function setupMapEventListeners() {
+	if (!rootMap) return;
+
+	rootMap.on('click', handleMapClick);
+	rootMap.on('contextmenu', handleMapContextMenu);
+	rootMap.on('locationfound', searchNearbyMarkers);
+}
+
+function handleMapClick() {
+	// do not close if the supply pipe is open
+	if (route.path.includes('supplypipe')) {
+		return;
+	}
+
+	const hideLocationMarker =
+		!route.path.includes('/markers/') && !route.path.includes('/nearbysources');
+
+	// The marker should only be hidden after tapping on the map and no marker info panel is open.
+	if (hideLocationMarker && customLocationMarker) {
+		customLocationMarker.remove();
+		customLocationMarker = null;
+	}
+
+	router.replace('/');
+}
+
+function handleMapContextMenu(e: LeafletMouseEvent) {
+	if (route.path.includes('supplypipe')) {
+		pumpCalculation.markerSetAlert(e.latlng);
+	}
+}
+
+function addTileLayer() {
+	if (!rootMap) return;
+
+	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+		maxZoom: 19,
+		attribution:
+			'© OpenStreetMap | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>'
+	}).addTo(rootMap);
+}
+
+function setupLocationControl() {
+	if (!rootMap) return;
+
+	locationControl.addTo(rootMap);
+	locationControl.start();
+}
+
+function restoreMapView() {
+	if (!rootMap) return;
+
+	// @ts-ignore: is a js plugin without any typings
+	if (!rootMap.restoreView()) {
+		rootMap.setView([48.135314, 15.274102], 13);
+	}
+}
+
+function watchExternalLocationQuery() {
+	watch(
+		() => route.query,
+		(query) => {
+			if (query.external === 'true' && query.lat && query.lng && query.zoom && rootMap) {
+				const lat = parseFloat(query.lat as string);
+				const lng = parseFloat(query.lng as string);
+				const zoom = parseFloat(query.zoom as string);
+				const latLng = L.latLng(lat, lng);
+
+				if (customLocationMarker) {
+					customLocationMarker.setLatLng(latLng);
+				} else {
+					customLocationMarker = L.marker(latLng, { icon: DefaultIcon }).addTo(rootMap);
+				}
+				rootMap.setView(latLng, zoom);
+			}
+		},
+		{ immediate: true }
+	);
 }
 
 onMounted(async () => {
