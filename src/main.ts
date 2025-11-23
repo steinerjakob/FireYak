@@ -79,11 +79,9 @@ const handleGeoUrl = (geoUrl: string) => {
 	const parts = geoUrl.replace('geo:', '').split('?');
 	const coords = parts[0].split(',');
 
-	console.log('Geo URL parsed:', coords, parts[1]);
-
 	if (coords.length >= 2) {
-		const latitude = parseFloat(coords[0]);
-		const longitude = parseFloat(coords[1]);
+		let latitude = parseFloat(coords[0]);
+		let longitude = parseFloat(coords[1]);
 
 		// Parse zoom level from query string if present
 		let zoom = 15; // default zoom
@@ -92,6 +90,19 @@ const handleGeoUrl = (geoUrl: string) => {
 			const zParam = queryParams.get('z');
 			if (zParam) {
 				zoom = parseFloat(zParam);
+			}
+
+			const qParam = queryParams.get('q');
+			if (qParam) {
+				const qCoords = qParam.split(',');
+				if (qCoords.length >= 2) {
+					const qLat = parseFloat(qCoords[0]);
+					const qLng = parseFloat(qCoords[1]);
+					if (!isNaN(qLat) && !isNaN(qLng)) {
+						latitude = qLat;
+						longitude = qLng;
+					}
+				}
 			}
 		}
 

@@ -56,7 +56,7 @@ import { informationCircle, analyticsOutline, navigate } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
-import icon from 'leaflet/dist/images/marker-icon.png';
+import icon from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
 const MAP_ELEMENT_ID = 'map';
