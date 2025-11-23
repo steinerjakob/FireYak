@@ -51,6 +51,15 @@ router.isReady().then(async () => {
 });
 
 CapApp.addListener('appUrlOpen', function (event: URLOpenListenerEvent) {
+	const url = event.url;
+	console.log('App opened with URL:', url);
+
+	// 1. Check if the URL is a location URL you want to handle
+	if (url.startsWith('geo:')) {
+		handleGeoUrl(url);
+		return;
+	}
+
 	const slug = event.url.split('#').pop();
 
 	// We only push to the route if there is a slug present
@@ -60,3 +69,41 @@ CapApp.addListener('appUrlOpen', function (event: URLOpenListenerEvent) {
 		});
 	}
 });
+
+/**
+ * Parses and handles the geo: URL
+ * Example geo:40.7128,-74.0060?z=10 (latitude, longitude, optional zoom)
+ */
+const handleGeoUrl = (geoUrl: string) => {
+	// Remove the 'geo:' prefix and parse the coordinates/query
+	const parts = geoUrl.replace('geo:', '').split('?');
+	const coords = parts[0].split(',');
+
+	console.log('Geo URL parsed:', coords, parts[1]);
+
+	if (coords.length >= 2) {
+		const latitude = parseFloat(coords[0]);
+		const longitude = parseFloat(coords[1]);
+
+		// Parse zoom level from query string if present
+		let zoom = 15; // default zoom
+		if (parts[1]) {
+			const queryParams = new URLSearchParams(parts[1]);
+			const zParam = queryParams.get('z');
+			if (zParam) {
+				zoom = parseFloat(zParam);
+			}
+		}
+
+		// Navigate to the map with the location and external flag
+		router.push({
+			path: '/',
+			query: {
+				lat: latitude.toString(),
+				lng: longitude.toString(),
+				zoom: zoom.toString(),
+				external: 'true'
+			}
+		});
+	}
+};
