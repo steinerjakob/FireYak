@@ -79,27 +79,47 @@ async function calculatePumpPosition(
 
 		if (pressure <= inputPressure) {
 			const pumpStore = usePumpCalculationStore();
-			const roundedPressure = Math.floor(pressure * 100) / 100;
+
+			// Find the last point where pressure was above inputPressure
+			let pumpPlacementIndex = i - 1;
+			while (
+				pumpPlacementIndex >= 0 &&
+				elevationPoints[pumpPlacementIndex].pressure! < inputPressure
+			) {
+				pumpPlacementIndex--;
+			}
+
+			// If no suitable point found (shouldn't happen if start pressure is high enough), default to current point
+			const pumpPoint =
+				pumpPlacementIndex >= 0 ? elevationPoints[pumpPlacementIndex] : elevationPoints[i];
+
 			const prevPump = pumps[pumps.length - 1];
-			const marker = new Marker(L.latLng(curr.latLng.lat, curr.latLng.lng), {
+			const marker = new Marker(L.latLng(pumpPoint.latLng.lat, pumpPoint.latLng.lng), {
 				icon: pumpIcon
 			});
-			const distanceFromPrev = Math.round(realDistance - (prevPump?.distanceFromStart || 0));
+
+			const distanceFromPrev = Math.round(pumpPoint.distance! - (prevPump?.distanceFromStart || 0));
 			const neededBTubes = Math.round(distanceFromPrev / pumpStore.tubeLength);
+
 			const pumpInfo = {
-				lat: curr.latLng.lat,
-				lon: curr.latLng.lng,
-				elevation: curr.elevation,
-				distanceFromStart: Math.round(realDistance),
+				lat: pumpPoint.latLng.lat,
+				lon: pumpPoint.latLng.lng,
+				elevation: pumpPoint.elevation,
+				distanceFromStart: Math.round(pumpPoint.distance!),
 				distanceFromPrev,
-				pressureAtTrigger: roundedPressure,
-				riseFromStart: Math.round(curr.elevation - startElevation),
-				riseFromPrev: Math.round(curr.elevation - (prevPump?.elevation || startElevation)),
+				pressureAtTrigger: Math.floor(pumpPoint.pressure! * 100) / 100, // Use the pressure at the chosen pump point
+				riseFromStart: Math.round(pumpPoint.elevation - startElevation),
+				riseFromPrev: Math.round(pumpPoint.elevation - (prevPump?.elevation || startElevation)),
 				neededBTubes,
 				marker
 			};
 			marker.bindPopup(provideMarkerPopup(t, pumpInfo));
 			pumps.push(pumpInfo);
+
+			// Reset the loop index, realDistance, and elevationOld to the state of the pumpPoint
+			i = pumpPlacementIndex;
+			realDistance = pumpPoint.distance!;
+			elevationOld = pumpPoint.elevation;
 
 			// reset pressure to output after placing pump
 			pressure = outputPressure;
