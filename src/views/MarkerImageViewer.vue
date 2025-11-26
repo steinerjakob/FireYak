@@ -15,7 +15,7 @@ import { useRoute } from 'vue-router';
 // PhotoSwipe imports
 import PhotoSwipeLightbox from 'photoswipe/lightbox';
 import 'photoswipe/photoswipe.css';
-import { useMapMarkerStore } from '@/store/app';
+import { useMapMarkerStore } from '@/store/mapMarkerStore';
 
 const ionRouter = useIonRouter();
 const route = useRoute();

@@ -3,7 +3,7 @@ import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote } from '@ionic/
 import { openOutline, createOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useMapMarkerStore } from '@/store/app';
+import { useMapMarkerStore } from '@/store/mapMarkerStore';
 
 const markerStore = useMapMarkerStore();
 
@@ -199,7 +199,6 @@ ion-item {
 }
 
 ion-label h3 {
-
 	font-weight: 600;
 	font-size: 0.875rem;
 	margin-bottom: 2px;

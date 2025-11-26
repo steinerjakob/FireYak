@@ -10,7 +10,7 @@ import iconWaterTank from '../assets/markers/watertank.png';
 
 import { fetchMarkerData, OverPassElement } from './overPassApi';
 import { getMapNodesForView, getNearbyMapNodes, storeMapNodes } from '@/mapHandler/databaseHandler';
-import { useMapMarkerStore } from '@/store/app';
+import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 
 function getIconForNode(element: OverPassElement): L.Icon {

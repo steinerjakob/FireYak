@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { IonContent, IonCard, IonModal } from '@ionic/vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import NearbyMarker from '@/components/NearbyMarker.vue';
 import NearbyMarkerHeader from '@/components/NearbyMarkerHeader.vue';
+import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
 
-const modal = ref();
+const modal = ref<typeof IonModal>();
 const screenOrientation = useScreenOrientation();
 const { isActive } = useNearbyWaterSource();
 
@@ -15,6 +16,10 @@ const isMobile = ref(window.innerWidth < 768);
 watch(screenOrientation.orientation, () => {
 	isMobile.value = window.innerWidth < 768;
 });
+
+const initialBreakpoint = 0.4;
+
+useIonModalBreakpoint(modal, initialBreakpoint);
 </script>
 
 <template>
@@ -23,7 +28,7 @@ watch(screenOrientation.orientation, () => {
 			ref="modal"
 			:is-open="isActive"
 			:breakpoints="[0.25, 0.4, 0.5, 0.75]"
-			:initial-breakpoint="0.25"
+			:initial-breakpoint="initialBreakpoint"
 			:backdrop-dismiss="false"
 			:backdrop-opacity="0"
 			:showBackdrop="false"
@@ -63,7 +68,7 @@ watch(screenOrientation.orientation, () => {
 }
 
 @media (max-width: 767px) {
-	.supply-pipe::part(content) {
+	.nearby-source::part(content) {
 		border-radius: 8px 8px 0 0;
 		box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
 	}

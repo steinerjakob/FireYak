@@ -11,7 +11,7 @@ import {
 import { navigate, shareSocial } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useMapMarkerStore } from '@/store/app';
+import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { Share } from '@capacitor/share';
 
 const markerStore = useMapMarkerStore();
