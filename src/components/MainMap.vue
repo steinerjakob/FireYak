@@ -133,7 +133,7 @@ function fitMapToLayer() {
 		const defaultPadding = 16;
 		rootMap.fitBounds(polyLine.getBounds(), {
 			paddingTopLeft: [defaultPadding + visibleMapView.x, visibleMapView.top + defaultPadding],
-			paddingBottomRight: [defaultPadding, visibleMapView.yMax - visibleMapView.y + defaultPadding]
+			paddingBottomRight: [defaultPadding, visibleMapView.yMax - visibleMapView.y]
 		});
 	} else if (rootMap && rootMap.hasLayer(selectedMarker)) {
 		// If no polyline is visible but selectedMarker is, center it
@@ -147,7 +147,7 @@ function fitMapToLayer() {
 		];
 		const paddingBottomRight: L.PointExpression = [
 			defaultPadding,
-			visibleMapView.yMax - visibleMapView.y + defaultPadding
+			visibleMapView.yMax - visibleMapView.y
 		];
 
 		// Calculate the center offset in pixels
