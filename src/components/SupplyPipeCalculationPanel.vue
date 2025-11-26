@@ -6,16 +6,21 @@ import SupplyPipeCalculationHeader from '@/components/SupplyPipeCalculationHeade
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import { locateOutline } from 'ionicons/icons';
 import SupplyPipeCalculation from '@/components/SupplyPipeCalculation.vue';
+import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
 
 const modal = ref();
 const screenOrientation = useScreenOrientation();
-const { isActive } = usePumpCalculation();
+const { isActive, calculationResult } = usePumpCalculation();
 
 const isMobile = ref(window.innerWidth < 768);
 
 watch(screenOrientation.orientation, () => {
 	isMobile.value = window.innerWidth < 768;
 });
+
+const initialBreakpoint = 0.4;
+
+useIonModalBreakpoint(modal, initialBreakpoint);
 </script>
 
 <template>
@@ -24,7 +29,7 @@ watch(screenOrientation.orientation, () => {
 			ref="modal"
 			:is-open="isActive"
 			:breakpoints="[0.25, 0.4, 0.5, 0.75]"
-			:initial-breakpoint="0.4"
+			:initial-breakpoint="initialBreakpoint"
 			:backdrop-dismiss="false"
 			:backdrop-opacity="0"
 			:showBackdrop="false"
@@ -43,7 +48,12 @@ watch(screenOrientation.orientation, () => {
 		<SupplyPipeCalculation></SupplyPipeCalculation>
 	</ion-card>
 
-	<ion-icon v-if="isActive" :icon="locateOutline" class="center-locate" size="medium" />
+	<ion-icon
+		v-if="isActive && !calculationResult"
+		:icon="locateOutline"
+		class="center-locate"
+		size="medium"
+	/>
 </template>
 
 <style scoped>

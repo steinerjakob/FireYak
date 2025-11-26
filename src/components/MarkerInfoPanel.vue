@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { IonContent, IonCard, IonModal, IonThumbnail } from '@ionic/vue';
 import MarkerInfo from '@/components/MarkerInfo.vue';
 import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
-import { useMapMarkerStore } from '@/store/app';
+import { useMapMarkerStore } from '@/store/mapMarkerStore';
+import { useDefaultStore } from '@/store/defaultStore';
+import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
 
 const route = useRoute();
-const modal = ref();
+const modal = ref<typeof IonModal>();
 const screenOrientation = useScreenOrientation();
 const nearbyWaterSource = useNearbyWaterSource();
 const markerStore = useMapMarkerStore();
+const defaultStore = useDefaultStore();
 const router = useRouter();
 
 const showMarkerInfo = computed(() => {
@@ -32,6 +35,10 @@ watch(screenOrientation.orientation, () => {
 watch(showMarkerInfo, () => {
 	isMobile.value = window.innerWidth < 768;
 });
+
+const initialBreakpoint = 0.25;
+
+useIonModalBreakpoint(modal, initialBreakpoint);
 </script>
 
 <template>
@@ -39,12 +46,12 @@ watch(showMarkerInfo, () => {
 		<ion-modal
 			ref="modal"
 			:is-open="showMarkerInfo"
-			:breakpoints="[0.25, 0.4, 0.5, 0.75]"
-			:initial-breakpoint="0.25"
+			:breakpoints="[0.25, 0.4, 0.5]"
+			:initial-breakpoint="initialBreakpoint"
 			:backdrop-dismiss="false"
 			:backdrop-opacity="0"
 			:showBackdrop="false"
-			:expand-to-scroll="false"
+			:expand-to-scroll="true"
 			handle-behavior="cycle"
 			class="marker-info"
 		>

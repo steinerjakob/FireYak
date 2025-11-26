@@ -247,9 +247,9 @@ export function usePumpCalculation() {
 		pumpPositions.forEach(({ marker }) => {
 			pumpLayer.addLayer(marker);
 		});
-		layer.addLayer(pumpLayer);
-
-		rootMap?.fitBounds(layer.getBounds(), { padding: [15, 10] });
+		if (!layer.hasLayer(pumpLayer)) {
+			layer.addLayer(pumpLayer);
+		}
 
 		calculationResult.value = {
 			pumpPositions,
@@ -317,7 +317,7 @@ export function usePumpCalculation() {
 
 	return {
 		isActive,
-		layer,
+		polyline: line,
 		setMap,
 		setSuctionPoint,
 		setTargetPoint,

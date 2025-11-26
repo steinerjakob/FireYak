@@ -49,7 +49,7 @@ import { nextTick, onMounted, watch } from 'vue';
 import { debounce } from '@/helper/helper';
 import { getMarkersForView, getNearbyMarkers } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
-import { useMapMarkerStore } from '@/store/app';
+import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
 import { informationCircle, analyticsOutline, navigate } from 'ionicons/icons';
@@ -58,6 +58,7 @@ import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import icon from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import { useDefaultStore } from '@/store/defaultStore';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -69,6 +70,7 @@ const markerStore = useMapMarkerStore();
 const { isDarkMode } = useDarkMode();
 const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
+const defaultStore = useDefaultStore();
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
@@ -119,31 +121,58 @@ const selectedMarkerPath = new L.Polyline([]);
 let customLocationMarker: L.Marker | null = null;
 
 function onMapMarkerClick(event: LeafletMouseEvent) {
+	L.DomEvent.stopPropagation(event);
 	router.push(`/markers/${event.target.options.title}`);
 }
 
-function fitToSelectedMarkerPath() {
-	if (rootMap) {
-		// Calculate the effective visible bounds (top 2/3 of the map)
-		const mapHeight = rootMap.getSize().y;
-		const visibleHeightPixels = mapHeight - window.innerHeight / 2; // Top edge of the bottom 1/3
+function fitMapToLayer() {
+	const polyLine = pumpCalculation.isActive.value ? pumpCalculation.polyline : selectedMarkerPath;
+	if (rootMap && polyLine && rootMap?.hasLayer(polyLine)) {
+		const visibleMapView = defaultStore.visibleMapView;
 
-		const northWestLatLng = rootMap.getBounds().getNorthWest();
-		// Convert the pixel point (full width, visibleHeightPixels) to LatLng
-		const southEastVisiblePoint = L.point(rootMap.getSize().x, visibleHeightPixels);
-		const southEastVisibleLatLng = rootMap.containerPointToLatLng(southEastVisiblePoint);
+		const defaultPadding = 16;
+		rootMap.fitBounds(polyLine.getBounds(), {
+			paddingTopLeft: [defaultPadding + visibleMapView.x, visibleMapView.top + defaultPadding],
+			paddingBottomRight: [defaultPadding, visibleMapView.yMax - visibleMapView.y]
+		});
+	} else if (rootMap && rootMap.hasLayer(selectedMarker)) {
+		// If no polyline is visible but selectedMarker is, center it
+		const visibleMapView = defaultStore.visibleMapView;
+		const defaultPadding = 16;
 
-		const effectiveVisibleBounds = L.latLngBounds(northWestLatLng, southEastVisibleLatLng);
+		// Calculate the center point of the visible area between paddingTopLeft and paddingBottomRight
+		const paddingTopLeft: L.PointExpression = [
+			defaultPadding + visibleMapView.x,
+			visibleMapView.top + defaultPadding
+		];
+		const paddingBottomRight: L.PointExpression = [
+			defaultPadding,
+			visibleMapView.yMax - visibleMapView.y
+		];
 
-		// Only fit bounds if the path is not fully visible within the top 2/3 of the screen
-		if (!effectiveVisibleBounds.contains(selectedMarkerPath.getBounds())) {
-			rootMap.fitBounds(selectedMarkerPath.getBounds(), {
-				paddingTopLeft: [0, 0], // Adjust padding to fit in upper 1/3
-				paddingBottomRight: [0, window.innerHeight / 2]
-			});
-		}
+		// Calculate the center offset in pixels
+		const centerOffsetX = (paddingTopLeft[0] - paddingBottomRight[0]) / 2;
+		const centerOffsetY = (paddingTopLeft[1] - paddingBottomRight[1]) / 2;
+
+		// Get the current center point and convert to container point
+		const markerLatLng = selectedMarker.getLatLng();
+		const markerPoint = rootMap.latLngToContainerPoint(markerLatLng);
+
+		// Adjust the point to account for the padding offset
+		const adjustedPoint = L.point(markerPoint.x - centerOffsetX, markerPoint.y - centerOffsetY);
+
+		// Convert back to LatLng and pan to it
+		const adjustedLatLng = rootMap.containerPointToLatLng(adjustedPoint);
+		rootMap.panTo(adjustedLatLng);
 	}
 }
+
+watch(defaultStore.visibleMapView, fitMapToLayer);
+watch(pumpCalculation.calculationResult, (val) => {
+	if (val) {
+		fitMapToLayer();
+	}
+});
 
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
 
@@ -176,18 +205,17 @@ watch(
 				const currentLocation = getCurrentLocation()!;
 				selectedMarkerPath.setLatLngs([currentLocation, latLng]);
 
-				fitToSelectedMarkerPath();
-
 				if (!rootMap?.hasLayer(selectedMarkerPath)) {
 					rootMap?.addLayer(selectedMarkerPath);
 				}
+				fitMapToLayer();
 				// update polyline to show a direct connection!
 			} else {
 				rootMap?.removeLayer(selectedMarkerPath);
 				if (isFirstWatch) {
 					rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
 				} else {
-					rootMap?.panTo(latLng);
+					fitMapToLayer();
 				}
 			}
 		} catch (e) {
@@ -238,6 +266,7 @@ async function searchNearbyMarkers() {
 async function initMap() {
 	await nextTick();
 	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
+	//L.control.scale().addTo(rootMap);
 
 	setupMapEventListeners();
 	addTileLayer();
