@@ -121,6 +121,7 @@ const selectedMarkerPath = new L.Polyline([]);
 let customLocationMarker: L.Marker | null = null;
 
 function onMapMarkerClick(event: LeafletMouseEvent) {
+	L.DomEvent.stopPropagation(event);
 	router.push(`/markers/${event.target.options.title}`);
 }
 

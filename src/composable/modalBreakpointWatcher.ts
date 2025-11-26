@@ -24,13 +24,13 @@ export function useIonModalBreakpoint(
 			defaultStore.bottomModalBreakpointValue(0);
 		};
 
-		el.addEventListener('ionModalDidPresent', handleDidPresent);
+		el.addEventListener('ionModalWillPresent', handleDidPresent);
 		el.addEventListener('ionBreakpointDidChange', handleBreakpointChange);
 		el.addEventListener('ionModalDidDismiss', handleDidDismiss);
 
 		// Cleanup function
 		return () => {
-			el.removeEventListener('ionModalDidPresent', handleDidPresent);
+			el.removeEventListener('ionModalWillPresent', handleDidPresent);
 			el.removeEventListener('ionBreakpointDidChange', handleBreakpointChange);
 			el.removeEventListener('ionModalDidDismiss', handleDidDismiss);
 		};
