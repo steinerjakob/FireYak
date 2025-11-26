@@ -58,6 +58,7 @@ import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import icon from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import { useDefaultStore } from '@/store/defaultStore';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -69,6 +70,7 @@ const markerStore = useMapMarkerStore();
 const { isDarkMode } = useDarkMode();
 const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
+const defaultStore = useDefaultStore();
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
@@ -122,28 +124,25 @@ function onMapMarkerClick(event: LeafletMouseEvent) {
 	router.push(`/markers/${event.target.options.title}`);
 }
 
-function fitToSelectedMarkerPath() {
-	if (rootMap) {
-		// Calculate the effective visible bounds (top 2/3 of the map)
-		const mapHeight = rootMap.getSize().y;
-		const visibleHeightPixels = mapHeight - window.innerHeight / 2; // Top edge of the bottom 1/3
+function fitToPolyline() {
+	const polyLine = pumpCalculation.isActive ? pumpCalculation.polyline : selectedMarkerPath;
+	if (rootMap && polyLine && rootMap?.hasLayer(polyLine)) {
+		const visibleMapView = defaultStore.visibleMapView;
 
-		const northWestLatLng = rootMap.getBounds().getNorthWest();
-		// Convert the pixel point (full width, visibleHeightPixels) to LatLng
-		const southEastVisiblePoint = L.point(rootMap.getSize().x, visibleHeightPixels);
-		const southEastVisibleLatLng = rootMap.containerPointToLatLng(southEastVisiblePoint);
-
-		const effectiveVisibleBounds = L.latLngBounds(northWestLatLng, southEastVisibleLatLng);
-
-		// Only fit bounds if the path is not fully visible within the top 2/3 of the screen
-		if (!effectiveVisibleBounds.contains(selectedMarkerPath.getBounds())) {
-			rootMap.fitBounds(selectedMarkerPath.getBounds(), {
-				paddingTopLeft: [0, 0], // Adjust padding to fit in upper 1/3
-				paddingBottomRight: [0, window.innerHeight / 2]
-			});
-		}
+		const defaultPadding = 16;
+		rootMap.fitBounds(polyLine.getBounds(), {
+			paddingTopLeft: [defaultPadding + visibleMapView.x, visibleMapView.top + defaultPadding], // todo
+			paddingBottomRight: [defaultPadding, visibleMapView.yMax - visibleMapView.y + defaultPadding]
+		});
 	}
 }
+
+watch(defaultStore.visibleMapView, fitToPolyline);
+watch(pumpCalculation.calculationResult, (val) => {
+	if (val) {
+		fitToPolyline();
+	}
+});
 
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
 
@@ -176,11 +175,10 @@ watch(
 				const currentLocation = getCurrentLocation()!;
 				selectedMarkerPath.setLatLngs([currentLocation, latLng]);
 
-				fitToSelectedMarkerPath();
-
 				if (!rootMap?.hasLayer(selectedMarkerPath)) {
 					rootMap?.addLayer(selectedMarkerPath);
 				}
+				fitToPolyline();
 				// update polyline to show a direct connection!
 			} else {
 				rootMap?.removeLayer(selectedMarkerPath);
@@ -238,6 +236,7 @@ async function searchNearbyMarkers() {
 async function initMap() {
 	await nextTick();
 	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
+	L.control.scale().addTo(rootMap);
 
 	setupMapEventListeners();
 	addTileLayer();
