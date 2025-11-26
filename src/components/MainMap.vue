@@ -125,7 +125,7 @@ function onMapMarkerClick(event: LeafletMouseEvent) {
 }
 
 function fitToPolyline() {
-	const polyLine = pumpCalculation.isActive ? pumpCalculation.polyline : selectedMarkerPath;
+	const polyLine = pumpCalculation.isActive.value ? pumpCalculation.polyline : selectedMarkerPath;
 	if (rootMap && polyLine && rootMap?.hasLayer(polyLine)) {
 		const visibleMapView = defaultStore.visibleMapView;
 
@@ -236,7 +236,7 @@ async function searchNearbyMarkers() {
 async function initMap() {
 	await nextTick();
 	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
-	L.control.scale().addTo(rootMap);
+	//L.control.scale().addTo(rootMap);
 
 	setupMapEventListeners();
 	addTileLayer();

@@ -10,7 +10,7 @@ import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
 
 const modal = ref();
 const screenOrientation = useScreenOrientation();
-const { isActive } = usePumpCalculation();
+const { isActive, calculationResult } = usePumpCalculation();
 
 const isMobile = ref(window.innerWidth < 768);
 
@@ -48,7 +48,12 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 		<SupplyPipeCalculation></SupplyPipeCalculation>
 	</ion-card>
 
-	<ion-icon v-if="isActive" :icon="locateOutline" class="center-locate" size="medium" />
+	<ion-icon
+		v-if="isActive && !calculationResult"
+		:icon="locateOutline"
+		class="center-locate"
+		size="medium"
+	/>
 </template>
 
 <style scoped>
