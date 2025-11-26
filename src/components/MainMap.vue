@@ -124,23 +124,52 @@ function onMapMarkerClick(event: LeafletMouseEvent) {
 	router.push(`/markers/${event.target.options.title}`);
 }
 
-function fitToPolyline() {
+function fitMapToLayer() {
 	const polyLine = pumpCalculation.isActive.value ? pumpCalculation.polyline : selectedMarkerPath;
 	if (rootMap && polyLine && rootMap?.hasLayer(polyLine)) {
 		const visibleMapView = defaultStore.visibleMapView;
 
 		const defaultPadding = 16;
 		rootMap.fitBounds(polyLine.getBounds(), {
-			paddingTopLeft: [defaultPadding + visibleMapView.x, visibleMapView.top + defaultPadding], // todo
+			paddingTopLeft: [defaultPadding + visibleMapView.x, visibleMapView.top + defaultPadding],
 			paddingBottomRight: [defaultPadding, visibleMapView.yMax - visibleMapView.y + defaultPadding]
 		});
+	} else if (rootMap && rootMap.hasLayer(selectedMarker)) {
+		// If no polyline is visible but selectedMarker is, center it
+		const visibleMapView = defaultStore.visibleMapView;
+		const defaultPadding = 16;
+
+		// Calculate the center point of the visible area between paddingTopLeft and paddingBottomRight
+		const paddingTopLeft: L.PointExpression = [
+			defaultPadding + visibleMapView.x,
+			visibleMapView.top + defaultPadding
+		];
+		const paddingBottomRight: L.PointExpression = [
+			defaultPadding,
+			visibleMapView.yMax - visibleMapView.y + defaultPadding
+		];
+
+		// Calculate the center offset in pixels
+		const centerOffsetX = (paddingTopLeft[0] - paddingBottomRight[0]) / 2;
+		const centerOffsetY = (paddingTopLeft[1] - paddingBottomRight[1]) / 2;
+
+		// Get the current center point and convert to container point
+		const markerLatLng = selectedMarker.getLatLng();
+		const markerPoint = rootMap.latLngToContainerPoint(markerLatLng);
+
+		// Adjust the point to account for the padding offset
+		const adjustedPoint = L.point(markerPoint.x - centerOffsetX, markerPoint.y - centerOffsetY);
+
+		// Convert back to LatLng and pan to it
+		const adjustedLatLng = rootMap.containerPointToLatLng(adjustedPoint);
+		rootMap.panTo(adjustedLatLng);
 	}
 }
 
-watch(defaultStore.visibleMapView, fitToPolyline);
+watch(defaultStore.visibleMapView, fitMapToLayer);
 watch(pumpCalculation.calculationResult, (val) => {
 	if (val) {
-		fitToPolyline();
+		fitMapToLayer();
 	}
 });
 
@@ -178,14 +207,14 @@ watch(
 				if (!rootMap?.hasLayer(selectedMarkerPath)) {
 					rootMap?.addLayer(selectedMarkerPath);
 				}
-				fitToPolyline();
+				fitMapToLayer();
 				// update polyline to show a direct connection!
 			} else {
 				rootMap?.removeLayer(selectedMarkerPath);
 				if (isFirstWatch) {
 					rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
 				} else {
-					rootMap?.panTo(latLng);
+					fitMapToLayer();
 				}
 			}
 		} catch (e) {
