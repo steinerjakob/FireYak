@@ -265,6 +265,13 @@ async function searchNearbyMarkers() {
 }
 async function initMap() {
 	await nextTick();
+
+	// Check if map already exists and remove it
+	if (rootMap) {
+		rootMap.remove();
+		rootMap = null;
+	}
+
 	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
 	//L.control.scale().addTo(rootMap);
 
