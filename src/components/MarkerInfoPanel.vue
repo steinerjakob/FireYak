@@ -46,12 +46,12 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 		<ion-modal
 			ref="modal"
 			:is-open="showMarkerInfo"
-			:breakpoints="[0.25, 0.4, 0.5]"
+			:breakpoints="[0.25, 0.5]"
 			:initial-breakpoint="initialBreakpoint"
 			:backdrop-dismiss="false"
 			:backdrop-opacity="0"
 			:showBackdrop="false"
-			:expand-to-scroll="true"
+			:expand-to-scroll="false"
 			handle-behavior="cycle"
 			class="marker-info"
 		>
