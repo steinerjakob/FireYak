@@ -413,8 +413,10 @@ ion-fab {
 	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + 56px + 16px);
 }
 
+.md {
 :deep(.leaflet-bottom) {
 	margin-bottom: env(safe-area-inset-bottom);
+}
 }
 
 :deep(.leaflet-control-locate) {
