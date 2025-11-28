@@ -175,6 +175,19 @@ watch(pumpCalculation.calculationResult, (val) => {
 
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
 
+const showPathToSelectedMarker = async () => {
+	if (nearbyWaterSource.isActive.value && rootMap?.hasLayer(selectedMarker)) {
+		const currentLocation = await getCurrentLocation()!;
+		selectedMarkerPath.setLatLngs([currentLocation, selectedMarker.getLatLng()]);
+
+		if (!rootMap?.hasLayer(selectedMarkerPath)) {
+			rootMap?.addLayer(selectedMarkerPath);
+		}
+		fitMapToLayer();
+		// update polyline to show a direct connection!
+	}
+};
+
 let isFirstWatch = true;
 // Watch store's selectedMarker and update map display
 watch(
@@ -200,16 +213,8 @@ watch(
 				rootMap?.addLayer(selectedMarker);
 			}
 
-			if (nearbyWaterSource.isActive.value) {
-				const currentLocation = getCurrentLocation()!;
-				selectedMarkerPath.setLatLngs([currentLocation, latLng]);
-
-				if (!rootMap?.hasLayer(selectedMarkerPath)) {
-					rootMap?.addLayer(selectedMarkerPath);
-				}
-				fitMapToLayer();
-				// update polyline to show a direct connection!
-			} else {
+			showPathToSelectedMarker();
+			if (!nearbyWaterSource.isActive.value) {
 				rootMap?.removeLayer(selectedMarkerPath);
 				if (isFirstWatch) {
 					rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
@@ -321,9 +326,11 @@ function stopWatchingLocation() {
 	}
 }
 
-function getCurrentLocation(): LatLng | null {
+async function getCurrentLocation(): Promise<LatLng> {
 	if (currentUserLocation.value) {
 		return currentUserLocation.value;
+	} else {
+		await showUserLocation();
 	}
 
 	// if a custom location is active, use it to find the nearest water source
@@ -331,18 +338,19 @@ function getCurrentLocation(): LatLng | null {
 		return customLocationMarker.getLatLng();
 	}
 	// Fallback to map center
-	return rootMap?.getCenter() || null;
+	return rootMap!.getCenter();
 }
 
 async function searchNearbyMarkers() {
 	if (!nearbyWaterSource.isActive.value) {
 		return;
 	}
-	const location = getCurrentLocation();
+	const location = await getCurrentLocation();
 	if (!location) {
 		return;
 	}
 	nearbyWaterSource.list.value = await getNearbyMarkers(location);
+	await showPathToSelectedMarker();
 }
 async function initMap() {
 	await nextTick();
