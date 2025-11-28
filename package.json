@@ -51,7 +51,6 @@
 		"@commitlint/cli": "^18.4.3",
 		"@commitlint/config-conventional": "^18.4.3",
 		"@types/leaflet": "^1.9.8",
-		"@types/leaflet.locatecontrol": "^0.74.4",
 		"@types/leaflet.markercluster": "^1.5.4",
 		"@types/photoswipe": "^5.2.5",
 		"@vitejs/plugin-vue": "^6.0.1",
