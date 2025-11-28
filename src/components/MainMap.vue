@@ -24,7 +24,7 @@
 		</ion-fab>
 		<ion-fab class="location-fab" vertical="bottom" horizontal="end" slot="fixed" size="small">
 			<ion-fab-button color="light" @click="showUserLocation" title="Location">
-				<ion-icon :icon="navigate"></ion-icon>
+				<ion-icon :icon="watchId ? navigate : navigateOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
 		<ion-fab vertical="bottom" horizontal="end" slot="fixed">
@@ -43,22 +43,21 @@ import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { MarkerClusterGroup } from 'leaflet.markercluster';
 import selectedMarkerIcon from '../assets/markers/selectedmarker.png';
 import '../plugins/leaflet.restoreview.js';
-import 'leaflet.locatecontrol';
-import 'leaflet.locatecontrol/dist/L.Control.Locate.min.css';
-import { nextTick, onMounted, watch } from 'vue';
+import { nextTick, onMounted, watch, ref, onUnmounted } from 'vue';
 import { debounce } from '@/helper/helper';
 import { getMarkersForView, getNearbyMarkers } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
-import { informationCircle, analyticsOutline, navigate } from 'ionicons/icons';
+import { informationCircle, analyticsOutline, navigate, navigateOutline } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import icon from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useDefaultStore } from '@/store/defaultStore';
+import { Geolocation } from '@capacitor/geolocation';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -225,32 +224,114 @@ watch(
 		}
 	}
 );
-const locationControl = L.control.locate({
-	position: 'bottomright',
-	flyTo: true,
-	keepCurrentZoomLevel: true,
-	setView: false,
-	clickBehavior: { inView: 'setView', outOfView: 'setView', inViewNotFollowing: 'inView' }
-});
+// Replace locationControl with custom location tracking
+let userLocationMarker: L.CircleMarker | null = null;
+const watchId = ref<string | null>(null);
+const currentUserLocation = ref<LatLng | null>(null);
 
-function showUserLocation() {
+async function showUserLocation() {
 	try {
-		locationControl.setView();
-	} catch {
-		// do nothing.
+		if (!watchId.value) {
+			// Check if we have permission
+			const permission = await Geolocation.checkPermissions();
+
+			if (permission.location !== 'granted') {
+				const requestResult = await Geolocation.requestPermissions();
+				if (requestResult.location !== 'granted') {
+					console.warn('Location permission not granted');
+					return;
+				}
+			}
+
+			// Get current position
+			const position = await Geolocation.getCurrentPosition({
+				enableHighAccuracy: true,
+				timeout: 10000,
+				maximumAge: 0
+			});
+
+			const latLng = L.latLng(position.coords.latitude, position.coords.longitude);
+			currentUserLocation.value = latLng;
+
+			// Update or create location marker
+			updateLocationMarker(latLng);
+
+			startWatchingLocation();
+		}
+
+		// Fly to user location
+		if (rootMap && userLocationMarker) {
+			rootMap.flyTo(
+				userLocationMarker?.getLatLng(),
+				Math.max(rootMap.getZoom(), DISABLE_CLUSTERING_ZOOM)
+			);
+		}
+	} catch (error) {
+		console.error('Error getting location:', error);
+	}
+}
+
+function updateLocationMarker(latLng: LatLng) {
+	if (!rootMap) return;
+
+	// Update or create location marker
+	if (userLocationMarker) {
+		userLocationMarker.setLatLng(latLng);
+	} else {
+		userLocationMarker = L.circleMarker(latLng, {
+			radius: 8,
+			weight: 3,
+			color: '#fff',
+			fillColor: '#136AEC',
+			fillOpacity: 1
+		}).addTo(rootMap);
+	}
+	// Trigger nearby search if active
+	searchNearbyMarkers();
+}
+
+function startWatchingLocation() {
+	Geolocation.watchPosition(
+		{
+			enableHighAccuracy: true,
+			timeout: 10000,
+			maximumAge: 0
+		},
+		(position, err) => {
+			if (err) {
+				console.error('Error watching location:', err);
+				return;
+			}
+
+			if (position) {
+				const latLng = L.latLng(position.coords.latitude, position.coords.longitude);
+				currentUserLocation.value = latLng;
+				updateLocationMarker(latLng);
+			}
+		}
+	).then((id) => {
+		watchId.value = id;
+	});
+}
+
+function stopWatchingLocation() {
+	if (watchId.value) {
+		Geolocation.clearWatch({ id: watchId.value });
+		watchId.value = null;
 	}
 }
 
 function getCurrentLocation(): LatLng | null {
-	if (!rootMap) {
-		return null;
+	if (currentUserLocation.value) {
+		return currentUserLocation.value;
 	}
-	if (locationControl._event && locationControl._event.latlng) {
-		return locationControl._event.latlng;
-	} else {
-		// Fallback to map center or request location
-		return rootMap.getCenter();
+
+	// if a custom location is active, use it to find the nearest water source
+	if (customLocationMarker) {
+		return customLocationMarker.getLatLng();
 	}
+	// Fallback to map center
+	return rootMap?.getCenter() || null;
 }
 
 async function searchNearbyMarkers() {
@@ -277,7 +358,6 @@ async function initMap() {
 
 	setupMapEventListeners();
 	addTileLayer();
-	setupLocationControl();
 	restoreMapView();
 
 	// Important: force Leaflet to recalc size after layout is ready
@@ -301,7 +381,6 @@ function setupMapEventListeners() {
 
 	rootMap.on('click', handleMapClick);
 	rootMap.on('contextmenu', handleMapContextMenu);
-	rootMap.on('locationfound', searchNearbyMarkers);
 }
 
 function handleMapClick() {
@@ -336,13 +415,6 @@ function addTileLayer() {
 		attribution:
 			'© OpenStreetMap | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>'
 	}).addTo(rootMap);
-}
-
-function setupLocationControl() {
-	if (!rootMap) return;
-
-	locationControl.addTo(rootMap);
-	locationControl.start();
 }
 
 function restoreMapView() {
@@ -400,6 +472,10 @@ onMounted(async () => {
 		},
 		{ immediate: true }
 	);
+});
+
+onUnmounted(() => {
+	stopWatchingLocation();
 });
 </script>
 <style scoped>
