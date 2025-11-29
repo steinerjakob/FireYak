@@ -91,7 +91,7 @@
 	},
 	"about": {
 		"title": "About FireYak",
-		"description": "FireYak is an open-source fire station water source locator. It helps fire departments quickly find the nearest water sources using OpenStreetMap data.",
+		"description": "FireYak helps fire departments quickly find the nearest water sources using OpenStreetMap data.",
 		"openSource": "Open Source",
 		"openSourceDescription": "This app is completely free and open source. The source code is available on GitHub.",
 		"support": "Support the Project",

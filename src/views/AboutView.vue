@@ -14,7 +14,10 @@
 				<div class="logo-section">
 					<img src="/android-chrome-192x192.png" alt="FireYak Logo" class="app-logo" />
 					<h1>FireYak</h1>
-					<p class="version">{{ $t('about.version') }} 2.0.0</p>
+					<p class="version">
+						{{ $t('about.version') }} {{ appInfo?.version }}
+						<template v-if="appInfo?.build"> ({{ appInfo.build }}) </template>
+					</p>
 				</div>
 
 				<ion-card>
@@ -147,7 +150,21 @@ import {
 	IonButtons,
 	IonBackButton
 } from '@ionic/vue';
-import { logoGithub, heart, star, bug, code, documentText, map, cafe } from 'ionicons/icons';
+import { logoGithub, heart, star, bug, code, documentText, map } from 'ionicons/icons';
+import { onMounted, ref } from 'vue';
+import { App } from '@capacitor/app';
+import { AppInfo } from '@capacitor/app/dist/esm/definitions';
+import { Capacitor } from '@capacitor/core';
+import { version } from '@/../package.json';
+
+const appInfo = ref<Partial<AppInfo> | null>(null);
+onMounted(async () => {
+	if (Capacitor.isNativePlatform()) {
+		appInfo.value = await App.getInfo();
+	} else {
+		appInfo.value = { version: version };
+	}
+});
 </script>
 
 <style scoped>
