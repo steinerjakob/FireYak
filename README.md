@@ -15,7 +15,7 @@ You can access FireYak through the web app or Android app:
 
 - **Web:** https://app.fireyak.org
 - **Android:** https://play.google.com/store/apps/details?id=at.jst.fireyak
-- **iOS:** Currently not available (requires an Apple Developer account and macOS).
+- **iOS:** Use the web app https://app.fireyak.org
 
 The web app is a Progressive Web App (PWA) and can be installed to the home screen on most modern browsers.
 

@@ -24,7 +24,11 @@
 		</ion-fab>
 		<ion-fab class="location-fab" vertical="bottom" horizontal="end" slot="fixed" size="small">
 			<ion-fab-button color="light" @click="showUserLocation" title="Location">
-				<ion-icon :icon="watchId ? navigate : navigateOutline"></ion-icon>
+				<ion-spinner v-show="waitingForLocation" color="primary"></ion-spinner>
+				<ion-icon
+					v-show="!waitingForLocation"
+					:icon="watchId ? navigate : navigateOutline"
+				></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
 		<ion-fab vertical="bottom" horizontal="end" slot="fixed">
@@ -49,7 +53,7 @@ import { getMarkersForView, getNearbyMarkers } from '@/mapHandler/markerHandler'
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
-import { IonFab, IonFabButton, IonIcon } from '@ionic/vue';
+import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
 import { informationCircle, analyticsOutline, navigate, navigateOutline } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
@@ -233,10 +237,13 @@ watch(
 let userLocationMarker: L.CircleMarker | null = null;
 const watchId = ref<string | null>(null);
 const currentUserLocation = ref<LatLng | null>(null);
+const waitingForLocation = ref(false);
 
 async function showUserLocation() {
 	try {
 		if (!watchId.value) {
+			waitingForLocation.value = true;
+
 			// Check if we have permission
 			const permission = await Geolocation.checkPermissions();
 
@@ -254,6 +261,8 @@ async function showUserLocation() {
 				timeout: 10000,
 				maximumAge: 0
 			});
+
+			waitingForLocation.value = false;
 
 			const latLng = L.latLng(position.coords.latitude, position.coords.longitude);
 			currentUserLocation.value = latLng;
@@ -273,6 +282,7 @@ async function showUserLocation() {
 		}
 	} catch (error) {
 		console.error('Error getting location:', error);
+		waitingForLocation.value = false;
 	}
 }
 
@@ -323,6 +333,7 @@ function stopWatchingLocation() {
 	if (watchId.value) {
 		Geolocation.clearWatch({ id: watchId.value });
 		watchId.value = null;
+		waitingForLocation.value = false;
 	}
 }
 
