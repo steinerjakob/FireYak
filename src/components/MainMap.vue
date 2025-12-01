@@ -62,6 +62,7 @@ import icon from 'leaflet/dist/images/marker-icon-2x.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useDefaultStore } from '@/store/defaultStore';
 import { Geolocation } from '@capacitor/geolocation';
+import { Capacitor } from '@capacitor/core';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -244,14 +245,17 @@ async function showUserLocation() {
 		if (!watchId.value) {
 			waitingForLocation.value = true;
 
-			// Check if we have permission
-			const permission = await Geolocation.checkPermissions();
+			// request permission only on native platforms
+			if (Capacitor.isNativePlatform()) {
+				// Check if we have permission
+				const permission = await Geolocation.checkPermissions();
 
-			if (permission.location !== 'granted') {
-				const requestResult = await Geolocation.requestPermissions();
-				if (requestResult.location !== 'granted') {
-					console.warn('Location permission not granted');
-					return;
+				if (permission.location !== 'granted') {
+					const requestResult = await Geolocation.requestPermissions();
+					if (requestResult.location !== 'granted') {
+						console.warn('Location permission not granted');
+						return;
+					}
 				}
 			}
 
@@ -508,10 +512,8 @@ ion-fab {
 	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + 56px + 16px);
 }
 
-.md {
 :deep(.leaflet-bottom) {
 	margin-bottom: env(safe-area-inset-bottom);
-}
 }
 
 :deep(.leaflet-control-locate) {
