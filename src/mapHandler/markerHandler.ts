@@ -17,7 +17,7 @@ function getIconForNode(element: OverPassElement): L.Icon {
 	let iconData = iconHydrant;
 	if (element.type === 'node') {
 		const emergency = element.tags?.emergency;
-		const type = element.tags?.['firehydrant:type'];
+		const type = element.tags?.['fire_hydrant:type'];
 		switch (emergency) {
 			case 'fire_hydrant':
 				iconData =
