@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
-import { useScreenOrientation } from '@/composable/screenOrientation';
 import { Capacitor } from '@capacitor/core';
+import { useScreenDetection } from '@/composable/screenDetection';
 
 interface VisibleMapView {
 	x: number;
@@ -14,11 +14,11 @@ interface VisibleMapView {
 export const useDefaultStore = defineStore('appDefault', () => {
 	const visibleMapView = ref<VisibleMapView>({ x: 0, y: 0, top: 0, bottom: 0, xMax: 0, yMax: 0 });
 
-	const screenOrientation = useScreenOrientation();
+	const { isMobile } = useScreenDetection();
 	const fullHeight = Capacitor.isNativePlatform() ? window.screen.height : window.innerHeight;
 	const fullWidth = Capacitor.isNativePlatform() ? window.screen.width : window.innerWidth;
 
-	watch(screenOrientation.isMobile, (mobile) => {
+	watch(isMobile, (mobile) => {
 		if (mobile) {
 			visibleMapView.value.x = 0;
 		} else {

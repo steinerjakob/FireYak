@@ -9,11 +9,6 @@ ScreenOrientation.addListener('screenOrientationChange', (currOrientation) => {
 
 export function useScreenOrientation() {
 	const getOrientation = ScreenOrientation.orientation();
-	const isMobile = ref(window.innerWidth < 768);
 
-	watch(orientation, () => {
-		isMobile.value = window.innerWidth < 768;
-	});
-
-	return { orientation, getOrientation, isMobile };
+	return { orientation, getOrientation };
 }

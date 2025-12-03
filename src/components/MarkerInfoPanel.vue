@@ -1,21 +1,19 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { IonContent, IonCard, IonModal, IonThumbnail } from '@ionic/vue';
 import MarkerInfo from '@/components/MarkerInfo.vue';
 import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
-import { useDefaultStore } from '@/store/defaultStore';
 import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
+import { useScreenDetection } from '@/composable/screenDetection';
 
 const route = useRoute();
 const modal = ref<typeof IonModal>();
-const screenOrientation = useScreenOrientation();
 const nearbyWaterSource = useNearbyWaterSource();
 const markerStore = useMapMarkerStore();
-const defaultStore = useDefaultStore();
 const router = useRouter();
 
 const showMarkerInfo = computed(() => {
@@ -24,17 +22,10 @@ const showMarkerInfo = computed(() => {
 
 const markerImage = computed(() => markerStore.selectedMarkerImages[0] || null);
 
-const isMobile = ref(window.innerWidth < 768);
+const { isMobile } = useScreenDetection();
 const showImages = async () => {
 	router.push(`/markerimages/${route.params.markerId}`);
 };
-watch(screenOrientation.orientation, () => {
-	isMobile.value = window.innerWidth < 768;
-});
-
-watch(showMarkerInfo, () => {
-	isMobile.value = window.innerWidth < 768;
-});
 
 const initialBreakpoint = 0.25;
 
