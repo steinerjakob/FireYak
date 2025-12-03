@@ -1,9 +1,11 @@
 name: Deploy Pipeline
 
 on:
+  # Runs on pushes targeting the default branch
   push:
-    branches: [main]
+    branches: ['main']
 
+# Sets the GITHUB_TOKEN permissions to allow deployment to GitHub Pages
 permissions:
   contents: write
   pages: write
@@ -18,8 +20,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
