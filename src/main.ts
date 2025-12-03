@@ -67,6 +67,8 @@ CapApp.addListener('appUrlOpen', function (event: URLOpenListenerEvent) {
 		router.push({
 			path: slug
 		});
+	} else {
+		router.push('/');
 	}
 });
 
