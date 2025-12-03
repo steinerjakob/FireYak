@@ -1,21 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { IonContent, IonCard, IonModal } from '@ionic/vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import NearbyMarker from '@/components/NearbyMarker.vue';
 import NearbyMarkerHeader from '@/components/NearbyMarkerHeader.vue';
 import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
+import { useScreenDetection } from '@/composable/screenDetection';
 
 const modal = ref<typeof IonModal>();
-const screenOrientation = useScreenOrientation();
 const { isActive } = useNearbyWaterSource();
 
-const isMobile = ref(window.innerWidth < 768);
-
-watch(screenOrientation.orientation, () => {
-	isMobile.value = window.innerWidth < 768;
-});
+const { isMobile } = useScreenDetection();
 
 const initialBreakpoint = 0.4;
 

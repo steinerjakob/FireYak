@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { IonContent, IonCard, IonModal, IonIcon } from '@ionic/vue';
 import { useScreenOrientation } from '@/composable/screenOrientation';
 import SupplyPipeCalculationHeader from '@/components/SupplyPipeCalculationHeader.vue';
@@ -7,16 +7,11 @@ import { usePumpCalculation } from '@/composable/pumpCalculation';
 import { locateOutline } from 'ionicons/icons';
 import SupplyPipeCalculation from '@/components/SupplyPipeCalculation.vue';
 import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
+import { useScreenDetection } from '@/composable/screenDetection';
 
 const modal = ref();
-const screenOrientation = useScreenOrientation();
 const { isActive, calculationResult } = usePumpCalculation();
-
-const isMobile = ref(window.innerWidth < 768);
-
-watch(screenOrientation.orientation, () => {
-	isMobile.value = window.innerWidth < 768;
-});
+const { isMobile } = useScreenDetection();
 
 const initialBreakpoint = 0.4;
 
