@@ -1,10 +1,19 @@
-name: Android CI/CD Pipeline
+name: Deploy Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,43 +24,83 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0 # Fetch all history for semantic versioning
+
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
           node-version: 22
           cache: 'npm'
+
       - name: Install dependencies
         run: npm install
+
+      - name: Semantic Version
+        id: semver
+        uses: paulhatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: 'v'
+          major_pattern: '(BREAKING CHANGE:|breaking:|!:)'
+          minor_pattern: '(feat:|feature:)'
+          version_format: '${major}.${minor}.${patch}'
+          bump_each_commit: false
+
+      - name: Update package.json version
+        run: |
+          npm version ${{ steps.semver.outputs.version }} --no-git-tag-version
+          echo "NEW_VERSION=${{ steps.semver.outputs.version }}" >> $GITHUB_ENV
+
       - name: Build
         run: npm run buildAndSync
+
+        # deploy to github pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Upload dist repository
+          path: './dist'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+        # android deployment
+
       - name: Set Up JDK 21
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: '21'
           cache: 'gradle'
+
       - name: Grant Execute Permission for Gradlew
         working-directory: ./android
         run: chmod +x gradlew
+
       - name: Bump Android Version Code
         uses: Devofure/advance-android-version-actions@v1.4
         with:
           gradlePath: android/app/build.gradle
-          versionName: 2.0.0
-      - name: Commit & Push Version Code Change
+          versionName: ${{ steps.semver.outputs.version }}
+
+      - name: Commit & Push Version Changes
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add android/app/build.gradle
-          git commit -m "chore: bump Android versionCode [skip ci]"
-          git push
+          git add package.json package-lock.json android/app/build.gradle
+          git commit -m "chore: bump version to ${{ steps.semver.outputs.version }} [skip ci]" || echo "No changes to commit"
+          git tag -a "v${{ steps.semver.outputs.version }}" -m "Release v${{ steps.semver.outputs.version }}"
+          git push --follow-tags
+
       - name: Decode Keystore
         working-directory: ./android
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | tr -d '\n' | base64 --decode > ./app/keystore.jks
+
       - name: Verify Keystore
         working-directory: ./android
-        run: | 
+        run: |
           ls -la app/keystore.jks
           echo "Keystore file exists and size: $(wc -c < app/keystore.jks) bytes"
           # Test if keystore is valid
@@ -65,11 +114,26 @@ jobs:
             -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
             -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
             -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: release-aab
           path: ./android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          tag_name: v${{ steps.semver.outputs.version }}
+          release_name: Release v${{ steps.semver.outputs.version }}
+          body: |
+            Changes in this release:
+            ${{ steps.semver.outputs.version_tag }}
+          draft: false
+          prerelease: false
+
       - name: Deploy to Google Play
         run: |
           printf '%s\n' '${{ secrets.PLAY_STORE_JSON_KEY }}' > play-credentials.json
