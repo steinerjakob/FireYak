@@ -40,7 +40,9 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 	</template>
 	<ion-card v-else-if="isActive" class="desktop-card">
 		<NearbyMarkerHeader></NearbyMarkerHeader>
-		<NearbyMarker></NearbyMarker>
+		<div class="scrollable-content">
+			<NearbyMarker></NearbyMarker>
+		</div>
 	</ion-card>
 </template>
 
@@ -58,8 +60,18 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 	bottom: 0;
 	width: 400px;
 	z-index: 1000;
-
 	border-radius: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.desktop-card .sticky-header {
+	flex-shrink: 0;
+}
+
+.desktop-card .scrollable-content {
+	flex: 1;
 	overflow-y: auto;
 }
 
