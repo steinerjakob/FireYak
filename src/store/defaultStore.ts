@@ -18,13 +18,17 @@ export const useDefaultStore = defineStore('appDefault', () => {
 	const fullHeight = Capacitor.isNativePlatform() ? window.screen.height : window.innerHeight;
 	const fullWidth = Capacitor.isNativePlatform() ? window.screen.width : window.innerWidth;
 
-	watch(isMobile, (mobile) => {
-		if (mobile) {
-			visibleMapView.value.x = 0;
-		} else {
-			visibleMapView.value.x = 420; // default width of the left panel inc margin
-		}
-	});
+	watch(
+		isMobile,
+		(mobile) => {
+			if (mobile) {
+				visibleMapView.value.x = 0;
+			} else {
+				visibleMapView.value.x = 420; // default width of the left panel inc margin
+			}
+		},
+		{ immediate: true }
+	);
 
 	const getSafeArea = () => {
 		const docStyle = getComputedStyle(document.documentElement);
