@@ -342,16 +342,17 @@ function stopWatchingLocation() {
 }
 
 async function getCurrentLocation(): Promise<LatLng> {
+	// if a custom location is active, use it to find the nearest water source
+	if (customLocationMarker) {
+		return customLocationMarker.getLatLng();
+	}
+
 	if (currentUserLocation.value) {
 		return currentUserLocation.value;
 	} else {
 		await showUserLocation();
 	}
 
-	// if a custom location is active, use it to find the nearest water source
-	if (customLocationMarker) {
-		return customLocationMarker.getLatLng();
-	}
 	// Fallback to map center
 	return rootMap!.getCenter();
 }
