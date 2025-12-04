@@ -4,7 +4,6 @@ import { computed, ref } from 'vue';
 import { IonContent, IonCard, IonModal, IonThumbnail } from '@ionic/vue';
 import MarkerInfo from '@/components/MarkerInfo.vue';
 import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
-import { useScreenOrientation } from '@/composable/screenOrientation';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
@@ -64,8 +63,10 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 			</ion-thumbnail>
 		</template>
 		<ion-card class="desktop-card">
-			<MarkerInfoHeader></MarkerInfoHeader>
-			<MarkerInfo></MarkerInfo>
+			<MarkerInfoHeader class="sticky-header"></MarkerInfoHeader>
+			<div class="scrollable-content">
+				<MarkerInfo></MarkerInfo>
+			</div>
 		</ion-card>
 	</template>
 </template>
@@ -121,8 +122,18 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 	bottom: 0;
 	width: 400px;
 	z-index: 1000;
-
 	border-radius: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.desktop-card .sticky-header {
+	flex-shrink: 0;
+}
+
+.desktop-card .scrollable-content {
+	flex: 1;
 	overflow-y: auto;
 }
 
