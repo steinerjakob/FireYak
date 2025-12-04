@@ -69,6 +69,24 @@ const pwaOptions: Partial<VitePWAOptions> = {
 		type: 'module',
 		navigateFallback: 'index.html',
 		suppressWarnings: true
+	},
+	workbox: {
+		runtimeCaching: [
+			{
+				urlPattern: /^https?:\/\/tile\.openstreetmap\.org\/.*/,
+				handler: 'StaleWhileRevalidate',
+				options: {
+					cacheName: 'osm-tiles-cache',
+					expiration: {
+						maxEntries: 500,
+						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
+			}
+		]
 	}
 };
 
