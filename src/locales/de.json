@@ -140,5 +140,9 @@
 	"nearbyMarker": {
 		"title": "Nächste Entnahmestelle",
 		"away": "entfernt"
+	},
+	"map": {
+		"zoomIn": "Heranzoomen",
+		"zoomOut": "Herauszoomen"
 	}
 }

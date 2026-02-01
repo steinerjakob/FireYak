@@ -140,5 +140,9 @@
 	"nearbyMarker": {
 		"title": "Next water source",
 		"away": "away"
+	},
+	"map": {
+		"zoomIn": "Zoom in",
+		"zoomOut": "Zoom out"
 	}
 }
