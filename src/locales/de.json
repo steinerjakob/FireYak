@@ -122,6 +122,10 @@
 		"alert": {
 			"title": "Marker setzen"
 		},
+		"error": {
+			"title": "Rechenfehler",
+			"pressureDifference": "Der Ausgangsdruck muss größer als der Eingangsdruck sein."
+		},
 		"suctionPoint": "Ansaugstelle",
 		"fireObject": "Brandobjekt",
 		"wayPoint": "Wegpunkt",
