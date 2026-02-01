@@ -13,6 +13,21 @@
 				<ion-icon :icon="informationCircle"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<!-- Zoom FAB Buttons -->
+		<ion-fab vertical="center" horizontal="end" slot="fixed" class="zoom-fab">
+			<ion-fab-button color="light" @click="zoomIn" size="small" :title="$t('map.zoomIn')" class="md-small">
+				<ion-icon :icon="add"></ion-icon>
+			</ion-fab-button>
+			<ion-fab-button
+				color="light"
+				@click="zoomOut"
+				size="small"
+				:title="$t('map.zoomOut')"
+				class="ion-margin-top md-small"
+			>
+				<ion-icon :icon="remove"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 		<ion-fab vertical="bottom" horizontal="start" slot="fixed">
 			<ion-fab-button
 				color="light"
@@ -54,7 +69,14 @@ import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
-import { informationCircle, analyticsOutline, navigate, navigateOutline } from 'ionicons/icons';
+import {
+	informationCircle,
+	analyticsOutline,
+	navigate,
+	navigateOutline,
+	add,
+	remove
+} from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
@@ -472,6 +494,14 @@ function watchExternalLocationQuery() {
 	);
 }
 
+function zoomIn() {
+	rootMap?.zoomIn();
+}
+
+function zoomOut() {
+	rootMap?.zoomOut();
+}
+
 onMounted(async () => {
 	await initMap();
 
@@ -507,6 +537,13 @@ ion-fab {
 	margin-top: var(--ion-safe-area-top, 0);
 	margin-bottom: var(--ion-safe-area-bottom, 0);
 	z-index: 1000;
+}
+
+.zoom-fab {
+	/* Move the FAB up to not overlap with the bottom FABs if the screen is small */
+	transform: translateY(-50%);
+	top: 50%;
+	right: 0;
 }
 
 .location-fab {
