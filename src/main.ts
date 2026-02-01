@@ -27,7 +27,7 @@ import '@ionic/vue/css/display.css';
  */
 /* @import '@ionic/vue/css/palettes/dark.always.css'; */
 /* @import '@ionic/vue/css/palettes/dark.class.css'; */
-import '@ionic/vue/css/palettes/dark.system.css';
+import '@ionic/vue/css/palettes/dark.class.css';
 
 import '@/theme/variables.scss';
 import '@/theme/md3/theme.css';
