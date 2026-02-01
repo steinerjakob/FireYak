@@ -38,6 +38,11 @@ const routes = [
 		component: () => import('@/views/AboutView.vue')
 	},
 	{
+		path: '/settings',
+		name: 'Settings',
+		component: () => import('@/views/SettingsView.vue')
+	},
+	{
 		path: '/markerimages/:relatedId',
 		name: 'markerimages',
 		component: () => import('@/views/MarkerImageViewer.vue')

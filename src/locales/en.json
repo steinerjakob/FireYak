@@ -122,6 +122,10 @@
 		"alert": {
 			"title": "Set marker"
 		},
+		"error": {
+			"title": "Calculation Error",
+			"pressureDifference": "Output pressure must be greater than input pressure."
+		},
 		"suctionPoint": "Suction point",
 		"fireObject": "Fire object",
 		"wayPoint": "Way point",
@@ -140,5 +144,25 @@
 	"nearbyMarker": {
 		"title": "Next water source",
 		"away": "away"
+	},
+	"map": {
+		"zoomIn": "Zoom in",
+		"zoomOut": "Zoom out"
+	},
+	"settings": {
+		"title": "Settings",
+		"appearance": {
+			"title": "Appearance",
+			"theme": {
+				"title": "Theme",
+				"light": "Light",
+				"dark": "Dark",
+				"auto": "Auto"
+			}
+		},
+		"map": {
+			"title": "Map",
+			"showZoomButtons": "Show zoom buttons"
+		}
 	}
 }

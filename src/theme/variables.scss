@@ -5,6 +5,10 @@
   --ion-safe-area-bottom: var(--safe-area-inset-bottom);
   --ion-safe-area-left: var(--safe-area-inset-left);
   --ion-safe-area-right: var(--safe-area-inset-right);
+
+	button, a, label, input {
+		-webkit-tap-highlight-color: transparent;
+	}
 }
 
 :root.prefers-light,

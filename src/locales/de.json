@@ -122,6 +122,10 @@
 		"alert": {
 			"title": "Marker setzen"
 		},
+		"error": {
+			"title": "Rechenfehler",
+			"pressureDifference": "Der Ausgangsdruck muss größer als der Eingangsdruck sein."
+		},
 		"suctionPoint": "Ansaugstelle",
 		"fireObject": "Brandobjekt",
 		"wayPoint": "Wegpunkt",
@@ -140,5 +144,25 @@
 	"nearbyMarker": {
 		"title": "Nächste Entnahmestelle",
 		"away": "entfernt"
+	},
+	"map": {
+		"zoomIn": "Heranzoomen",
+		"zoomOut": "Herauszoomen"
+	},
+	"settings": {
+		"title": "Einstellungen",
+		"appearance": {
+			"title": "Erscheinungsbild",
+			"theme": {
+				"title": "Thema",
+				"light": "Hell",
+				"dark": "Dunkel",
+				"auto": "Auto"
+			}
+		},
+		"map": {
+			"title": "Karte",
+			"showZoomButtons": "Zoom-Buttons anzeigen"
+		}
 	}
 }
