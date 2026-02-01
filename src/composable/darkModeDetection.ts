@@ -31,7 +31,9 @@ export function useDarkMode() {
 			};
 			mediaQuery.addEventListener('change', listener);
 		}
-		document.body.classList.toggle('dark', isDarkMode.value);
+		const isDark = isDarkMode.value;
+		document.documentElement.classList.toggle('ion-palette-dark', isDark);
+		document.documentElement.classList.toggle('ion-palette-light', !isDark);
 	};
 
 	// Watch for changes in the theme setting and apply it
