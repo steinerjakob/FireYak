@@ -102,10 +102,8 @@ jobs:
         run: |
           ls -la app/keystore.jks
           echo "Keystore file exists and size: $(wc -c < app/keystore.jks) bytes"
-          # Test if keystore is valid
-          # keytool -list -keystore app/keystore.jks -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -v || echo "Keystore verification failed"
 
-      - name: Build Release APK
+      - name: Build Release AAB
         working-directory: ./android
         run: |
           ./gradlew bundleRelease \
@@ -114,13 +112,26 @@ jobs:
             -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
             -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
 
-      - name: Upload Release APK
+      - name: Build Release APK
+        working-directory: ./android
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/keystore.jks" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+
+      - name: Rename APK
+        run: mv ./android/app/build/outputs/apk/release/app-release.apk ./android/app/build/outputs/apk/release/fireyak-v${{ env.NEW_VERSION }}.apk
+
+      - name: Upload Release AAB to Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-aab
           path: ./android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Create GitHub Release
+        id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -129,9 +140,19 @@ jobs:
           release_name: Release v${{ steps.semver.outputs.version }}
           body: |
             Changes in this release:
-            ${{ steps.semver.outputs.version_tag }}
+            See commit history.
           draft: false
           prerelease: false
+
+      - name: Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./android/app/build/outputs/apk/release/fireyak-v${{ env.NEW_VERSION }}.apk
+          asset_name: fireyak-v${{ env.NEW_VERSION }}.apk
+          asset_content_type: application/vnd.android.package-archive
 
       - name: Deploy to Google Play
         run: |
