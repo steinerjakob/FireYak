@@ -13,8 +13,20 @@
 				<ion-icon :icon="informationCircle"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<!-- Settings FAB Button -->
+		<ion-fab vertical="top" horizontal="end" slot="fixed">
+			<ion-fab-button
+				class="md-small"
+				color="light"
+				size="small"
+				@click="router.push('/settings')"
+				:title="$t('settings.title')"
+			>
+				<ion-icon :icon="settings"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 		<!-- Zoom FAB Buttons -->
-		<ion-fab vertical="center" horizontal="end" slot="fixed" class="zoom-fab">
+		<ion-fab v-if="showZoomButtons" vertical="center" horizontal="end" slot="fixed" class="zoom-fab">
 			<ion-fab-button color="light" @click="zoomIn" size="small" :title="$t('map.zoomIn')" class="md-small">
 				<ion-icon :icon="add"></ion-icon>
 			</ion-fab-button>
@@ -23,7 +35,7 @@
 				@click="zoomOut"
 				size="small"
 				:title="$t('map.zoomOut')"
-				class="ion-margin-top md-small"
+				class=" md-small"
 			>
 				<ion-icon :icon="remove"></ion-icon>
 			</ion-fab-button>
@@ -75,7 +87,8 @@ import {
 	navigate,
 	navigateOutline,
 	add,
-	remove
+	remove,
+	settings
 } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
@@ -85,6 +98,8 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useDefaultStore } from '@/store/defaultStore';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
+import { useSettingsStore } from '@/store/settingsStore';
+import { storeToRefs } from 'pinia';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -97,6 +112,8 @@ const { isDarkMode } = useDarkMode();
 const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
 const defaultStore = useDefaultStore();
+const settingsStore = useSettingsStore();
+const { showZoomButtons } = storeToRefs(settingsStore);
 
 let rootMap: L.Map | null = null;
 const fireMapCluster = new MarkerClusterGroup({
