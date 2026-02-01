@@ -232,6 +232,17 @@ export function usePumpCalculation() {
 	};
 
 	const calculatePumpRequirements = async () => {
+		const pumpStore = usePumpCalculationStore();
+		if (pumpStore.outputPressure <= pumpStore.inputPressure) {
+			const alert = await alertController.create({
+				header: t('pumpCalculation.error.title'),
+				message: t('pumpCalculation.error.pressureDifference'),
+				buttons: ['OK']
+			});
+			await alert.present();
+			return;
+		}
+
 		if (!suctionPoint || !targetPoint) {
 			return;
 		}
