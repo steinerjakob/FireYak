@@ -43,6 +43,9 @@ jobs:
           tag_prefix: 'v'
           version_format: '${major}.${minor}.${patch}'
           bump_each_commit: false
+          major_pattern: 'BREAKING CHANGE' # Explicitly define major pattern
+          minor_pattern: 'feat'          # Explicitly define minor pattern
+
 
       - name: Update package.json version
         run: |
