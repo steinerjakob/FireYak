@@ -9,6 +9,7 @@ export function useSettings() {
 
 	/**
 	 * Loads settings from persistent storage and updates the store.
+	 * Also initializes the theme system to apply the correct theme on startup.
 	 */
 	const loadSettings = async () => {
 		const [themeResult, showZoomButtonsResult] = await Promise.all([
@@ -23,6 +24,10 @@ export function useSettings() {
 		if (showZoomButtonsResult.value) {
 			settingsStore.setShowZoomButtons(showZoomButtonsResult.value === 'true');
 		}
+
+		// Initialize the theme system after loading settings
+		// This ensures the theme is applied on app startup and listeners are set up
+		settingsStore.initializeTheme();
 	};
 
 	/**
