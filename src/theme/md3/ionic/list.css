@@ -3,75 +3,243 @@
   ion-list {
     background: var(--md-sys-surface);
     color: var(--md-sys-on-surface);
+    padding: 0;
+    margin: 0;
+  }
+
+  ion-list-header {
+    --background: transparent;
+    --color: var(--md-sys-on-surface-variant);
+    padding: 12px 16px 4px;
+    min-height: unset;
+    font: var(--md-sys-label-medium);
+    letter-spacing: var(--md-sys-label-medium-letter-spacing);
+    text-transform: none;
   }
 
   ion-item {
     --background: var(--md-sys-surface);
     --color: var(--md-sys-on-surface);
     --border-color: var(--md-sys-surface-variant);
+    --inner-border-width: 0 0 1px 0;
+    --padding-start: 16px;
+    --padding-end: 16px;
+    --inner-padding-end: 0;
+    --min-height: 56px;
+    --highlight-height: 0;
 
     font: var(--md-sys-body-large);
     letter-spacing: var(--md-sys-body-large-letter-spacing);
-
-    ion-icon[slot='start'] {
-      color: var(--md-sys-on-surface-variant);
-    }
-
-    ion-icon[slot='end'] {
-      color: var(--md-sys-on-surface-variant);
-      font-size: 24px;
-    }
-
-    ion-label {
-      h1 {
-        font: var(--md-sys-title-large);
-        letter-spacing: var(--md-sys-title-large-letter-spacing);
-      }
-
-      h2 {
-        font: var(--md-sys-title-medium);
-        letter-spacing: var(--md-sys-title-medium-letter-spacing);
-      }
-
-      h3 {
-        font: var(--md-sys-body-large);
-        letter-spacing: var(--md-sys-body-large-letter-spacing);
-      }
-
-      p {
-        color: var(--md-sys-on-surface-variant);
-        font: var(--md-sys-body-medium);
-        letter-spacing: var(--md-sys-body-medium-letter-spacing);
-      }
-    }
   }
 
+  /* Remove border from last item in list */
+  ion-item:last-of-type {
+    --inner-border-width: 0;
+  }
+
+  /* Item with lines=full */
+  ion-item[lines="full"] {
+    --border-width: 0 0 1px 0;
+    --inner-border-width: 0;
+  }
+
+  /* Item with lines=none */
+  ion-item[lines="none"] {
+    --border-width: 0;
+    --inner-border-width: 0;
+  }
+
+  /* Start slot icon styling */
+  ion-item ion-icon[slot='start'],
+  ion-item ion-avatar[slot='start'],
+  ion-item ion-thumbnail[slot='start'] {
+    color: var(--md-sys-on-surface-variant);
+    margin-right: 16px;
+    margin-left: 0;
+  }
+
+  ion-item ion-icon[slot='start'] {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+  }
+
+  /* End slot icon styling */
+  ion-item ion-icon[slot='end'],
+  ion-item ion-button[slot='end'],
+  ion-item ion-toggle[slot='end'],
+  ion-item ion-checkbox[slot='end'],
+  ion-item ion-radio[slot='end'] {
+    margin-right: 0;
+    margin-left: 16px;
+  }
+
+  ion-item ion-icon[slot='end'] {
+    color: var(--md-sys-on-surface-variant);
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+  }
+
+  /* Label typography */
+  ion-item ion-label {
+    margin: 12px 0;
+  }
+
+  ion-item ion-label h1 {
+    font: var(--md-sys-title-large);
+    letter-spacing: var(--md-sys-title-large-letter-spacing);
+    margin: 0 0 4px;
+    color: var(--md-sys-on-surface);
+  }
+
+  ion-item ion-label h2 {
+    font: var(--md-sys-body-large);
+    letter-spacing: var(--md-sys-body-large-letter-spacing);
+    margin: 0 0 2px;
+    color: var(--md-sys-on-surface);
+  }
+
+  ion-item ion-label h3 {
+    font: var(--md-sys-body-medium);
+    letter-spacing: var(--md-sys-body-medium-letter-spacing);
+    margin: 0;
+    color: var(--md-sys-on-surface);
+  }
+
+  ion-item ion-label p {
+    color: var(--md-sys-on-surface-variant);
+    font: var(--md-sys-body-medium);
+    letter-spacing: var(--md-sys-body-medium-letter-spacing);
+    margin: 2px 0 0;
+  }
+
+  /* Stacked label for inputs */
+  ion-item ion-label[position="stacked"] {
+    font: var(--md-sys-body-small);
+    letter-spacing: var(--md-sys-body-small-letter-spacing);
+    color: var(--md-sys-on-surface-variant);
+    transform: none;
+    margin-bottom: 4px;
+  }
+
+  /* Item detail (chevron) icon */
+  ion-item[detail] .item-detail-icon,
+  ion-item .item-detail-icon {
+    color: var(--md-sys-on-surface-variant);
+    opacity: 1;
+    font-size: 20px;
+  }
+
+  /* Item divider */
   ion-item-divider {
-    --background: var(--md-sys-background);
-    --color: var(--md-sys-on-background);
+    --background: var(--md-sys-surface-container);
+    --color: var(--md-sys-on-surface-variant);
+    --padding-start: 16px;
+    --padding-end: 16px;
+    --inner-padding-end: 0;
 
-    color: var(--md-sys-on-background);
-    padding-top: 8px;
-    padding-bottom: 8px;
-    font-size: inherit;
+    color: var(--md-sys-on-surface-variant);
+    min-height: 32px;
+    font: var(--md-sys-label-large);
+    letter-spacing: var(--md-sys-label-large-letter-spacing);
     border: none;
-
-    ion-icon {
-      font-size: 24px;
-      color: inherit;
-    }
   }
 
-  ion-card,
-  ion-popover {
-    ion-list {
-      background: inherit;
-      color: inherit;
-    }
+  ion-item-divider ion-icon {
+    font-size: 20px;
+    color: inherit;
+    margin-right: 12px;
+  }
 
-    ion-item {
-      --background: inherit;
-      --color: inherit;
-    }
+  /* Item sliding */
+  ion-item-sliding {
+    --background: var(--md-sys-surface);
+  }
+
+  ion-item-options {
+    border: none;
+  }
+
+  ion-item-option {
+    --background: var(--ion-color-base, var(--md-sys-primary));
+    --color: var(--ion-color-contrast, var(--md-sys-on-primary));
+    font: var(--md-sys-label-large);
+    letter-spacing: var(--md-sys-label-large-letter-spacing);
+  }
+
+  /* Item group */
+  ion-item-group {
+    margin: 0;
+  }
+
+  /* List in cards and popovers inherit background */
+  ion-card ion-list,
+  ion-popover ion-list {
+    background: inherit;
+    color: inherit;
+  }
+
+  ion-card ion-item,
+  ion-popover ion-item {
+    --background: inherit;
+    --color: inherit;
+  }
+
+  /* Compact list variant */
+  ion-list.list-compact ion-item,
+  ion-item.item-compact {
+    --min-height: 48px;
+  }
+
+  ion-list.list-compact ion-item ion-label,
+  ion-item.item-compact ion-label {
+    margin: 8px 0;
+  }
+
+  /* Dense list variant */
+  ion-list.list-dense ion-item,
+  ion-item.item-dense {
+    --min-height: 40px;
+  }
+
+  ion-list.list-dense ion-item ion-label,
+  ion-item.item-dense ion-label {
+    margin: 6px 0;
+    font: var(--md-sys-body-medium);
+    letter-spacing: var(--md-sys-body-medium-letter-spacing);
+  }
+
+  /* Inset list styling */
+  ion-list.list-inset {
+    margin: 8px 16px;
+    border-radius: var(--md-sys-corner-medium);
+    overflow: hidden;
+    background: var(--md-sys-surface-container);
+  }
+
+  ion-list.list-inset ion-item {
+    --background: transparent;
+  }
+
+  ion-list.list-inset ion-item:last-of-type {
+    --inner-border-width: 0;
+  }
+
+  /* Interactive item states */
+  ion-item.item-interactive {
+    cursor: pointer;
+  }
+
+  ion-item.item-interactive:hover {
+    --background: color-mix(in srgb, var(--md-sys-on-surface) 8%, var(--md-sys-surface));
+  }
+
+  ion-item.item-interactive:focus {
+    --background: color-mix(in srgb, var(--md-sys-on-surface) 12%, var(--md-sys-surface));
+  }
+
+  ion-item.item-interactive.ion-activated {
+    --background: color-mix(in srgb, var(--md-sys-on-surface) 12%, var(--md-sys-surface));
   }
 }

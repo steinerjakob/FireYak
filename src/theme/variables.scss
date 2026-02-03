@@ -1,22 +1,372 @@
+/**
+ * Ionic CSS Variables and MD3 Theme Integration
+ *
+ * This file integrates the Material Design 3 theme with Ionic's styling system.
+ * It handles safe area insets, global UI fixes, and Ionic-specific spacing overrides.
+ */
+
 :root {
   color-scheme: light dark;
 
-  --ion-safe-area-top: var(--safe-area-inset-top);
-  --ion-safe-area-bottom: var(--safe-area-inset-bottom);
-  --ion-safe-area-left: var(--safe-area-inset-left);
-  --ion-safe-area-right: var(--safe-area-inset-right);
+  /* Safe area insets for notch devices */
+  --ion-safe-area-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --ion-safe-area-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --ion-safe-area-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --ion-safe-area-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
 
-	button, a, label, input {
-		-webkit-tap-highlight-color: transparent;
-	}
+  /* Disable tap highlight on interactive elements */
+  button, a, label, input, ion-button, ion-item, ion-chip, ion-fab-button {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
+/* Light theme explicit declaration */
 :root.prefers-light,
 :root.ion-palette-light {
   color-scheme: light;
 }
 
+/* Dark theme explicit declaration */
 :root.prefers-dark,
 :root.ion-palette-dark {
   color-scheme: dark;
+}
+
+/**
+ * Global spacing and padding overrides for MD3 compliance
+ * These values follow Material Design 3 spacing guidelines
+ */
+:root[mode="md"] {
+  /* Ionic default padding overrides - reduced for MD3 */
+  --ion-padding: 16px;
+  --ion-margin: 16px;
+
+  /* Grid and content padding */
+  --ion-grid-padding: 8px;
+  --ion-grid-padding-xs: 8px;
+  --ion-grid-padding-sm: 8px;
+  --ion-grid-padding-md: 12px;
+  --ion-grid-padding-lg: 16px;
+  --ion-grid-padding-xl: 16px;
+
+  /* Grid column padding */
+  --ion-grid-column-padding: 8px;
+  --ion-grid-column-padding-xs: 8px;
+  --ion-grid-column-padding-sm: 8px;
+  --ion-grid-column-padding-md: 12px;
+  --ion-grid-column-padding-lg: 16px;
+  --ion-grid-column-padding-xl: 16px;
+
+  /* Item spacing */
+  --ion-item-padding-start: 16px;
+  --ion-item-padding-end: 16px;
+  --ion-item-padding-top: 12px;
+  --ion-item-padding-bottom: 12px;
+
+  /* Card content padding */
+  --ion-card-padding: 16px;
+
+  /* Override Ionic's default font size stepping */
+  --ion-font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+
+/**
+ * iOS-specific overrides (when not using MD mode)
+ */
+:root[mode="ios"] {
+  --ion-padding: 16px;
+  --ion-margin: 16px;
+}
+
+/**
+ * Utility classes for compact spacing
+ */
+.ion-padding-compact {
+  --padding-start: 12px !important;
+  --padding-end: 12px !important;
+  --padding-top: 8px !important;
+  --padding-bottom: 8px !important;
+}
+
+.ion-margin-compact {
+  margin: 8px !important;
+}
+
+/**
+ * Fix for content overflow issues
+ */
+ion-content {
+  --padding-start: 0;
+  --padding-end: 0;
+  --padding-top: 0;
+  --padding-bottom: 0;
+}
+
+ion-content.ion-padding {
+  --padding-start: var(--ion-padding, 16px);
+  --padding-end: var(--ion-padding, 16px);
+  --padding-top: var(--ion-padding, 16px);
+  --padding-bottom: var(--ion-padding, 16px);
+}
+
+/**
+ * Global list and item styling fixes
+ */
+:root[mode="md"] {
+  ion-list {
+    padding-top: 0;
+    padding-bottom: 0;
+
+    &.list-inset {
+      margin: 8px 16px;
+      border-radius: var(--md-sys-corner-medium, 12px);
+    }
+  }
+
+  ion-item {
+    --inner-padding-start: 0;
+    --inner-padding-end: 0;
+    --padding-start: 16px;
+    --padding-end: 16px;
+    --min-height: 56px;
+
+    &.item-lines-none {
+      --inner-border-width: 0;
+    }
+
+    /* Reduce vertical padding for denser lists */
+    &.item-compact {
+      --min-height: 48px;
+      --padding-top: 8px;
+      --padding-bottom: 8px;
+    }
+  }
+
+  /* Note sections in items */
+  ion-note {
+    font-size: 0.875rem;
+    color: var(--md-sys-on-surface-variant);
+  }
+}
+
+/**
+ * Fix button default sizing for better touch targets
+ * while not being excessively large
+ */
+:root[mode="md"] {
+  ion-button {
+    --padding-top: 0;
+    --padding-bottom: 0;
+  }
+}
+
+/**
+ * Modal and sheet fixes for proper content sizing
+ */
+:root[mode="md"] {
+  ion-modal {
+    --border-radius: var(--md-sys-corner-extra-large, 28px);
+
+    &.modal-sheet {
+      --border-radius: var(--md-sys-corner-extra-large-top, 28px 28px 0 0);
+    }
+
+    ion-header {
+      ion-toolbar:first-of-type {
+        padding-top: var(--ion-safe-area-top, 0);
+      }
+    }
+  }
+}
+
+/**
+ * Header and toolbar fixes
+ */
+:root[mode="md"] {
+  ion-header {
+    /* Remove default shadow - handled by MD3 theme */
+    &:not(.header-collapse-condense-inactive) {
+      box-shadow: none;
+    }
+
+    ion-toolbar {
+      --padding-top: 0;
+      --padding-bottom: 0;
+    }
+  }
+
+  ion-footer {
+    box-shadow: none;
+
+    ion-toolbar {
+      --padding-top: 8px;
+      --padding-bottom: calc(8px + var(--ion-safe-area-bottom, 0px));
+    }
+  }
+}
+
+/**
+ * Form input fixes
+ */
+:root[mode="md"] {
+  ion-input,
+  ion-textarea,
+  ion-select {
+    --padding-start: 16px;
+    --padding-end: 16px;
+    --padding-top: 12px;
+    --padding-bottom: 12px;
+  }
+
+  /* Filled inputs */
+  ion-input.input-fill-solid,
+  ion-textarea.textarea-fill-solid,
+  ion-select.select-fill-solid {
+    --background: var(--md-sys-surface-container-highest);
+    --border-radius: var(--md-sys-corner-extra-small, 4px) var(--md-sys-corner-extra-small, 4px) 0 0;
+  }
+
+  /* Outlined inputs */
+  ion-input.input-fill-outline,
+  ion-textarea.textarea-fill-outline,
+  ion-select.select-fill-outline {
+    --border-radius: var(--md-sys-corner-extra-small, 4px);
+    --border-color: var(--md-sys-outline);
+  }
+}
+
+/**
+ * Action sheet and bottom sheet fixes
+ */
+:root[mode="md"] {
+  ion-action-sheet {
+    .action-sheet-group {
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+
+    .action-sheet-button {
+      --min-height: 56px;
+      padding-left: 16px;
+      padding-right: 16px;
+    }
+  }
+}
+
+/**
+ * Alert dialog fixes
+ */
+:root[mode="md"] {
+  ion-alert {
+    .alert-input-group {
+      padding: 0 24px 16px;
+    }
+
+    .alert-input {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--md-sys-outline);
+    }
+  }
+}
+
+/**
+ * Segment fixes for proper sizing
+ */
+:root[mode="md"] {
+  ion-segment {
+    --background: var(--md-sys-surface-container);
+    border-radius: var(--md-sys-corner-extra-large, 28px);
+    min-height: 40px;
+  }
+}
+
+/**
+ * Searchbar padding fixes
+ */
+:root[mode="md"] {
+  ion-searchbar {
+    --padding-top: 8px;
+    --padding-bottom: 8px;
+    --padding-start: 8px;
+    --padding-end: 8px;
+    height: auto;
+    min-height: 56px;
+  }
+}
+
+/**
+ * FAB positioning and spacing
+ */
+:root[mode="md"] {
+  ion-fab {
+    margin: 16px;
+
+    &[vertical="bottom"] {
+      margin-bottom: calc(16px + var(--ion-safe-area-bottom, 0px));
+    }
+  }
+}
+
+/**
+ * Chip spacing fixes
+ */
+:root[mode="md"] {
+  ion-chip {
+    margin: 4px;
+  }
+}
+
+/**
+ * Card padding fixes
+ */
+:root[mode="md"] {
+  ion-card {
+    margin: 8px;
+
+    ion-card-header {
+      padding: 16px 16px 8px;
+    }
+
+    ion-card-content {
+      padding: 8px 16px 16px;
+
+      &:only-child {
+        padding-top: 16px;
+      }
+    }
+  }
+}
+
+/**
+ * Tab bar safe area handling
+ */
+:root[mode="md"] {
+  ion-tab-bar {
+    padding-bottom: var(--ion-safe-area-bottom, 0px);
+  }
+}
+
+/**
+ * Toast and snackbar positioning
+ */
+:root[mode="md"] {
+  ion-toast {
+    --start: 16px;
+    --end: 16px;
+
+    &.toast-bottom {
+      margin-bottom: calc(16px + var(--ion-safe-area-bottom, 0px));
+    }
+  }
+}
+
+/**
+ * Refresher styling
+ */
+:root[mode="md"] {
+  ion-refresher {
+    ion-refresher-content {
+      --ion-color-primary: var(--md-sys-primary);
+    }
+  }
 }
