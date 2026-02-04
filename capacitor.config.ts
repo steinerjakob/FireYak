@@ -7,6 +7,10 @@ const config: CapacitorConfig = {
 	android: {
 		adjustMarginsForEdgeToEdge: 'disable'
 	},
+	ios: {
+		// Enable edge-to-edge display with safe area handling
+		contentInset: 'automatic'
+	},
 	plugins: {
 		CapacitorHttp: {
 			enabled: false
