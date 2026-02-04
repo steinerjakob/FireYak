@@ -551,9 +551,17 @@ onUnmounted(() => {
 </script>
 <style scoped>
 ion-fab {
-	margin-top: var(--ion-safe-area-top, 0);
-	margin-bottom: var(--ion-safe-area-bottom, 0);
 	z-index: 1000;
+}
+
+/* Top positioned FABs - account for iOS notch/status bar */
+ion-fab[vertical="top"] {
+	margin-top: var(--ion-safe-area-top, env(safe-area-inset-top, 0px));
+}
+
+/* Bottom positioned FABs - account for iOS home indicator */
+ion-fab[vertical="bottom"] {
+	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
 }
 
 .zoom-fab {
@@ -561,14 +569,18 @@ ion-fab {
 	transform: translateY(-50%);
 	top: 50%;
 	right: 0;
+	/* Reset margins for center-positioned FAB */
+	margin-top: 0;
+	margin-bottom: 0;
 }
 
 .location-fab {
-	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + 56px + 16px);
+	/* Position above the other bottom FAB (56px FAB height + 16px spacing) */
+	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 56px + 16px);
 }
 
 :deep(.leaflet-bottom) {
-	margin-bottom: env(safe-area-inset-bottom);
+	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
 }
 
 :deep(.leaflet-control-locate) {

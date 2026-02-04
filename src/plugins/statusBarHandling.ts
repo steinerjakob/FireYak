@@ -5,8 +5,10 @@ import { SafeArea } from '@capacitor-community/safe-area';
 const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
 export async function updateEdge2Edge() {
-	if (Capacitor.getPlatform() === 'android') {
-		const isDark = mediaQuery.matches;
+	const platform = Capacitor.getPlatform();
+	const isDark = mediaQuery.matches;
+
+	if (platform === 'android') {
 		try {
 			await SafeArea.enable({
 				config: {
@@ -15,6 +17,19 @@ export async function updateEdge2Edge() {
 					statusBarContent: isDark ? 'light' : 'dark',
 					navigationBarColor: '#00ffffff', // transparent
 					navigationBarContent: isDark ? 'light' : 'dark'
+				}
+			});
+		} catch (e) {
+			console.error(e);
+		}
+	} else if (platform === 'ios') {
+		// On iOS, enable SafeArea plugin to inject CSS variables for safe-area-inset-*
+		// This makes --safe-area-inset-top, --safe-area-inset-bottom, etc. available
+		try {
+			await SafeArea.enable({
+				config: {
+					customColorsForSystemBars: false,
+					statusBarContent: isDark ? 'light' : 'dark'
 				}
 			});
 		} catch (e) {
