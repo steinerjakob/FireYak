@@ -1,5 +1,8 @@
+/* MD3 Ionic Components Theme Index */
+/* Import color mappings first */
 @import url("_colorings.css");
 
+/* Import component styles */
 @import url("accordion.css");
 @import url("action-sheet.css");
 @import url("alert.css");
