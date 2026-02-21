@@ -149,6 +149,39 @@
 		"zoomIn": "Zoom in",
 		"zoomOut": "Zoom out"
 	},
+	"markerEdit": {
+		"title": {
+			"add": "Add Fire Hydrant",
+			"edit": "Edit Fire Hydrant"
+		},
+		"buttons": {
+			"save": "Save to OSM",
+			"cancel": "Cancel",
+			"login": "Login to OSM",
+			"logout": "Logout",
+			"selectLocation": "Select Location on Map"
+		},
+		"hints": {
+			"location": "Tap on the map to set the hydrant's location.",
+			"emergency": "Specifies that this is a fire hydrant.",
+			"type": "The type of hydrant (e.g., pillar, underground).",
+			"diameter": "Inner diameter of the pipe in mm.",
+			"pressure": "Is it a pressurized hydrant or a suction point?",
+			"flowCapacity": "Available water flow in l/min.",
+			"position": "Where the hydrant is located (e.g., sidewalk, street).",
+			"couplings": "Number of couplings available.",
+			"couplingType": "Type of couplings (e.g., Storz).",
+			"couplingDiameters": "Diameters of the couplings (e.g., A, B, C).",
+			"operator": "The organization responsible for the hydrant.",
+			"ref": "Official identification number.",
+			"loginRequired": "You need to log in to OpenStreetMap to save changes."
+		},
+		"messages": {
+			"saveSuccess": "Successfully saved to OpenStreetMap!",
+			"saveError": "Failed to save to OpenStreetMap. Please try again.",
+			"locationSet": "Location set successfully."
+		}
+	},
 	"settings": {
 		"title": "Settings",
 		"appearance": {

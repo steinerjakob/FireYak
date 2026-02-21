@@ -3,6 +3,7 @@
 		<ion-content :fullscreen="true">
 			<MainMap></MainMap>
 			<MarkerInfoPanel></MarkerInfoPanel>
+			<MarkerEditPanel></MarkerEditPanel>
 			<SupplyPipeCalculationPanel></SupplyPipeCalculationPanel>
 			<NearbyMarkerPanel></NearbyMarkerPanel>
 		</ion-content>
@@ -13,6 +14,7 @@
 import { IonPage, IonContent } from '@ionic/vue';
 import MainMap from '@/components/MainMap.vue';
 import MarkerInfoPanel from '@/components/MarkerInfoPanel.vue';
+import MarkerEditPanel from '@/components/MarkerEditPanel.vue';
 import SupplyPipeCalculationPanel from '@/components/SupplyPipeCalculationPanel.vue';
 import NearbyMarkerPanel from '@/components/NearbyMarkerPanel.vue';
 </script>
