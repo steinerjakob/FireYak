@@ -149,6 +149,39 @@
 		"zoomIn": "Heranzoomen",
 		"zoomOut": "Herauszoomen"
 	},
+	"markerEdit": {
+		"title": {
+			"add": "Hydrant hinzufügen",
+			"edit": "Hydrant bearbeiten"
+		},
+		"buttons": {
+			"save": "In OSM speichern",
+			"cancel": "Abbrechen",
+			"login": "In OSM einloggen",
+			"logout": "Ausloggen",
+			"selectLocation": "Position auf Karte wählen"
+		},
+		"hints": {
+			"location": "Tippen Sie auf die Karte, um die Position des Hydranten festzulegen.",
+			"emergency": "Gibt an, dass es sich um einen Hydranten handelt.",
+			"type": "Der Typ des Hydranten (z. B. Überflur, Unterflur).",
+			"diameter": "Innendurchmesser der Leitung in mm.",
+			"pressure": "Ist es ein Druckhydrant oder eine Saugstelle?",
+			"flowCapacity": "Verfügbarer Wasserdurchfluss in l/min.",
+			"position": "Wo befindet sich der Hydrant (z. B. Gehweg, Straße).",
+			"couplings": "Anzahl der verfügbaren Kupplungen.",
+			"couplingType": "Typ der Kupplungen (z. B. Storz).",
+			"couplingDiameters": "Durchmesser der Kupplungen (z. B. A, B, C).",
+			"operator": "Die für den Hydranten verantwortliche Organisation.",
+			"ref": "Offizielle Kennnummer.",
+			"loginRequired": "Sie müssen sich in OpenStreetMap einloggen, um Änderungen zu speichern."
+		},
+		"messages": {
+			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",
+			"saveError": "Speichern in OpenStreetMap fehlgeschlagen. Bitte versuchen Sie es erneut.",
+			"locationSet": "Position erfolgreich gesetzt."
+		}
+	},
 	"settings": {
 		"title": "Einstellungen",
 		"appearance": {
