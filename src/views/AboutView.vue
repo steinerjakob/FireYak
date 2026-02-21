@@ -9,7 +9,7 @@
 			</ion-toolbar>
 		</ion-header>
 
-		<ion-content :fullscreen="true">
+		<ion-content>
 			<div class="about-container">
 				<div class="logo-section">
 					<img src="/android-chrome-192x192.png" alt="FireYak Logo" class="app-logo" />
