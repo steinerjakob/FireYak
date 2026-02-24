@@ -6,17 +6,18 @@ import { Preferences } from '@capacitor/preferences';
 const OSM_AUTH_KEY = 'osm_auth_token';
 
 // Placeholder values - should be configured via env or settings
-const CLIENT_ID = 'PLACEHOLDER_CLIENT_ID';
-const REDIRECT_URI = window.location.origin + '/osm-callback';
+//const CLIENT_ID = '5RmzpVAEyynIFoe3Lj5IdMvQ-1L-Z1ZhzQ0U33JJE-o';
+const REDIRECT_URI = 'http://127.0.0.1:5173';
+const CLIENT_ID = 'HrEk30DIuyw_bUOodnWs8Uept4nHFYqaSqf-IDbH4rw';
+
+// Configure OSM API
+OSM.configure({
+	apiUrl: 'https://master.apis.dev.openstreetmap.org'
+});
 
 export const useOsmAuthStore = defineStore('osmAuth', () => {
 	const isAuthenticated = ref(false);
 	const user = ref<any>(null);
-
-	// Configure OSM API
-	OSM.configure({
-		apiUrl: 'https://api.openstreetmap.org'
-	});
 
 	async function login() {
 		try {
@@ -24,8 +25,10 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 				mode: 'popup',
 				clientId: CLIENT_ID,
 				redirectUrl: REDIRECT_URI,
-				scopes: ['read_prefs', 'write_api']
+				scopes: ['read_prefs', 'write_api', 'write_notes']
 			});
+
+			console.log('OSM Login successful', auth);
 
 			if (auth && auth.accessToken) {
 				isAuthenticated.value = true;
