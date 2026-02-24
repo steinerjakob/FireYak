@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import * as OSM from 'osm-api';
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
+import { Browser } from 'leaflet';
 
 const OSM_AUTH_KEY = 'osm_auth_token';
 
@@ -30,7 +31,7 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 				mode: 'redirect',
 				clientId: CLIENT_ID,
 				redirectUrl: REDIRECT_URI,
-				scopes: ['read_prefs', 'write_api', 'write_notes']
+				scopes: ['read_prefs', 'write_api']
 			});
 		} catch (e) {
 			console.error('OSM Login failed', e);
@@ -76,6 +77,9 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 					await fetchUser();
 				}
 			}
+		}
+		if (window.location.href.includes('?code')) {
+			window.location.replace('/')
 		}
 	}
 
