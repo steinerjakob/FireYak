@@ -20,6 +20,7 @@ const markerEditStore = useMarkerEditStore();
 
 const { t } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
+const editAllowed = computed(() => markerData.value?.tags?.emergency === 'fire_hydrant');
 
 const startEdit = () => {
 	if (markerData.value) {
@@ -100,7 +101,7 @@ const shareMarker = async () => {
 		<ion-toolbar>
 			<ion-title>{{ getTitle() }}</ion-title>
 			<ion-buttons slot="end">
-				<ion-button @click="startEdit" :title="t('markerEdit.title.edit')">
+				<ion-button v-if="editAllowed" @click="startEdit" :title="t('markerEdit.title.edit')">
 					<ion-icon :icon="createOutline" />
 				</ion-button>
 				<ion-button @click="shareMarker" :title="t('markerInfo.share.title')">
