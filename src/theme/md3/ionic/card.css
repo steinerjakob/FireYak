@@ -1,62 +1,196 @@
 /* Cards: https://m3.material.io/components/cards/specs */
 :root[mode=md] {
+  /* Default elevated card */
   ion-card,
   ion-card.md-elevated,
   ion-card.mat-elevated {
     --background: var(--md-sys-surface-container-low);
     --color: var(--md-sys-on-surface);
     box-shadow: var(--md-sys-level1);
-    border-radius: 12px;
+    border-radius: var(--md-sys-corner-medium);
+    margin: 8px;
+    contain: content;
   }
 
+  /* Filled card variant */
   ion-card.md-filled,
   ion-card.mat-filled {
     --background: var(--md-sys-surface-container-highest);
     box-shadow: var(--md-sys-level0);
   }
 
+  /* Outlined card variant */
   ion-card.md-outlined,
   ion-card.mat-outlined {
     --background: var(--md-sys-surface);
     box-shadow: var(--md-sys-level0);
-    outline: 1px solid var(--md-sys-outline);
+    outline: 1px solid var(--md-sys-outline-variant);
   }
 
+  /* Card title and subtitle colors */
   ion-card ion-card-title,
   ion-card ion-card-subtitle {
     --color: var(--md-sys-on-surface);
   }
 
-  ion-card img {
-    border-bottom-right-radius: 12px;
-    border-bottom-left-radius: 12px;
+  /* Card header */
+  ion-card-header {
+    padding: 16px 16px 8px;
   }
 
+  /* Card header when no content follows */
+  ion-card-header:last-child {
+    padding-bottom: 16px;
+  }
+
+  /* Card title typography */
   ion-card ion-card-title {
-    font-family: var(--md-sys-headline-small-font-family-name);
-    font-style: var(--md-sys-headline-small-font-family-style);
-    font-weight: var(--md-sys-headline-small-font-weight);
-    font-size: var(--md-sys-headline-small-font-size);
-    line-height: var(--md-sys-headline-small-line-height);
-    letter-spacing: var(--md-sys-headline-small-letter-spacing);
+    font: var(--md-sys-title-large);
+    letter-spacing: var(--md-sys-title-large-letter-spacing);
+    margin: 0;
+    padding: 0;
   }
 
+  /* Card subtitle typography */
   ion-card ion-card-subtitle {
-    margin-top: 0;
-    font-family: var(--md-sys-label-large-font-family-name);
-    font-style: var(--md-sys-label-large-font-family-style);
-    font-weight: var(--md-sys-label-large-font-weight);
-    font-size: var(--md-sys-label-large-font-size);
-    line-height: var(--md-sys-label-large-line-height);
+    margin: 4px 0 0;
+    padding: 0;
+    font: var(--md-sys-label-large);
     letter-spacing: var(--md-sys-label-large-letter-spacing);
+    color: var(--md-sys-on-surface-variant);
+    text-transform: none;
   }
 
+  /* Subtitle before title */
+  ion-card-header ion-card-subtitle:first-child {
+    margin: 0 0 4px;
+  }
+
+  /* Card content */
   ion-card-content {
-    font-family: var(--md-sys-body-medium-font-family-name);
-    font-style: var(--md-sys-body-medium-font-family-style);
-    font-weight: var(--md-sys-body-medium-font-weight);
-    font-size: var(--md-sys-body-medium-font-size);
-    line-height: var(--md-sys-body-medium-line-height);
+    padding: 8px 16px 16px;
+    font: var(--md-sys-body-medium);
     letter-spacing: var(--md-sys-body-medium-letter-spacing);
+  }
+
+  /* Card content when it's the only child */
+  ion-card-content:first-child {
+    padding-top: 16px;
+  }
+
+  /* Card content with only text (no header) */
+  ion-card-content:only-child {
+    padding: 16px;
+  }
+
+  /* Media in cards */
+  ion-card > img,
+  ion-card > ion-img {
+    display: block;
+  }
+
+  /* First image fills top with rounded corners */
+  ion-card > img:first-child,
+  ion-card > ion-img:first-child {
+    border-radius: var(--md-sys-corner-medium) var(--md-sys-corner-medium) 0 0;
+  }
+
+  /* Last image fills bottom with rounded corners */
+  ion-card > img:last-child,
+  ion-card > ion-img:last-child {
+    border-radius: 0 0 var(--md-sys-corner-medium) var(--md-sys-corner-medium);
+  }
+
+  /* Only image fills all corners */
+  ion-card > img:only-child,
+  ion-card > ion-img:only-child {
+    border-radius: var(--md-sys-corner-medium);
+  }
+
+  /* Card buttons container */
+  ion-card .card-buttons,
+  ion-card ion-row.card-buttons {
+    padding: 8px;
+    gap: 8px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  ion-card .card-buttons ion-button {
+    margin: 0;
+  }
+
+  /* Interactive card hover state */
+  ion-card[button],
+  ion-card.ion-activatable {
+    cursor: pointer;
+    transition: box-shadow var(--md-sys-motion-duration-short-2) var(--md-sys-motion-easing-standard);
+  }
+
+  ion-card[button]:hover,
+  ion-card.ion-activatable:hover {
+    box-shadow: var(--md-sys-level2);
+  }
+
+  ion-card[button]:active,
+  ion-card.ion-activatable:active,
+  ion-card[button].ion-activated,
+  ion-card.ion-activatable.ion-activated {
+    box-shadow: var(--md-sys-level1);
+  }
+
+  /* Outlined card interactive states */
+  ion-card.md-outlined[button]:hover,
+  ion-card.md-outlined.ion-activatable:hover,
+  ion-card.mat-outlined[button]:hover,
+  ion-card.mat-outlined.ion-activatable:hover {
+    box-shadow: var(--md-sys-level1);
+  }
+
+  /* Filled card interactive states */
+  ion-card.md-filled[button]:hover,
+  ion-card.md-filled.ion-activatable:hover,
+  ion-card.mat-filled[button]:hover,
+  ion-card.mat-filled.ion-activatable:hover {
+    box-shadow: var(--md-sys-level1);
+  }
+
+  /* Horizontal card layout helper */
+  ion-card.card-horizontal {
+    display: flex;
+    flex-direction: row;
+  }
+
+  ion-card.card-horizontal > img,
+  ion-card.card-horizontal > ion-img {
+    width: 80px;
+    height: auto;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  ion-card.card-horizontal > img:first-child,
+  ion-card.card-horizontal > ion-img:first-child {
+    border-radius: var(--md-sys-corner-medium) 0 0 var(--md-sys-corner-medium);
+  }
+
+  ion-card.card-horizontal > div,
+  ion-card.card-horizontal > ion-card-header,
+  ion-card.card-horizontal > ion-card-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Card inside lists */
+  ion-list ion-card {
+    margin: 8px 0;
+  }
+
+  /* Full-width card */
+  ion-card.card-full {
+    margin-left: 0;
+    margin-right: 0;
+    border-radius: 0;
   }
 }
