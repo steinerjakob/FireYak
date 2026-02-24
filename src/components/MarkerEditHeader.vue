@@ -22,17 +22,34 @@ const close = () => {
 			</ion-buttons>
 
 			<ion-title>
-				{{
-					markerEditStore.isAdding
-						? t('markerEdit.title.add')
-						: t('markerEdit.title.edit')
-				}}
+				{{ markerEditStore.isAdding ? t('markerEdit.title.add') : t('markerEdit.title.edit') }}
 			</ion-title>
 		</ion-toolbar>
 	</ion-header>
 </template>
 
 <style scoped>
+ion-header {
+	border-bottom: 1px solid var(--ion-color-light-shade);
+	--ion-safe-area-top: 0;
+	--ion-safe-area-bottom: 0;
+	--ion-safe-area-left: 0;
+	--ion-safe-area-right: 0;
+
+	ion-toolbar {
+		border-top-left-radius: var(--border-radius);
+
+		border-top-right-radius: var(--border-radius);
+	}
+
+	.md {
+		--border-radius: 28px;
+	}
+	.ios {
+		--border-radius: 10px;
+	}
+}
+
 ion-toolbar {
 	--background: transparent;
 	--border-width: 0;
