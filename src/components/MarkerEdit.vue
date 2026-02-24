@@ -14,7 +14,6 @@ import {
 	IonItemDivider
 } from '@ionic/vue';
 import { saveOutline, closeOutline, logInOutline } from 'ionicons/icons';
-import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
@@ -23,7 +22,7 @@ const markerEditStore = useMarkerEditStore();
 const osmAuthStore = useOsmAuthStore();
 const { t } = useI18n();
 
-const hydrantTypes = ['pillar', 'underground', 'wall', 'pond'];
+const hydrantTypes = ['pillar', 'underground', 'wall'/*, 'pond'*/];
 const hydrantPositions = ['sidewalk', 'lane', 'parking_lot', 'green', 'street'];
 const pressures = ['pressurised', 'suction', 'gravity'];
 
@@ -85,14 +84,14 @@ const login = () => {
 			</ion-item-divider>
 
 			<!-- Type -->
-			<ion-item>
-				<ion-label position="stacked">
-					{{ t('markerInfo.tags.hydrantType') }}
-					<ion-note slot="helper">{{ t('markerEdit.hints.type') }}</ion-note>
-				</ion-label>
+			<ion-item lines="none">
 				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.hydrantType')"
 					v-model="markerEditStore.editableTags['fire_hydrant:type']"
 					:placeholder="t('markerInfo.tags.hydrantType')"
+					:helper-text="t('markerEdit.hints.type')"
 				>
 					<ion-selectOption v-for="type in hydrantTypes" :key="type" :value="type">
 						{{ t(`markerInfo.values.fire_hydrant:type.${type}`) }}
@@ -101,27 +100,27 @@ const login = () => {
 			</ion-item>
 
 			<!-- Diameter -->
-			<ion-item>
-				<ion-label position="stacked">
-					{{ t('markerInfo.tags.diameter') }} (mm)
-					<ion-note slot="helper">{{ t('markerEdit.hints.diameter') }}</ion-note>
-				</ion-label>
+			<ion-item lines="none">
 				<ion-input
 					type="number"
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.diameter') + `(mm)`"
 					v-model="markerEditStore.editableTags['fire_hydrant:diameter']"
 					placeholder="80, 100, 150..."
+					:helper-text="t('markerEdit.hints.diameter')"
 				></ion-input>
 			</ion-item>
 
 			<!-- Pressure -->
-			<ion-item>
-				<ion-label position="stacked">
-					{{ t('markerInfo.tags.pressure') }}
-					<ion-note slot="helper">{{ t('markerEdit.hints.pressure') }}</ion-note>
-				</ion-label>
+			<ion-item lines="none">
 				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.pressure')"
 					v-model="markerEditStore.editableTags['fire_hydrant:pressure']"
 					:placeholder="t('markerInfo.tags.pressure')"
+					:helper-text="t('markerEdit.hints.pressure')"
 				>
 					<ion-selectOption v-for="p in pressures" :key="p" :value="p">
 						{{ t(`markerInfo.values.fire_hydrant:pressure.${p}`) }}
@@ -130,27 +129,27 @@ const login = () => {
 			</ion-item>
 
 			<!-- Flow Capacity -->
-			<ion-item>
-				<ion-label position="stacked">
-					{{ t('markerInfo.tags.flowCapacity') }} (l/min)
-					<ion-note slot="helper">{{ t('markerEdit.hints.flowCapacity') }}</ion-note>
-				</ion-label>
+			<ion-item lines="none">
 				<ion-input
 					type="number"
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.flowCapacity') + ` (l/min)`"
 					v-model="markerEditStore.editableTags['fire_hydrant:flow_capacity']"
 					placeholder="800, 1200..."
+					:helper-text="t('markerEdit.hints.flowCapacity')"
 				></ion-input>
 			</ion-item>
 
 			<!-- Position -->
-			<ion-item>
-				<ion-label position="stacked">
-					{{ t('markerInfo.tags.position') }}
-					<ion-note slot="helper">{{ t('markerEdit.hints.position') }}</ion-note>
-				</ion-label>
+			<ion-item lines="none">
 				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.position')"
 					v-model="markerEditStore.editableTags['fire_hydrant:position']"
 					:placeholder="t('markerInfo.tags.position')"
+					:helper-text="t('markerEdit.hints.position')"
 				>
 					<ion-selectOption v-for="pos in hydrantPositions" :key="pos" :value="pos">
 						{{ t(`markerInfo.values.fire_hydrant:position.${pos}`) }}
@@ -161,25 +160,75 @@ const login = () => {
 
 		<ion-item-group>
 			<ion-item-divider>
-				<ion-label>{{ t('markerInfo.tags.operator') }} & {{ t('markerInfo.tags.referenceNumber') }}</ion-label>
+				<ion-label>{{ t('markerInfo.tags.couplings') }}</ion-label>
+			</ion-item-divider>
+
+			<!-- Couplings Count -->
+			<ion-item lines="none">
+				<ion-input
+					type="number"
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.couplings')"
+					v-model="markerEditStore.editableTags['couplings']"
+					placeholder="1, 2, 3..."
+					:helper-text="t('markerEdit.hints.couplings')"
+				></ion-input>
+			</ion-item>
+
+			<!-- Coupling Type -->
+			<ion-item lines="none">
+				<ion-input
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.couplingType')"
+					v-model="markerEditStore.editableTags['couplings:type']"
+					placeholder="Storz, NH, BS 336..."
+					:helper-text="t('markerEdit.hints.couplingType')"
+				></ion-input>
+			</ion-item>
+
+			<!-- Coupling Diameters -->
+			<ion-item lines="none">
+				<ion-input
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.couplingDiameters')"
+					v-model="markerEditStore.editableTags['couplings:diameters']"
+					placeholder="A;B;C or 110;75;52"
+					:helper-text="t('markerEdit.hints.couplingDiameters')"
+				></ion-input>
+			</ion-item>
+		</ion-item-group>
+
+		<ion-item-group>
+			<ion-item-divider>
+				<ion-label
+					>{{ t('markerInfo.tags.operator') }} &
+					{{ t('markerInfo.tags.referenceNumber') }}</ion-label
+				>
 			</ion-item-divider>
 
 			<!-- Operator -->
-			<ion-item>
-				<ion-label position="stacked">
-					{{ t('markerInfo.tags.operator') }}
-					<ion-note slot="helper">{{ t('markerEdit.hints.operator') }}</ion-note>
-				</ion-label>
-				<ion-input v-model="markerEditStore.editableTags['operator']"></ion-input>
+			<ion-item lines="none">
+				<ion-input
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.operator')"
+					v-model="markerEditStore.editableTags['operator']"
+					:helper-text="t('markerEdit.hints.operator')"
+				></ion-input>
 			</ion-item>
 
 			<!-- Ref -->
-			<ion-item>
-				<ion-label position="stacked">
-					{{ t('markerInfo.tags.referenceNumber') }}
-					<ion-note slot="helper">{{ t('markerEdit.hints.ref') }}</ion-note>
-				</ion-label>
-				<ion-input v-model="markerEditStore.editableTags['ref']"></ion-input>
+			<ion-item lines="none">
+				<ion-input
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.referenceNumber')"
+					v-model="markerEditStore.editableTags['ref']"
+					:helper-text="t('markerEdit.hints.ref')"
+				></ion-input>
 			</ion-item>
 		</ion-item-group>
 
@@ -189,26 +238,43 @@ const login = () => {
 			</ion-item-divider>
 
 			<!-- Note -->
-			<ion-item>
-				<ion-label position="stacked">{{ t('markerInfo.tags.note') }}</ion-label>
-				<ion-textarea v-model="markerEditStore.editableTags['note']" auto-grow></ion-textarea>
+			<ion-item lines="none">
+				<ion-textarea
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.note')"
+					v-model="markerEditStore.editableTags['note']"
+					auto-grow
+				></ion-textarea>
 			</ion-item>
 
 			<!-- Description -->
-			<ion-item>
-				<ion-label position="stacked">{{ t('markerInfo.tags.description') }}</ion-label>
-				<ion-textarea v-model="markerEditStore.editableTags['description']" auto-grow></ion-textarea>
+			<ion-item lines="none">
+				<ion-textarea
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.description')"
+					v-model="markerEditStore.editableTags['description']"
+					auto-grow
+				></ion-textarea>
 			</ion-item>
 		</ion-item-group>
 
 		<!-- Unknown / Other Tags -->
 		<ion-item-group v-if="getOtherTags().length > 0">
 			<ion-item-divider>
-				<ion-label>{{ t('markerInfo.messages.noAdditionalInfo') }} ({{ t('about.openSource') }})</ion-label>
+				<ion-label
+					>{{ t('markerInfo.messages.noAdditionalInfo') }} ({{ t('about.openSource') }})</ion-label
+				>
 			</ion-item-divider>
-			<ion-item v-for="tag in getOtherTags()" :key="tag.key">
-				<ion-label position="stacked">{{ tag.key }}</ion-label>
-				<ion-input v-model="markerEditStore.editableTags[tag.key]"></ion-input>
+
+			<ion-item lines="none" v-for="tag in getOtherTags()" :key="tag.key">
+				<ion-input
+					fill="outline"
+					label-placement="stacked"
+					:label="tag.key"
+					v-model="markerEditStore.editableTags[tag.key]"
+				></ion-input>
 			</ion-item>
 		</ion-item-group>
 
@@ -242,6 +308,14 @@ const login = () => {
 	background: transparent;
 }
 
+.edit-list ion-input,
+.edit-list ion-select,
+.edit-list ion-textarea {
+	width: 100%;
+	padding-top: 10px !important;
+}
+
+/* ... existing code ... */
 ion-item-divider {
 	--background: transparent;
 	--padding-top: 16px;

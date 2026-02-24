@@ -40,6 +40,7 @@ import App from './App.vue';
 // Composables
 import { createApp } from 'vue';
 import { updateEdge2Edge } from '@/plugins/statusBarHandling';
+import { useOsmAuthStore } from '@/store/osmAuthStore';
 
 const app = createApp(App);
 
@@ -50,14 +51,22 @@ router.isReady().then(async () => {
 	app.mount('#app');
 });
 
-CapApp.addListener('appUrlOpen', function (event: URLOpenListenerEvent) {
+CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 	const url = event.url;
 	console.log('App opened with URL:', url);
 
-	// 1. Check if the URL is a location URL you want to handle
 	if (url.startsWith('geo:')) {
 		handleGeoUrl(url);
 		return;
+	}
+
+	// OAuth redirect callback: reload the WebView at the callback URL so that
+	// osm-api's authReady IIFE can exchange the authorization code for a token.
+	if (url.includes('?code=')) {
+		window.location.replace('/?' + url.split('?')[1]);
+		const osmAuthStore = useOsmAuthStore();
+		await osmAuthStore.loadToken();
+		return router.push('/');
 	}
 
 	const slug = event.url.split('#').pop();
