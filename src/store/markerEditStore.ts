@@ -9,6 +9,7 @@ import { toastController, alertController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import * as OSM from 'osm-api';
 import { useRoute, useRouter } from 'vue-router';
+import { version } from '@/../package.json';
 
 export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const isEditing = ref(false);
@@ -137,7 +138,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					modify: [node],
 					delete: []
 				};
-				result = await OSM.uploadChangeset({ comment: 'Update fire hydrant via FireYak' }, change);
+				result = await OSM.uploadChangeset({ comment: `Update fire hydrant via FireYak ${version}` }, change);
 			} else {
 				return;
 			}
