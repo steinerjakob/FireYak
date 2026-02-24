@@ -232,12 +232,12 @@ const login = () => {
 			</ion-item>
 		</ion-item-group>
 
-		<ion-item-group>
+<!--		<ion-item-group>
 			<ion-item-divider>
 				<ion-label>{{ t('markerInfo.tags.description') }}</ion-label>
 			</ion-item-divider>
 
-			<!-- Note -->
+			&lt;!&ndash; Note &ndash;&gt;
 			<ion-item lines="none">
 				<ion-textarea
 					fill="outline"
@@ -248,7 +248,7 @@ const login = () => {
 				></ion-textarea>
 			</ion-item>
 
-			<!-- Description -->
+			&lt;!&ndash; Description &ndash;&gt;
 			<ion-item lines="none">
 				<ion-textarea
 					fill="outline"
@@ -258,13 +258,13 @@ const login = () => {
 					auto-grow
 				></ion-textarea>
 			</ion-item>
-		</ion-item-group>
+		</ion-item-group>-->
 
 		<!-- Unknown / Other Tags -->
 		<ion-item-group v-if="getOtherTags().length > 0">
 			<ion-item-divider>
 				<ion-label
-					>{{ t('markerInfo.messages.noAdditionalInfo') }} ({{ t('about.openSource') }})</ion-label
+					>{{ t('markerInfo.messages.noAdditionalInfo') }}</ion-label
 				>
 			</ion-item-divider>
 
