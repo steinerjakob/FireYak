@@ -154,6 +154,10 @@
 			"add": "Add Fire Hydrant",
 			"edit": "Edit Fire Hydrant"
 		},
+		"authDialog": {
+			"title": "OpenStreetMap Account Required",
+			"message": "You need an OpenStreetMap account to add or edit markers. Do you want to log in?"
+		},
 		"buttons": {
 			"save": "Save to OSM",
 			"cancel": "Cancel",
@@ -184,6 +188,12 @@
 	},
 	"settings": {
 		"title": "Settings",
+		"account": {
+			"title": "Account",
+			"osmAccount": "OpenStreetMap Account",
+			"loggedInAs": "Logged in as {name}",
+			"loginDescription": "Log in to add or edit markers on OpenStreetMap."
+		},
 		"appearance": {
 			"title": "Appearance",
 			"theme": {

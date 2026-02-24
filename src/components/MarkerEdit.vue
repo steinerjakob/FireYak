@@ -295,7 +295,7 @@ const login = () => {
 					{{ t('markerEdit.buttons.save') }}
 				</ion-button>
 			</template>
-			<ion-button expand="block" fill="clear" color="medium" @click="cancel">
+			<ion-button expand="block" fill="outline" @click="cancel">
 				<ion-icon slot="start" :icon="closeOutline"></ion-icon>
 				{{ t('markerEdit.buttons.cancel') }}
 			</ion-button>
@@ -323,10 +323,6 @@ ion-item-divider {
 	font-weight: bold;
 }
 
-ion-note[slot='helper'] {
-	font-size: 0.75rem;
-	color: var(--ion-color-medium);
-}
 
 .action-buttons {
 	display: flex;

@@ -154,6 +154,10 @@
 			"add": "Hydrant hinzufügen",
 			"edit": "Hydrant bearbeiten"
 		},
+		"authDialog": {
+			"title": "OpenStreetMap-Konto erforderlich",
+			"message": "Sie benötigen ein OpenStreetMap-Konto, um Hydranten hinzuzufügen oder zu bearbeiten. Möchten Sie sich einloggen?"
+		},
 		"buttons": {
 			"save": "In OSM speichern",
 			"cancel": "Abbrechen",
@@ -184,6 +188,12 @@
 	},
 	"settings": {
 		"title": "Einstellungen",
+		"account": {
+			"title": "Konto",
+			"osmAccount": "OpenStreetMap-Konto",
+			"loggedInAs": "Eingeloggt als {name}",
+			"loginDescription": "Einloggen, um Hydranten in OpenStreetMap hinzuzufügen oder zu bearbeiten."
+		},
 		"appearance": {
 			"title": "Erscheinungsbild",
 			"theme": {

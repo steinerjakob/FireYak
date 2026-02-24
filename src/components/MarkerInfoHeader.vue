@@ -23,7 +23,7 @@ const markerData = computed(() => markerStore.selectedMarker);
 
 const startEdit = () => {
 	if (markerData.value) {
-		markerEditStore.startEditing(markerData.value);
+		markerEditStore.requestStartEditing(markerData.value);
 	}
 };
 

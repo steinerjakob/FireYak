@@ -168,11 +168,7 @@ const DefaultIcon = L.icon({
 
 const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
 const ghostMarker = L.marker(L.latLng(0, 0), {
-	icon: L.icon({
-		iconUrl: selectedMarkerIcon,
-		iconSize: [56, 56],
-		className: 'ghost-marker'
-	}),
+	icon: DefaultIcon,
 	draggable: true
 });
 const selectedMarkerPath = new L.Polyline([]);
@@ -183,11 +179,7 @@ let customLocationMarker: L.Marker | null = null;
 function startAdding() {
 	if (rootMap) {
 		const center = rootMap.getCenter();
-		markerEditStore.startAdding(center);
-		ghostMarker.setLatLng(center);
-		if (!rootMap.hasLayer(ghostMarker)) {
-			ghostMarker.addTo(rootMap);
-		}
+		markerEditStore.requestStartAdding(center);
 	}
 }
 
@@ -217,6 +209,9 @@ watch(
 );
 
 function onMapMarkerClick(event: LeafletMouseEvent) {
+	// While editing or adding, block navigation to other markers but allow
+	// the event to propagate to the map so the click updates pendingLocation.
+	if (markerEditStore.isActive) return;
 	L.DomEvent.stopPropagation(event);
 	router.push(`/markers/${event.target.options.title}`);
 }
@@ -627,11 +622,6 @@ ion-fab {
 
 .add-hydrant-fab {
 	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + (56px + 16px) * 2);
-}
-
-:deep(.ghost-marker) {
-	opacity: 0.6;
-	filter: hue-rotate(90deg);
 }
 
 :deep(.leaflet-bottom) {
