@@ -1,13 +1,14 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { LatLng } from 'leaflet';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { storeMapNodes } from '@/mapHandler/databaseHandler';
-import { toastController } from '@ionic/vue';
+import { toastController, alertController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import * as OSM from 'osm-api';
+import { useRoute, useRouter } from 'vue-router';
 
 export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const isEditing = ref(false);
@@ -15,12 +16,26 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const pendingLocation = ref<LatLng | null>(null);
 	const editableTags = ref<Record<string, string>>({});
 	const originalMarker = ref<OverPassElement | null>(null);
+	const router = useRouter();
+	const route = useRoute()
 
 	const osmAuthStore = useOsmAuthStore();
 	const markerStore = useMapMarkerStore();
 	const { t } = useI18n();
 
 	const isActive = computed(() => isEditing.value || isAdding.value);
+
+	watch(isActive, (isActive) => {
+		if (isActive) {
+			router.push('/');
+		}
+	});
+
+	watch(route, (to) => {
+		if (to.fullPath !== '/') {
+			cancelEdit();
+		}
+	})
 
 	function startEditing(marker: OverPassElement) {
 		isEditing.value = true;
@@ -39,6 +54,42 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			'fire_hydrant:type': 'pillar'
 		};
 		pendingLocation.value = location;
+	}
+
+	async function showAuthAlert() {
+		const alert = await alertController.create({
+			header: t('markerEdit.authDialog.title'),
+			message: t('markerEdit.authDialog.message'),
+			buttons: [
+				{
+					text: t('markerEdit.buttons.cancel'),
+					role: 'cancel'
+				},
+				{
+					text: t('markerEdit.buttons.login'),
+					handler: () => {
+						osmAuthStore.login();
+					}
+				}
+			]
+		});
+		await alert.present();
+	}
+
+	async function requestStartEditing(marker: OverPassElement) {
+		if (!osmAuthStore.isAuthenticated) {
+			await showAuthAlert();
+			return;
+		}
+		startEditing(marker);
+	}
+
+	async function requestStartAdding(location: LatLng) {
+		if (!osmAuthStore.isAuthenticated) {
+			await showAuthAlert();
+			return;
+		}
+		startAdding(location);
 	}
 
 	function cancelEdit() {
@@ -147,6 +198,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		originalMarker,
 		startEditing,
 		startAdding,
+		requestStartEditing,
+		requestStartAdding,
 		cancelEdit,
 		saveMarker,
 		updateTag
