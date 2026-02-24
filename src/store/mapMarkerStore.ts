@@ -71,6 +71,12 @@ export const useMapMarkerStore = defineStore('marker', () => {
 		}
 	}
 
+	function updateSelectedMarker(marker: OverPassElement) {
+		if (selectedMarker.value && selectedMarker.value.id === marker.id) {
+			selectedMarker.value = marker;
+		}
+	}
+
 	return {
 		// State
 		fetchPromises,
@@ -79,6 +85,7 @@ export const useMapMarkerStore = defineStore('marker', () => {
 		// Actions
 		fetchMarkerById,
 		selectMarker,
+		updateSelectedMarker,
 		fetchMarkerImageInfoById
 	};
 });
