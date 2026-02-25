@@ -607,13 +607,11 @@ ion-fab {
 	z-index: 1000;
 }
 
-/* Top positioned FABs - account for iOS notch/status bar */
-ion-fab[vertical="top"] {
+.fab-vertical-top {
 	margin-top: var(--ion-safe-area-top, env(safe-area-inset-top, 0px));
 }
 
-/* Bottom positioned FABs - account for iOS home indicator */
-ion-fab[vertical="bottom"] {
+.fab-vertical-bottom {
 	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
 }
 
