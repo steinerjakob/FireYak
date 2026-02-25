@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { SystemBars, SystemBarsStyle } from '@capacitor/core';
 
 export type ThemeSetting = 'light' | 'dark' | 'auto';
 
@@ -15,6 +16,8 @@ const applyThemeToDocument = (theme: ThemeSetting) => {
 
 	// Toggle Ionic's dark palette class
 	document.documentElement.classList.toggle('ion-palette-dark', isDark);
+
+	SystemBars.setStyle({ style: isDark ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
 };
 
 export const useSettingsStore = defineStore('settings', {
