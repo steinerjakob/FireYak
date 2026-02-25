@@ -4,14 +4,16 @@ const config: CapacitorConfig = {
 	appId: 'at.jst.fireyak',
 	appName: 'FireYak',
 	webDir: 'dist',
-	android: {
-		adjustMarginsForEdgeToEdge: 'disable'
-	},
+	android: {},
 	ios: {
-		// Enable edge-to-edge display with safe area handling
 		contentInset: 'automatic'
 	},
 	plugins: {
+		StausBar: {
+			overlaysWebView: true },
+		SystemBars: {
+			insetsHandling: 'disable'
+		},
 		CapacitorHttp: {
 			enabled: false
 		}
