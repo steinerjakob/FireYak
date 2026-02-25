@@ -8,16 +8,25 @@ import {
 	IonButtons,
 	isPlatform
 } from '@ionic/vue';
-import { navigate, shareSocial } from 'ionicons/icons';
+import { navigate, shareSocial, createOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
+import { useMarkerEditStore } from '@/store/markerEditStore';
 import { Share } from '@capacitor/share';
 
 const markerStore = useMapMarkerStore();
+const markerEditStore = useMarkerEditStore();
 
 const { t } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
+const editAllowed = computed(() => markerData.value?.tags?.emergency === 'fire_hydrant');
+
+const startEdit = () => {
+	if (markerData.value) {
+		markerEditStore.requestStartEditing(markerData.value);
+	}
+};
 
 const getTitle = () => {
 	if (!markerData.value) return t('markerInfo.title.locationInfo');
@@ -92,6 +101,9 @@ const shareMarker = async () => {
 		<ion-toolbar>
 			<ion-title>{{ getTitle() }}</ion-title>
 			<ion-buttons slot="end">
+				<ion-button v-if="editAllowed" @click="startEdit" :title="t('markerEdit.title.edit')">
+					<ion-icon :icon="createOutline" />
+				</ion-button>
 				<ion-button @click="shareMarker" :title="t('markerInfo.share.title')">
 					<ion-icon :icon="shareSocial" />
 				</ion-button>

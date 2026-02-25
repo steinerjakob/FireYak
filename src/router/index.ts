@@ -46,6 +46,11 @@ const routes = [
 		path: '/markerimages/:relatedId',
 		name: 'markerimages',
 		component: () => import('@/views/MarkerImageViewer.vue')
+	},
+	{
+		path: '/osm-callback',
+		name: 'osm-callback',
+		component: () => import('@/views/HomeView.vue')
 	}
 ];
 
