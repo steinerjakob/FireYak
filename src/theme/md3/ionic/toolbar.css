@@ -3,71 +3,82 @@
   ion-toolbar {
     --background: var(--md-sys-surface-container);
     --color: var(--md-sys-on-surface);
-
-    --min-height: 64px;
-    --padding-start: 16px;
-    --padding-end: 16px;
+    --border-width: 0;
+    --border-style: none;
+    --min-height: 56px;
+    --padding-start: 4px;
+    --padding-end: 4px;
+    --padding-top: 0;
+    --padding-bottom: 0;
   }
 
-  ion-toolbar,
+  /* Title styling */
   ion-toolbar ion-title {
     font: var(--md-sys-title-large);
     letter-spacing: var(--md-sys-title-large-letter-spacing);
-
-    h1 {
-      font: var(--md-sys-display-medium);
-      letter-spacing: var(--md-sys-display-medium-letter-spacing);
-      margin: unset;
-    }
-
-    h2 {
-      font: var(--md-sys-title-large);
-      letter-spacing: var(--md-sys-title-large-letter-spacing);
-      margin: unset;
-    }
-
-    h3 {
-      font: var(--md-sys-body-large);
-      letter-spacing: var(--md-sys-body-large-letter-spacing);
-      margin: unset;
-    }
-
-    p {
-      color: var(--md-sys-on-surface-variant);
-      font: var(--md-sys-body-medium);
-      letter-spacing: var(--md-sys-body-medium-letter-spacing);
-      margin: unset;
-    }
-
-    small {
-      color: var(--md-sys-on-surface-variant);
-      font: var(--md-sys-body-small);
-      letter-spacing: var(--md-sys-body-small-letter-spacing);
-      margin: unset;
-    }
+    padding: 0 16px;
   }
 
+  /* Typography within toolbar */
+  ion-toolbar h1 {
+    font: var(--md-sys-display-small);
+    letter-spacing: var(--md-sys-display-small-letter-spacing);
+    margin: 0;
+  }
+
+  ion-toolbar h2 {
+    font: var(--md-sys-title-large);
+    letter-spacing: var(--md-sys-title-large-letter-spacing);
+    margin: 0;
+  }
+
+  ion-toolbar h3 {
+    font: var(--md-sys-title-medium);
+    letter-spacing: var(--md-sys-title-medium-letter-spacing);
+    margin: 0;
+  }
+
+  ion-toolbar p {
+    color: var(--md-sys-on-surface-variant);
+    font: var(--md-sys-body-medium);
+    letter-spacing: var(--md-sys-body-medium-letter-spacing);
+    margin: 0;
+  }
+
+  ion-toolbar small {
+    color: var(--md-sys-on-surface-variant);
+    font: var(--md-sys-body-small);
+    letter-spacing: var(--md-sys-body-small-letter-spacing);
+    margin: 0;
+  }
+
+  /* Fix line-height when title contains block elements */
   ion-toolbar ion-title:has(:is(h1, h2, h3, p, small)) {
-    line-height: 0;
+    line-height: 1;
   }
 
-  ion-toolbar *[slot=start] {
+  /* Start slot elements (navigation, menu) */
+  ion-toolbar *[slot="start"] {
     color: var(--md-sys-on-surface);
   }
 
-  ion-toolbar *[slot=end] {
+  /* End slot elements (actions) */
+  ion-toolbar *[slot="end"] {
     color: var(--md-sys-on-surface-variant);
   }
 
-  ion-header, ion-footer {
+  /* Header styling */
+  ion-header {
     box-shadow: none;
-
-    &::before,
-    &::after {
-      display: none;
-    }
   }
 
+  ion-header::before,
+  ion-header::after {
+    display: none;
+  }
+
+  /* Scrolled header shadow */
+  ion-header.header-collapse-condense-inactive,
   ion-header.scrolled {
     box-shadow: var(--md-sys-level2);
   }
@@ -76,7 +87,82 @@
     --background: var(--md-sys-surface-container);
   }
 
+  /* Footer styling */
+  ion-footer {
+    box-shadow: none;
+  }
+
+  ion-footer::before,
+  ion-footer::after {
+    display: none;
+  }
+
+  /* Footer toolbar bottom padding for safe area */
+  ion-footer ion-toolbar:last-of-type {
+    --padding-bottom: var(--ion-safe-area-bottom, 0);
+  }
+
+  /* Toolbar inside content (for sticky headers etc.) */
   ion-content ion-header ion-toolbar {
     --background: transparent;
+  }
+
+  /* Large title (collapsing) toolbar */
+  ion-header[collapse="condense"] ion-toolbar {
+    --background: var(--md-sys-surface);
+  }
+
+  ion-header[collapse="condense"] ion-toolbar ion-title.title-large {
+    font: var(--md-sys-display-small);
+    letter-spacing: var(--md-sys-display-small-letter-spacing);
+    padding-bottom: 8px;
+  }
+
+  /* Toolbar segment adjustments */
+  ion-toolbar ion-segment {
+    max-width: 100%;
+    margin: 8px 16px;
+  }
+
+  /* Toolbar searchbar */
+  ion-toolbar ion-searchbar {
+    padding: 8px 8px;
+  }
+
+  /* Compact toolbar variant */
+  ion-toolbar.toolbar-compact {
+    --min-height: 48px;
+  }
+
+  ion-toolbar.toolbar-compact ion-title {
+    font: var(--md-sys-title-medium);
+    letter-spacing: var(--md-sys-title-medium-letter-spacing);
+  }
+
+  /* Prominent toolbar variant */
+  ion-toolbar.toolbar-prominent {
+    --min-height: 112px;
+    flex-wrap: wrap;
+  }
+
+  ion-toolbar.toolbar-prominent ion-title {
+    width: 100%;
+    padding-top: 24px;
+    font: var(--md-sys-headline-medium);
+    letter-spacing: var(--md-sys-headline-medium-letter-spacing);
+  }
+
+  /* Transparent toolbar for overlaying content */
+  ion-toolbar.toolbar-transparent {
+    --background: transparent;
+    --border-width: 0;
+  }
+
+  /* Toolbar progress bar */
+  ion-toolbar ion-progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
   }
 }

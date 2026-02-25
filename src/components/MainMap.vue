@@ -63,6 +63,12 @@
 				<ion-icon :icon="nearbyMarker" size="large"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<!-- Add Hydrant FAB -->
+		<ion-fab class="add-hydrant-fab" vertical="bottom" horizontal="end" slot="fixed">
+			<ion-fab-button color="primary" @click="startAdding" :title="$t('markerEdit.title.add')">
+				<ion-icon :icon="addOutline"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 	</div>
 </template>
 <script lang="ts" setup>
@@ -88,7 +94,8 @@ import {
 	navigateOutline,
 	add,
 	remove,
-	settings
+	settings,
+	addOutline
 } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
@@ -99,6 +106,7 @@ import { useDefaultStore } from '@/store/defaultStore';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
 
 const MAP_ELEMENT_ID = 'map';
@@ -108,6 +116,7 @@ const DISABLE_CLUSTERING_ZOOM = 15;
 const router = useRouter();
 const route = useRoute();
 const markerStore = useMapMarkerStore();
+const markerEditStore = useMarkerEditStore();
 const { isDarkMode } = useDarkMode();
 const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
@@ -158,12 +167,51 @@ const DefaultIcon = L.icon({
 });
 
 const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
+const ghostMarker = L.marker(L.latLng(0, 0), {
+	icon: DefaultIcon,
+	draggable: true
+});
 const selectedMarkerPath = new L.Polyline([]);
 
 // Custom external location marker
 let customLocationMarker: L.Marker | null = null;
 
+function startAdding() {
+	if (rootMap) {
+		const center = rootMap.getCenter();
+		markerEditStore.requestStartAdding(center);
+	}
+}
+
+ghostMarker.on('dragend', (e) => {
+	markerEditStore.pendingLocation = e.target.getLatLng();
+});
+
+watch(
+	() => markerEditStore.isActive,
+	(active) => {
+		if (!active && rootMap?.hasLayer(ghostMarker)) {
+			rootMap.removeLayer(ghostMarker);
+		}
+	}
+);
+
+watch(
+	() => markerEditStore.pendingLocation,
+	(loc) => {
+		if (loc && rootMap && markerEditStore.isActive) {
+			ghostMarker.setLatLng(loc);
+			if (!rootMap.hasLayer(ghostMarker)) {
+				ghostMarker.addTo(rootMap);
+			}
+		}
+	}
+);
+
 function onMapMarkerClick(event: LeafletMouseEvent) {
+	// While editing or adding, block navigation to other markers but allow
+	// the event to propagate to the map so the click updates pendingLocation.
+	if (markerEditStore.isActive) return;
 	L.DomEvent.stopPropagation(event);
 	router.push(`/markers/${event.target.options.title}`);
 }
@@ -446,7 +494,12 @@ function setupMapEventListeners() {
 	rootMap.on('contextmenu', handleMapContextMenu);
 }
 
-function handleMapClick() {
+function handleMapClick(e: LeafletMouseEvent) {
+	if (markerEditStore.isActive) {
+		markerEditStore.pendingLocation = e.latlng;
+		return;
+	}
+
 	// do not close if the supply pipe is open
 	if (route.path.includes('supplypipe')) {
 		return;
@@ -577,6 +630,10 @@ ion-fab[vertical="bottom"] {
 .location-fab {
 	/* Position above the other bottom FAB (56px FAB height + 16px spacing) */
 	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 56px + 16px);
+}
+
+.add-hydrant-fab {
+	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + (56px + 16px) * 2);
 }
 
 :deep(.leaflet-bottom) {

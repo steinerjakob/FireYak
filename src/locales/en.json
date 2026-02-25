@@ -149,8 +149,51 @@
 		"zoomIn": "Zoom in",
 		"zoomOut": "Zoom out"
 	},
+	"markerEdit": {
+		"title": {
+			"add": "Add Fire Hydrant",
+			"edit": "Edit Fire Hydrant"
+		},
+		"authDialog": {
+			"title": "OpenStreetMap Account Required",
+			"message": "You need an OpenStreetMap account to add or edit markers. Do you want to log in?"
+		},
+		"buttons": {
+			"save": "Save to OSM",
+			"cancel": "Cancel",
+			"login": "Login to OSM",
+			"logout": "Logout",
+			"selectLocation": "Select Location on Map"
+		},
+		"hints": {
+			"location": "Tap on the map to set the hydrant's location.",
+			"emergency": "Specifies that this is a fire hydrant.",
+			"type": "Specifies the type of fire hydrant. Pillar hydrants are above ground, underground hydrants are beneath a cover, wall hydrants are mounted on or in a wall.",
+			"diameter": "The internal diameter of the water pipe connected to the hydrant in millimeters (e.g., 80, 100, 150).",
+			"pressure": "Indicates how water is delivered. 'pressurised' for water mains, 'suction' for non-pressurized sources like ponds, 'gravity' for high-level tanks.",
+			"flowCapacity": "The maximum water flow rate the hydrant can provide in litres per minute (l/min).",
+			"position": "The physical location of the hydrant relative to the surroundings (e.g., sidewalk, parking lot).",
+			"couplings": "The number of hose connections available on the hydrant.",
+			"couplingType": "The technical standard of the couplings (e.g., Storz).",
+			"couplingDiameters": "The specific sizes of the couplings available (e.g., A, B, C or 110, 75, 52).",
+			"operator": "The organization or company responsible for maintaining the hydrant.",
+			"ref": "An official identification number or reference used by the operator.",
+			"loginRequired": "You need to log in to OpenStreetMap to save changes."
+		},
+		"messages": {
+			"saveSuccess": "Successfully saved to OpenStreetMap!",
+			"saveError": "Failed to save to OpenStreetMap. Please try again.",
+			"locationSet": "Location set successfully."
+		}
+	},
 	"settings": {
 		"title": "Settings",
+		"account": {
+			"title": "Account",
+			"osmAccount": "OpenStreetMap Account",
+			"loggedInAs": "Logged in as {name}",
+			"loginDescription": "Log in to add or edit markers on OpenStreetMap."
+		},
 		"appearance": {
 			"title": "Appearance",
 			"theme": {
