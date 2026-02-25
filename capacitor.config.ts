@@ -5,8 +5,11 @@ const config: CapacitorConfig = {
 	appName: 'FireYak',
 	webDir: 'dist',
 	android: {},
+	ios: {
+		contentInset: 'never'
+	},
 	plugins: {
-		StausBar: {
+		StatusBar: {
 			overlaysWebView: true },
 		SystemBars: {
 			insetsHandling: 'disable'
