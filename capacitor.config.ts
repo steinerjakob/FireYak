@@ -5,9 +5,6 @@ const config: CapacitorConfig = {
 	appName: 'FireYak',
 	webDir: 'dist',
 	android: {},
-	ios: {
-		contentInset: 'automatic'
-	},
 	plugins: {
 		StausBar: {
 			overlaysWebView: true },
