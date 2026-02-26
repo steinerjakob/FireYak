@@ -1,0 +1,142 @@
+name: Deploy Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (leave empty to use package.json version)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: 'android'
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Set Version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "NEW_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            VERSION=$(node -p "require('./package.json').version")
+            echo "NEW_VERSION=$VERSION" >> $GITHUB_ENV
+          fi
+
+      - name: Build
+        run: npm run buildAndSync
+
+      - name: Set Up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Grant Execute Permission for Gradlew
+        working-directory: ./android
+        run: chmod +x gradlew
+
+      - name: Bump Android Version Code
+        uses: Devofure/advance-android-version-actions@v1.4
+        with:
+          gradlePath: android/app/build.gradle
+          versionName: ${{ env.NEW_VERSION }}
+
+      - name: Commit & Push Version Changes
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/build.gradle
+          git commit -m "chore: bump android version to ${{ env.NEW_VERSION }} [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Decode Keystore
+        working-directory: ./android
+        run: |
+          echo "${{ secrets.KEYSTORE_FILE }}" | tr -d '\n' | base64 --decode > ./app/keystore.jks
+
+      - name: Verify Keystore
+        working-directory: ./android
+        run: |
+          ls -la app/keystore.jks
+          echo "Keystore file exists and size: $(wc -c < app/keystore.jks) bytes"
+
+      - name: Build Release AAB
+        working-directory: ./android
+        run: |
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/keystore.jks" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+
+      - name: Build Release APK
+        working-directory: ./android
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/keystore.jks" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+
+      - name: Rename APK
+        run: mv ./android/app/build/outputs/apk/release/app-release.apk ./android/app/build/outputs/apk/release/fireyak-v${{ env.NEW_VERSION }}.apk
+
+      - name: Upload Release AAB to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-aab
+          path: ./android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          tag_name: v${{ env.NEW_VERSION }}
+          release_name: Release v${{ env.NEW_VERSION }}
+          body: |
+            Changes in this release:
+            See commit history.
+          draft: false
+          prerelease: false
+
+      - name: Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./android/app/build/outputs/apk/release/fireyak-v${{ env.NEW_VERSION }}.apk
+          asset_name: fireyak-v${{ env.NEW_VERSION }}.apk
+          asset_content_type: application/vnd.android.package-archive
+
+      - name: Deploy to Google Play
+        run: |
+          printf '%s\n' '${{ secrets.PLAY_STORE_JSON_KEY }}' > play-credentials.json
+          fastlane supply \
+            --aab ./android/app/build/outputs/bundle/release/app-release.aab \
+            --track production \
+            --skip_upload_screenshots
