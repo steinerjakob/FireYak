@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 
 const markerStore = useMapMarkerStore();
 const markerEditStore = useMarkerEditStore();
@@ -101,7 +102,11 @@ const shareMarker = async () => {
 		<ion-toolbar>
 			<ion-title>{{ getTitle() }}</ion-title>
 			<ion-buttons slot="end">
-				<ion-button v-if="editAllowed" @click="startEdit" :title="t('markerEdit.title.edit')">
+				<ion-button
+					v-if="editAllowed && Capacitor.getPlatform() !== 'ios'"
+					@click="startEdit"
+					:title="t('markerEdit.title.edit')"
+				>
 					<ion-icon :icon="createOutline" />
 				</ion-button>
 				<ion-button @click="shareMarker" :title="t('markerInfo.share.title')">

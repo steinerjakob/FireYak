@@ -66,15 +66,21 @@
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
-						<p>{{ $t('about.buyMeCoffeeDescription') }}</p>
+						<template v-if="Capacitor.getPlatform() !== 'ios'">
+							<p>{{ $t('about.buyMeCoffeeDescription') }}</p>
 
-						<a href="https://www.buymeacoffee.com/steinerjakob" target="_blank" class="coffee-link">
-							<img
-								src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-								alt="Buy Me A Coffee"
-								class="coffee-button-img"
-							/>
-						</a>
+							<a
+								href="https://www.buymeacoffee.com/steinerjakob"
+								target="_blank"
+								class="coffee-link"
+							>
+								<img
+									src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+									alt="Buy Me A Coffee"
+									class="coffee-button-img"
+								/>
+							</a>
+						</template>
 
 						<ion-list>
 							<ion-item>
