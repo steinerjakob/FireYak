@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { SystemBars, SystemBarsStyle } from '@capacitor/core';
+import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 
 export type ThemeSetting = 'light' | 'dark' | 'auto';
 
@@ -11,13 +11,14 @@ const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
  * @param theme The theme setting ('light', 'dark', or 'auto')
  */
 const applyThemeToDocument = (theme: ThemeSetting) => {
-	const isDark =
-		theme === 'dark' || (theme === 'auto' && darkModeMediaQuery.matches);
+	const isDark = theme === 'dark' || (theme === 'auto' && darkModeMediaQuery.matches);
 
 	// Toggle Ionic's dark palette class
 	document.documentElement.classList.toggle('ion-palette-dark', isDark);
 
-	SystemBars.setStyle({ style: isDark ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
+	if (Capacitor.isNativePlatform()) {
+		SystemBars.setStyle({ style: isDark ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
+	}
 };
 
 export const useSettingsStore = defineStore('settings', {
