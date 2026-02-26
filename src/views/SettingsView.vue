@@ -48,7 +48,7 @@
 				</ion-item>
 
 				<!-- Account Section -->
-				<template v-if="Capacitor.getPlatform() !== 'ios'">
+				<template v-if="!isNativeIos">
 					<ion-list-header>
 						<ion-label>{{ $t('settings.account.title') }}</ion-label>
 					</ion-list-header>
@@ -110,6 +110,7 @@ import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
+import { computed } from 'vue';
 
 const settingsStore = useSettingsStore();
 const { saveTheme, saveShowZoomButtons } = useSettings();
@@ -123,4 +124,8 @@ const onThemeChange = (event: SegmentCustomEvent) => {
 const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 	saveShowZoomButtons(event.detail.checked);
 };
+
+const isNativeIos = computed<boolean>(() => {
+	return Capacitor.getPlatform() === 'ios';
+});
 </script>

@@ -66,7 +66,7 @@
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
-						<template v-if="Capacitor.getPlatform() !== 'ios'">
+						<template v-if="!isNativeIos">
 							<p>{{ $t('about.buyMeCoffeeDescription') }}</p>
 
 							<a
@@ -157,13 +157,18 @@ import {
 	IonBackButton
 } from '@ionic/vue';
 import { logoGithub, heart, star, bug, code, documentText, map } from 'ionicons/icons';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { App } from '@capacitor/app';
 import { AppInfo } from '@capacitor/app/dist/esm/definitions';
 import { Capacitor } from '@capacitor/core';
 import { version } from '@/../package.json';
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
+
+const isNativeIos = computed<boolean>(() => {
+	return Capacitor.getPlatform() === 'ios';
+});
+
 onMounted(async () => {
 	if (Capacitor.isNativePlatform()) {
 		appInfo.value = await App.getInfo();

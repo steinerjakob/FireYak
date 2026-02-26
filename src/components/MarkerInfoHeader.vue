@@ -22,6 +22,9 @@ const markerEditStore = useMarkerEditStore();
 const { t } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
 const editAllowed = computed(() => markerData.value?.tags?.emergency === 'fire_hydrant');
+const isNativeIos = computed<boolean>(() => {
+	return Capacitor.getPlatform() === 'ios';
+});
 
 const startEdit = () => {
 	if (markerData.value) {
@@ -103,7 +106,7 @@ const shareMarker = async () => {
 			<ion-title>{{ getTitle() }}</ion-title>
 			<ion-buttons slot="end">
 				<ion-button
-					v-if="editAllowed && Capacitor.getPlatform() !== 'ios'"
+					v-if="editAllowed && !isNativeIos"
 					@click="startEdit"
 					:title="t('markerEdit.title.edit')"
 				>
