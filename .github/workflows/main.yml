@@ -1,31 +1,28 @@
-name: Deploy Pipeline
+name: Deploy GitHub Pages
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ['main']
+  workflow_dispatch:
 
-# Sets the GITHUB_TOKEN permissions to allow deployment to GitHub Pages
 permissions:
   contents: write
   pages: write
   id-token: write
 
-# Allow one concurrent deployment
 concurrency:
   group: 'pages'
   cancel-in-progress: true
 
-
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
-          fetch-depth: 0 # Fetch all history for semantic versioning
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v3
@@ -43,9 +40,8 @@ jobs:
           tag_prefix: 'v'
           version_format: '${major}.${minor}.${patch}'
           bump_each_commit: false
-          major_pattern: 'BREAKING CHANGE' # Explicitly define major pattern
-          minor_pattern: 'feat'          # Explicitly define minor pattern
-
+          major_pattern: 'BREAKING CHANGE'
+          minor_pattern: 'feat'
 
       - name: Update package.json version
         run: |
@@ -55,115 +51,23 @@ jobs:
       - name: Build
         run: npm run build
 
-        # deploy to github pages
       - name: Setup Pages
         uses: actions/configure-pages@v3
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload dist repository
           path: './dist'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Build
-        run: npm run buildAndSync
-
-        # android deployment
-
-      - name: Set Up JDK 21
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Grant Execute Permission for Gradlew
-        working-directory: ./android
-        run: chmod +x gradlew
-
-      - name: Bump Android Version Code
-        uses: Devofure/advance-android-version-actions@v1.4
-        with:
-          gradlePath: android/app/build.gradle
-          versionName: ${{ steps.semver.outputs.version }}
 
       - name: Commit & Push Version Changes
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add package.json package-lock.json android/app/build.gradle
+          git add package.json package-lock.json
           git commit -m "chore: bump version to ${{ steps.semver.outputs.version }} [skip ci]" || echo "No changes to commit"
           git tag -a "v${{ steps.semver.outputs.version }}" -m "Release v${{ steps.semver.outputs.version }}"
           git push --follow-tags
-
-      - name: Decode Keystore
-        working-directory: ./android
-        run: |
-          echo "${{ secrets.KEYSTORE_FILE }}" | tr -d '\n' | base64 --decode > ./app/keystore.jks
-
-      - name: Verify Keystore
-        working-directory: ./android
-        run: |
-          ls -la app/keystore.jks
-          echo "Keystore file exists and size: $(wc -c < app/keystore.jks) bytes"
-
-      - name: Build Release AAB
-        working-directory: ./android
-        run: |
-          ./gradlew bundleRelease \
-            -Pandroid.injected.signing.store.file="$(pwd)/app/keystore.jks" \
-            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
-
-      - name: Build Release APK
-        working-directory: ./android
-        run: |
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file="$(pwd)/app/keystore.jks" \
-            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
-            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
-
-      - name: Rename APK
-        run: mv ./android/app/build/outputs/apk/release/app-release.apk ./android/app/build/outputs/apk/release/fireyak-v${{ env.NEW_VERSION }}.apk
-
-      - name: Upload Release AAB to Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-aab
-          path: ./android/app/build/outputs/bundle/release/app-release.aab
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        with:
-          tag_name: v${{ steps.semver.outputs.version }}
-          release_name: Release v${{ steps.semver.outputs.version }}
-          body: |
-            Changes in this release:
-            See commit history.
-          draft: false
-          prerelease: false
-
-      - name: Upload APK to Release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./android/app/build/outputs/apk/release/fireyak-v${{ env.NEW_VERSION }}.apk
-          asset_name: fireyak-v${{ env.NEW_VERSION }}.apk
-          asset_content_type: application/vnd.android.package-archive
-
-      - name: Deploy to Google Play
-        run: |
-          printf '%s\n' '${{ secrets.PLAY_STORE_JSON_KEY }}' > play-credentials.json
-          fastlane supply \
-            --aab ./android/app/build/outputs/bundle/release/app-release.aab \
-            --track production \
-            --skip_upload_screenshots
