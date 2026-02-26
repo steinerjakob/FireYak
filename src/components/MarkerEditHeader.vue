@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon } from '@ionic/vue';
-import { closeOutline } from 'ionicons/icons';
+import { close } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 
 const { t } = useI18n();
 const markerEditStore = useMarkerEditStore();
 
-const close = () => {
+const closePanel = () => {
 	markerEditStore.cancelEdit();
 };
 </script>
@@ -15,9 +15,9 @@ const close = () => {
 <template>
 	<ion-header class="ion-no-border">
 		<ion-toolbar>
-			<ion-buttons slot="start">
-				<ion-button @click="close">
-					<ion-icon :icon="closeOutline" />
+			<ion-buttons slot="end">
+				<ion-button @click="closePanel">
+					<ion-icon :icon="close" />
 				</ion-button>
 			</ion-buttons>
 

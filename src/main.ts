@@ -32,14 +32,11 @@ import '@ionic/vue/css/palettes/dark.class.css';
 import '@/theme/variables.scss';
 import '@/theme/md3/theme.css';
 
-import '@/plugins/statusBarHandling.ts';
-
 // Components
 import App from './App.vue';
 
 // Composables
 import { createApp } from 'vue';
-import { updateEdge2Edge } from '@/plugins/statusBarHandling';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 
 const app = createApp(App);
@@ -47,7 +44,6 @@ const app = createApp(App);
 registerPlugins(app);
 
 router.isReady().then(async () => {
-	await updateEdge2Edge();
 	app.mount('#app');
 });
 

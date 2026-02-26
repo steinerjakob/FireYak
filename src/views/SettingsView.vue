@@ -16,8 +16,7 @@
 				</ion-list-header>
 
 				<ion-item>
-					<ion-label class="ion-padding-end">{{ $t('settings.appearance.theme.title') }}</ion-label>
-					<ion-segment :value="theme" @ion-change="onThemeChange($event)">
+					<ion-segment :value="theme" @ion-change="onThemeChange($event)" style="padding-left: 8px; padding-right:8px;">
 						<ion-segment-button value="light">
 							<ion-label>{{ $t('settings.appearance.theme.light') }}</ion-label>
 						</ion-segment-button>
