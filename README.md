@@ -233,10 +233,3 @@ npm run build
 ```
 
 The Android project lives in the `android` directory and can be built with Gradle/Android Studio as usual.
-
----
-
-## License
-
-This project is released under the terms of the **MIT License**.  
-See the [`LICENSE`](LICENSE) file for details.

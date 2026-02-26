@@ -64,7 +64,7 @@
 			</ion-fab-button>
 		</ion-fab>
 		<!-- Add Hydrant FAB -->
-		<ion-fab class="add-hydrant-fab" vertical="bottom" horizontal="end" slot="fixed">
+		<ion-fab v-if="Capacitor.getPlatform() !== 'ios'" class="add-hydrant-fab" vertical="bottom" horizontal="end" slot="fixed">
 			<ion-fab-button color="primary" @click="startAdding" :title="$t('markerEdit.title.add')">
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
@@ -86,7 +86,7 @@ import { getMarkersForView, getNearbyMarkers } from '@/mapHandler/markerHandler'
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
-import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import { IonFab, IonFabButton, IonIcon, IonSpinner, isPlatform } from '@ionic/vue';
 import {
 	informationCircle,
 	analyticsOutline,

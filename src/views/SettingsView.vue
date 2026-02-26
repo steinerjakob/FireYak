@@ -16,7 +16,11 @@
 				</ion-list-header>
 
 				<ion-item>
-					<ion-segment :value="theme" @ion-change="onThemeChange($event)" style="padding-left: 8px; padding-right:8px;">
+					<ion-segment
+						:value="theme"
+						@ion-change="onThemeChange($event)"
+						style="padding-left: 8px; padding-right: 8px"
+					>
 						<ion-segment-button value="light">
 							<ion-label>{{ $t('settings.appearance.theme.light') }}</ion-label>
 						</ion-segment-button>
@@ -44,34 +48,36 @@
 				</ion-item>
 
 				<!-- Account Section -->
-				<ion-list-header>
-					<ion-label>{{ $t('settings.account.title') }}</ion-label>
-				</ion-list-header>
+				<template v-if="Capacitor.getPlatform() !== 'ios'">
+					<ion-list-header>
+						<ion-label>{{ $t('settings.account.title') }}</ion-label>
+					</ion-list-header>
 
-				<ion-item v-if="osmAuthStore.isAuthenticated">
-					<ion-label>
-						<h2>{{ $t('settings.account.osmAccount') }}</h2>
-						<p>
-							{{ $t('settings.account.loggedInAs', { name: osmAuthStore.user?.display_name }) }}
-						</p>
-					</ion-label>
-					<ion-button slot="end" fill="outline" @click="osmAuthStore.logout()">
-						<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
-						{{ $t('markerEdit.buttons.logout') }}
-					</ion-button>
-				</ion-item>
+					<ion-item v-if="osmAuthStore.isAuthenticated">
+						<ion-label>
+							<h2>{{ $t('settings.account.osmAccount') }}</h2>
+							<p>
+								{{ $t('settings.account.loggedInAs', { name: osmAuthStore.user?.display_name }) }}
+							</p>
+						</ion-label>
+						<ion-button slot="end" fill="outline" @click="osmAuthStore.logout()">
+							<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
+							{{ $t('markerEdit.buttons.logout') }}
+						</ion-button>
+					</ion-item>
 
-				<ion-item v-else lines="none">
-					<ion-label>
-						<p>{{ $t('settings.account.loginDescription') }}</p>
-					</ion-label>
-				</ion-item>
-				<ion-item v-if="!osmAuthStore.isAuthenticated" lines="none">
-					<ion-button expand="block" @click="osmAuthStore.login()">
-						<ion-icon slot="start" :icon="logInOutline"></ion-icon>
-						{{ $t('markerEdit.buttons.login') }}
-					</ion-button>
-				</ion-item>
+					<ion-item v-else lines="none">
+						<ion-label>
+							<p>{{ $t('settings.account.loginDescription') }}</p>
+						</ion-label>
+					</ion-item>
+					<ion-item v-if="!osmAuthStore.isAuthenticated" lines="none">
+						<ion-button expand="block" @click="osmAuthStore.login()">
+							<ion-icon slot="start" :icon="logInOutline"></ion-icon>
+							{{ $t('markerEdit.buttons.login') }}
+						</ion-button>
+					</ion-item>
+				</template>
 			</ion-list>
 		</ion-content>
 	</ion-page>
@@ -103,6 +109,7 @@ import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { storeToRefs } from 'pinia';
+import { Capacitor } from '@capacitor/core';
 
 const settingsStore = useSettingsStore();
 const { saveTheme, saveShowZoomButtons } = useSettings();
