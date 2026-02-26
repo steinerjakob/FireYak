@@ -53,7 +53,7 @@ jobs:
           echo "NEW_VERSION=${{ steps.semver.outputs.version }}" >> $GITHUB_ENV
 
       - name: Build
-        run: npm run buildAndSync
+        run: npm run build
 
         # deploy to github pages
       - name: Setup Pages
@@ -66,6 +66,9 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Build
+        run: npm run buildAndSync
 
         # android deployment
 
