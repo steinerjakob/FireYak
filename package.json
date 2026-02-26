@@ -42,7 +42,7 @@
 		"stylelint-scss": "^7.0.0",
 		"vue": "^3.5.29",
 		"vue-i18n": "^11.2.8",
-		"vue-router": "^5.0.3"
+		"vue-router": "^4.6.4"
 	},
 	"devDependencies": {
 		"@babel/types": "^7.21.4",
