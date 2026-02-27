@@ -8,16 +8,11 @@ All water source data comes from the community-driven project [OpenStreetMap](ht
 If a hydrant or water source is missing or incorrect, you can improve it directly in OpenStreetMap (see below).
 
 ---
+<a href='https://github.com/steinerjakob/FireYak/releases/latest'><img height=70 alt='Get it on Github' src='doc/get-it-on-github.png'/></a>
+<a href='https://play.google.com/store/apps/details?id=at.jst.fireyak'><img height=70 alt='Get it on Google Play' src='https://play.google.com/intl/en_us/badges/images/generic/en_badge_web_generic.png'/></a>
+<a href='https://apps.apple.com/app/id6759717059'><img height=70 alt='Download on App Store' src='doc/download_on_app_store.png'/></a>
 
-## Apps
-
-You can access FireYak through the web app or Android app:
-
-- **Web:** https://app.fireyak.org
-- **Android:** https://play.google.com/store/apps/details?id=at.jst.fireyak
-- **GitHub:** [![Get it on GitHub](https://img.shields.io/badge/Get_it_on-GitHub-grey?logo=github)](https://github.com/steinerjakob/FireYak/releases/latest)
-- **iOS:** Use the web app https://app.fireyak.org
-
+**Web:** [app.fireyak.org](https://app.fireyak.org)  
 The web app is a Progressive Web App (PWA) and can be installed to the home screen on most modern browsers.
 
 ---
