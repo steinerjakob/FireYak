@@ -134,3 +134,13 @@ export async function getMapNodeById(id: number) {
 		return null;
 	}
 }
+
+export async function deleteMapNode(id: number) {
+	try {
+		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
+		await tx.store.delete(id);
+		await tx.done;
+	} catch (e) {
+		console.error(e);
+	}
+}

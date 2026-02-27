@@ -21,7 +21,9 @@ const markerEditStore = useMarkerEditStore();
 
 const { t } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
-const editAllowed = computed(() => markerData.value?.tags?.emergency === 'fire_hydrant');
+const editAllowed = computed(() =>
+	['fire_hydrant', 'suction_point', 'water_tank'].includes(markerData.value?.tags?.emergency || '')
+);
 const isNativeIos = computed<boolean>(() => {
 	return Capacitor.getPlatform() === 'ios';
 });
