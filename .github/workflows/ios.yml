@@ -1,0 +1,73 @@
+name: Deploy Ios
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (leave empty to use package.json version)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: 'ios'
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Set Version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "NEW_VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            VERSION=$(node -p "require('./package.json').version")
+            echo "NEW_VERSION=$VERSION" >> $GITHUB_ENV
+          fi
+
+      - name: Build
+        run: npm run buildAndSync
+
+      - name: Select Xcode Version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+
+      - name: Deploy to Testflight
+        run: |
+          printf '%s\n' '${{ secrets.APPSTORE_AUTHKEY }}' > authkey.json
+          fastlane ios beta
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+
+      - name: Commit & Push Version Changes
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add ios/App/App/Info.plist
+          git commit -m "chore: bump ios version to ${{ env.NEW_VERSION }} [skip ci]" || echo "No changes to commit"
+          git push
