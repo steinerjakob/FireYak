@@ -59,7 +59,7 @@ jobs:
 
       - name: Deploy to Testflight
         run: |
-          printf '%s\n' '${{ secrets.APPSTORE_AUTHKEY }}' > authkey.json
+          printf '${{ secrets.APPSTORE_AUTHKEY }}' > authkey.json
           fastlane ios beta
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
