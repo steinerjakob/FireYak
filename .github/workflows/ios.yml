@@ -59,7 +59,7 @@ jobs:
 
       - name: Deploy to Testflight
         run: |
-          printf '${{ secrets.AUTHKEY_FILE }}' > authkey.json
+          echo '${{ secrets.AUTHKEY_FILE }}' | base64 -d > authkey.json
           fastlane ios beta
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
