@@ -13,7 +13,19 @@
 # Uncomment the line if you want fastlane to automatically update itself
 # update_fastlane
 
-default_platform(:android)
+def get_package_version_without_prerelease
+  # Load package.json
+  package = load_json(json_path: "./package.json")
+
+  # Get version and strip prerelease information
+  version = package["version"]
+
+  # Remove prerelease information (everything after the first hyphen)
+  # This handles cases like "1.2.3-beta.1" -> "1.2.3"
+  clean_version = version.split('-')[0]
+
+  return clean_version
+end
 
 platform :android do
   desc "Runs all the tests"
@@ -34,5 +46,33 @@ platform :android do
   lane :deploy do
     gradle(task: "clean assembleRelease")
     upload_to_play_store
+  end
+end
+
+platform :ios do 
+
+  private_lane :default_ios_app_build do |options|
+    setup_ci
+    ios_dir = File.expand_path('../ios')
+
+    increment_version_number(
+      version_number: get_package_version_without_prerelease,
+      xcodeproj: File.join(ios_dir, "App/App.xcodeproj")
+    )
+
+    match(type: "appstore", readonly: is_ci, api_key_path: "./authkey.json")
+
+		build_app(project: File.join(ios_dir, "App/App.xcodeproj"), scheme: "App")
+
+  end
+
+  lane :beta do |options|
+    desc "Push a new build to TestFlight"
+    default_ios_app_build(options)
+		pilot(
+				skip_waiting_for_build_processing: true,
+        api_key_path: "./authkey.json"
+		)
+    
   end
 end
