@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 
 export type ThemeSetting = 'light' | 'dark' | 'auto';
+export type MapLayerSetting = 'standard' | 'satellite';
 
 // Media query for detecting system dark mode preference
 const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -25,6 +26,7 @@ export const useSettingsStore = defineStore('settings', {
 	state: () => ({
 		theme: 'auto' as ThemeSetting,
 		showZoomButtons: true,
+		mapLayer: 'standard' as MapLayerSetting,
 		_darkModeListener: null as ((e: MediaQueryListEvent) => void) | null
 	}),
 	actions: {
@@ -35,6 +37,9 @@ export const useSettingsStore = defineStore('settings', {
 		},
 		setShowZoomButtons(show: boolean) {
 			this.showZoomButtons = show;
+		},
+		setMapLayer(mapLayer: MapLayerSetting) {
+			this.mapLayer = mapLayer;
 		},
 		/**
 		 * Sets up or removes the system dark mode listener based on the current theme setting.
