@@ -14,7 +14,6 @@ import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { Share } from '@capacitor/share';
-import { Capacitor } from '@capacitor/core';
 
 const markerStore = useMapMarkerStore();
 const markerEditStore = useMarkerEditStore();
@@ -24,9 +23,6 @@ const markerData = computed(() => markerStore.selectedMarker);
 const editAllowed = computed(() =>
 	['fire_hydrant', 'suction_point', 'water_tank'].includes(markerData.value?.tags?.emergency || '')
 );
-const isNativeIos = computed<boolean>(() => {
-	return Capacitor.getPlatform() === 'ios';
-});
 
 const startEdit = () => {
 	if (markerData.value) {
@@ -108,7 +104,7 @@ const shareMarker = async () => {
 			<ion-title>{{ getTitle() }}</ion-title>
 			<ion-buttons slot="end">
 				<ion-button
-					v-if="editAllowed && !isNativeIos"
+					v-if="editAllowed"
 					@click="startEdit"
 					:title="t('markerEdit.title.edit')"
 				>
