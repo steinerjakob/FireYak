@@ -68,6 +68,11 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
+
+          # Update local branch refs before committing/pushing
+          git fetch --prune origin
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+
           git add ios/App/App/Info.plist
           git commit -m "chore: bump ios version to ${{ env.NEW_VERSION }} [skip ci]" || echo "No changes to commit"
           git push
