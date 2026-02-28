@@ -10,7 +10,8 @@ import {
 	IonSelectOption,
 	IonNote,
 	IonItemGroup,
-	IonItemDivider
+	IonItemDivider,
+	IonTextarea,
 } from '@ionic/vue';
 import { saveOutline, closeOutline, logInOutline } from 'ionicons/icons';
 import { computed } from 'vue';
@@ -49,6 +50,7 @@ const onTypeChange = () => {
 		delete markerEditStore.editableTags['fire_hydrant:diameter'];
 		delete markerEditStore.editableTags['fire_hydrant:pressure'];
 		delete markerEditStore.editableTags['fire_hydrant:flow_capacity'];
+		delete markerEditStore.editableTags['flow_rate'];
 		delete markerEditStore.editableTags['fire_hydrant:position'];
 		delete markerEditStore.editableTags['couplings'];
 		delete markerEditStore.editableTags['couplings:type'];
@@ -200,12 +202,11 @@ const login = () => {
 			<!-- Flow Capacity -->
 			<ion-item lines="none">
 				<ion-input
-					type="number"
 					fill="outline"
 					label-placement="stacked"
 					:label="t('markerInfo.tags.flowCapacity') + ` (l/min)`"
-					v-model="markerEditStore.editableTags['fire_hydrant:flow_capacity']"
-					placeholder="800, 1200..."
+					v-model="markerEditStore.editableTags['flow_rate']"
+					placeholder="800 l/min, 1200 l/min..."
 					:helper-text="t('markerEdit.hints.flowCapacity')"
 				></ion-input>
 			</ion-item>
@@ -415,7 +416,21 @@ const login = () => {
 				></ion-input>
 			</ion-item>
 		</ion-item-group>
+		<ion-item-group>
+			<ion-item-divider>
+				<ion-label>{{ t('markerInfo.tags.description') }}</ion-label>
+			</ion-item-divider>
 
+			<ion-item lines="none">
+				<ion-textarea
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.description')"
+					v-model="markerEditStore.editableTags['description']"
+					auto-grow
+				></ion-textarea>
+			</ion-item>
+		</ion-item-group>
 		<!-- Unknown / Other Tags -->
 		<ion-item-group v-if="getOtherTags().length > 0">
 			<ion-item-divider>

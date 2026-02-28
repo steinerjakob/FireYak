@@ -196,7 +196,7 @@
 			"type": "Specifies the type of fire hydrant. Pillar hydrants are above ground, underground hydrants are beneath a cover, wall hydrants are mounted on or in a wall.",
 			"diameter": "The internal diameter of the water pipe connected to the hydrant in millimeters (e.g., 80, 100, 150).",
 			"pressure": "Indicates how water is delivered. 'pressurised' for water mains, 'suction' for non-pressurized sources like ponds, 'gravity' for high-level tanks.",
-			"flowCapacity": "The maximum water flow rate the hydrant can provide in litres per minute (l/min).",
+			"flowCapacity": "The maximum water flow rate the hydrant can provide (l/min, usgal/min, ukgal/min, m3/h). (z.B. 600 l/min)",
 			"position": "The physical location of the hydrant relative to the surroundings (e.g., sidewalk, parking lot).",
 			"couplings": "The number of hose connections available on the hydrant.",
 			"couplingType": "The technical standard of the couplings (e.g., Storz).",
