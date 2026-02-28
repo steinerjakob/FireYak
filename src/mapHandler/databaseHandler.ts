@@ -4,6 +4,12 @@ import L, { LatLng, LatLngBounds } from 'leaflet';
 
 const markerStoreName = 'fireMarker';
 
+type CachedMapNode = OverPassElement & { __deleted?: boolean };
+
+function isDeleted(node: unknown): boolean {
+	return Boolean((node as CachedMapNode | null | undefined)?.__deleted);
+}
+
 const dbPromise = openDB('FireMarker', 1, {
 	upgrade(db) {
 		// Create a store of objects
@@ -23,8 +29,13 @@ export async function storeMapNodes(nodes: OverPassElement[]) {
 	try {
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
 		await Promise.all([
-			...nodes.map((node) => {
-				return tx.store.put(node);
+			...nodes.map(async (node) => {
+				// Keep an existing soft-delete flag even when re-storing/updating the node.
+				const existing = (await tx.store.get(node.id)) as CachedMapNode | undefined;
+				const deletedFlag = existing?.__deleted ?? (node as CachedMapNode).__deleted ?? false;
+
+				const toStore: CachedMapNode = { ...(node as CachedMapNode), __deleted: deletedFlag };
+				return tx.store.put(toStore);
 			}),
 			tx.done
 		]);
@@ -55,17 +66,19 @@ export async function getMapNodesForView(mapBounds: LatLngBounds) {
 
 		while (cursor) {
 			// Retrieve the map marker object from the cursor
-			const mapMarker = cursor.value as OverPassElement;
+			const mapMarker = cursor.value as CachedMapNode;
 
-			const markerLatLng = new L.LatLng(
-				mapMarker.lat || mapMarker.center?.lat || 0,
-				mapMarker.lon || mapMarker.center?.lon || 0
-			);
+			if (!isDeleted(mapMarker)) {
+				const markerLatLng = new L.LatLng(
+					mapMarker.lat || mapMarker.center?.lat || 0,
+					mapMarker.lon || mapMarker.center?.lon || 0
+				);
 
-			// somehow the filter returns more markers than in the range specified?
-			if (mapBounds.contains(markerLatLng)) {
-				// Add the map marker to the results array
-				results.push(mapMarker);
+				// somehow the filter returns more markers than in the range specified?
+				if (mapBounds.contains(markerLatLng)) {
+					// Add the map marker to the results array
+					results.push(mapMarker);
+				}
 			}
 
 			cursor = await cursor.continue();
@@ -98,19 +111,21 @@ export async function getNearbyMapNodes(location: LatLng, radius: number) {
 		let cursor = await index.openCursor(range);
 
 		while (cursor) {
-			const mapMarker = cursor.value as OverPassElement;
+			const mapMarker = cursor.value as CachedMapNode;
 
-			// Get the marker's coordinates
-			const markerLatLng = new L.LatLng(
-				mapMarker.lat || mapMarker.center?.lat || 0,
-				mapMarker.lon || mapMarker.center?.lon || 0
-			);
+			if (!isDeleted(mapMarker)) {
+				// Get the marker's coordinates
+				const markerLatLng = new L.LatLng(
+					mapMarker.lat || mapMarker.center?.lat || 0,
+					mapMarker.lon || mapMarker.center?.lon || 0
+				);
 
-			// Calculate precise distance and check if within radius
-			const distance = location.distanceTo(markerLatLng);
+				// Calculate precise distance and check if within radius
+				const distance = location.distanceTo(markerLatLng);
 
-			if (distance <= radius) {
-				results.push(mapMarker);
+				if (distance <= radius) {
+					results.push(mapMarker);
+				}
 			}
 
 			cursor = await cursor.continue();
@@ -127,8 +142,9 @@ export async function getMapNodeById(id: number) {
 	try {
 		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
 		const store = transaction.objectStore(markerStoreName);
-		const result = await store.get(id);
-		return result || null;
+		const result = (await store.get(id)) as CachedMapNode | undefined;
+		if (!result || isDeleted(result)) return null;
+		return result;
 	} catch (e) {
 		console.error(e);
 		return null;
@@ -138,7 +154,14 @@ export async function getMapNodeById(id: number) {
 export async function deleteMapNode(id: number) {
 	try {
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
-		await tx.store.delete(id);
+
+		// Soft-delete: keep the record in the cache, but mark it as deleted.
+		const existing = (await tx.store.get(id)) as CachedMapNode | undefined;
+
+		if (existing) {
+			await tx.store.put({ ...existing, __deleted: true });
+		}
+
 		await tx.done;
 	} catch (e) {
 		console.error(e);
