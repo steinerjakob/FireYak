@@ -1,5 +1,5 @@
 <template>
-	<div :class="{ darkMap: isDarkMode }" style="height: 100%; width: 100%">
+	<div :class="{ darkMap: isDarkMode && !isSatellite }" style="height: 100%; width: 100%">
 		<div id="map" style="height: 100%; width: 100%"></div>
 		<!-- About FAB Button -->
 		<ion-fab vertical="top" horizontal="start" slot="fixed">
@@ -152,6 +152,8 @@ const { showZoomButtons, mapLayer } = storeToRefs(settingsStore);
 const { saveMapLayer } = useSettings();
 const { t } = useI18n();
 
+const isSatellite = ref(false);
+
 let rootMap: L.Map | null = null;
 let osmTileLayer: L.TileLayer | null = null;
 let satelliteTileLayer: L.TileLayer | null = null;
@@ -163,6 +165,7 @@ const fireMapCluster = new MarkerClusterGroup({
 	zoomToBoundsOnClick: true,
 	maxClusterRadius: 50
 });
+
 
 function initTileLayers() {
 	osmTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -209,8 +212,10 @@ function applyMapLayerSelection(selection: MapLayerSetting) {
 	if (selection === 'satellite') {
 		satelliteTileLayer.addTo(rootMap);
 		cartoLabelsLayer.addTo(rootMap);
+		isSatellite.value = true;
 	} else {
 		osmTileLayer.addTo(rootMap);
+		isSatellite.value = false;
 	}
 }
 
