@@ -166,12 +166,12 @@ const fireMapCluster = new MarkerClusterGroup({
 	maxClusterRadius: 50
 });
 
-
 function initTileLayers() {
+	const githubAttribution =
+		' | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>';
 	osmTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 		maxZoom: 19,
-		attribution:
-			'© OpenStreetMap | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>'
+		attribution: `© OpenStreetMap${githubAttribution}`
 	});
 
 	satelliteTileLayer = L.tileLayer(
@@ -186,7 +186,7 @@ function initTileLayers() {
 		'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
 		{
 			maxZoom: 19,
-			attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+			attribution: `& &copy; CARTO${githubAttribution}`,
 			subdomains: 'abcd',
 			pane: 'shadowPane'
 		}
