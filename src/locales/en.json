@@ -157,7 +157,14 @@
 	},
 	"map": {
 		"zoomIn": "Zoom in",
-		"zoomOut": "Zoom out"
+		"zoomOut": "Zoom out",
+		"layers": {
+			"openSelector": "Change map layer",
+			"title": "Map layer",
+			"standard": "Standard (OpenStreetMap)",
+			"satellite": "Satellite",
+			"cancel": "Cancel"
+		}
 	},
 	"markerEdit": {
 		"title": {

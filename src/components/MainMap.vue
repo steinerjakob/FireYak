@@ -13,6 +13,17 @@
 				<ion-icon :icon="informationCircle"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<ion-fab class="layers-fab" vertical="top" horizontal="start" slot="fixed">
+			<ion-fab-button
+				class="md-small"
+				color="light"
+				size="small"
+				@click="openLayerSelector"
+				:title="$t('about.openInfo')"
+			>
+				<ion-icon :icon="layers"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 		<!-- Settings FAB Button -->
 		<ion-fab vertical="top" horizontal="end" slot="fixed">
 			<ion-fab-button
@@ -61,7 +72,7 @@
 				<ion-icon :icon="analyticsOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
-		<ion-fab class="location-fab" vertical="bottom" horizontal="end" slot="fixed" size="small">
+		<ion-fab class="location-fab" vertical="bottom" horizontal="end" slot="fixed">
 			<ion-fab-button color="light" @click="showUserLocation" title="Location">
 				<ion-spinner v-show="waitingForLocation" color="primary"></ion-spinner>
 				<ion-icon
@@ -98,7 +109,7 @@ import { getMarkersForView, getNearbyMarkers } from '@/mapHandler/markerHandler'
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
-import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import { alertController, IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
 import {
 	informationCircle,
 	analyticsOutline,
@@ -107,7 +118,8 @@ import {
 	add,
 	remove,
 	settings,
-	addOutline
+	addOutline,
+	layers
 } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
@@ -117,9 +129,11 @@ import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useDefaultStore } from '@/store/defaultStore';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-import { useSettingsStore } from '@/store/settingsStore';
+import { MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
+import { useSettings } from '@/composable/settings';
+import { useI18n } from 'vue-i18n';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -134,9 +148,14 @@ const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
 const defaultStore = useDefaultStore();
 const settingsStore = useSettingsStore();
-const { showZoomButtons } = storeToRefs(settingsStore);
+const { showZoomButtons, mapLayer } = storeToRefs(settingsStore);
+const { saveMapLayer } = useSettings();
+const { t } = useI18n();
 
 let rootMap: L.Map | null = null;
+let osmTileLayer: L.TileLayer | null = null;
+let satelliteTileLayer: L.TileLayer | null = null;
+let cartoLabelsLayer: L.TileLayer | null = null;
 const fireMapCluster = new MarkerClusterGroup({
 	disableClusteringAtZoom: DISABLE_CLUSTERING_ZOOM,
 	spiderfyOnMaxZoom: false,
@@ -144,6 +163,91 @@ const fireMapCluster = new MarkerClusterGroup({
 	zoomToBoundsOnClick: true,
 	maxClusterRadius: 50
 });
+
+function initTileLayers() {
+	osmTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+		maxZoom: 19,
+		attribution:
+			'© OpenStreetMap | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>'
+	});
+
+	satelliteTileLayer = L.tileLayer(
+		'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+		{
+			attribution: '&copy; Esri',
+			maxZoom: 19
+		}
+	);
+
+	cartoLabelsLayer = L.tileLayer(
+		'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+		{
+			maxZoom: 19,
+			attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+			subdomains: 'abcd',
+			pane: 'shadowPane'
+		}
+	);
+}
+
+function applyMapLayerSelection(selection: MapLayerSetting) {
+	if (!rootMap || !osmTileLayer || !satelliteTileLayer || !cartoLabelsLayer) {
+		return;
+	}
+
+	// Remove all base/overlay layers first
+	if (rootMap.hasLayer(osmTileLayer)) {
+		rootMap.removeLayer(osmTileLayer);
+	}
+	if (rootMap.hasLayer(satelliteTileLayer)) {
+		rootMap.removeLayer(satelliteTileLayer);
+	}
+	if (rootMap.hasLayer(cartoLabelsLayer)) {
+		rootMap.removeLayer(cartoLabelsLayer);
+	}
+
+	if (selection === 'satellite') {
+		satelliteTileLayer.addTo(rootMap);
+		cartoLabelsLayer.addTo(rootMap);
+	} else {
+		osmTileLayer.addTo(rootMap);
+	}
+}
+
+async function openLayerSelector() {
+	const alert = await alertController.create({
+		header: t('map.layers.title'),
+		inputs: [
+			{
+				type: 'radio',
+				label: t('map.layers.standard'),
+				value: 'standard',
+				checked: mapLayer.value === 'standard'
+			},
+			{
+				type: 'radio',
+				label: t('map.layers.satellite'),
+				value: 'satellite',
+				checked: mapLayer.value === 'satellite'
+			}
+		],
+		buttons: [
+			{
+				text: t('map.layers.cancel'),
+				role: 'cancel'
+			},
+			{
+				text: 'OK',
+				handler: async (value: MapLayerSetting) => {
+					await saveMapLayer(value);
+					applyMapLayerSelection(value);
+				}
+			}
+		]
+	});
+
+	await alert.present();
+}
 
 // Ensure Leaflet recalculates the map size once layout is settled
 async function ensureMapSize() {
@@ -538,11 +642,11 @@ function handleMapContextMenu(e: LeafletMouseEvent) {
 function addTileLayer() {
 	if (!rootMap) return;
 
-	L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-		maxZoom: 19,
-		attribution:
-			'© OpenStreetMap | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>'
-	}).addTo(rootMap);
+	if (!osmTileLayer || !satelliteTileLayer || !cartoLabelsLayer) {
+		initTileLayers();
+	}
+
+	applyMapLayerSelection(mapLayer.value);
 }
 
 function restoreMapView() {
@@ -608,6 +712,13 @@ onMounted(async () => {
 		},
 		{ immediate: true }
 	);
+
+	watch(
+		() => mapLayer.value,
+		(val) => {
+			applyMapLayerSelection(val);
+		}
+	);
 });
 
 onUnmounted(() => {
@@ -624,7 +735,7 @@ ion-fab {
 }
 
 .fab-vertical-bottom {
-	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
+	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 10px);
 }
 
 .zoom-fab {
@@ -639,11 +750,15 @@ ion-fab {
 
 .location-fab {
 	/* Position above the other bottom FAB (56px FAB height + 16px spacing) */
-	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 56px + 16px);
+	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 56px + 26px);
 }
 
 .add-hydrant-fab {
-	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + (56px + 16px) * 2);
+	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + (56px + 21px) * 2);
+}
+
+.layers-fab {
+	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px));
 }
 
 :deep(.leaflet-bottom) {
