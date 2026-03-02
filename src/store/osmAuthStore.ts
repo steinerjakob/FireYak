@@ -104,8 +104,8 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 	}
 
 	/**
-	 * Performs OAuth2 PKCE authorization using the @capgo/inappbrowser.
-	 * Opens the OSM authorization page in an in-app WebView, monitors URL changes
+	 * Performs OAuth2 PKCE authorization using the @capacitor/inappbrowser.
+	 * Opens the OSM authorization page in an in-app WebView, monitors navigation
 	 * to detect the redirect back to REDIRECT_URI, extracts the authorization code,
 	 * and exchanges it for an access token — all without leaving the app.
 	 */
