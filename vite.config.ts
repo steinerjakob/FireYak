@@ -7,62 +7,73 @@ import { VitePWA, VitePWAOptions } from 'vite-plugin-pwa';
 import { defineConfig } from 'vite';
 import { fileURLToPath, URL } from 'node:url';
 
+// Check if building for native platforms (Android/iOS)
+const isNativeBuild = process.env.BUILD_TARGET === 'native';
+
 const purpose = 'any maskable';
 
+// PWA options - for native builds, we use selfDestroying mode which unregisters
+// any existing service workers and doesn't create new ones
 const pwaOptions: Partial<VitePWAOptions> = {
 	mode: 'production',
 	base: '/',
 	includeAssets: ['favicon.svg'],
-	manifest: {
-		name: 'FireYak',
-		short_name: 'FireYak',
-		display: 'standalone',
-		icons: [
-			{
-				src: 'icons/icon-48.webp',
-				type: 'image/png',
-				sizes: '48x48',
-				purpose
+	// For native builds: use selfDestroying to unregister service workers
+	// For web builds: use prompt to show update notifications
+	selfDestroying: isNativeBuild,
+	registerType: isNativeBuild ? 'autoUpdate' : 'prompt',
+	// Disable manifest for native builds
+	manifest: isNativeBuild
+		? false
+		: {
+				name: 'FireYak',
+				short_name: 'FireYak',
+				display: 'standalone',
+				icons: [
+					{
+						src: 'icons/icon-48.webp',
+						type: 'image/png',
+						sizes: '48x48',
+						purpose
+					},
+					{
+						src: 'icons/icon-72.webp',
+						type: 'image/png',
+						sizes: '72x72',
+						purpose
+					},
+					{
+						src: 'icons/icon-96.webp',
+						type: 'image/png',
+						sizes: '96x96',
+						purpose
+					},
+					{
+						src: 'icons/icon-128.webp',
+						type: 'image/png',
+						sizes: '128x128',
+						purpose
+					},
+					{
+						src: 'icons/icon-192.webp',
+						type: 'image/png',
+						sizes: '192x192',
+						purpose
+					},
+					{
+						src: 'icons/icon-256.webp',
+						type: 'image/png',
+						sizes: '256x256',
+						purpose
+					},
+					{
+						src: 'icons/icon-512.webp',
+						type: 'image/png',
+						sizes: '512x512',
+						purpose
+					}
+				]
 			},
-			{
-				src: 'icons/icon-72.webp',
-				type: 'image/png',
-				sizes: '72x72',
-				purpose
-			},
-			{
-				src: 'icons/icon-96.webp',
-				type: 'image/png',
-				sizes: '96x96',
-				purpose
-			},
-			{
-				src: 'icons/icon-128.webp',
-				type: 'image/png',
-				sizes: '128x128',
-				purpose
-			},
-			{
-				src: 'icons/icon-192.webp',
-				type: 'image/png',
-				sizes: '192x192',
-				purpose
-			},
-			{
-				src: 'icons/icon-256.webp',
-				type: 'image/png',
-				sizes: '256x256',
-				purpose
-			},
-			{
-				src: 'icons/icon-512.webp',
-				type: 'image/png',
-				sizes: '512x512',
-				purpose
-			}
-		]
-	},
-	registerType: 'prompt',
 	devOptions: {
 		enabled: false,
 		/* when using generateSW the PWA plugin will switch to classic */
@@ -105,9 +116,15 @@ export default defineConfig({
 				]
 			}
 		}),
+		// Always include VitePWA plugin - for native builds it uses selfDestroying mode
+		// which unregisters service workers and clears caches
 		VitePWA(pwaOptions)
 	],
-	define: { 'process.env': {} },
+	define: {
+		'process.env': {},
+		// Expose build target to client code for conditional service worker handling
+		__BUILD_TARGET_NATIVE__: JSON.stringify(isNativeBuild)
+	},
 	resolve: {
 		alias: {
 			'@': fileURLToPath(new URL('./src', import.meta.url))
