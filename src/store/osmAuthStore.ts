@@ -10,10 +10,12 @@ const OSM_AUTH_KEY = 'osm_auth_token';
 // Placeholder values - should be configured via env or settings
 const CLIENT_ID = '5RmzpVAEyynIFoe3Lj5IdMvQ-1L-Z1ZhzQ0U33JJE-o';
 
-// In native, the Capacitor WebView is configured to serve the app at this origin,
-// so the OAuth redirect lands back in the local app context (same localStorage origin).
-// In web dev, the Vite dev server origin is used.
-const REDIRECT_URI = Capacitor.isNativePlatform() ? 'https://app.fireyak.org' : window.location.origin;
+// On native, the redirect URI is the Capacitor server origin so the OAuth callback
+// stays in the local app context. On web, it points to land.html which uses a
+// BroadcastChannel to hand the auth code back to the popup opener (osm-api).
+const REDIRECT_URI = Capacitor.isNativePlatform()
+	? 'https://app.fireyak.org'
+	: `${window.location.origin}/land.html`;
 
 const OSM_BASE_URL = 'https://www.openstreetmap.org';
 const OSM_AUTH_URL = `${OSM_BASE_URL}/oauth2/authorize`;
@@ -64,13 +66,20 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 			if (Capacitor.isNativePlatform()) {
 				await loginWithInAppBrowser();
 			} else {
-				// On web, use the standard redirect-based OAuth flow from osm-api
+				// On web, use popup-based OAuth flow — land.html receives the code
+				// and sends it back via BroadcastChannel so the page never navigates away
 				await OSM.login({
-					mode: 'redirect',
+					mode: 'popup',
 					clientId: CLIENT_ID,
 					redirectUrl: REDIRECT_URI,
 					scopes: SCOPES
 				});
+				// After popup completes, persist the token and fetch the user
+				const token = OSM.getAuthToken();
+				if (token) {
+					await Preferences.set({ key: OSM_AUTH_KEY, value: token });
+				}
+				await fetchUser();
 			}
 		} catch (e) {
 			console.error('OSM Login failed', e);
