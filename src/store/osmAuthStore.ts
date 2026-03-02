@@ -23,6 +23,19 @@ const OSM_TOKEN_URL = `${OSM_BASE_URL}/oauth2/token`;
 
 const SCOPES = ['read_prefs', 'write_api'] as const;
 
+/**
+ * Module-level flag indicating the InAppBrowser OAuth flow is in progress.
+ * Used to prevent the appUrlOpen deep-link handler in main.ts from
+ * doing a destructive window.location.replace() while the InAppBrowser
+ * is still exchanging the authorization code.
+ */
+let _nativeAuthInProgress = false;
+
+/** Returns true while the native InAppBrowser OAuth flow is active. */
+export function isNativeAuthInProgress(): boolean {
+	return _nativeAuthInProgress;
+}
+
 // Configure OSM API
 // OSM.configure({
 // 	apiUrl: 'https://master.apis.dev.openstreetmap.org'
@@ -94,6 +107,8 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 	 * and exchanges it for an access token — all without leaving the app.
 	 */
 	async function loginWithInAppBrowser(): Promise<void> {
+		_nativeAuthInProgress = true;
+
 		const codeVerifier = generateCodeVerifier();
 		const codeChallenge = await generateCodeChallenge(codeVerifier);
 
@@ -108,62 +123,72 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 				code_challenge_method: 'S256'
 			}).toString();
 
-		return new Promise<void>((resolve, reject) => {
-			let settled = false;
+		try {
+			await new Promise<void>((resolve, reject) => {
+				let settled = false;
 
-			const cleanup = async () => {
-				await InAppBrowser.removeAllListeners();
-			};
+				const cleanup = async () => {
+					await InAppBrowser.removeAllListeners();
+				};
 
-			// Monitor URL changes in the WebView to detect the OAuth redirect
-			InAppBrowser.addListener('urlChangeEvent', async (event) => {
-				if (settled || !event.url) return;
-				if (!event.url.startsWith(REDIRECT_URI)) return;
+				// Monitor URL changes in the WebView to detect the OAuth redirect
+				InAppBrowser.addListener('urlChangeEvent', async (event) => {
+					if (settled || !event.url) return;
+					if (!event.url.startsWith(REDIRECT_URI)) return;
 
-				settled = true;
-				await cleanup();
-
-				const url = new URL(event.url);
-				const code = url.searchParams.get('code');
-				const error = url.searchParams.get('error');
-
-				await InAppBrowser.close();
-
-				if (error) {
-					reject(new Error(`OAuth authorization error: ${error}`));
-					return;
-				}
-
-				if (!code) {
-					reject(new Error('No authorization code received from OSM'));
-					return;
-				}
-
-				try {
-					await exchangeCodeForToken(code, codeVerifier);
-					resolve();
-				} catch (e) {
-					reject(e);
-				}
-			});
-
-			// Handle the case where the user closes the browser manually
-			InAppBrowser.addListener('closeEvent', () => {
-				if (!settled) {
 					settled = true;
-					cleanup();
-					reject(new Error('Authentication cancelled — browser was closed'));
-				}
-			});
 
-			// Open the OAuth page in the in-app WebView
-			InAppBrowser.openWebView({
-				url: authUrl,
-				title: 'OpenStreetMap Login',
-				isPresentAfterPageLoad: false,
-				preventDeeplink: true
+					const url = new URL(event.url);
+					const code = url.searchParams.get('code');
+					const error = url.searchParams.get('error');
+
+					// Close the InAppBrowser first — cleanup listeners afterwards
+					// to avoid race conditions with the Android deep-link intent.
+					try {
+						await InAppBrowser.close();
+					} catch {
+						/* browser may already be closing */
+					}
+					await cleanup();
+
+					if (error) {
+						reject(new Error(`OAuth authorization error: ${error}`));
+						return;
+					}
+
+					if (!code) {
+						reject(new Error('No authorization code received from OSM'));
+						return;
+					}
+
+					try {
+						await exchangeCodeForToken(code, codeVerifier);
+						resolve();
+					} catch (e) {
+						reject(e);
+					}
+				});
+
+				// Handle the case where the user closes the browser manually
+				InAppBrowser.addListener('closeEvent', () => {
+					if (!settled) {
+						settled = true;
+						cleanup();
+						reject(new Error('Authentication cancelled — browser was closed'));
+					}
+				});
+
+				// Open the OAuth page in the in-app WebView
+				InAppBrowser.openWebView({
+					url: authUrl,
+					title: 'OpenStreetMap Login',
+					isPresentAfterPageLoad: false,
+					preventDeeplink: true
+				});
 			});
-		});
+		} finally {
+			_nativeAuthInProgress = false;
+		}
 	}
 
 	/**
@@ -242,7 +267,11 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 				}
 			}
 		}
-		if (window.location.href.includes('?code')) {
+		// On web, if the page was loaded with an OAuth ?code param (e.g. from a
+		// redirect that wasn't caught by land.html), clean up the URL.  On native
+		// this is unnecessary because the InAppBrowser flow handles the exchange
+		// without ever touching window.location.
+		if (!Capacitor.isNativePlatform() && window.location.href.includes('?code')) {
 			window.location.replace('/');
 		}
 	}
