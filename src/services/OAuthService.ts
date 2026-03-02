@@ -1,4 +1,4 @@
-import { InAppBrowser } from '@capgo/inappbrowser';
+import { DefaultWebViewOptions, InAppBrowser } from '@capacitor/inappbrowser';
 
 export class OAuthService {
 	private listeners: { remove: () => Promise<void> | void }[] = [];
@@ -13,31 +13,54 @@ export class OAuthService {
 				fn();
 			};
 
-			const urlListener = await InAppBrowser.addListener('urlChangeEvent', async (event) => {
-				if (!event?.url) return;
-				if (!event.url.startsWith(redirectUri)) return;
+			const finish = (result: { code?: string; error?: string }) => {
+				settleOnce(() => {
+					void (async () => {
+						try {
+							await InAppBrowser.close();
+						} catch {
+							/* close may fail if already closed */
+						} finally {
+							await this.cleanup();
+						}
 
-				const url = new URL(event.url);
-				const code = url.searchParams.get('code');
-				const error = url.searchParams.get('error');
+						if (result.error) return reject(new Error(result.error));
+						if (!result.code) return reject(new Error('OAuth failed: missing authorization code'));
+						resolve(result.code);
+					})();
+				});
+			};
 
-				// Close ASAP to avoid races with native deep-link handling.
-				if (code) {
-					await new Promise((r) => setTimeout(r, 50));
-					await InAppBrowser.close();
-					resolve(code);
-				} else {
-					const error = url.searchParams.get('error');
-					reject(new Error(error || 'OAuth failed'));
+			// Fires after a navigation completes; use it like "url change"
+			const navListener = await InAppBrowser.addListener(
+				'browserPageNavigationCompleted',
+				(event: any) => {
+					if (settled) return;
+
+					const urlString: string | undefined = event?.url;
+					if (!urlString) return;
+					if (!urlString.startsWith(redirectUri)) return;
+
+					const url = new URL(urlString);
+					const code = url.searchParams.get('code') ?? undefined;
+					const error = url.searchParams.get('error') ?? undefined;
+
+					finish({ code, error });
 				}
+			);
+
+			const closedListener = await InAppBrowser.addListener('browserClosed', () => {
+				if (settled) return;
+				finish({ error: 'Authentication cancelled — browser was closed' });
 			});
 
-			this.listeners.push(urlListener);
+			this.listeners.push(navListener);
+			this.listeners.push(closedListener);
 
-			// Open OAuth provider inside the app
-			InAppBrowser.openWebView({
+			// Open OAuth provider inside the app web view
+			InAppBrowser.openInWebView({
 				url: authUrl,
-				preventDeeplink: true
+				options: DefaultWebViewOptions
 			});
 		});
 	}
