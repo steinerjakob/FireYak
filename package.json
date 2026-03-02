@@ -5,7 +5,8 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
-		"buildAndSync": "npm run build && npx cap sync",
+		"build:native": "cross-env BUILD_TARGET=native npm run build",
+		"buildAndSync": "npm run build:native && npx cap sync",
 		"preview": "vite preview",
 		"lint": "eslint . --fix --ignore-path .gitignore",
 		"generate:assets": "npx @capacitor/assets generate --iconBackgroundColor '#45b1fd' --iconBackgroundColorDark '#45b1fd' --splashBackgroundColor '#45b1fd' --splashBackgroundColorDark '#45b1fd'"
@@ -59,6 +60,7 @@
 		"@typescript-eslint/eslint-plugin": "^8.56.1",
 		"@vitejs/plugin-vue": "^6.0.4",
 		"@vue/eslint-config-typescript": "^14.7.0",
+		"cross-env": "^7.0.3",
 		"eslint": "^10.0.2",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-prettier": "^5.5.5",
