@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import * as OSM from 'osm-api';
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
-import { InAppBrowser } from '@capgo/inappbrowser';
+import { OAuthService } from '@/services/OAuthService';
 
 const OSM_AUTH_KEY = 'osm_auth_token';
 
@@ -74,6 +74,9 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 	const isAuthenticated = ref(false);
 	const user = ref<any>(null);
 
+	// Reuse one instance to manage listeners cleanly
+	const oauthService = new OAuthService();
+
 	async function login() {
 		try {
 			if (Capacitor.isNativePlatform()) {
@@ -124,69 +127,10 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 			}).toString();
 
 		try {
-			await new Promise<void>((resolve, reject) => {
-				let settled = false;
-
-				const cleanup = async () => {
-					await InAppBrowser.removeAllListeners();
-				};
-
-				// Monitor URL changes in the WebView to detect the OAuth redirect
-				InAppBrowser.addListener('urlChangeEvent', async (event) => {
-					if (settled || !event.url) return;
-					if (!event.url.startsWith(REDIRECT_URI)) return;
-
-					settled = true;
-
-					const url = new URL(event.url);
-					const code = url.searchParams.get('code');
-					const error = url.searchParams.get('error');
-
-					// Close the InAppBrowser first — cleanup listeners afterwards
-					// to avoid race conditions with the Android deep-link intent.
-					try {
-						await InAppBrowser.close();
-					} catch {
-						/* browser may already be closing */
-					}
-					await cleanup();
-
-					if (error) {
-						reject(new Error(`OAuth authorization error: ${error}`));
-						return;
-					}
-
-					if (!code) {
-						reject(new Error('No authorization code received from OSM'));
-						return;
-					}
-
-					try {
-						await exchangeCodeForToken(code, codeVerifier);
-						resolve();
-					} catch (e) {
-						reject(e);
-					}
-				});
-
-				// Handle the case where the user closes the browser manually
-				InAppBrowser.addListener('closeEvent', () => {
-					if (!settled) {
-						settled = true;
-						cleanup();
-						reject(new Error('Authentication cancelled — browser was closed'));
-					}
-				});
-
-				// Open the OAuth page in the in-app WebView
-				InAppBrowser.openWebView({
-					url: authUrl,
-					title: 'OpenStreetMap Login',
-					isPresentAfterPageLoad: false,
-					preventDeeplink: true
-				});
-			});
+			const code = await oauthService.authenticate(authUrl, REDIRECT_URI);
+			await exchangeCodeForToken(code, codeVerifier);
 		} finally {
+			await oauthService.cleanup();
 			_nativeAuthInProgress = false;
 		}
 	}
