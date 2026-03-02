@@ -25,9 +25,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Show user location on a map</string>
+	<string>FireYak uses your location to show your position on the map, find nearby fire hydrants and calculate distances for water supply planning.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Show user location on a map</string>
+	<string>FireYak uses your location to show your position on the map, find nearby fire hydrants and calculate distances for water supply planning.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
