@@ -47,7 +47,7 @@ router.isReady().then(async () => {
 	app.mount('#app');
 });
 
-/*
+
 CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 	const url = event.url;
 	console.log('App opened with URL:', url);
@@ -83,7 +83,7 @@ CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 	} else {
 		router.push('/');
 	}
-});*/
+});
 
 /**
  * Parses query parameters from a geo URL part and extracts zoom and q (coordinates) values.
