@@ -232,7 +232,8 @@
 			"title": "Account",
 			"osmAccount": "OpenStreetMap Account",
 			"loggedInAs": "Logged in as {name}",
-			"loginDescription": "Log in to add or edit markers on OpenStreetMap."
+			"loginDescription": "Log in to add or edit markers on OpenStreetMap.",
+			"manageAccount": "Manage Account"
 		},
 		"appearance": {
 			"title": "Appearance",
