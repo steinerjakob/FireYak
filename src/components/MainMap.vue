@@ -186,7 +186,7 @@ function initTileLayers() {
 		'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
 		{
 			maxZoom: 19,
-			attribution: `& &copy; CARTO${githubAttribution}`,
+			attribution: `&copy; CARTO${githubAttribution}`,
 			subdomains: 'abcd',
 			pane: 'shadowPane'
 		}
