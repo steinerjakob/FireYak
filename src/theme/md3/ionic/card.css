@@ -1,5 +1,5 @@
 /* Cards: https://m3.material.io/components/cards/specs */
-:root[mode=md] {
+:root[mode='md'] {
 	ion-card,
 	ion-card.md-elevated,
 	ion-card.mat-elevated {
