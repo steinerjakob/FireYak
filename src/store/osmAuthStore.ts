@@ -4,6 +4,7 @@ import * as OSM from 'osm-api';
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { OAuthService } from '@/services/OAuthService';
+import { App as CapApp } from '@capacitor/app';
 
 const OSM_AUTH_KEY = 'osm_auth_token';
 
@@ -70,6 +71,52 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
 	return base64UrlEncode(new Uint8Array(digest));
 }
 
+/**
+ * Waits until the Capacitor Activity is active again (Android resumes after closing the in-app browser).
+ * This avoids calling native plugins like Preferences while the Activity is still paused/transitioning.
+ */
+async function waitForAppToBeActive(timeoutMs = 2000): Promise<void> {
+	if (!Capacitor.isNativePlatform()) return;
+
+	const start = Date.now();
+	// Fast-path: already active
+	try {
+		const state = await CapApp.getState();
+		if (state.isActive) return;
+	} catch {
+		// If getState fails for any reason, fall back to a tiny delay.
+		await new Promise((r) => setTimeout(r, 50));
+		return;
+	}
+
+	await new Promise<void>((resolve) => {
+		let done = false;
+
+		const finish = () => {
+			if (done) return;
+			done = true;
+			resolve();
+		};
+
+		const timer = setInterval(async () => {
+			if (Date.now() - start > timeoutMs) {
+				clearInterval(timer);
+				finish();
+				return;
+			}
+			try {
+				const s = await CapApp.getState();
+				if (s.isActive) {
+					clearInterval(timer);
+					finish();
+				}
+			} catch {
+				// ignore and keep polling until timeout
+			}
+		}, 50);
+	});
+}
+
 export const useOsmAuthStore = defineStore('osmAuth', () => {
 	const isAuthenticated = ref(false);
 	const user = ref<any>(null);
@@ -128,6 +175,8 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 
 		try {
 			const code = await oauthService.authenticate(authUrl, REDIRECT_URI);
+			// Key part: wait for Android Activity to be active again before touching Preferences/OSM state.
+			await waitForAppToBeActive();
 			await exchangeCodeForToken(code, codeVerifier);
 		} finally {
 			await oauthService.cleanup();
@@ -168,7 +217,10 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 
 		// Persist the token and configure osm-api
 		OSM.configure({ authHeader: `Bearer ${token}` });
+		await new Promise((resolve) => setTimeout(resolve, 2000));
 		await Preferences.set({ key: OSM_AUTH_KEY, value: token });
+		const check = await Preferences.get({ key: OSM_AUTH_KEY });
+		console.log('[OSM] persisted token length:', check.value?.length ?? null);
 		await fetchUser();
 	}
 
