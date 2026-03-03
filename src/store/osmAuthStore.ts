@@ -1,12 +1,11 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import * as OSM from 'osm-api';
-import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 import { OAuthService } from '@/services/OAuthService';
 import { App as CapApp } from '@capacitor/app';
-
-const OSM_AUTH_KEY = 'osm_auth_token';
+import { useSettings } from '@/composable/settings';
+import { useSettingsStore } from '@/store/settingsStore';
 
 // Placeholder values - should be configured via env or settings
 const CLIENT_ID = '5RmzpVAEyynIFoe3Lj5IdMvQ-1L-Z1ZhzQ0U33JJE-o';
@@ -120,6 +119,10 @@ async function waitForAppToBeActive(timeoutMs = 2000): Promise<void> {
 export const useOsmAuthStore = defineStore('osmAuth', () => {
 	const isAuthenticated = ref(false);
 	const user = ref<any>(null);
+	console.log("useOsmAuthStore")
+
+	const settingsStore = useSettingsStore();
+	const { saveOsmAuthToken, removeOsmAuthToken, getOsmAuthToken } = useSettings();
 
 	// Reuse one instance to manage listeners cleanly
 	const oauthService = new OAuthService();
@@ -140,7 +143,7 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 				// After popup completes, persist the token and fetch the user
 				const token = OSM.getAuthToken();
 				if (token) {
-					await Preferences.set({ key: OSM_AUTH_KEY, value: token });
+					await saveOsmAuthToken(token);
 				}
 				await fetchUser();
 			}
@@ -215,20 +218,16 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 			throw new Error('No access_token in token response');
 		}
 
-		// Persist the token and configure osm-api
-		OSM.configure({ authHeader: `Bearer ${token}` });
 		await new Promise((resolve) => setTimeout(resolve, 2000));
-		await Preferences.set({ key: OSM_AUTH_KEY, value: token });
-		const check = await Preferences.get({ key: OSM_AUTH_KEY });
-		console.log('[OSM] persisted token length:', check.value?.length ?? null);
-		await fetchUser();
+		await saveOsmAuthToken(token);
+		await loadToken();
 	}
 
 	async function logout() {
 		OSM.logout();
 		isAuthenticated.value = false;
 		user.value = null;
-		await Preferences.remove({ key: OSM_AUTH_KEY });
+		await removeOsmAuthToken();
 	}
 
 	async function fetchUser() {
@@ -249,15 +248,18 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 		await OSM.authReady;
 
 		if (OSM.isLoggedIn()) {
+			console.log("loadToken, logged in")
 			const token = OSM.getAuthToken();
 			if (token) {
-				await Preferences.set({ key: OSM_AUTH_KEY, value: token });
+				await saveOsmAuthToken(token);
 			}
 			await fetchUser();
 		} else {
-			const { value } = await Preferences.get({ key: OSM_AUTH_KEY });
+			const value = settingsStore.osmAuthToken || (await getOsmAuthToken());
+			console.log("loadToken, not logged in", value, settingsStore.theme)
 			if (value) {
 				OSM.configure({ authHeader: `Bearer ${value}` });
+				await OSM.authReady;
 				if (OSM.isLoggedIn()) {
 					await fetchUser();
 				}
@@ -271,6 +273,9 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 			window.location.replace('/');
 		}
 	}
+
+
+	onMounted(() => loadToken());
 
 	return {
 		isAuthenticated,
