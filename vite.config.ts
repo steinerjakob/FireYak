@@ -82,6 +82,8 @@ const pwaOptions: Partial<VitePWAOptions> = {
 		suppressWarnings: true
 	},
 	workbox: {
+		globIgnores: ['**/land.html'],
+		navigateFallbackDenylist: [/^\/land\.html/],
 		runtimeCaching: [
 			{
 				urlPattern: /^https?:\/\/tile\.openstreetmap\.org\/.*/,
