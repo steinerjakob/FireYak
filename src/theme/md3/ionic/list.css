@@ -1,5 +1,5 @@
 /* Lists: https://m3.material.io/components/lists/specs */
-:root[mode=md] {
+:root[mode='md'] {
 	ion-list {
 		background: var(--md-sys-surface);
 		color: var(--md-sys-on-surface);
