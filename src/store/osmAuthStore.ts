@@ -119,7 +119,6 @@ async function waitForAppToBeActive(timeoutMs = 2000): Promise<void> {
 export const useOsmAuthStore = defineStore('osmAuth', () => {
 	const isAuthenticated = ref(false);
 	const user = ref<any>(null);
-	console.log("useOsmAuthStore")
 
 	const settingsStore = useSettingsStore();
 	const { saveOsmAuthToken, removeOsmAuthToken, getOsmAuthToken } = useSettings();
@@ -217,8 +216,6 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 		if (!token) {
 			throw new Error('No access_token in token response');
 		}
-
-		await new Promise((resolve) => setTimeout(resolve, 2000));
 		await saveOsmAuthToken(token);
 		await loadToken();
 	}
@@ -230,8 +227,10 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 		await removeOsmAuthToken();
 	}
 
-	async function fetchUser() {
-		if (!OSM.isLoggedIn()) {
+	async function fetchUser(force = false) {
+		// When we restore a token via OSM.configure({ authHeader }),
+		// osm-api may not consider itself "logged in", but requests can still succeed.
+		if (!force && !OSM.isLoggedIn()) {
 			isAuthenticated.value = false;
 			return;
 		}
@@ -241,6 +240,7 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 		} catch (e) {
 			console.error('Failed to fetch OSM user', e);
 			isAuthenticated.value = false;
+			user.value = null;
 		}
 	}
 
@@ -248,7 +248,6 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 		await OSM.authReady;
 
 		if (OSM.isLoggedIn()) {
-			console.log("loadToken, logged in")
 			const token = OSM.getAuthToken();
 			if (token) {
 				await saveOsmAuthToken(token);
@@ -256,13 +255,10 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 			await fetchUser();
 		} else {
 			const value = settingsStore.osmAuthToken || (await getOsmAuthToken());
-			console.log("loadToken, not logged in", value, settingsStore.theme)
 			if (value) {
 				OSM.configure({ authHeader: `Bearer ${value}` });
 				await OSM.authReady;
-				if (OSM.isLoggedIn()) {
-					await fetchUser();
-				}
+				await fetchUser(true);
 			}
 		}
 		// On web, if the page was loaded with an OAuth ?code param (e.g. from a
