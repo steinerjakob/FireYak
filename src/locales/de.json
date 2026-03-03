@@ -232,7 +232,8 @@
 			"title": "Konto",
 			"osmAccount": "OpenStreetMap-Konto",
 			"loggedInAs": "Eingeloggt als {name}",
-			"loginDescription": "Einloggen, um Hydranten in OpenStreetMap hinzuzufügen oder zu bearbeiten."
+			"loginDescription": "Einloggen, um Hydranten in OpenStreetMap hinzuzufügen oder zu bearbeiten.",
+			"manageAccount": "Konto verwalten"
 		},
 		"appearance": {
 			"title": "Erscheinungsbild",
