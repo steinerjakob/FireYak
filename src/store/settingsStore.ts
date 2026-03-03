@@ -27,6 +27,7 @@ export const useSettingsStore = defineStore('settings', {
 		theme: 'auto' as ThemeSetting,
 		showZoomButtons: true,
 		mapLayer: 'standard' as MapLayerSetting,
+		osmAuthToken: '',
 		_darkModeListener: null as ((e: MediaQueryListEvent) => void) | null
 	}),
 	actions: {
@@ -40,6 +41,9 @@ export const useSettingsStore = defineStore('settings', {
 		},
 		setMapLayer(mapLayer: MapLayerSetting) {
 			this.mapLayer = mapLayer;
+		},
+		setOsmAuthToken(token: string) {
+			this.osmAuthToken = token;
 		},
 		/**
 		 * Sets up or removes the system dark mode listener based on the current theme setting.
