@@ -68,12 +68,14 @@ jobs:
           git config user.name github-actions
           git config user.email github-actions@github.com
 
-          # Update local branch refs before committing/pushing
-          git fetch --prune origin
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          
+          # Commit version changes before rebasing to avoid unstaged changes error
           git add android/app/build.gradle
           git commit -m "chore: bump android version to ${{ env.NEW_VERSION }} [skip ci]" || echo "No changes to commit"
+
+          # Update local branch refs and rebase our commit on top
+          git fetch --prune origin
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+
           git push
 
       - name: Decode Keystore
