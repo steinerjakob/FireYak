@@ -74,6 +74,16 @@
 				"reservoir": "Reservoir",
 				"cistern": "Cistern",
 				"water_works": "Water Works"
+			},
+			"location": {
+				"overground": "Above Ground",
+				"underground": "Underground"
+			},
+			"access": {
+				"yes": "Public",
+				"private": "Private",
+				"permissive": "Permissive",
+				"no": "No Access"
 			}
 		},
 		"navigation": {
@@ -138,7 +148,7 @@
 			"flowRate": "Flow Rate (l/min)",
 			"distanceFromStart": "Distance",
 			"elevationDifference": "Elevation",
-			"tubes": "Tubes"
+			"tubes": "hoses"
 		}
 	},
 	"nearbyMarker": {
@@ -147,23 +157,45 @@
 	},
 	"map": {
 		"zoomIn": "Zoom in",
-		"zoomOut": "Zoom out"
+		"zoomOut": "Zoom out",
+		"layers": {
+			"openSelector": "Change map layer",
+			"title": "Map layer",
+			"standard": "Standard (OpenStreetMap)",
+			"satellite": "Satellite",
+			"cancel": "Cancel"
+		}
 	},
 	"markerEdit": {
 		"title": {
-			"add": "Add Fire Hydrant",
-			"edit": "Edit Fire Hydrant"
+			"add": "Add Marker",
+			"edit": "Edit Marker",
+			"addFireHydrant": "Add Fire Hydrant",
+			"editFireHydrant": "Edit Fire Hydrant",
+			"addSuctionPoint": "Add Suction Point",
+			"editSuctionPoint": "Edit Suction Point",
+			"addWaterTank": "Add Water Tank",
+			"editWaterTank": "Edit Water Tank"
+		},
+		"labels": {
+			"markerType": "Water Source Type"
 		},
 		"authDialog": {
 			"title": "OpenStreetMap Account Required",
 			"message": "You need an OpenStreetMap account to add or edit markers. Do you want to log in?"
+		},
+		"deleteDialog": {
+			"title": "Remove from OpenStreetMap",
+			"message": "Are you sure you want to permanently remove this marker from OpenStreetMap? This action cannot be undone.",
+			"confirm": "Remove"
 		},
 		"buttons": {
 			"save": "Save to OSM",
 			"cancel": "Cancel",
 			"login": "Login to OSM",
 			"logout": "Logout",
-			"selectLocation": "Select Location on Map"
+			"selectLocation": "Select Location on Map",
+			"delete": "Remove from OSM"
 		},
 		"hints": {
 			"location": "Tap on the map to set the hydrant's location.",
@@ -171,19 +203,27 @@
 			"type": "Specifies the type of fire hydrant. Pillar hydrants are above ground, underground hydrants are beneath a cover, wall hydrants are mounted on or in a wall.",
 			"diameter": "The internal diameter of the water pipe connected to the hydrant in millimeters (e.g., 80, 100, 150).",
 			"pressure": "Indicates how water is delivered. 'pressurised' for water mains, 'suction' for non-pressurized sources like ponds, 'gravity' for high-level tanks.",
-			"flowCapacity": "The maximum water flow rate the hydrant can provide in litres per minute (l/min).",
+			"flowCapacity": "The maximum water flow rate the hydrant can provide (l/min, usgal/min, ukgal/min, m3/h). (z.B. 600 l/min)",
 			"position": "The physical location of the hydrant relative to the surroundings (e.g., sidewalk, parking lot).",
 			"couplings": "The number of hose connections available on the hydrant.",
 			"couplingType": "The technical standard of the couplings (e.g., Storz).",
 			"couplingDiameters": "The specific sizes of the couplings available (e.g., A, B, C or 110, 75, 52).",
-			"operator": "The organization or company responsible for maintaining the hydrant.",
+			"operator": "The organization or company responsible for maintaining this water source.",
 			"ref": "An official identification number or reference used by the operator.",
-			"loginRequired": "You need to log in to OpenStreetMap to save changes."
+			"loginRequired": "You need to log in to OpenStreetMap to save changes.",
+			"markerType": "Select the type of water source you want to add.",
+			"waterSource": "The type of water body at this suction point (e.g., river, lake, pond). Helps fire departments identify the available water source.",
+			"access": "Indicates who can access this water source. Use 'Public' for openly accessible locations, 'Private' for restricted access.",
+			"volume": "Total storage volume of the water tank in litres (e.g. 50000 for 50,000 litres).",
+			"tankLocation": "Whether the tank is located above or below ground.",
+			"name": "A distinctive name for this water source, if it has one."
 		},
 		"messages": {
 			"saveSuccess": "Successfully saved to OpenStreetMap!",
 			"saveError": "Failed to save to OpenStreetMap. Please try again.",
-			"locationSet": "Location set successfully."
+			"locationSet": "Location set successfully.",
+			"deleteSuccess": "Successfully removed from OpenStreetMap!",
+			"deleteError": "Failed to remove from OpenStreetMap. Please try again."
 		}
 	},
 	"settings": {
@@ -192,7 +232,8 @@
 			"title": "Account",
 			"osmAccount": "OpenStreetMap Account",
 			"loggedInAs": "Logged in as {name}",
-			"loginDescription": "Log in to add or edit markers on OpenStreetMap."
+			"loginDescription": "Log in to add or edit markers on OpenStreetMap.",
+			"manageAccount": "Manage Account"
 		},
 		"appearance": {
 			"title": "Appearance",

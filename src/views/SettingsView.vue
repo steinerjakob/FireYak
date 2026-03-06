@@ -48,36 +48,41 @@
 				</ion-item>
 
 				<!-- Account Section -->
-				<template v-if="!isNativeIos">
-					<ion-list-header>
-						<ion-label>{{ $t('settings.account.title') }}</ion-label>
-					</ion-list-header>
+				<ion-list-header>
+					<ion-label>{{ $t('settings.account.title') }}</ion-label>
+				</ion-list-header>
 
-					<ion-item v-if="osmAuthStore.isAuthenticated">
-						<ion-label>
-							<h2>{{ $t('settings.account.osmAccount') }}</h2>
-							<p>
-								{{ $t('settings.account.loggedInAs', { name: osmAuthStore.user?.display_name }) }}
-							</p>
-						</ion-label>
-						<ion-button slot="end" fill="outline" @click="osmAuthStore.logout()">
-							<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
-							{{ $t('markerEdit.buttons.logout') }}
-						</ion-button>
-					</ion-item>
+				<ion-item v-if="osmAuthStore.isAuthenticated" lines="none">
+					<ion-label>
+						<h2>{{ $t('settings.account.osmAccount') }}</h2>
+						<p>
+							{{ $t('settings.account.loggedInAs', { name: osmAuthStore.user?.display_name }) }}
+						</p>
+					</ion-label>
+				</ion-item>
 
-					<ion-item v-else lines="none">
-						<ion-label>
-							<p>{{ $t('settings.account.loginDescription') }}</p>
-						</ion-label>
-					</ion-item>
-					<ion-item v-if="!osmAuthStore.isAuthenticated" lines="none">
-						<ion-button expand="block" @click="osmAuthStore.login()">
-							<ion-icon slot="start" :icon="logInOutline"></ion-icon>
-							{{ $t('markerEdit.buttons.login') }}
-						</ion-button>
-					</ion-item>
-				</template>
+				<ion-item v-if="osmAuthStore.isAuthenticated" lines="none">
+					<ion-button fill="primary" @click="openOsmProfile()">
+						<ion-icon slot="start" :icon="openOutline"></ion-icon>
+						{{ $t('settings.account.manageAccount') }}
+					</ion-button>
+					<ion-button slot="end" fill="outline" @click="osmAuthStore.logout()">
+						<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
+						{{ $t('markerEdit.buttons.logout') }}
+					</ion-button>
+				</ion-item>
+
+				<ion-item v-else lines="none">
+					<ion-label>
+						<p>{{ $t('settings.account.loginDescription') }}</p>
+					</ion-label>
+				</ion-item>
+				<ion-item v-if="!osmAuthStore.isAuthenticated" lines="none">
+					<ion-button expand="block" @click="osmAuthStore.login()">
+						<ion-icon slot="start" :icon="logInOutline"></ion-icon>
+						{{ $t('markerEdit.buttons.login') }}
+					</ion-button>
+				</ion-item>
 			</ion-list>
 		</ion-content>
 	</ion-page>
@@ -104,13 +109,12 @@ import {
 	SegmentCustomEvent,
 	ToggleCustomEvent
 } from '@ionic/vue';
-import { logInOutline, logOutOutline } from 'ionicons/icons';
+import { logInOutline, logOutOutline, openOutline } from 'ionicons/icons';
 import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
-import { computed } from 'vue';
 
 const settingsStore = useSettingsStore();
 const { saveTheme, saveShowZoomButtons } = useSettings();
@@ -125,7 +129,22 @@ const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 	saveShowZoomButtons(event.detail.checked);
 };
 
-const isNativeIos = computed<boolean>(() => {
-	return Capacitor.getPlatform() === 'ios';
-});
+const OSM_ACCOUNT_URL = 'https://www.openstreetmap.org/account/edit';
+
+/**
+ * Opens the OpenStreetMap account profile page.
+ * On native platforms, uses InAppBrowser (WebView) so session cookies from the
+ * OAuth login flow may auto-login the user. On web, opens a new browser tab.
+ */
+const openOsmProfile = async () => {
+	if (Capacitor.isNativePlatform()) {
+		const { InAppBrowser, DefaultWebViewOptions } = await import('@capacitor/inappbrowser');
+		await InAppBrowser.openInWebView({
+			url: OSM_ACCOUNT_URL,
+			options: DefaultWebViewOptions
+		});
+	} else {
+		window.open(OSM_ACCOUNT_URL, '_blank');
+	}
+};
 </script>

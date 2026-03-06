@@ -37,7 +37,7 @@ import App from './App.vue';
 
 // Composables
 import { createApp } from 'vue';
-import { useOsmAuthStore } from '@/store/osmAuthStore';
+import { useOsmAuthStore, isNativeAuthInProgress } from '@/store/osmAuthStore';
 
 const app = createApp(App);
 
@@ -46,6 +46,7 @@ registerPlugins(app);
 router.isReady().then(async () => {
 	app.mount('#app');
 });
+
 
 CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 	const url = event.url;
@@ -56,9 +57,16 @@ CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 		return;
 	}
 
-	// OAuth redirect callback: reload the WebView at the callback URL so that
-	// osm-api's authReady IIFE can exchange the authorization code for a token.
+	// OAuth redirect callback.  On native, the InAppBrowser flow handles the
+	// token exchange itself — the deep-link intent that arrives here is a
+	// side-effect of the Android App Link and must be ignored to avoid a
+	// destructive window.location.replace() that destroys the WebView state.
 	if (url.includes('?code=')) {
+		if (isNativeAuthInProgress()) {
+			console.log('[OAuth] Ignoring appUrlOpen — InAppBrowser flow is active');
+			return;
+		}
+
 		window.location.replace('/?' + url.split('?')[1]);
 		const osmAuthStore = useOsmAuthStore();
 		await osmAuthStore.loadToken();
