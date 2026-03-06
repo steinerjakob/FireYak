@@ -3,6 +3,36 @@
 	<head>
 		<meta charset="UTF-8" />
 
+		<!-- SEO -->
+		<title>FireYak - Find Nearby Water Sources for Fire Departments</title>
+		<meta name="description" content="FireYak helps fire departments quickly find the nearest usable water sources — hydrants, suction points, water tanks and more — using OpenStreetMap data." />
+		<meta name="keywords" content="fire hydrant, water source, fire department, firefighting, hydrant map, Feuerwehr, Wasserentnahme, Hydranten, OpenStreetMap" />
+		<link rel="canonical" href="https://app.fireyak.org/" />
+
+		<!-- Geo targeting -->
+		<meta name="geo.region" content="AT" />
+		<meta name="geo.placename" content="Austria" />
+
+		<!-- Theme color -->
+		<meta name="theme-color" content="#45b1fd" />
+		<meta name="msapplication-TileColor" content="#45b1fd" />
+
+		<!-- Open Graph / Social -->
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://app.fireyak.org/" />
+		<meta property="og:title" content="FireYak - Find Nearby Water Sources for Fire Departments" />
+		<meta property="og:description" content="Quickly find the nearest usable water sources — hydrants, suction points, water tanks and more — using OpenStreetMap data." />
+		<meta property="og:image" content="https://app.fireyak.org/android-chrome-512x512.png" />
+		<meta property="og:locale" content="en_US" />
+		<meta property="og:locale:alternate" content="de_AT" />
+		<meta property="og:site_name" content="FireYak" />
+
+		<!-- Twitter Card -->
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content="FireYak - Find Nearby Water Sources" />
+		<meta name="twitter:description" content="Quickly find the nearest usable water sources — hydrants, suction points, water tanks and more." />
+		<meta name="twitter:image" content="https://app.fireyak.org/android-chrome-512x512.png" />
+
 		<!-- Favicon -->
 		<link rel="icon" type="image/x-icon" href="/favicon.ico" />
 		<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
@@ -16,12 +46,43 @@
 		<link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png" />
 
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-		
+
+		<!-- Homescreen & Native App banners -->
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-title" content="FireYak" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+		<!-- iOS Smart App Banner — shown natively by Safari on iPhones -->
+		<meta name="apple-itunes-app" content="app-id=6759717059, app-argument=https://app.fireyak.org/" />
+		<!-- Android — triggers Chrome "Install App" prompt when visiting in Chrome -->
+		<meta name="google-play-app" content="app-id=at.jst.fireyak" />
+
+		<!-- Structured Data (JSON-LD) -->
+		<script type="application/ld+json">
+		{
+			"@context": "https://schema.org",
+			"@type": "WebApplication",
+			"name": "FireYak",
+			"url": "https://app.fireyak.org",
+			"description": "FireYak helps fire departments quickly find the nearest usable water sources using OpenStreetMap data.",
+			"applicationCategory": "UtilitiesApplication",
+			"operatingSystem": "Web, Android, iOS",
+			"offers": {
+				"@type": "Offer",
+				"price": "0",
+				"priceCurrency": "EUR"
+			},
+			"installUrl": [
+				"https://play.google.com/store/apps/details?id=at.jst.fireyak",
+				"https://apps.apple.com/app/id6759717059"
+			]
+		}
+		</script>
+
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
 		<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-		<title>Fireyak</title>
 	</head>
 
 	<body>
