@@ -1,5 +1,5 @@
 /* Common Buttons: https://m3.material.io/components/buttons/specs */
-:root[mode="md"] {
+:root[mode='md'] {
 	button {
 		color: inherit !important;
 		text-transform: none;
@@ -8,7 +8,7 @@
 
 	ion-button,
 	ion-button.md-filled,
-	ion-button[fill="solid"] {
+	ion-button[fill='solid'] {
 		--background: var(--ion-color-base, var(--md-sys-primary));
 		--background-hover: var(--ion-color-base, var(--md-sys-primary));
 		--background-focused: var(--ion-color-base, var(--md-sys-primary));
@@ -21,7 +21,8 @@
 		--border-width: 1px;
 		--border-radius: 28px;
 		--ripple-color: var(--md-sys-surface-container-highest);
-		--transition: border-radius var(--md-sys-expressive-default-spring-duration) var(--md-sys-expressive-default-spring);
+		--transition: border-radius var(--md-sys-expressive-default-spring-duration)
+			var(--md-sys-expressive-default-spring);
 		--padding-start: 24px;
 		--padding-end: 24px;
 
@@ -32,7 +33,7 @@
 
 		&.button-full,
 		&.md-square,
-		&[shape="square"] {
+		&[shape='square'] {
 			--border-radius: var(--md-sys-corner-large);
 
 			&::part(native) {
@@ -49,11 +50,11 @@
 			width: 24px;
 			height: 24px;
 
-			&[slot="start"] {
+			&[slot='start'] {
 				margin-right: 8px;
 			}
 
-			&[slot="end"] {
+			&[slot='end'] {
 				margin-left: 8px;
 			}
 		}
@@ -71,7 +72,7 @@
 
 		&.button-full,
 		&.md-square,
-		&[shape="square"] {
+		&[shape='square'] {
 			--border-radius: var(--md-sys-corner-medium);
 		}
 
@@ -97,7 +98,7 @@
 
 		&.button-full,
 		&.md-square,
-		&[shape="square"] {
+		&[shape='square'] {
 			--border-radius: var(--md-sys-corner-extra-large);
 		}
 
@@ -109,11 +110,11 @@
 			width: 32px;
 			height: 32px;
 
-			&[slot="start"] {
+			&[slot='start'] {
 				margin-right: 12px;
 			}
 
-			&[slot="end"] {
+			&[slot='end'] {
 				margin-left: 12px;
 			}
 		}
@@ -162,7 +163,7 @@
 	}
 
 	ion-button.md-outlined,
-	ion-button[fill="outline"] {
+	ion-button[fill='outline'] {
 		--background: var(--md-sys-surface);
 		--background-hover: var(--md-sys-surface);
 		--background-focused: var(--md-sys-surface);
@@ -179,7 +180,7 @@
 
 	ion-button.md-text,
 	ion-button.button-clear,
-	ion-button[fill="clear"] {
+	ion-button[fill='clear'] {
 		--background: transparent;
 		--background-hover: transparent;
 		--background-focused: transparent;
