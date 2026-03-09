@@ -151,6 +151,51 @@ export async function getMapNodeById(id: number) {
 	}
 }
 
+export async function getMapNodeIdsForBounds(mapBounds: LatLngBounds): Promise<number[]> {
+	try {
+		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
+		const markerStore = transaction.objectStore(markerStoreName);
+		const index = markerStore.index('lat, lon');
+
+		const range = IDBKeyRange.bound(
+			[mapBounds.getSouthWest().lat, mapBounds.getSouthWest().lng],
+			[mapBounds.getNorthEast().lat, mapBounds.getNorthEast().lng]
+		);
+
+		const ids: number[] = [];
+		let cursor = await index.openCursor(range);
+
+		while (cursor) {
+			const mapMarker = cursor.value as CachedMapNode;
+			const markerLatLng = new L.LatLng(
+				mapMarker.lat || mapMarker.center?.lat || 0,
+				mapMarker.lon || mapMarker.center?.lon || 0
+			);
+
+			if (mapBounds.contains(markerLatLng)) {
+				ids.push(mapMarker.id);
+			}
+
+			cursor = await cursor.continue();
+		}
+
+		return ids;
+	} catch (e) {
+		console.error('Error getting map node IDs for bounds:', e);
+		return [];
+	}
+}
+
+export async function hardDeleteMapNodes(ids: number[]) {
+	if (!ids.length) return;
+	try {
+		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
+		await Promise.all([...ids.map((id) => tx.store.delete(id)), tx.done]);
+	} catch (e) {
+		console.error('Error hard-deleting map nodes:', e);
+	}
+}
+
 export async function deleteMapNode(id: number) {
 	try {
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
