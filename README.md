@@ -4,39 +4,19 @@
 
 FireYak helps fire departments quickly find the nearest usable water source (e.g. fire hydrants, suction points, water tanks, fire water ponds, fire stations) based on **OpenStreetMap** data.
 
-All water source data comes from the community-driven project [OpenStreetMap](https://www.openstreetmap.org).  
-If a hydrant or water source is missing or incorrect, you can improve it directly in OpenStreetMap (see below).
+All water source data comes from the community-driven project [OpenStreetMap](https://www.openstreetmap.org).
+If a hydrant or water source is missing or incorrect, you can add, edit or delete it directly within the app — no need to leave FireYak.
 
 ---
 
-## Apps
+## Download
 
-You can access FireYak through the web app or Android app:
+<a href='https://play.google.com/store/apps/details?id=at.jst.fireyak'><img height=70 alt='Get it on Google Play' src='https://play.google.com/intl/en_us/badges/images/generic/en_badge_web_generic.png'/></a>
+<a href='https://apps.apple.com/app/id6759717059'><img height=70 alt='Download on App Store' src='doc/download_on_app_store.png'/></a>
+<a href='https://github.com/steinerjakob/FireYak/releases/latest'><img height=70 alt='Get it on Github' src='doc/get-it-on-github.png'/></a>
 
-- **Web:** https://app.fireyak.org
-- **Android:** https://play.google.com/store/apps/details?id=at.jst.fireyak
-- **GitHub:** [![Get it on GitHub](https://img.shields.io/badge/Get_it_on-GitHub-grey?logo=github)](https://github.com/steinerjakob/FireYak/releases/latest)
-- **iOS:** Use the web app https://app.fireyak.org
-
+**Web:** [app.fireyak.org](https://app.fireyak.org)
 The web app is a Progressive Web App (PWA) and can be installed to the home screen on most modern browsers.
-
----
-
-## Support
-
-If you find FireYak useful, please consider supporting it:
-
-<a href="https://www.buymeacoffee.com/steinerjakob" target="_blank">
-  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-       alt="Buy Me A Coffee"
-       style="height: 60px !important;width: 217px !important;">
-</a>
-
-You can also:
-
-- Star the project on GitHub
-- Report issues and improvement ideas
-- Contribute code or documentation
 
 ---
 
@@ -73,6 +53,31 @@ You can:
 - Start navigation to the location (mobile & desktop).
 - Share a link to the marker.
 
+### Add, edit & delete water sources
+
+You can manage water sources directly within the app — all changes are synced to OpenStreetMap in real time.
+
+**Add a new marker:**
+- Press the + button at the bottom right.
+- Choose the type: fire hydrant, suction point or water tank.
+- Fill in details (diameter, pressure, flow, couplings, operator, etc.) and save.
+
+**Edit an existing marker:**
+- Tap a marker, then tap the edit button in the info panel.
+- Update any field — leave a field empty to remove it from OpenStreetMap.
+
+**Delete a marker:**
+- Open the edit panel for a marker and tap the trash icon.
+- A confirmation dialog ensures nothing is deleted by accident.
+
+All operations require an OpenStreetMap account (OAuth2 login is built in).
+Changes are uploaded immediately and include a changeset comment referencing FireYak.
+
+### Photos
+
+If photos exist on Wikimedia Commons using the naming pattern
+`Fire-fighting-facility node-<OSM_ID>`, FireYak shows them in a full-screen gallery for the selected marker.
+
 ### Nearby water sources
 
 - Use your current location to list the **nearest water sources** (e.g. nearest hydrants).
@@ -106,11 +111,6 @@ Configuration:
   - Minimum input pressure
   - Pressure loss per meter (depending on flow rate)
 
-### Photos
-
-If photos exist on Wikimedia Commons using the naming pattern  
-`Fire-fighting-facility node-<OSM_ID>`, FireYak can show them in a gallery for the selected marker.
-
 ### Localization
 
 - English
@@ -120,21 +120,26 @@ If photos exist on Wikimedia Commons using the naming pattern
 
 ## For developers
 
-### Tech stack
+| Layer | Technology |
+|---|---|
+| Frontend | Vue 3 + Ionic Vue |
+| Language | TypeScript |
+| State | Pinia |
+| Routing | Vue Router |
+| Maps | Leaflet + marker clustering |
+| Local storage | IndexedDB (via `idb`) |
+| PWA | Vite + `vite-plugin-pwa` |
+| Mobile | Capacitor (iOS + Android) |
+| OSM editing | osm-api (OAuth2 PKCE) |
+| Elevation | Open-Meteo API |
+| Image gallery | PhotoSwipe (Wikimedia Commons) |
+| CI/CD | GitHub Actions + Fastlane |
 
-- **Frontend:** Vue 3 + Ionic Vue
-- **Language:** TypeScript
-- **State:** Pinia
-- **Routing:** vue-router
-- **Maps:** Leaflet + marker clustering
-- **Storage:** IndexedDB (via `idb`) for caching map data
-- **PWA:** Vite + `vite-plugin-pwa`
-- **Mobile:** Capacitor (Android)
+## Development
 
 ### Setup
 
 ```bash
-# install dependencies
 npm install
 ```
 
@@ -149,8 +154,36 @@ Then open the printed URL (typically http://localhost:5173) in your browser.
 ### Build
 
 ```bash
-# build web app
+# web only
 npm run build
+
+# web + sync native platforms
+npm run buildAndSync
 ```
 
-The Android project lives in the `android` directory and can be built with Gradle/Android Studio as usual.
+### Lint
+
+```bash
+npm run lint
+```
+
+The Android project lives in the `android/` directory and can be built with Gradle / Android Studio.
+The iOS project lives in the `ios/` directory and can be built with Xcode.
+
+---
+
+## Support
+
+If you find FireYak useful, please consider supporting it:
+
+<a href="https://www.buymeacoffee.com/steinerjakob" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+       alt="Buy Me A Coffee"
+       style="height: 60px !important;width: 217px !important;">
+</a>
+
+You can also:
+
+- Star the project on GitHub
+- Report issues and improvement ideas
+- Contribute code or documentation
