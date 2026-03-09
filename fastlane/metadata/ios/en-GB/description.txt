@@ -2,13 +2,13 @@ FireYak helps fire departments quickly find the nearest usable water source — 
 
 All data comes from the community-driven project OpenStreetMap.
 
-<b>Find water sources nearby</b>
+FIND WATER SOURCES NEARBY
 - Displays fire hydrants, suction points, water tanks, fire water ponds and fire stations near you
 - GPS-based location: see the nearest water sources at a glance
 - Distance display in meters and kilometers
 - Estimated number of supply hoses
 
-<b>Detailed information</b>
+DETAILED INFORMATION
 - Hydrant type (pillar, underground, wall)
 - Pipe diameter, pressure, flow rate
 - Couplings (type, diameters)
@@ -16,13 +16,13 @@ All data comes from the community-driven project OpenStreetMap.
 - Capacity, reference number, operator, address
 - Coordinates and OSM ID
 
-<b>Edit water sources</b>
+EDIT WATER SOURCES
 - Add new hydrants, suction points and water tanks directly in the app
 - Edit or delete existing entries
 - All changes sync to OpenStreetMap in real time
 - OpenStreetMap login
 
-<b>Relay pump / supply line calculator</b>
+RELAY PUMP / SUPPLY LINE CALCULATOR
 - Set fire object (target) and suction point (water source)
 - Optional waypoints for routing
 - 3D hose distance calculation using elevation data
@@ -30,7 +30,7 @@ All data comes from the community-driven project OpenStreetMap.
 - Pressure at each pump and at the fire object
 - Adjustable parameters: output pressure, minimum input pressure
 
-<b>More features</b>
+MORE FEATURES
 - Start navigation to any water source
 - View photos from Wikimedia Commons
 - Share a link to any water source

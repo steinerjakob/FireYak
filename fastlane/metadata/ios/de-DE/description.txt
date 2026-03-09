@@ -2,13 +2,13 @@ FireYak hilft Feuerwehren, die nächste nutzbare Wasserentnahmestelle schnell zu
 
 Alle Daten stammen aus dem Community-Projekt OpenStreetMap.
 
-<b>Wasserentnahmestellen finden</b>
+WASSERENTNAHMESTELLEN FINDEN
 - Zeigt Hydranten, Saugstellen, Löschwassertanks, Löschwasserteiche und Feuerwehrhäuser in deiner Nähe
 - GPS-basierte Standortbestimmung: die nächsten Wasserentnahmestellen auf einen Blick
 - Entfernungsanzeige in Metern und Kilometern
 - Abschätzung der benötigten B-Schläuche
 
-<b>Detaillierte Informationen</b>
+DETAILLIERTE INFORMATIONEN
 - Hydrantentyp (Überflur, Unterflur, Wandhydrant)
 - Rohrdurchmesser, Druck, Durchflussleistung
 - Kupplungen (Typ, Durchmesser)
@@ -16,13 +16,13 @@ Alle Daten stammen aus dem Community-Projekt OpenStreetMap.
 - Kapazität, Referenznummer, Betreiber, Adresse
 - Koordinaten und OSM-ID
 
-<b>Wasserentnahmestellen bearbeiten</b>
+WASSERENTNAHMESTELLEN BEARBEITEN
 - Neue Hydranten, Saugstellen und Löschwassertanks direkt in der App anlegen
 - Bestehende Einträge bearbeiten oder löschen
 - Alle Änderungen werden in Echtzeit mit OpenStreetMap synchronisiert
 - OpenStreetMap-Login
 
-<b>Löschleitungsberechnung</b>
+LÖSCHLEITUNGSBERECHNUNG
 - Brandobjekt (Zielpunkt) und Saugstelle (Wasserentnahme) festlegen
 - Optionale Wegpunkte für die Routenführung
 - Berechnung der 3D-Schlauchdistanz unter Berücksichtigung von Höhendaten
@@ -30,7 +30,7 @@ Alle Daten stammen aus dem Community-Projekt OpenStreetMap.
 - Druck an jeder Pumpe und am Brandobjekt
 - Einstellbare Parameter: Ausgangsdruck, Mindest-Eingangsdruck, Pumpenleistung
 
-<b>Weitere Funktionen</b>
+WEITERE FUNKTIONEN
 - Navigation zur Wasserentnahmestelle starten
 - Fotos von Wikimedia Commons anzeigen
 - Link zur Wasserentnahmestelle teilen

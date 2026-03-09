@@ -1,0 +1,1 @@
+Feuerwehr,Hydrant,Hydranten,Löschwasser,Wasserentnahmestelle,Saugstelle,Löschwasserteich,Löschwassertank,Löschleitung,Pumpe,OpenStreetMap,Brandschutz,Wasserversorgung,Feuerwehrhaus,Karte
