@@ -47,21 +47,9 @@ platform :android do
     gradle(task: "clean assembleRelease")
     upload_to_play_store
   end
-
-  desc "Upload metadata to Google Play (no binary)"
-  lane :upload_metadata do
-    upload_to_play_store(
-      skip_upload_apk: true,
-      skip_upload_aab: true,
-      skip_upload_changelogs: false,
-      skip_upload_images: false,
-      skip_upload_screenshots: false,
-      skip_upload_metadata: false
-    )
-  end
 end
 
-platform :ios do 
+platform :ios do
 
   private_lane :default_ios_app_build do |options|
     setup_ci
@@ -87,15 +75,4 @@ platform :ios do
 		)
   end
 
-  desc "Upload metadata to App Store Connect (no binary)"
-  lane :upload_metadata do
-    deliver(
-      skip_binary_upload: true,
-      skip_screenshots: true,
-      skip_metadata: false,
-      force: true,
-      metadata_path: "./fastlane/metadata/ios",
-      api_key_path: "./authkey.json"
-    )
-  end
 end
