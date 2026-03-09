@@ -9,7 +9,7 @@ import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
 import { fetchMarkerData, OverPassElement } from './overPassApi';
-import { getMapNodesForView, getNearbyMapNodes, storeMapNodes } from '@/mapHandler/databaseHandler';
+import { getMapNodesForView, getNearbyMapNodes, storeMapNodes, getMapNodeIdsForBounds, hardDeleteMapNodes } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 
@@ -48,9 +48,21 @@ function getIconForNode(element: OverPassElement): L.Icon {
 	});
 }
 
+async function reconcileDeletedNodes(mapBounds: LatLngBounds, freshElements: OverPassElement[]) {
+	const freshIds = new Set(freshElements.map((e) => e.id));
+	const cachedIds = await getMapNodeIdsForBounds(mapBounds);
+	const staleIds = cachedIds.filter((id) => !freshIds.has(id));
+	await hardDeleteMapNodes(staleIds);
+}
+
 async function updateNodeCache(mapBounds: LatLngBounds) {
 	const mapElements = await fetchMarkerData(mapBounds);
 	await storeMapNodes(mapElements);
+	// Only reconcile when the result is not truncated by the 2000-element limit,
+	// otherwise we'd falsely hard-delete nodes that were just cut off.
+	if (mapElements.length < 2000) {
+		await reconcileDeletedNodes(mapBounds, mapElements);
+	}
 	return mapElements;
 }
 
