@@ -9,12 +9,13 @@
 		"buildAndSync": "npm run build:native && npx cap sync",
 		"preview": "vite preview",
 		"lint": "eslint . --fix --ignore-path .gitignore",
-		"generate:assets": "npx @capacitor/assets generate --iconBackgroundColor '#45b1fd' --iconBackgroundColorDark '#45b1fd' --splashBackgroundColor '#45b1fd' --splashBackgroundColorDark '#45b1fd'"
+		"generate:assets": "npx @capacitor/assets generate --iconBackgroundColor '#45b1fd' --iconBackgroundColorDark '#45b1fd' --splashBackgroundColor '#45b1fd' --splashBackgroundColorDark '#45b1fd'",
+		"prepare": "husky"
 	},
 	"lint-staged": {
 		"**/*.{js,jsx,ts,vue,tsx,html,css,scss,json}": [
 			"prettier --write",
-			"eslint"
+			"eslint --fix"
 		],
 		"**/*.{scss}": [
 			"stylelint"
@@ -67,7 +68,7 @@
 		"eslint-plugin-sonarjs": "^4.0.0",
 		"eslint-plugin-vue": "^10.8.0",
 		"globals": "^17.3.0",
-		"husky": "^8.0.3",
+		"husky": "^9.1.7",
 		"lint-staged": "^16.2.7",
 		"prettier": "^3.8.1",
 		"sass": "^1.97.3",
