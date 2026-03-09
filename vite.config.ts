@@ -98,6 +98,35 @@ const pwaOptions: Partial<VitePWAOptions> = {
 						statuses: [0, 200]
 					}
 				}
+			},
+			{
+				urlPattern:
+					/^https?:\/\/server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery\/MapServer\/tile\/.*/,
+				handler: 'StaleWhileRevalidate',
+				options: {
+					cacheName: 'arcgis-tiles-cache',
+					expiration: {
+						maxEntries: 500,
+						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
+			},
+			{
+				urlPattern: /^https?:\/\/a\.basemaps\.cartocdn\.com\/rastertiles\/voyager_only_labels\/.*/,
+				handler: 'StaleWhileRevalidate',
+				options: {
+					cacheName: 'arcgis-tiles-cache',
+					expiration: {
+						maxEntries: 500,
+						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
 			}
 		]
 	}
