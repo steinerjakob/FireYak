@@ -47,7 +47,6 @@ router.isReady().then(async () => {
 	app.mount('#app');
 });
 
-
 CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 	const url = event.url;
 	console.log('App opened with URL:', url);
@@ -73,16 +72,14 @@ CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 		return router.push('/');
 	}
 
-	const slug = event.url.split('#').pop();
+	const parsedUrl = new URL(url);
+	const hashPath = parsedUrl.hash.startsWith('#') ? parsedUrl.hash.slice(1) : '';
 
-	// We only push to the route if there is a slug present
-	if (slug) {
-		router.push({
-			path: slug
-		});
-	} else {
-		router.push('/');
+	if (!hashPath || hashPath === '/') {
+		return router.push('/');
 	}
+
+	return router.push(hashPath);
 });
 
 /**
