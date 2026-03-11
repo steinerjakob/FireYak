@@ -1,4 +1,4 @@
-import L, { LatLngBounds } from 'leaflet';
+import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
@@ -9,53 +9,65 @@ import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
 import { fetchMarkerData, OverPassElement } from './overPassApi';
-import { getMapNodesForView, getNearbyMapNodes, storeMapNodes, getMapNodeIdsForBounds, hardDeleteMapNodes } from '@/mapHandler/databaseHandler';
+import {
+	getMapNodesForView,
+	getNearbyMapNodes,
+	storeMapNodes,
+	getMapNodeIdsForBounds,
+	hardDeleteMapNodes
+} from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 
-function getIconForNode(element: OverPassElement): L.Icon {
-	let iconData = iconHydrant;
+// Map icon keys to URLs for use in MapLibre image loading
+export const markerIconUrls: Record<string, string> = {
+	hydrant: iconHydrant,
+	underground: iconUnderground,
+	wall: iconWall,
+	pump: iconPump,
+	water: iconWater,
+	watertank: iconWaterTank,
+	firestation: iconFirestation
+};
+
+function getIconKeyForNode(element: OverPassElement): string {
 	if (element.type === 'node') {
 		const emergency = element.tags?.emergency;
 		const type = element.tags?.['fire_hydrant:type'];
 		switch (emergency) {
 			case 'fire_hydrant':
-				iconData =
-					{
-						pillar: iconHydrant,
-						underground: iconUnderground,
-						wall: iconWall
-					}[type] || iconHydrant;
-				break;
+				return (
+					({ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<
+						string,
+						string
+					>)[type as string] || 'hydrant'
+				);
 			case 'suction_point':
-				iconData = iconPump;
-				break;
+				return 'pump';
 			case 'fire_water_pond':
-				iconData = iconWater;
-				break;
+				return 'water';
 			case 'water_tank':
-				iconData = iconWaterTank;
-				break;
+				return 'watertank';
 		}
 	}
 	if (element.type === 'way') {
-		iconData = iconFirestation;
+		return 'firestation';
 	}
-
-	return L.icon({
-		iconUrl: iconData,
-		iconSize: [32, 32]
-	});
+	return 'hydrant';
 }
 
-async function reconcileDeletedNodes(mapBounds: LatLngBounds, freshElements: OverPassElement[]) {
+function getIconUrlForNode(element: OverPassElement): string {
+	return markerIconUrls[getIconKeyForNode(element)];
+}
+
+async function reconcileDeletedNodes(mapBounds: GeoBounds, freshElements: OverPassElement[]) {
 	const freshIds = new Set(freshElements.map((e) => e.id));
 	const cachedIds = await getMapNodeIdsForBounds(mapBounds);
 	const staleIds = cachedIds.filter((id) => !freshIds.has(id));
 	await hardDeleteMapNodes(staleIds);
 }
 
-async function updateNodeCache(mapBounds: LatLngBounds) {
+async function updateNodeCache(mapBounds: GeoBounds) {
 	const mapElements = await fetchMarkerData(mapBounds);
 	await storeMapNodes(mapElements);
 	// Only reconcile when the result is not truncated by the 2000-element limit,
@@ -66,8 +78,10 @@ async function updateNodeCache(mapBounds: LatLngBounds) {
 	return mapElements;
 }
 
-export async function getMarkersForView(mapBounds: LatLngBounds) {
-	const markerList: L.Marker[] = [];
+export async function getMarkersForView(
+	mapBounds: GeoBounds
+): Promise<GeoJSON.FeatureCollection> {
+	const features: GeoJSON.Feature[] = [];
 	try {
 		let mapElements = await getMapNodesForView(mapBounds);
 		// if nothing is in the cache wait for the api call
@@ -77,42 +91,47 @@ export async function getMarkersForView(mapBounds: LatLngBounds) {
 			updateNodeCache(mapBounds);
 		}
 		for (const element of mapElements) {
-			const latLng = L.latLng(
-				(element?.lat || element.center?.lat) as number,
-				(element.lon || element.center?.lon) as number
-			);
-			// todo add additional marker information
-			// icon and so on..
-			const markerIcon = getIconForNode(element);
-			markerList.push(L.marker(latLng, { title: `${element.id}`, icon: markerIcon }));
+			const lat = (element?.lat || element.center?.lat) as number;
+			const lng = (element.lon || element.center?.lon) as number;
+			features.push({
+				type: 'Feature',
+				geometry: {
+					type: 'Point',
+					coordinates: [lng, lat]
+				},
+				properties: {
+					id: element.id,
+					icon: getIconKeyForNode(element)
+				}
+			});
 		}
 	} catch (e) {
 		// ignore error for now
 	}
 
-	return markerList;
+	return { type: 'FeatureCollection', features };
 }
 
 /**
  * Sorts a list of map markers by their distance from a specified geographic location.
  *
  * @param elements
- * @param {L.LatLng} latLng - The reference geographic location used to calculate distances from each marker.
+ * @param {GeoPoint} latLng - The reference geographic location used to calculate distances from each marker.
  * @return {Promise<NearbyMarker[]>} A promise that resolves to an array of objects, each containing a marker and its distance from the specified location, sorted in ascending order by distance.
  */
 async function sortElementsByDistance(
 	elements: OverPassElement[],
-	latLng: L.LatLng
+	latLng: GeoPoint
 ): Promise<NearbyMarker[]> {
 	const markersWithDistance: NearbyMarker[] = elements.map((element) => {
-		const elementLatLng = L.latLng(
-			(element?.lat || element.center?.lat) as number,
-			(element.lon || element.center?.lon) as number
-		);
+		const elementPoint: GeoPoint = {
+			lat: (element?.lat || element.center?.lat) as number,
+			lng: (element.lon || element.center?.lon) as number
+		};
 		return {
 			element,
-			distance: latLng.distanceTo(elementLatLng),
-			icon: getIconForNode(element).options.iconUrl
+			distance: distanceTo(latLng, elementPoint),
+			icon: getIconUrlForNode(element)
 		};
 	});
 
@@ -123,11 +142,14 @@ async function sortElementsByDistance(
  * Retrieves a list of nearby markers within the specified radius around a point,
  * sorted by their distance from the given coordinates.
  *
- * @param {L.LatLng} latLng - The latitude and longitude coordinates used as the center point.
+ * @param {GeoPoint} latLng - The latitude and longitude coordinates used as the center point.
  * @param {number} radius - The search radius in meters around the center point (default: 5000 meters).
  * @return {Promise<NearbyMarker[]>} A promise that resolves with a list of sorted markers containing their distance and icons.
  */
-export async function getNearbyMarkers(latLng: L.LatLng, radius = 2000): Promise<NearbyMarker[]> {
+export async function getNearbyMarkers(
+	latLng: GeoPoint,
+	radius = 2000
+): Promise<NearbyMarker[]> {
 	const elements = await getNearbyMapNodes(latLng, radius);
 	return sortElementsByDistance(elements, latLng);
 }

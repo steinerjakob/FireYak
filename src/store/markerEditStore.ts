@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
-import { LatLng } from 'leaflet';
+import { GeoPoint } from '@/types/geo';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
@@ -14,7 +14,7 @@ import { version } from '@/../package.json';
 export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const isEditing = ref(false);
 	const isAdding = ref(false);
-	const pendingLocation = ref<LatLng | null>(null);
+	const pendingLocation = ref<GeoPoint | null>(null);
 	const editableTags = ref<Record<string, string>>({});
 	const originalMarker = ref<OverPassElement | null>(null);
 	const router = useRouter();
@@ -44,10 +44,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		isAdding.value = false;
 		originalMarker.value = marker;
 		editableTags.value = { ...marker.tags };
-		pendingLocation.value = marker.lat && marker.lon ? new LatLng(marker.lat, marker.lon) : null;
+		pendingLocation.value = marker.lat && marker.lon ? { lat: marker.lat, lng: marker.lon } : null;
 	}
 
-	function startAdding(location: LatLng) {
+	function startAdding(location: GeoPoint) {
 		isAdding.value = true;
 		isEditing.value = false;
 		originalMarker.value = null;
@@ -86,7 +86,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		startEditing(marker);
 	}
 
-	async function requestStartAdding(location: LatLng) {
+	async function requestStartAdding(location: GeoPoint) {
 		if (!osmAuthStore.isAuthenticated) {
 			await showAuthAlert();
 			return;

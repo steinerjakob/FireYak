@@ -3,7 +3,7 @@
 	"version": "2.9.2",
 	"private": true,
 	"scripts": {
-		"dev": "vite",
+		"dev": "vite --host",
 		"build": "vite build",
 		"build:native": "cross-env BUILD_TARGET=native npm run build",
 		"buildAndSync": "npm run build:native && npx cap sync",
@@ -38,6 +38,7 @@
 		"idb": "^8.0.3",
 		"leaflet": "^1.9.4",
 		"leaflet.markercluster": "^1.5.3",
+		"maplibre-gl": "^5.20.0",
 		"osm-api": "^4.0.0",
 		"photoswipe": "^5.4.4",
 		"pinia": "^3.0.4",

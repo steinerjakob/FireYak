@@ -1,5 +1,4 @@
-import { computed, ref, watch } from 'vue';
-import L, { LayerGroup, Marker } from 'leaflet';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 

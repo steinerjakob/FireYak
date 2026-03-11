@@ -12,15 +12,13 @@ const isNativeBuild = process.env.BUILD_TARGET === 'native';
 
 const purpose = 'any maskable';
 
-// PWA options - for native builds, we use selfDestroying mode which unregisters
-// any existing service workers and doesn't create new ones
+// PWA options - for native builds, the service worker only handles runtime
+// caching (map tiles) with no precaching or navigation fallback.
+// For web builds, full PWA behavior is enabled.
 const pwaOptions: Partial<VitePWAOptions> = {
 	mode: 'production',
 	base: '/',
-	includeAssets: ['favicon.svg'],
-	// For native builds: use selfDestroying to unregister service workers
-	// For web builds: use prompt to show update notifications
-	selfDestroying: isNativeBuild,
+	includeAssets: isNativeBuild ? [] : ['favicon.svg'],
 	registerType: isNativeBuild ? 'autoUpdate' : 'prompt',
 	// Disable manifest for native builds
 	manifest: isNativeBuild
@@ -82,8 +80,14 @@ const pwaOptions: Partial<VitePWAOptions> = {
 		suppressWarnings: true
 	},
 	workbox: {
-		globIgnores: ['**/land.html'],
-		navigateFallbackDenylist: [/^\/land\.html/],
+		// Native: no precaching, no navigation fallback — only runtime caching for tiles
+		// Web: full precaching with navigateFallback support
+		...(isNativeBuild
+			? { globPatterns: [] }
+			: {
+					globIgnores: ['**/land.html'],
+					navigateFallbackDenylist: [/^\/land\.html/]
+				}),
 		runtimeCaching: [
 			{
 				urlPattern: /^https?:\/\/tile\.openstreetmap\.org\/.*/,
@@ -118,7 +122,7 @@ const pwaOptions: Partial<VitePWAOptions> = {
 				urlPattern: /^https?:\/\/a\.basemaps\.cartocdn\.com\/rastertiles\/voyager_only_labels\/.*/,
 				handler: 'StaleWhileRevalidate',
 				options: {
-					cacheName: 'arcgis-tiles-cache',
+					cacheName: 'carto-tiles-cache',
 					expiration: {
 						maxEntries: 500,
 						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
@@ -147,8 +151,8 @@ export default defineConfig({
 				]
 			}
 		}),
-		// Always include VitePWA plugin - for native builds it uses selfDestroying mode
-		// which unregisters service workers and clears caches
+		// Always include VitePWA plugin - for native builds the SW only handles
+		// runtime caching (map tiles) with no precaching or navigation fallback
 		VitePWA(pwaOptions)
 	],
 	define: {

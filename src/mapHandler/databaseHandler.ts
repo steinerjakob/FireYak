@@ -1,6 +1,6 @@
 import { openDB } from 'idb';
 import { OverPassElement } from '@/mapHandler/overPassApi';
-import L, { LatLng, LatLngBounds } from 'leaflet';
+import { GeoPoint, GeoBounds, distanceTo, boundsContains } from '@/types/geo';
 
 const markerStoreName = 'fireMarker';
 
@@ -44,24 +44,23 @@ export async function storeMapNodes(nodes: OverPassElement[]) {
 	}
 }
 
-export async function getMapNodesForView(mapBounds: LatLngBounds) {
+export async function getMapNodesForView(mapBounds: GeoBounds) {
 	try {
 		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
 		const markerStore = transaction.objectStore(markerStoreName);
 
 		// Create an index on lat and lon keys
-		const index = markerStore.index('lat, lon'); // Replace 'latLonIndex' with the actual index name
+		const index = markerStore.index('lat, lon');
 
 		// Initialize an empty array to store the results
 		const results: OverPassElement[] = [];
 
-		// Iterate over the indexed items within the LatLngBounds
+		// Iterate over the indexed items within the bounds
 		const range = IDBKeyRange.bound(
-			[mapBounds.getSouthWest().lat, mapBounds.getSouthWest().lng],
-			[mapBounds.getNorthEast().lat, mapBounds.getNorthEast().lng]
+			[mapBounds.south, mapBounds.west],
+			[mapBounds.north, mapBounds.east]
 		);
 
-		// todo range is not correct?
 		let cursor = await index.openCursor(range);
 
 		while (cursor) {
@@ -69,13 +68,13 @@ export async function getMapNodesForView(mapBounds: LatLngBounds) {
 			const mapMarker = cursor.value as CachedMapNode;
 
 			if (!isDeleted(mapMarker)) {
-				const markerLatLng = new L.LatLng(
-					mapMarker.lat || mapMarker.center?.lat || 0,
-					mapMarker.lon || mapMarker.center?.lon || 0
-				);
+				const markerPoint: GeoPoint = {
+					lat: mapMarker.lat || mapMarker.center?.lat || 0,
+					lng: mapMarker.lon || mapMarker.center?.lon || 0
+				};
 
 				// somehow the filter returns more markers than in the range specified?
-				if (mapBounds.contains(markerLatLng)) {
+				if (boundsContains(mapBounds, markerPoint)) {
 					// Add the map marker to the results array
 					results.push(mapMarker);
 				}
@@ -90,7 +89,7 @@ export async function getMapNodesForView(mapBounds: LatLngBounds) {
 	}
 }
 
-export async function getNearbyMapNodes(location: LatLng, radius: number) {
+export async function getNearbyMapNodes(location: GeoPoint, radius: number) {
 	try {
 		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
 		const markerStore = transaction.objectStore(markerStoreName);
@@ -100,12 +99,12 @@ export async function getNearbyMapNodes(location: LatLng, radius: number) {
 		const latDelta = radius / 111000; // Convert meters to degrees (approximate)
 		const lngDelta = radius / (111000 * Math.cos((location.lat * Math.PI) / 180));
 
-		const southWest = L.latLng(location.lat - latDelta, location.lng - lngDelta);
-		const northEast = L.latLng(location.lat + latDelta, location.lng + lngDelta);
-
 		// Use the existing index for initial filtering
 		const index = markerStore.index('lat, lon');
-		const range = IDBKeyRange.bound([southWest.lat, southWest.lng], [northEast.lat, northEast.lng]);
+		const range = IDBKeyRange.bound(
+			[location.lat - latDelta, location.lng - lngDelta],
+			[location.lat + latDelta, location.lng + lngDelta]
+		);
 
 		const results: OverPassElement[] = [];
 		let cursor = await index.openCursor(range);
@@ -115,13 +114,13 @@ export async function getNearbyMapNodes(location: LatLng, radius: number) {
 
 			if (!isDeleted(mapMarker)) {
 				// Get the marker's coordinates
-				const markerLatLng = new L.LatLng(
-					mapMarker.lat || mapMarker.center?.lat || 0,
-					mapMarker.lon || mapMarker.center?.lon || 0
-				);
+				const markerPoint: GeoPoint = {
+					lat: mapMarker.lat || mapMarker.center?.lat || 0,
+					lng: mapMarker.lon || mapMarker.center?.lon || 0
+				};
 
 				// Calculate precise distance and check if within radius
-				const distance = location.distanceTo(markerLatLng);
+				const distance = distanceTo(location, markerPoint);
 
 				if (distance <= radius) {
 					results.push(mapMarker);
@@ -151,15 +150,15 @@ export async function getMapNodeById(id: number) {
 	}
 }
 
-export async function getMapNodeIdsForBounds(mapBounds: LatLngBounds): Promise<number[]> {
+export async function getMapNodeIdsForBounds(mapBounds: GeoBounds): Promise<number[]> {
 	try {
 		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
 		const markerStore = transaction.objectStore(markerStoreName);
 		const index = markerStore.index('lat, lon');
 
 		const range = IDBKeyRange.bound(
-			[mapBounds.getSouthWest().lat, mapBounds.getSouthWest().lng],
-			[mapBounds.getNorthEast().lat, mapBounds.getNorthEast().lng]
+			[mapBounds.south, mapBounds.west],
+			[mapBounds.north, mapBounds.east]
 		);
 
 		const ids: number[] = [];
@@ -167,12 +166,12 @@ export async function getMapNodeIdsForBounds(mapBounds: LatLngBounds): Promise<n
 
 		while (cursor) {
 			const mapMarker = cursor.value as CachedMapNode;
-			const markerLatLng = new L.LatLng(
-				mapMarker.lat || mapMarker.center?.lat || 0,
-				mapMarker.lon || mapMarker.center?.lon || 0
-			);
+			const markerPoint: GeoPoint = {
+				lat: mapMarker.lat || mapMarker.center?.lat || 0,
+				lng: mapMarker.lon || mapMarker.center?.lon || 0
+			};
 
-			if (mapBounds.contains(markerLatLng)) {
+			if (boundsContains(mapBounds, markerPoint)) {
 				ids.push(mapMarker.id);
 			}
 

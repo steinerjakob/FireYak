@@ -95,17 +95,12 @@
 	</div>
 </template>
 <script lang="ts" setup>
-import 'leaflet/dist/leaflet.css';
-import L, { LatLng, LeafletMouseEvent } from 'leaflet';
-import 'leaflet.markercluster/dist/MarkerCluster.css';
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
-// @ts-ignore: does not find typings
-import { MarkerClusterGroup } from 'leaflet.markercluster';
-import selectedMarkerIcon from '../assets/markers/selectedmarker.png';
-import '../plugins/leaflet.restoreview.js';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import selectedMarkerIconUrl from '../assets/markers/selectedmarker.png';
 import { nextTick, onMounted, watch, ref, onUnmounted } from 'vue';
 import { debounce } from '@/helper/helper';
-import { getMarkersForView, getNearbyMarkers } from '@/mapHandler/markerHandler';
+import { getMarkersForView, getNearbyMarkers, markerIconUrls } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
@@ -124,8 +119,6 @@ import {
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
-import icon from 'leaflet/dist/images/marker-icon-2x.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 import { useDefaultStore } from '@/store/defaultStore';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
@@ -134,10 +127,15 @@ import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
 import { useSettings } from '@/composable/settings';
 import { useI18n } from 'vue-i18n';
+import { GeoPoint, GeoBounds } from '@/types/geo';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
 const DISABLE_CLUSTERING_ZOOM = 15;
+const MARKER_SOURCE_ID = 'markers';
+const SELECTED_PATH_SOURCE = 'selected-path';
+const SELECTED_PATH_LAYER = 'selected-path-layer';
+const MAP_VIEW_STORAGE_KEY = 'mapView';
 
 const router = useRouter();
 const route = useRoute();
@@ -154,67 +152,111 @@ const { t } = useI18n();
 
 const isSatellite = ref(false);
 
-let rootMap: L.Map | null = null;
-let osmTileLayer: L.TileLayer | null = null;
-let satelliteTileLayer: L.TileLayer | null = null;
-let cartoLabelsLayer: L.TileLayer | null = null;
-const fireMapCluster = new MarkerClusterGroup({
-	disableClusteringAtZoom: DISABLE_CLUSTERING_ZOOM,
-	spiderfyOnMaxZoom: false,
-	showCoverageOnHover: false,
-	zoomToBoundsOnClick: true,
-	maxClusterRadius: 50
-});
+let rootMap: maplibregl.Map | null = null;
+let mapReady = false;
 
-function initTileLayers() {
+// Markers (DOM-based MapLibre markers)
+let selectedMarker: maplibregl.Marker | null = null;
+let ghostMarker: maplibregl.Marker | null = null;
+let userLocationMarker: maplibregl.Marker | null = null;
+
+// Custom external location marker
+let customLocationMarker: maplibregl.Marker | null = null;
+
+function createSelectedMarker(): maplibregl.Marker {
+	const el = document.createElement('img');
+	el.src = selectedMarkerIconUrl;
+	el.style.width = '56px';
+	el.style.height = '56px';
+	return new maplibregl.Marker({ element: el, anchor: 'center' });
+}
+
+function createGhostMarker(): maplibregl.Marker {
+	const marker = new maplibregl.Marker({ draggable: true });
+	marker.on('dragend', () => {
+		const lngLat = marker.getLngLat();
+		markerEditStore.pendingLocation = { lat: lngLat.lat, lng: lngLat.lng };
+	});
+	return marker;
+}
+
+function createUserLocationMarker(): maplibregl.Marker {
+	const el = document.createElement('div');
+	el.style.width = '16px';
+	el.style.height = '16px';
+	el.style.borderRadius = '50%';
+	el.style.backgroundColor = '#136AEC';
+	el.style.border = '3px solid #fff';
+	el.style.boxSizing = 'content-box';
+	return new maplibregl.Marker({ element: el, anchor: 'center' });
+}
+
+function getMapStyle(): maplibregl.StyleSpecification {
 	const githubAttribution =
 		' | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>';
-	osmTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-		maxZoom: 19,
-		attribution: `© OpenStreetMap${githubAttribution}`
-	});
-
-	satelliteTileLayer = L.tileLayer(
-		'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-		{
-			attribution: '&copy; Esri',
-			maxZoom: 19
-		}
-	);
-
-	cartoLabelsLayer = L.tileLayer(
-		'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
-		{
-			maxZoom: 19,
-			attribution: `&copy; CARTO${githubAttribution}`,
-			subdomains: 'abcd',
-			pane: 'shadowPane'
-		}
-	);
+	return {
+		version: 8,
+		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+		sources: {
+			osm: {
+				type: 'raster',
+				tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+				tileSize: 256,
+				maxzoom: 19,
+				attribution: `© OpenStreetMap${githubAttribution}`
+			},
+			satellite: {
+				type: 'raster',
+				tiles: [
+					'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+				],
+				tileSize: 256,
+				maxzoom: 19,
+				attribution: '&copy; Esri'
+			},
+			'carto-labels': {
+				type: 'raster',
+				tiles: [
+					'https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+					'https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+					'https://c.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+					'https://d.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png'
+				],
+				tileSize: 256,
+				maxzoom: 19,
+				attribution: `&copy; CARTO${githubAttribution}`
+			}
+		},
+		layers: [
+			{ id: 'osm-layer', type: 'raster', source: 'osm' },
+			{
+				id: 'satellite-layer',
+				type: 'raster',
+				source: 'satellite',
+				layout: { visibility: 'none' }
+			},
+			{
+				id: 'carto-labels-layer',
+				type: 'raster',
+				source: 'carto-labels',
+				layout: { visibility: 'none' }
+			}
+		]
+	};
 }
 
 function applyMapLayerSelection(selection: MapLayerSetting) {
-	if (!rootMap || !osmTileLayer || !satelliteTileLayer || !cartoLabelsLayer) {
-		return;
-	}
-
-	// Remove all base/overlay layers first
-	if (rootMap.hasLayer(osmTileLayer)) {
-		rootMap.removeLayer(osmTileLayer);
-	}
-	if (rootMap.hasLayer(satelliteTileLayer)) {
-		rootMap.removeLayer(satelliteTileLayer);
-	}
-	if (rootMap.hasLayer(cartoLabelsLayer)) {
-		rootMap.removeLayer(cartoLabelsLayer);
-	}
+	if (!rootMap || !mapReady) return;
 
 	if (selection === 'satellite') {
-		satelliteTileLayer.addTo(rootMap);
-		cartoLabelsLayer.addTo(rootMap);
+		rootMap.setLayoutProperty('osm-layer', 'visibility', 'none');
+		rootMap.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+		rootMap.setLayoutProperty('carto-labels-layer', 'visibility', 'visible');
 		isSatellite.value = true;
 	} else {
-		osmTileLayer.addTo(rootMap);
+		rootMap.setLayoutProperty('osm-layer', 'visibility', 'visible');
+		rootMap.setLayoutProperty('satellite-layer', 'visibility', 'none');
+		rootMap.setLayoutProperty('carto-labels-layer', 'visibility', 'none');
 		isSatellite.value = false;
 	}
 }
@@ -254,65 +296,77 @@ async function openLayerSelector() {
 	await alert.present();
 }
 
-// Ensure Leaflet recalculates the map size once layout is settled
+// Save/restore map view via localStorage (replaces leaflet.restoreview plugin)
+function saveMapView() {
+	if (!rootMap) return;
+	try {
+		const center = rootMap.getCenter();
+		const view = { lat: center.lat, lng: center.lng, zoom: rootMap.getZoom() };
+		localStorage.setItem(MAP_VIEW_STORAGE_KEY, JSON.stringify(view));
+	} catch {
+		// localStorage might be unavailable
+	}
+}
+
+function restoreMapView(): { center: [number, number]; zoom: number } | null {
+	try {
+		const stored = localStorage.getItem(MAP_VIEW_STORAGE_KEY);
+		if (stored) {
+			const view = JSON.parse(stored);
+			return { center: [view.lng, view.lat], zoom: view.zoom };
+		}
+	} catch {
+		// ignore
+	}
+	return null;
+}
+
+// Ensure MapLibre recalculates the map size once layout is settled
 async function ensureMapSize() {
 	await nextTick();
 	await new Promise((r) => requestAnimationFrame(() => r(undefined)));
-	rootMap?.invalidateSize();
+	rootMap?.resize();
+}
+
+function getMapBounds(): GeoBounds | null {
+	if (!rootMap) return null;
+	const bounds = rootMap.getBounds();
+	return {
+		south: bounds.getSouth(),
+		west: bounds.getWest(),
+		north: bounds.getNorth(),
+		east: bounds.getEast()
+	};
 }
 
 async function handleMapMovement() {
 	// do not fetch data for big zoom areas!
 	if (!rootMap || rootMap.getZoom() <= 9) return;
 
-	const markersToAdd = await getMarkersForView(rootMap.getBounds());
-	fireMapCluster.clearLayers();
-	markersToAdd.forEach((marker) => {
-		marker.on('click', onMapMarkerClick);
-		fireMapCluster.addLayer(marker);
-	});
+	const bounds = getMapBounds();
+	if (!bounds) return;
+
+	const geojson = await getMarkersForView(bounds);
+	const source = rootMap.getSource(MARKER_SOURCE_ID) as maplibregl.GeoJSONSource;
+	if (source) {
+		source.setData(geojson);
+	}
 }
 
-const markerIcon = L.icon({
-	iconUrl: selectedMarkerIcon,
-	iconSize: [56, 56]
-});
-
 //http://localhost:5173/#/?lat=48.1292912&lng=15.2728629&zoom=15&external=true
-
-const DefaultIcon = L.icon({
-	iconUrl: icon,
-	shadowUrl: iconShadow,
-	iconSize: [25, 41],
-	iconAnchor: [12, 41]
-});
-
-const selectedMarker = L.marker(L.latLng(0, 0), { icon: markerIcon });
-const ghostMarker = L.marker(L.latLng(0, 0), {
-	icon: DefaultIcon,
-	draggable: true
-});
-const selectedMarkerPath = new L.Polyline([]);
-
-// Custom external location marker
-let customLocationMarker: L.Marker | null = null;
 
 function startAdding() {
 	if (rootMap) {
 		const center = rootMap.getCenter();
-		markerEditStore.requestStartAdding(center);
+		markerEditStore.requestStartAdding({ lat: center.lat, lng: center.lng });
 	}
 }
-
-ghostMarker.on('dragend', (e) => {
-	markerEditStore.pendingLocation = e.target.getLatLng();
-});
 
 watch(
 	() => markerEditStore.isActive,
 	(active) => {
-		if (!active && rootMap?.hasLayer(ghostMarker)) {
-			rootMap.removeLayer(ghostMarker);
+		if (!active && ghostMarker) {
+			ghostMarker.remove();
 		}
 	}
 );
@@ -321,61 +375,85 @@ watch(
 	() => markerEditStore.pendingLocation,
 	(loc) => {
 		if (loc && rootMap && markerEditStore.isActive) {
-			ghostMarker.setLatLng(loc);
-			if (!rootMap.hasLayer(ghostMarker)) {
-				ghostMarker.addTo(rootMap);
+			if (!ghostMarker) {
+				ghostMarker = createGhostMarker();
 			}
+			ghostMarker.setLngLat([loc.lng, loc.lat]);
+			ghostMarker.addTo(rootMap);
 		}
 	}
 );
 
-function onMapMarkerClick(event: LeafletMouseEvent) {
-	// While editing or adding, block navigation to other markers but allow
-	// the event to propagate to the map so the click updates pendingLocation.
-	if (markerEditStore.isActive) return;
-	L.DomEvent.stopPropagation(event);
-	router.push(`/markers/${event.target.options.title}`);
+function fitMapToLayer() {
+	if (!rootMap) return;
+
+	const visibleMapView = defaultStore.visibleMapView;
+	const defaultPadding = 16;
+	const padding = {
+		top: visibleMapView.top + defaultPadding,
+		left: defaultPadding + visibleMapView.x,
+		bottom: visibleMapView.yMax - visibleMapView.y,
+		right: defaultPadding
+	};
+
+	if (pumpCalculation.isActive.value && pumpCalculation.hasPolyline()) {
+		const bounds = pumpCalculation.getPolylineBounds();
+		if (bounds) {
+			rootMap.fitBounds(bounds, { padding });
+		}
+	} else if (selectedPathVisible.value && selectedPathCoords.value.length >= 2) {
+		const bounds = new maplibregl.LngLatBounds();
+		selectedPathCoords.value.forEach((coord) => bounds.extend(coord as [number, number]));
+		rootMap.fitBounds(bounds, { padding });
+	} else if (selectedMarker) {
+		// If no polyline is visible but selectedMarker is, center it
+		const centerOffsetX = (padding.left - padding.right) / 2;
+		const centerOffsetY = (padding.top - padding.bottom) / 2;
+
+		const markerLngLat = selectedMarker.getLngLat();
+		const markerPoint = rootMap.project(markerLngLat);
+
+		const adjustedPoint = new maplibregl.Point(
+			markerPoint.x - centerOffsetX,
+			markerPoint.y - centerOffsetY
+		);
+
+		const adjustedLngLat = rootMap.unproject(adjustedPoint);
+		rootMap.panTo(adjustedLngLat);
+	}
 }
 
-function fitMapToLayer() {
-	const polyLine = pumpCalculation.isActive.value ? pumpCalculation.polyline : selectedMarkerPath;
-	if (rootMap && polyLine && rootMap?.hasLayer(polyLine)) {
-		const visibleMapView = defaultStore.visibleMapView;
+// Selected path state
+const selectedPathCoords = ref<[number, number][]>([]);
+const selectedPathVisible = ref(false);
 
-		const defaultPadding = 16;
-		rootMap.fitBounds(polyLine.getBounds(), {
-			paddingTopLeft: [defaultPadding + visibleMapView.x, visibleMapView.top + defaultPadding],
-			paddingBottomRight: [defaultPadding, visibleMapView.yMax - visibleMapView.y]
-		});
-	} else if (rootMap && rootMap.hasLayer(selectedMarker)) {
-		// If no polyline is visible but selectedMarker is, center it
-		const visibleMapView = defaultStore.visibleMapView;
-		const defaultPadding = 16;
+function updateSelectedPath(from: GeoPoint, to: GeoPoint) {
+	selectedPathCoords.value = [
+		[from.lng, from.lat],
+		[to.lng, to.lat]
+	];
+	selectedPathVisible.value = true;
 
-		// Calculate the center point of the visible area between paddingTopLeft and paddingBottomRight
-		const paddingTopLeft: L.PointExpression = [
-			defaultPadding + visibleMapView.x,
-			visibleMapView.top + defaultPadding
-		];
-		const paddingBottomRight: L.PointExpression = [
-			defaultPadding,
-			visibleMapView.yMax - visibleMapView.y
-		];
+	if (rootMap && mapReady) {
+		const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
+		if (source) {
+			source.setData({
+				type: 'Feature',
+				geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
+				properties: {}
+			});
+		}
+		if (rootMap.getLayer(SELECTED_PATH_LAYER)) {
+			rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'visible');
+		}
+	}
+}
 
-		// Calculate the center offset in pixels
-		const centerOffsetX = (paddingTopLeft[0] - paddingBottomRight[0]) / 2;
-		const centerOffsetY = (paddingTopLeft[1] - paddingBottomRight[1]) / 2;
-
-		// Get the current center point and convert to container point
-		const markerLatLng = selectedMarker.getLatLng();
-		const markerPoint = rootMap.latLngToContainerPoint(markerLatLng);
-
-		// Adjust the point to account for the padding offset
-		const adjustedPoint = L.point(markerPoint.x - centerOffsetX, markerPoint.y - centerOffsetY);
-
-		// Convert back to LatLng and pan to it
-		const adjustedLatLng = rootMap.containerPointToLatLng(adjustedPoint);
-		rootMap.panTo(adjustedLatLng);
+function hideSelectedPath() {
+	selectedPathVisible.value = false;
+	selectedPathCoords.value = [];
+	if (rootMap && mapReady && rootMap.getLayer(SELECTED_PATH_LAYER)) {
+		rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'none');
 	}
 }
 
@@ -389,15 +467,11 @@ watch(pumpCalculation.calculationResult, (val) => {
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
 
 const showPathToSelectedMarker = async () => {
-	if (nearbyWaterSource.isActive.value && rootMap?.hasLayer(selectedMarker)) {
-		const currentLocation = await getCurrentLocation()!;
-		selectedMarkerPath.setLatLngs([currentLocation, selectedMarker.getLatLng()]);
-
-		if (!rootMap?.hasLayer(selectedMarkerPath)) {
-			rootMap?.addLayer(selectedMarkerPath);
-		}
+	if (nearbyWaterSource.isActive.value && selectedMarker) {
+		const currentLocation = await getCurrentLocation();
+		const markerLngLat = selectedMarker.getLngLat();
+		updateSelectedPath(currentLocation, { lat: markerLngLat.lat, lng: markerLngLat.lng });
 		fitMapToLayer();
-		// update polyline to show a direct connection!
 	}
 };
 
@@ -408,29 +482,31 @@ watch(
 	(marker) => {
 		if (!marker) {
 			// Remove marker from map if no selection
-			if (rootMap?.hasLayer(selectedMarker)) {
-				rootMap?.removeLayer(selectedMarker);
-				rootMap?.removeLayer(selectedMarkerPath);
+			if (selectedMarker) {
+				selectedMarker.remove();
+				selectedMarker = null;
 			}
+			hideSelectedPath();
 			return;
 		}
 
 		try {
-			const latLng = L.latLng(
-				marker.lat || marker.center?.lat || 0,
-				marker.lon || marker.center?.lon || 0
-			);
-			selectedMarker.setLatLng(latLng);
+			const lat = marker.lat || marker.center?.lat || 0;
+			const lng = marker.lon || marker.center?.lon || 0;
 
-			if (!rootMap?.hasLayer(selectedMarker)) {
-				rootMap?.addLayer(selectedMarker);
+			if (!selectedMarker) {
+				selectedMarker = createSelectedMarker();
+			}
+			selectedMarker.setLngLat([lng, lat]);
+			if (rootMap) {
+				selectedMarker.addTo(rootMap);
 			}
 
 			showPathToSelectedMarker();
 			if (!nearbyWaterSource.isActive.value) {
-				rootMap?.removeLayer(selectedMarkerPath);
-				if (isFirstWatch) {
-					rootMap?.flyTo(latLng, DISABLE_CLUSTERING_ZOOM);
+				hideSelectedPath();
+				if (isFirstWatch && rootMap) {
+					rootMap.flyTo({ center: [lng, lat], zoom: DISABLE_CLUSTERING_ZOOM });
 				} else {
 					fitMapToLayer();
 				}
@@ -442,10 +518,10 @@ watch(
 		}
 	}
 );
-// Replace locationControl with custom location tracking
-let userLocationMarker: L.CircleMarker | null = null;
+
+// Location tracking
 const watchId = ref<string | null>(null);
-const currentUserLocation = ref<LatLng | null>(null);
+const currentUserLocation = ref<GeoPoint | null>(null);
 const waitingForLocation = ref(false);
 
 async function showUserLocation() {
@@ -476,21 +552,25 @@ async function showUserLocation() {
 
 			waitingForLocation.value = false;
 
-			const latLng = L.latLng(position.coords.latitude, position.coords.longitude);
-			currentUserLocation.value = latLng;
+			const point: GeoPoint = {
+				lat: position.coords.latitude,
+				lng: position.coords.longitude
+			};
+			currentUserLocation.value = point;
 
 			// Update or create location marker
-			updateLocationMarker(latLng);
+			updateLocationMarker(point);
 
 			startWatchingLocation();
 		}
 
 		// Fly to user location
 		if (rootMap && userLocationMarker) {
-			rootMap.flyTo(
-				userLocationMarker?.getLatLng(),
-				Math.max(rootMap.getZoom(), DISABLE_CLUSTERING_ZOOM)
-			);
+			const lngLat = userLocationMarker.getLngLat();
+			rootMap.flyTo({
+				center: lngLat,
+				zoom: Math.max(rootMap.getZoom(), DISABLE_CLUSTERING_ZOOM)
+			});
 		}
 	} catch (error) {
 		console.error('Error getting location:', error);
@@ -498,21 +578,16 @@ async function showUserLocation() {
 	}
 }
 
-function updateLocationMarker(latLng: LatLng) {
+function updateLocationMarker(point: GeoPoint) {
 	if (!rootMap) return;
 
 	// Update or create location marker
-	if (userLocationMarker) {
-		userLocationMarker.setLatLng(latLng);
-	} else {
-		userLocationMarker = L.circleMarker(latLng, {
-			radius: 8,
-			weight: 3,
-			color: '#fff',
-			fillColor: '#136AEC',
-			fillOpacity: 1
-		}).addTo(rootMap);
+	if (!userLocationMarker) {
+		userLocationMarker = createUserLocationMarker();
 	}
+	userLocationMarker.setLngLat([point.lng, point.lat]);
+	userLocationMarker.addTo(rootMap);
+
 	// Trigger nearby search if active
 	searchNearbyMarkers();
 }
@@ -531,9 +606,12 @@ function startWatchingLocation() {
 			}
 
 			if (position) {
-				const latLng = L.latLng(position.coords.latitude, position.coords.longitude);
-				currentUserLocation.value = latLng;
-				updateLocationMarker(latLng);
+				const point: GeoPoint = {
+					lat: position.coords.latitude,
+					lng: position.coords.longitude
+				};
+				currentUserLocation.value = point;
+				updateLocationMarker(point);
 			}
 		}
 	).then((id) => {
@@ -549,10 +627,11 @@ function stopWatchingLocation() {
 	}
 }
 
-async function getCurrentLocation(): Promise<LatLng> {
+async function getCurrentLocation(): Promise<GeoPoint> {
 	// if a custom location is active, use it to find the nearest water source
 	if (customLocationMarker) {
-		return customLocationMarker.getLatLng();
+		const lngLat = customLocationMarker.getLngLat();
+		return { lat: lngLat.lat, lng: lngLat.lng };
 	}
 
 	if (currentUserLocation.value) {
@@ -562,7 +641,8 @@ async function getCurrentLocation(): Promise<LatLng> {
 	}
 
 	// Fallback to map center
-	return rootMap!.getCenter();
+	const center = rootMap!.getCenter();
+	return { lat: center.lat, lng: center.lng };
 }
 
 async function searchNearbyMarkers() {
@@ -576,6 +656,189 @@ async function searchNearbyMarkers() {
 	nearbyWaterSource.list.value = await getNearbyMarkers(location);
 	await showPathToSelectedMarker();
 }
+
+async function loadMarkerImages(map: maplibregl.Map) {
+	const entries = Object.entries(markerIconUrls);
+	for (const [name, url] of entries) {
+		const response = await map.loadImage(url);
+		map.addImage(name, response.data);
+	}
+}
+
+function addMapLayers(map: maplibregl.Map) {
+	// Marker source with clustering
+	map.addSource(MARKER_SOURCE_ID, {
+		type: 'geojson',
+		data: { type: 'FeatureCollection', features: [] },
+		cluster: true,
+		clusterMaxZoom: DISABLE_CLUSTERING_ZOOM - 1,
+		clusterRadius: 50
+	});
+
+	// Cluster circles
+	map.addLayer({
+		id: 'clusters',
+		type: 'circle',
+		source: MARKER_SOURCE_ID,
+		filter: ['has', 'point_count'],
+		paint: {
+			'circle-color': [
+				'step',
+				['get', 'point_count'],
+				'#51bbd6',
+				100,
+				'#f1f075',
+				750,
+				'#f28cb1'
+			],
+			'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40]
+		}
+	});
+
+	// Cluster count labels
+	map.addLayer({
+		id: 'cluster-count',
+		type: 'symbol',
+		source: MARKER_SOURCE_ID,
+		filter: ['has', 'point_count'],
+		layout: {
+			'text-field': '{point_count_abbreviated}',
+			'text-font': ['Noto Sans Medium'],
+			'text-size': 12
+		}
+	});
+
+	// Individual markers (unclustered)
+	map.addLayer({
+		id: 'unclustered-point',
+		type: 'symbol',
+		source: MARKER_SOURCE_ID,
+		filter: ['!', ['has', 'point_count']],
+		layout: {
+			'icon-image': ['get', 'icon'],
+			'icon-size': 0.25,
+			'icon-allow-overlap': true
+		}
+	});
+
+	// Selected path line source and layer
+	map.addSource(SELECTED_PATH_SOURCE, {
+		type: 'geojson',
+		data: {
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates: [] },
+			properties: {}
+		}
+	});
+
+	map.addLayer({
+		id: SELECTED_PATH_LAYER,
+		type: 'line',
+		source: SELECTED_PATH_SOURCE,
+		layout: { visibility: 'none' },
+		paint: {
+			'line-color': '#3388ff',
+			'line-width': 3
+		}
+	});
+}
+
+function setupMapEventListeners(map: maplibregl.Map) {
+	// General map click handler
+	map.on('click', async (e) => {
+		// Check if click was on a marker or cluster
+		const interactiveLayers = ['clusters', 'unclustered-point'];
+		const features = map.queryRenderedFeatures(e.point, { layers: interactiveLayers });
+
+		if (features.length > 0) {
+			const feature = features[0];
+
+			// Cluster click → zoom in
+			if (feature.properties?.cluster_id !== undefined) {
+				const source = map.getSource(MARKER_SOURCE_ID) as maplibregl.GeoJSONSource;
+				const coords = (feature.geometry as GeoJSON.Point).coordinates as [
+					number,
+					number
+				];
+				try {
+					const expansionZoom = await source.getClusterExpansionZoom(
+						feature.properties.cluster_id
+					);
+					const zoom = Math.max(expansionZoom, map.getZoom() + 1);
+					map.easeTo({ center: coords, zoom });
+				} catch {
+					map.easeTo({ center: coords, zoom: (map.getZoom() || 10) + 2 });
+				}
+				return;
+			}
+
+			// Individual marker click
+			if (markerEditStore.isActive) {
+				// In edit mode, clicking a marker updates pending location
+				markerEditStore.pendingLocation = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+				return;
+			}
+
+			// Do not navigate away while supply pipe calculation is active
+			if (route.path.includes('supplypipe')) {
+				return;
+			}
+
+			const markerId = feature.properties?.id;
+			if (markerId) {
+				router.push(`/markers/${markerId}`);
+			}
+			return;
+		}
+
+		// Click on empty map area
+		if (markerEditStore.isActive) {
+			markerEditStore.pendingLocation = { lat: e.lngLat.lat, lng: e.lngLat.lng };
+			return;
+		}
+
+		// do not close if the supply pipe is open
+		if (route.path.includes('supplypipe')) {
+			return;
+		}
+
+		const hideLocationMarker =
+			!route.path.includes('/markers/') && !route.path.includes('/nearbysources');
+
+		// The marker should only be hidden after tapping on the map and no marker info panel is open.
+		if (hideLocationMarker && customLocationMarker) {
+			customLocationMarker.remove();
+			customLocationMarker = null;
+		}
+
+		router.replace('/');
+	});
+
+	// Context menu
+	map.on('contextmenu', (e) => {
+		if (route.path.includes('supplypipe')) {
+			pumpCalculation.markerSetAlert({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+		}
+	});
+
+	// Cursor changes for interactive layers
+	map.on('mouseenter', 'unclustered-point', () => {
+		map.getCanvas().style.cursor = 'pointer';
+	});
+	map.on('mouseleave', 'unclustered-point', () => {
+		map.getCanvas().style.cursor = '';
+	});
+	map.on('mouseenter', 'clusters', () => {
+		map.getCanvas().style.cursor = 'pointer';
+	});
+	map.on('mouseleave', 'clusters', () => {
+		map.getCanvas().style.cursor = '';
+	});
+
+	// Save view on movement
+	map.on('moveend', saveMapView);
+}
+
 async function initMap() {
 	await nextTick();
 
@@ -585,82 +848,41 @@ async function initMap() {
 		rootMap = null;
 	}
 
-	rootMap = L.map(MAP_ELEMENT_ID, { zoomControl: false });
-	//L.control.scale().addTo(rootMap);
+	const savedView = restoreMapView();
 
-	setupMapEventListeners();
-	addTileLayer();
-	restoreMapView();
+	rootMap = new maplibregl.Map({
+		container: MAP_ELEMENT_ID,
+		style: getMapStyle(),
+		center: savedView?.center || [15.274102, 48.135314],
+		zoom: savedView?.zoom || 13,
+		attributionControl: {},
+		maxZoom: 19
+	});
 
-	// Important: force Leaflet to recalc size after layout is ready
-	await ensureMapSize();
+	rootMap.on('load', async () => {
+		if (!rootMap) return;
+		mapReady = true;
 
-	handleMapMovement();
+		await loadMarkerImages(rootMap);
+		addMapLayers(rootMap);
+		setupMapEventListeners(rootMap);
 
-	// watch map movement
-	rootMap.on('zoomend', debouncedMapMove);
-	rootMap.on('dragend', debouncedMapMove);
-	rootMap.on('moveend', debouncedMapMove);
+		applyMapLayerSelection(mapLayer.value);
 
-	fireMapCluster.addTo(rootMap);
-	pumpCalculation.setMap(rootMap);
+		// Important: force MapLibre to recalc size after layout is ready
+		await ensureMapSize();
 
-	watchExternalLocationQuery();
-}
+		handleMapMovement();
 
-function setupMapEventListeners() {
-	if (!rootMap) return;
+		// watch map movement
+		rootMap.on('zoomend', debouncedMapMove);
+		rootMap.on('dragend', debouncedMapMove);
+		rootMap.on('moveend', debouncedMapMove);
 
-	rootMap.on('click', handleMapClick);
-	rootMap.on('contextmenu', handleMapContextMenu);
-}
+		pumpCalculation.setMap(rootMap);
 
-function handleMapClick(e: LeafletMouseEvent) {
-	if (markerEditStore.isActive) {
-		markerEditStore.pendingLocation = e.latlng;
-		return;
-	}
-
-	// do not close if the supply pipe is open
-	if (route.path.includes('supplypipe')) {
-		return;
-	}
-
-	const hideLocationMarker =
-		!route.path.includes('/markers/') && !route.path.includes('/nearbysources');
-
-	// The marker should only be hidden after tapping on the map and no marker info panel is open.
-	if (hideLocationMarker && customLocationMarker) {
-		customLocationMarker.remove();
-		customLocationMarker = null;
-	}
-
-	router.replace('/');
-}
-
-function handleMapContextMenu(e: LeafletMouseEvent) {
-	if (route.path.includes('supplypipe')) {
-		pumpCalculation.markerSetAlert(e.latlng);
-	}
-}
-
-function addTileLayer() {
-	if (!rootMap) return;
-
-	if (!osmTileLayer || !satelliteTileLayer || !cartoLabelsLayer) {
-		initTileLayers();
-	}
-
-	applyMapLayerSelection(mapLayer.value);
-}
-
-function restoreMapView() {
-	if (!rootMap) return;
-
-	// @ts-ignore: is a js plugin without any typings
-	if (!rootMap.restoreView()) {
-		rootMap.setView([48.135314, 15.274102], 13);
-	}
+		watchExternalLocationQuery();
+	});
 }
 
 function watchExternalLocationQuery() {
@@ -671,14 +893,16 @@ function watchExternalLocationQuery() {
 				const lat = parseFloat(query.lat as string);
 				const lng = parseFloat(query.lng as string);
 				const zoom = parseFloat(query.zoom as string);
-				const latLng = L.latLng(lat, lng);
 
 				if (customLocationMarker) {
-					customLocationMarker.setLatLng(latLng);
+					customLocationMarker.setLngLat([lng, lat]);
 				} else {
-					customLocationMarker = L.marker(latLng, { icon: DefaultIcon }).addTo(rootMap);
+					customLocationMarker = new maplibregl.Marker()
+						.setLngLat([lng, lat])
+						.addTo(rootMap);
 				}
-				rootMap.setView(latLng, zoom);
+				rootMap.setCenter([lng, lat]);
+				rootMap.setZoom(zoom);
 			}
 		},
 		{ immediate: true }
@@ -728,6 +952,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
 	stopWatchingLocation();
+	if (rootMap) {
+		rootMap.remove();
+		rootMap = null;
+	}
 });
 </script>
 <style scoped>
@@ -766,12 +994,9 @@ ion-fab {
 	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px));
 }
 
-:deep(.leaflet-bottom) {
+:deep(.maplibregl-ctrl-bottom-left),
+:deep(.maplibregl-ctrl-bottom-right) {
 	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
-}
-
-:deep(.leaflet-control-locate) {
-	display: none;
 }
 </style>
 
@@ -781,10 +1006,7 @@ ion-fab {
 		background: #000;
 	}
 
-	.leaflet-layer,
-	.leaflet-control-zoom-in,
-	.leaflet-control-zoom-out,
-	.leaflet-control-attribution {
+	.maplibregl-canvas {
 		filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
 	}
 }
