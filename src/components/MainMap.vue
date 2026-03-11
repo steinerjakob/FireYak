@@ -148,9 +148,11 @@ const defaultStore = useDefaultStore();
 const settingsStore = useSettingsStore();
 const { showZoomButtons, mapLayer } = storeToRefs(settingsStore);
 const { saveMapLayer } = useSettings();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const isSatellite = ref(false);
+
+const PROTOMAPS_API_KEY = 'key';
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
@@ -191,72 +193,47 @@ function createUserLocationMarker(): maplibregl.Marker {
 	return new maplibregl.Marker({ element: el, anchor: 'center' });
 }
 
-function getMapStyle(): maplibregl.StyleSpecification {
-	const githubAttribution =
-		' | <a href="https://github.com/steinerjakob/FireYak" target="_blank">Support on GitHub ⭐</a>';
-	return {
-		version: 8,
-		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
-		sources: {
-			osm: {
-				type: 'raster',
-				tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-				tileSize: 256,
-				maxzoom: 19,
-				attribution: `© OpenStreetMap${githubAttribution}`
-			},
-			satellite: {
-				type: 'raster',
-				tiles: [
-					'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-				],
-				tileSize: 256,
-				maxzoom: 19,
-				attribution: '&copy; Esri'
-			},
-			'carto-labels': {
-				type: 'raster',
-				tiles: [
-					'https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
-					'https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
-					'https://c.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
-					'https://d.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png'
-				],
-				tileSize: 256,
-				maxzoom: 19,
-				attribution: `&copy; CARTO${githubAttribution}`
-			}
-		},
-		layers: [
-			{ id: 'osm-layer', type: 'raster', source: 'osm' },
-			{
-				id: 'satellite-layer',
-				type: 'raster',
-				source: 'satellite',
-				layout: { visibility: 'none' }
-			},
-			{
-				id: 'carto-labels-layer',
-				type: 'raster',
-				source: 'carto-labels',
-				layout: { visibility: 'none' }
-			}
-		]
-	};
+function getProtomapsStyleUrl(): string {
+	const theme = isDarkMode.value ? 'dark' : 'light';
+	const lang = locale.value || 'en';
+	return `https://api.protomaps.com/styles/v5/${theme}/${lang}.json?key=${PROTOMAPS_API_KEY}`;
 }
 
 function applyMapLayerSelection(selection: MapLayerSetting) {
 	if (!rootMap || !mapReady) return;
 
 	if (selection === 'satellite') {
-		rootMap.setLayoutProperty('osm-layer', 'visibility', 'none');
-		rootMap.setLayoutProperty('satellite-layer', 'visibility', 'visible');
-		rootMap.setLayoutProperty('carto-labels-layer', 'visibility', 'visible');
+		// Hide all Protomaps base layers and show satellite
+		rootMap.getStyle().layers.forEach((layer) => {
+			if (layer.id === 'satellite-layer' || layer.id === 'carto-labels-layer') return;
+			if (
+				layer.id.startsWith('clusters') ||
+				layer.id.startsWith('cluster-count') ||
+				layer.id.startsWith('unclustered-point') ||
+				layer.id === SELECTED_PATH_LAYER
+			)
+				return;
+			rootMap!.setLayoutProperty(layer.id, 'visibility', 'none');
+		});
+		if (rootMap.getLayer('satellite-layer')) {
+			rootMap.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+		}
+		if (rootMap.getLayer('carto-labels-layer')) {
+			rootMap.setLayoutProperty('carto-labels-layer', 'visibility', 'visible');
+		}
 		isSatellite.value = true;
 	} else {
-		rootMap.setLayoutProperty('osm-layer', 'visibility', 'visible');
-		rootMap.setLayoutProperty('satellite-layer', 'visibility', 'none');
-		rootMap.setLayoutProperty('carto-labels-layer', 'visibility', 'none');
+		// Show all Protomaps base layers and hide satellite
+		rootMap.getStyle().layers.forEach((layer) => {
+			if (layer.id === 'satellite-layer' || layer.id === 'carto-labels-layer') return;
+			rootMap!.setLayoutProperty(layer.id, 'visibility', 'visible');
+		});
+		if (rootMap.getLayer('satellite-layer')) {
+			rootMap.setLayoutProperty('satellite-layer', 'visibility', 'none');
+		}
+		if (rootMap.getLayer('carto-labels-layer')) {
+			rootMap.setLayoutProperty('carto-labels-layer', 'visibility', 'none');
+		}
 		isSatellite.value = false;
 	}
 }
@@ -665,7 +642,46 @@ async function loadMarkerImages(map: maplibregl.Map) {
 	}
 }
 
+function addSatelliteLayers(map: maplibregl.Map) {
+	map.addSource('satellite', {
+		type: 'raster',
+		tiles: [
+			'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+		],
+		tileSize: 256,
+		maxzoom: 19,
+		attribution: '&copy; Esri'
+	});
+	map.addSource('carto-labels', {
+		type: 'raster',
+		tiles: [
+			'https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+			'https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+			'https://c.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+			'https://d.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png'
+		],
+		tileSize: 256,
+		maxzoom: 19,
+		attribution: '&copy; CARTO'
+	});
+	map.addLayer({
+		id: 'satellite-layer',
+		type: 'raster',
+		source: 'satellite',
+		layout: { visibility: 'none' }
+	});
+	map.addLayer({
+		id: 'carto-labels-layer',
+		type: 'raster',
+		source: 'carto-labels',
+		layout: { visibility: 'none' }
+	});
+}
+
 function addMapLayers(map: maplibregl.Map) {
+	// Satellite overlay layers
+	addSatelliteLayers(map);
+
 	// Marker source with clustering
 	map.addSource(MARKER_SOURCE_ID, {
 		type: 'geojson',
@@ -682,15 +698,7 @@ function addMapLayers(map: maplibregl.Map) {
 		source: MARKER_SOURCE_ID,
 		filter: ['has', 'point_count'],
 		paint: {
-			'circle-color': [
-				'step',
-				['get', 'point_count'],
-				'#51bbd6',
-				100,
-				'#f1f075',
-				750,
-				'#f28cb1'
-			],
+			'circle-color': ['step', ['get', 'point_count'], '#51bbd6', 100, '#f1f075', 750, '#f28cb1'],
 			'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40]
 		}
 	});
@@ -756,14 +764,9 @@ function setupMapEventListeners(map: maplibregl.Map) {
 			// Cluster click → zoom in
 			if (feature.properties?.cluster_id !== undefined) {
 				const source = map.getSource(MARKER_SOURCE_ID) as maplibregl.GeoJSONSource;
-				const coords = (feature.geometry as GeoJSON.Point).coordinates as [
-					number,
-					number
-				];
+				const coords = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
 				try {
-					const expansionZoom = await source.getClusterExpansionZoom(
-						feature.properties.cluster_id
-					);
+					const expansionZoom = await source.getClusterExpansionZoom(feature.properties.cluster_id);
 					const zoom = Math.max(expansionZoom, map.getZoom() + 1);
 					map.easeTo({ center: coords, zoom });
 				} catch {
@@ -852,10 +855,9 @@ async function initMap() {
 
 	rootMap = new maplibregl.Map({
 		container: MAP_ELEMENT_ID,
-		style: getMapStyle(),
+		style: getProtomapsStyleUrl(),
 		center: savedView?.center || [15.274102, 48.135314],
 		zoom: savedView?.zoom || 13,
-		attributionControl: {},
 		maxZoom: 19
 	});
 
@@ -863,14 +865,15 @@ async function initMap() {
 		if (!rootMap) return;
 		mapReady = true;
 
+		// Important: force MapLibre to recalc size after layout is ready
+		await ensureMapSize();
+
 		await loadMarkerImages(rootMap);
+
 		addMapLayers(rootMap);
 		setupMapEventListeners(rootMap);
 
 		applyMapLayerSelection(mapLayer.value);
-
-		// Important: force MapLibre to recalc size after layout is ready
-		await ensureMapSize();
 
 		handleMapMovement();
 
@@ -897,9 +900,7 @@ function watchExternalLocationQuery() {
 				if (customLocationMarker) {
 					customLocationMarker.setLngLat([lng, lat]);
 				} else {
-					customLocationMarker = new maplibregl.Marker()
-						.setLngLat([lng, lat])
-						.addTo(rootMap);
+					customLocationMarker = new maplibregl.Marker().setLngLat([lng, lat]).addTo(rootMap);
 				}
 				rootMap.setCenter([lng, lat]);
 				rootMap.setZoom(zoom);
@@ -907,6 +908,21 @@ function watchExternalLocationQuery() {
 		},
 		{ immediate: true }
 	);
+}
+
+async function reloadMapStyle() {
+	if (!rootMap || !mapReady) return;
+	const wasSatellite = isSatellite.value;
+	rootMap.setStyle(getProtomapsStyleUrl());
+	rootMap.once('style.load', async () => {
+		if (!rootMap) return;
+		await loadMarkerImages(rootMap);
+		addMapLayers(rootMap);
+		if (wasSatellite) {
+			applyMapLayerSelection('satellite');
+		}
+		handleMapMovement();
+	});
 }
 
 function zoomIn() {
@@ -918,6 +934,7 @@ function zoomOut() {
 }
 
 onMounted(async () => {
+	await nextTick();
 	await initMap();
 
 	// Watch route params and update store
@@ -948,6 +965,16 @@ onMounted(async () => {
 			applyMapLayerSelection(val);
 		}
 	);
+
+	watch(isDarkMode, () => {
+		if (!isSatellite.value) {
+			reloadMapStyle();
+		}
+	});
+
+	watch(locale, () => {
+		reloadMapStyle();
+	});
 });
 
 onUnmounted(() => {
@@ -1003,11 +1030,7 @@ ion-fab {
 <style>
 .darkMap {
 	#map {
-		background: #000;
-	}
-
-	.maplibregl-canvas {
-		filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+		background: #1a1a2e;
 	}
 }
 </style>
