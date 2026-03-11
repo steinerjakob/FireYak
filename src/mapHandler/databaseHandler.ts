@@ -25,16 +25,36 @@ const dbPromise = openDB('FireMarker', 1, {
 	}
 });
 
+function getNodePoint(node: OverPassElement): GeoPoint | null {
+	const lat = node.lat ?? node.center?.lat;
+	const lng = node.lon ?? node.center?.lon;
+
+	if (lat === undefined || lng === undefined) {
+		return null;
+	}
+
+	return { lat, lng };
+}
+
 export async function storeMapNodes(nodes: OverPassElement[]) {
 	try {
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
 		await Promise.all([
 			...nodes.map(async (node) => {
-				// Keep an existing soft-delete flag even when re-storing/updating the node.
+				const point = getNodePoint(node);
+				if (!point) {
+					return;
+				}
+
 				const existing = (await tx.store.get(node.id)) as CachedMapNode | undefined;
 				const deletedFlag = existing?.__deleted ?? (node as CachedMapNode).__deleted ?? false;
 
-				const toStore: CachedMapNode = { ...(node as CachedMapNode), __deleted: deletedFlag };
+				const toStore: CachedMapNode = {
+					...(node as CachedMapNode),
+					__deleted: deletedFlag,
+					lat: point.lat,
+					lon: point.lng
+				};
 				return tx.store.put(toStore);
 			}),
 			tx.done
@@ -55,7 +75,6 @@ export async function getMapNodesForView(mapBounds: GeoBounds) {
 		// Initialize an empty array to store the results
 		const results: OverPassElement[] = [];
 
-		// Iterate over the indexed items within the bounds
 		const range = IDBKeyRange.bound(
 			[mapBounds.south, mapBounds.west],
 			[mapBounds.north, mapBounds.east]
@@ -64,18 +83,12 @@ export async function getMapNodesForView(mapBounds: GeoBounds) {
 		let cursor = await index.openCursor(range);
 
 		while (cursor) {
-			// Retrieve the map marker object from the cursor
 			const mapMarker = cursor.value as CachedMapNode;
 
 			if (!isDeleted(mapMarker)) {
-				const markerPoint: GeoPoint = {
-					lat: mapMarker.lat || mapMarker.center?.lat || 0,
-					lng: mapMarker.lon || mapMarker.center?.lon || 0
-				};
+				const markerPoint = getNodePoint(mapMarker);
 
-				// somehow the filter returns more markers than in the range specified?
-				if (boundsContains(mapBounds, markerPoint)) {
-					// Add the map marker to the results array
+				if (markerPoint && boundsContains(mapBounds, markerPoint)) {
 					results.push(mapMarker);
 				}
 			}
@@ -94,12 +107,9 @@ export async function getNearbyMapNodes(location: GeoPoint, radius: number) {
 		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
 		const markerStore = transaction.objectStore(markerStoreName);
 
-		// Calculate approximate bounding box to reduce the search space
-		// This is a rough approximation: 1 degree ≈ 111km at equator
-		const latDelta = radius / 111000; // Convert meters to degrees (approximate)
+		const latDelta = radius / 111000;
 		const lngDelta = radius / (111000 * Math.cos((location.lat * Math.PI) / 180));
 
-		// Use the existing index for initial filtering
 		const index = markerStore.index('lat, lon');
 		const range = IDBKeyRange.bound(
 			[location.lat - latDelta, location.lng - lngDelta],
@@ -113,17 +123,14 @@ export async function getNearbyMapNodes(location: GeoPoint, radius: number) {
 			const mapMarker = cursor.value as CachedMapNode;
 
 			if (!isDeleted(mapMarker)) {
-				// Get the marker's coordinates
-				const markerPoint: GeoPoint = {
-					lat: mapMarker.lat || mapMarker.center?.lat || 0,
-					lng: mapMarker.lon || mapMarker.center?.lon || 0
-				};
+				const markerPoint = getNodePoint(mapMarker);
 
-				// Calculate precise distance and check if within radius
-				const distance = distanceTo(location, markerPoint);
+				if (markerPoint) {
+					const distance = distanceTo(location, markerPoint);
 
-				if (distance <= radius) {
-					results.push(mapMarker);
+					if (distance <= radius) {
+						results.push(mapMarker);
+					}
 				}
 			}
 
@@ -166,12 +173,9 @@ export async function getMapNodeIdsForBounds(mapBounds: GeoBounds): Promise<numb
 
 		while (cursor) {
 			const mapMarker = cursor.value as CachedMapNode;
-			const markerPoint: GeoPoint = {
-				lat: mapMarker.lat || mapMarker.center?.lat || 0,
-				lng: mapMarker.lon || mapMarker.center?.lon || 0
-			};
+			const markerPoint = getNodePoint(mapMarker);
 
-			if (boundsContains(mapBounds, markerPoint)) {
+			if (markerPoint && boundsContains(mapBounds, markerPoint)) {
 				ids.push(mapMarker.id);
 			}
 

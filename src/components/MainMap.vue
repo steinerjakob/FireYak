@@ -324,7 +324,7 @@ async function handleMapMovement() {
 	if (!bounds) return;
 
 	const geojson = await getMarkersForView(bounds);
-	const source = rootMap.getSource(MARKER_SOURCE_ID) as maplibregl.GeoJSONSource;
+	const source = rootMap.getSource(MARKER_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
 	if (source) {
 		source.setData(geojson);
 	}
@@ -637,6 +637,7 @@ async function searchNearbyMarkers() {
 async function loadMarkerImages(map: maplibregl.Map) {
 	const entries = Object.entries(markerIconUrls);
 	for (const [name, url] of entries) {
+		if (map.hasImage(name)) continue;
 		const response = await map.loadImage(url);
 		map.addImage(name, response.data);
 	}
@@ -858,15 +859,19 @@ async function initMap() {
 		style: getProtomapsStyleUrl(),
 		center: savedView?.center || [15.274102, 48.135314],
 		zoom: savedView?.zoom || 13,
-		maxZoom: 19
+		maxZoom: 19,
+		dragRotate: false,
+		touchZoomRotate: false,
+		pitchWithRotate: false,
+		maxPitch: 0
 	});
+
+	// Important: force MapLibre to recalc size after layout is ready
+	await ensureMapSize();
 
 	rootMap.on('load', async () => {
 		if (!rootMap) return;
 		mapReady = true;
-
-		// Important: force MapLibre to recalc size after layout is ready
-		await ensureMapSize();
 
 		await loadMarkerImages(rootMap);
 
@@ -875,7 +880,7 @@ async function initMap() {
 
 		applyMapLayerSelection(mapLayer.value);
 
-		handleMapMovement();
+		debouncedMapMove();
 
 		// watch map movement
 		rootMap.on('zoomend', debouncedMapMove);
@@ -910,21 +915,30 @@ function watchExternalLocationQuery() {
 	);
 }
 
-async function reloadMapStyle() {
+function reloadMapStyle() {
 	if (!rootMap || !mapReady) return;
 	const wasSatellite = isSatellite.value;
+
 	rootMap.setStyle(getProtomapsStyleUrl());
+
 	rootMap.once('style.load', async () => {
 		if (!rootMap) return;
+
 		await loadMarkerImages(rootMap);
 		addMapLayers(rootMap);
+		setupMapEventListeners(rootMap);
+
+		rootMap.on('zoomend', debouncedMapMove);
+		rootMap.on('dragend', debouncedMapMove);
+		rootMap.on('moveend', debouncedMapMove);
+
 		if (wasSatellite) {
 			applyMapLayerSelection('satellite');
 		}
+
 		handleMapMovement();
 	});
 }
-
 function zoomIn() {
 	rootMap?.zoomIn();
 }
