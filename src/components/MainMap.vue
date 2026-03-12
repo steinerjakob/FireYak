@@ -130,6 +130,7 @@ import { storeToRefs } from 'pinia';
 import { useSettings } from '@/composable/settings';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds } from '@/types/geo';
+import { outdoorsFlavor } from '@/map/outdoorsFlavor';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -214,7 +215,7 @@ function getProtomapsStyle(): string | maplibregl.StyleSpecification {
 					'&copy; <a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
 			}
 		},
-		layers: protomapsLayers('protomaps', osmFlavor, { lang }).map((layer) => {
+		layers: protomapsLayers('protomaps', outdoorsFlavor, { lang }).map((layer) => {
 			if (
 				layer.type === 'symbol' &&
 				(layer.id === 'roads_labels_minor' || layer.id === 'roads_labels_major')
