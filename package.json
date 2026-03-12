@@ -34,6 +34,7 @@
 		"@ionic/vue": "^8.7.17",
 		"@ionic/vue-router": "^8.7.17",
 		"@mdi/font": "7.4.47",
+		"@protomaps/basemaps": "^5.7.2",
 		"core-js": "^3.47.0",
 		"idb": "^8.0.3",
 		"leaflet": "^1.9.4",

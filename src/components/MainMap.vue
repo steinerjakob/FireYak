@@ -97,6 +97,8 @@
 <script lang="ts" setup>
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { layers as protomapsLayers } from '@protomaps/basemaps';
+import { osmFlavor } from '@/map/osmFlavor';
 import selectedMarkerIconUrl from '../assets/markers/selectedmarker.png';
 import { nextTick, onMounted, watch, ref, onUnmounted } from 'vue';
 import { debounce } from '@/helper/helper';
@@ -193,10 +195,42 @@ function createUserLocationMarker(): maplibregl.Marker {
 	return new maplibregl.Marker({ element: el, anchor: 'center' });
 }
 
-function getProtomapsStyleUrl(): string {
-	const theme = isDarkMode.value ? 'dark' : 'light';
+function getProtomapsStyle(): string | maplibregl.StyleSpecification {
 	const lang = locale.value || 'en';
-	return `https://api.protomaps.com/styles/v5/${theme}/${lang}.json?key=${PROTOMAPS_API_KEY}`;
+
+	if (isDarkMode.value) {
+		return `https://api.protomaps.com/styles/v5/dark/${lang}.json?key=${PROTOMAPS_API_KEY}`;
+	}
+
+	return {
+		version: 8,
+		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+		sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v5/light',
+		sources: {
+			protomaps: {
+				type: 'vector',
+				url: `https://api.protomaps.com/tiles/v4.json?key=${PROTOMAPS_API_KEY}`,
+				attribution:
+					'&copy; <a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
+			}
+		},
+		layers: protomapsLayers('protomaps', osmFlavor, { lang }).map((layer) => {
+			if (
+				layer.type === 'symbol' &&
+				(layer.id === 'roads_labels_minor' || layer.id === 'roads_labels_major')
+			) {
+				return { ...layer, layout: { ...layer.layout, 'text-size': 16 } };
+			}
+			if (layer.type === 'symbol' && layer.id === 'address_label') {
+				return {
+					...layer,
+					minzoom: 16,
+					layout: { ...layer.layout, 'text-size': 14 }
+				};
+			}
+			return layer;
+		})
+	};
 }
 
 function applyMapLayerSelection(selection: MapLayerSetting) {
@@ -321,7 +355,9 @@ async function handleMapMovement() {
 	if (!rootMap || rootMap.getZoom() <= 9) return;
 
 	const bounds = getMapBounds();
-	if (!bounds) return;
+	if (!bounds) {
+		return;
+	}
 
 	const geojson = await getMarkersForView(bounds);
 	const source = rootMap.getSource(MARKER_SOURCE_ID) as maplibregl.GeoJSONSource;
@@ -855,7 +891,7 @@ async function initMap() {
 
 	rootMap = new maplibregl.Map({
 		container: MAP_ELEMENT_ID,
-		style: getProtomapsStyleUrl(),
+		style: getProtomapsStyle(),
 		center: savedView?.center || [15.274102, 48.135314],
 		zoom: savedView?.zoom || 13,
 		maxZoom: 19
@@ -913,7 +949,7 @@ function watchExternalLocationQuery() {
 async function reloadMapStyle() {
 	if (!rootMap || !mapReady) return;
 	const wasSatellite = isSatellite.value;
-	rootMap.setStyle(getProtomapsStyleUrl());
+	rootMap.setStyle(getProtomapsStyle());
 	rootMap.once('style.load', async () => {
 		if (!rootMap) return;
 		await loadMarkerImages(rootMap);
