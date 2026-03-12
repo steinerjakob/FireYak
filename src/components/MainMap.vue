@@ -263,9 +263,13 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 }
 
 function applyMapLayerSelection(selection: MapLayerSetting) {
-	const wasSatellite = isSatellite.value;
 	isSatellite.value = selection === 'satellite';
-	if (isSatellite.value !== wasSatellite && rootMap && mapReady) {
+}
+
+function syncMapStyleWithPreferences() {
+	applyMapLayerSelection(mapLayer.value);
+
+	if (rootMap && mapReady) {
 		reloadMapStyle();
 	}
 }
@@ -297,6 +301,7 @@ async function openLayerSelector() {
 				handler: async (value: MapLayerSetting) => {
 					await saveMapLayer(value);
 					applyMapLayerSelection(value);
+					syncMapStyleWithPreferences();
 				}
 			}
 		]
@@ -847,8 +852,10 @@ async function initMap() {
 		rootMap = null;
 	}
 
+	mapReady = false;
+
 	const savedView = restoreMapView();
-	isSatellite.value = mapLayer.value === 'satellite';
+	applyMapLayerSelection(mapLayer.value);
 
 	rootMap = new maplibregl.Map({
 		container: MAP_ELEMENT_ID,
@@ -857,10 +864,13 @@ async function initMap() {
 		zoom: savedView?.zoom || 13,
 		maxZoom: 19,
 		dragRotate: false,
-		touchZoomRotate: false,
+		touchZoomRotate: true,
 		pitchWithRotate: false,
 		maxPitch: 0
 	});
+
+	rootMap.touchPitch.disable();
+	rootMap.touchZoomRotate.disableRotation();
 
 	// Important: force MapLibre to recalc size after layout is ready
 	await ensureMapSize();
@@ -870,6 +880,8 @@ async function initMap() {
 		mapReady = true;
 
 		await loadMarkerImages(rootMap);
+
+		syncMapStyleWithPreferences();
 
 		addMapLayers(rootMap);
 		setupMapEventListeners(rootMap);
@@ -956,16 +968,21 @@ onMounted(async () => {
 
 	watch(
 		() => mapLayer.value,
-		(val) => {
-			applyMapLayerSelection(val);
-		}
+		() => {
+			syncMapStyleWithPreferences();
+		},
+		{ immediate: true }
 	);
 
-	watch(isDarkMode, () => {
-		if (!isSatellite.value) {
-			reloadMapStyle();
-		}
-	});
+	watch(
+		isDarkMode,
+		() => {
+			if (!isSatellite.value) {
+				syncMapStyleWithPreferences();
+			}
+		},
+		{ immediate: true }
+	);
 
 	watch(locale, () => {
 		reloadMapStyle();
