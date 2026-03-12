@@ -98,7 +98,6 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { layers as protomapsLayers } from '@protomaps/basemaps';
-import { osmFlavor } from '@/map/osmFlavor';
 import selectedMarkerIconUrl from '../assets/markers/selectedmarker.png';
 import { nextTick, onMounted, watch, ref, onUnmounted } from 'vue';
 import { debounce } from '@/helper/helper';
@@ -131,6 +130,8 @@ import { useSettings } from '@/composable/settings';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds } from '@/types/geo';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
+import { nightFlavor } from '@/map/nightFlavor';
+import { satelliteFlavor } from '@/map/satelliteFlavor';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
@@ -196,80 +197,72 @@ function createUserLocationMarker(): maplibregl.Marker {
 	return new maplibregl.Marker({ element: el, anchor: 'center' });
 }
 
-function getProtomapsStyle(): string | maplibregl.StyleSpecification {
+function getProtomapsStyle(): maplibregl.StyleSpecification {
 	const lang = locale.value || 'en';
+	const flavor = isSatellite.value
+		? satelliteFlavor
+		: isDarkMode.value
+			? nightFlavor
+			: outdoorsFlavor;
 
-	if (isDarkMode.value) {
-		return `https://api.protomaps.com/styles/v5/dark/${lang}.json?key=${PROTOMAPS_API_KEY}`;
+	const sources: Record<string, maplibregl.SourceSpecification> = {
+		protomaps: {
+			type: 'vector',
+			url: `https://api.protomaps.com/tiles/v4.json?key=${PROTOMAPS_API_KEY}`,
+			attribution:
+				'&copy; <a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
+		}
+	};
+
+	const baseLayers: maplibregl.LayerSpecification[] = [];
+
+	if (isSatellite.value) {
+		sources['satellite'] = {
+			type: 'raster',
+			tiles: [
+				'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+			],
+			tileSize: 256,
+			maxzoom: 19,
+			attribution: '&copy; Esri'
+		};
+		baseLayers.push({
+			id: 'satellite-layer',
+			type: 'raster',
+			source: 'satellite'
+		} as maplibregl.LayerSpecification);
 	}
 
 	return {
 		version: 8,
-		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
-		sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v5/light',
-		sources: {
-			protomaps: {
-				type: 'vector',
-				url: `https://api.protomaps.com/tiles/v4.json?key=${PROTOMAPS_API_KEY}`,
-				attribution:
-					'&copy; <a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
-			}
-		},
-		layers: protomapsLayers('protomaps', outdoorsFlavor, { lang }).map((layer) => {
-			if (
-				layer.type === 'symbol' &&
-				(layer.id === 'roads_labels_minor' || layer.id === 'roads_labels_major')
-			) {
-				return { ...layer, layout: { ...layer.layout, 'text-size': 16 } };
-			}
-			if (layer.type === 'symbol' && layer.id === 'address_label') {
-				return {
-					...layer,
-					minzoom: 16,
-					layout: { ...layer.layout, 'text-size': 14 }
-				};
-			}
-			return layer;
-		})
+		sources,
+		layers: [
+			...baseLayers,
+			...protomapsLayers('protomaps', flavor, { lang }).map((layer) => {
+				if (
+					layer.type === 'symbol' &&
+					(layer.id === 'roads_labels_minor' || layer.id === 'roads_labels_major')
+				) {
+					return { ...layer, layout: { ...layer.layout, 'text-size': 16 } };
+				}
+				if (layer.type === 'symbol' && layer.id === 'address_label') {
+					return {
+						...layer,
+						minzoom: 16,
+						layout: { ...layer.layout, 'text-size': 14 }
+					};
+				}
+				return layer;
+			})
+		]
 	};
 }
 
 function applyMapLayerSelection(selection: MapLayerSetting) {
-	if (!rootMap || !mapReady) return;
-
-	if (selection === 'satellite') {
-		// Hide all Protomaps base layers and show satellite
-		rootMap.getStyle().layers.forEach((layer) => {
-			if (layer.id === 'satellite-layer' || layer.id === 'carto-labels-layer') return;
-			if (
-				layer.id.startsWith('clusters') ||
-				layer.id.startsWith('cluster-count') ||
-				layer.id.startsWith('unclustered-point') ||
-				layer.id === SELECTED_PATH_LAYER
-			)
-				return;
-			rootMap!.setLayoutProperty(layer.id, 'visibility', 'none');
-		});
-		if (rootMap.getLayer('satellite-layer')) {
-			rootMap.setLayoutProperty('satellite-layer', 'visibility', 'visible');
-		}
-		if (rootMap.getLayer('carto-labels-layer')) {
-			rootMap.setLayoutProperty('carto-labels-layer', 'visibility', 'visible');
-		}
-		isSatellite.value = true;
-	} else {
-		// Show all Protomaps base layers and hide satellite
-		rootMap.getStyle().layers.forEach((layer) => {
-			if (layer.id === 'satellite-layer' || layer.id === 'carto-labels-layer') return;
-			rootMap!.setLayoutProperty(layer.id, 'visibility', 'visible');
-		});
-		if (rootMap.getLayer('satellite-layer')) {
-			rootMap.setLayoutProperty('satellite-layer', 'visibility', 'none');
-		}
-		if (rootMap.getLayer('carto-labels-layer')) {
-			rootMap.setLayoutProperty('carto-labels-layer', 'visibility', 'none');
-		}
-		isSatellite.value = false;
+	const wasSatellite = isSatellite.value;
+	isSatellite.value = selection === 'satellite';
+	if (isSatellite.value !== wasSatellite && rootMap && mapReady) {
+		reloadMapStyle();
 	}
 }
 
@@ -679,46 +672,7 @@ async function loadMarkerImages(map: maplibregl.Map) {
 	}
 }
 
-function addSatelliteLayers(map: maplibregl.Map) {
-	map.addSource('satellite', {
-		type: 'raster',
-		tiles: [
-			'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-		],
-		tileSize: 256,
-		maxzoom: 19,
-		attribution: '&copy; Esri'
-	});
-	map.addSource('carto-labels', {
-		type: 'raster',
-		tiles: [
-			'https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
-			'https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
-			'https://c.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
-			'https://d.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png'
-		],
-		tileSize: 256,
-		maxzoom: 19,
-		attribution: '&copy; CARTO'
-	});
-	map.addLayer({
-		id: 'satellite-layer',
-		type: 'raster',
-		source: 'satellite',
-		layout: { visibility: 'none' }
-	});
-	map.addLayer({
-		id: 'carto-labels-layer',
-		type: 'raster',
-		source: 'carto-labels',
-		layout: { visibility: 'none' }
-	});
-}
-
 function addMapLayers(map: maplibregl.Map) {
-	// Satellite overlay layers
-	addSatelliteLayers(map);
-
 	// Marker source with clustering
 	map.addSource(MARKER_SOURCE_ID, {
 		type: 'geojson',
@@ -889,6 +843,7 @@ async function initMap() {
 	}
 
 	const savedView = restoreMapView();
+	isSatellite.value = mapLayer.value === 'satellite';
 
 	rootMap = new maplibregl.Map({
 		container: MAP_ELEMENT_ID,
@@ -909,8 +864,6 @@ async function initMap() {
 
 		addMapLayers(rootMap);
 		setupMapEventListeners(rootMap);
-
-		applyMapLayerSelection(mapLayer.value);
 
 		handleMapMovement();
 
@@ -949,15 +902,11 @@ function watchExternalLocationQuery() {
 
 async function reloadMapStyle() {
 	if (!rootMap || !mapReady) return;
-	const wasSatellite = isSatellite.value;
 	rootMap.setStyle(getProtomapsStyle());
 	rootMap.once('style.load', async () => {
 		if (!rootMap) return;
 		await loadMarkerImages(rootMap);
 		addMapLayers(rootMap);
-		if (wasSatellite) {
-			applyMapLayerSelection('satellite');
-		}
 		handleMapMovement();
 	});
 }
@@ -1067,7 +1016,7 @@ ion-fab {
 <style>
 .darkMap {
 	#map {
-		background: #1a1a2e;
+		background: #424d5c;
 	}
 }
 </style>
