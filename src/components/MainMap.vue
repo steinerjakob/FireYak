@@ -205,6 +205,8 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 			? nightFlavor
 			: outdoorsFlavor;
 
+	const spriteFlavor = isSatellite.value ? 'light' : isDarkMode.value ? 'dark' : 'light';
+
 	const sources: Record<string, maplibregl.SourceSpecification> = {
 		protomaps: {
 			type: 'vector',
@@ -236,7 +238,7 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 	return {
 		version: 8,
 		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
-		sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
+		sprite: `https://protomaps.github.io/basemaps-assets/sprites/v4/${spriteFlavor}`,
 		sources,
 		layers: [
 			...baseLayers,
