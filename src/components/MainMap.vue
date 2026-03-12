@@ -983,7 +983,7 @@ ion-fab {
 }
 
 .fab-vertical-bottom {
-	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 10px);
+	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 30px);
 }
 
 .zoom-fab {
@@ -998,11 +998,11 @@ ion-fab {
 
 .location-fab {
 	/* Position above the other bottom FAB (56px FAB height + 16px spacing) */
-	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 56px + 26px);
+	margin-bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 56px + 46px);
 }
 
 .add-hydrant-fab {
-	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + (56px + 21px) * 2);
+	margin-bottom: calc(var(--ion-safe-area-bottom, 0) + (56px + 30px) * 2);
 }
 
 .layers-fab {
