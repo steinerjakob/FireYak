@@ -80,7 +80,7 @@ export const outdoorsFlavor: Flavor = {
 	roads_label_minor_halo: '#ffffff',
 	roads_label_major: '#000000',
 	roads_label_major_halo: '#ffffff',
-	ocean_label: '#79bcec',
+	ocean_label: '#2a7ab5',
 	subplace_label: '#000000',
 	subplace_label_halo: '#ffffff',
 	city_label: '#000000',

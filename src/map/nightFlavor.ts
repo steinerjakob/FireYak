@@ -83,7 +83,7 @@ export const nightFlavor: Flavor = {
 	roads_label_minor_halo: '#3a4a5f',
 	roads_label_major: '#e6e6e6',
 	roads_label_major_halo: '#3a4a5f',
-	ocean_label: '#5d757e',
+	ocean_label: '#8ecae6',
 	subplace_label: '#acbcd2',
 	subplace_label_halo: '#3a4a5f',
 	city_label: '#acbcd2',
