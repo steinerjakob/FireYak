@@ -11,7 +11,6 @@ export default defineConfig([
 		'package.json',
 		'package-lock.json',
 		'**/index.html',
-		'src/plugins/leaflet.restoreview.js',
 		'src/vite-env.d.ts'
 	]),
 	{

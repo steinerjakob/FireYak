@@ -310,7 +310,7 @@ async function openLayerSelector() {
 	await alert.present();
 }
 
-// Save/restore map view via localStorage (replaces leaflet.restoreview plugin)
+// Save/restore map view via localStorage
 function saveMapView() {
 	if (!rootMap) return;
 	try {
