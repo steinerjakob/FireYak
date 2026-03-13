@@ -161,7 +161,7 @@
 		"layers": {
 			"openSelector": "Change map layer",
 			"title": "Map layer",
-			"standard": "Standard (OpenStreetMap)",
+			"standard": "Standard",
 			"satellite": "Satellite",
 			"cancel": "Cancel"
 		}

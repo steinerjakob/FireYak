@@ -51,17 +51,17 @@ const tubeCount = computed(() => {
 });
 
 const selectPumpMarker = (pumpPosition: PumpPosition) => {
-	pumpPosition.marker.openPopup();
+	pumpPosition.marker.togglePopup();
 };
 
 const selectTargetMarker = () => {
 	if (pumpCalculation.calculationResult.value?.targetPoint) {
-		pumpCalculation.calculationResult.value?.targetPoint.openPopup();
+		pumpCalculation.calculationResult.value?.targetPoint.togglePopup();
 	}
 };
 const selectSuctionPoint = () => {
 	if (pumpCalculation.calculationResult.value?.suctionPoint) {
-		pumpCalculation.calculationResult.value?.suctionPoint.openPopup();
+		pumpCalculation.calculationResult.value?.suctionPoint.togglePopup();
 	}
 };
 

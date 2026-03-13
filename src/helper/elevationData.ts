@@ -1,16 +1,16 @@
-import { LatLng } from 'leaflet';
+import { GeoPoint } from '@/types/geo';
 
 const MAX_ELEVATION_POINTS_PER_REQUEST = 100;
 export const ELEVATION_RASTER = 20; // in meters should be the tube length eg B = 20m
 
 export interface ElevationPoint {
-	latLng: LatLng;
+	latLng: GeoPoint;
 	elevation: number;
 	pressure?: number;
 	distance?: number;
 }
 
-export async function getElevationDataForPoints(points: LatLng[]) {
+export async function getElevationDataForPoints(points: GeoPoint[]) {
 	// Beispiel-Implementierung, die eine fiktive API aufruft
 	const elevations: ElevationPoint[] = [];
 
@@ -23,7 +23,7 @@ export async function getElevationDataForPoints(points: LatLng[]) {
 	return elevations;
 }
 
-async function fetchElevationForPoints(points: LatLng[]): Promise<ElevationPoint[]> {
+async function fetchElevationForPoints(points: GeoPoint[]): Promise<ElevationPoint[]> {
 	try {
 		// https://api.open-meteo.com/v1/elevation?latitude=52.52,48.85&longitude=13.41,2.35
 		const latitudePoints = points.map((p) => p.lat).join(',');

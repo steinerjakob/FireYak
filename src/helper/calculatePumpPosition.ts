@@ -1,5 +1,5 @@
 import { ElevationPoint } from '@/helper/elevationData';
-import L, { Marker } from 'leaflet';
+import maplibregl from 'maplibre-gl';
 import markerPump from '@/assets/markers/markerpump.png';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 
@@ -23,9 +23,17 @@ export type PumpPosition = {
 	pressureAtTrigger: number; // bar
 	riseFromStart: number; // meters
 	riseFromPrev: number; //meters
-	marker: Marker;
+	marker: maplibregl.Marker;
 	neededBTubes: number;
 };
+
+function createPumpMarkerElement(): HTMLImageElement {
+	const el = document.createElement('img');
+	el.src = markerPump;
+	el.style.width = '48px';
+	el.style.height = '48px';
+	return el;
+}
 
 async function calculatePumpPosition(
 	t: any,
@@ -94,14 +102,15 @@ async function calculatePumpPosition(
 				pumpPlacementIndex >= 0 ? elevationPoints[pumpPlacementIndex] : elevationPoints[i];
 
 			const prevPump = pumps[pumps.length - 1];
-			const marker = new Marker(L.latLng(pumpPoint.latLng.lat, pumpPoint.latLng.lng), {
-				icon: pumpIcon
-			});
+			const marker = new maplibregl.Marker({
+				element: createPumpMarkerElement(),
+				anchor: 'bottom'
+			}).setLngLat([pumpPoint.latLng.lng, pumpPoint.latLng.lat]);
 
 			const distanceFromPrev = Math.round(pumpPoint.distance! - (prevPump?.distanceFromStart || 0));
 			const neededBTubes = Math.round(distanceFromPrev / pumpStore.tubeLength);
 
-			const pumpInfo = {
+			const pumpInfo: PumpPosition = {
 				lat: pumpPoint.latLng.lat,
 				lon: pumpPoint.latLng.lng,
 				elevation: pumpPoint.elevation,
@@ -113,7 +122,7 @@ async function calculatePumpPosition(
 				neededBTubes,
 				marker
 			};
-			marker.bindPopup(provideMarkerPopup(t, pumpInfo));
+			marker.setPopup(provideMarkerPopup(t, pumpInfo));
 			pumps.push(pumpInfo);
 
 			// Reset the loop index, realDistance, and elevationOld to the state of the pumpPoint
@@ -129,17 +138,9 @@ async function calculatePumpPosition(
 	// final rounding of pressure not strictly required here; return pump positions
 	return { pumps, realDistance };
 }
-const pumpIcon = L.icon({
-	iconUrl: markerPump,
-	iconSize: [48, 48],
-	iconAnchor: [24, 48],
-	popupAnchor: [0, -48]
-});
 
-function provideMarkerPopup(t: any, pump: PumpPosition) {
-	const popup = L.popup({
-		maxWidth: 400
-	});
+function provideMarkerPopup(t: any, pump: PumpPosition): maplibregl.Popup {
+	const popup = new maplibregl.Popup({ maxWidth: '400px', offset: [0, -48] });
 
 	const inpuPressure = t('pumpCalculation.pump.inputPressure');
 	const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
@@ -150,7 +151,7 @@ function provideMarkerPopup(t: any, pump: PumpPosition) {
 	const snippet = `B-${tubes}: ~${pump.neededBTubes}<br>${distanceFromStart}: ~${pump.distanceFromPrev}m<br>${riseFromStart}: ${pump.riseFromPrev}m`;
 	const subDescription = `${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}`;
 
-	popup.setContent(`
+	popup.setHTML(`
 		<div class="pump-popup">
 			<b>${title}</b>
 			<div>${snippet}</div>

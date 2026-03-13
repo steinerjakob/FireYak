@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 import { Preferences } from '@capacitor/preferences';
-import L from 'leaflet';
+import type maplibregl from 'maplibre-gl';
 
 const STORAGE_KEYS = {
 	TUBE_LENGTH: 'pumpCalc_tubeLength',
@@ -16,8 +16,8 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 	const outputPressure = ref(10); // bar
 	const pressureLost = ref(1.1); // bar per meter for 800l/min
 
-	const suctionPoint = ref<L.Marker | null>(null);
-	const targetPoint = ref<L.Marker | null>(null);
+	const suctionPoint = ref<maplibregl.Marker | null>(null);
+	const targetPoint = ref<maplibregl.Marker | null>(null);
 
 	// Load settings from preferences on store initialization
 	const loadSettings = async () => {

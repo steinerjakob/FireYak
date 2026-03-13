@@ -14,13 +14,10 @@ const intervalMS = 60 * 60 * 1000;
 const needRefresh = ref(false);
 
 // Register the service worker
-// For native builds: VitePWA is configured with selfDestroying=true, which will
-// automatically unregister any existing service workers and clear caches
 // For web builds: Normal PWA behavior with prompt-based updates
 const updateSW = registerSW({
 	onNeedRefresh() {
 		// Only show refresh prompt for web builds
-		// Native builds with selfDestroying mode won't trigger this
 		if (!isNativeBuild) {
 			needRefresh.value = true;
 		}

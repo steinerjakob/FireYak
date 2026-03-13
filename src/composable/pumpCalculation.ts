@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import L, { LatLng, Marker } from 'leaflet';
+import maplibregl from 'maplibre-gl';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
@@ -10,21 +10,23 @@ import { getPumpLocationMarkers, PumpPosition } from '@/helper/calculatePumpPosi
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { alertController } from '@ionic/vue';
+import { GeoPoint, distanceTo } from '@/types/geo';
 
-const layer = new L.FeatureGroup();
-const pumpLayer = new L.FeatureGroup();
-let rootMap: L.Map | null = null;
-let suctionPoint: L.Marker | null = null;
-let targetPoint: L.Marker | null = null;
-const wayPoints: L.Marker[] = [];
-const line = new L.Polyline([]);
+const PUMP_LINE_SOURCE = 'pump-line';
+const PUMP_LINE_LAYER = 'pump-line-layer';
+
+let rootMap: maplibregl.Map | null = null;
+let suctionPoint: maplibregl.Marker | null = null;
+let targetPoint: maplibregl.Marker | null = null;
+const wayPoints: maplibregl.Marker[] = [];
+const pumpMarkers: maplibregl.Marker[] = [];
 
 export interface CalculationResult {
 	realDistance: number;
 	elevation: number;
-	wayPoints: Marker[];
-	suctionPoint: Marker;
-	targetPoint: Marker;
+	wayPoints: maplibregl.Marker[];
+	suctionPoint: maplibregl.Marker;
+	targetPoint: maplibregl.Marker;
 	pumpCount: number;
 	elevationData: ElevationPoint[];
 	pumpPositions: PumpPosition[];
@@ -32,13 +34,37 @@ export interface CalculationResult {
 
 const calculationResult = ref<CalculationResult | null>(null);
 
-function setMap(map: L.Map) {
+function setMap(map: maplibregl.Map) {
 	rootMap = map;
-	layer.addTo(rootMap);
+	// Add pump line source/layer if not present
+	if (!map.getSource(PUMP_LINE_SOURCE)) {
+		map.addSource(PUMP_LINE_SOURCE, {
+			type: 'geojson',
+			data: {
+				type: 'Feature',
+				geometry: { type: 'LineString', coordinates: [] },
+				properties: {}
+			}
+		});
+		map.addLayer({
+			id: PUMP_LINE_LAYER,
+			type: 'line',
+			source: PUMP_LINE_SOURCE,
+			paint: {
+				'line-color': '#3388ff',
+				'line-width': 3
+			}
+		});
+	}
 }
 
 const suctionPointSet = ref(false);
 const firePointSet = ref(false);
+
+function getMarkerLngLat(marker: maplibregl.Marker): GeoPoint {
+	const lngLat = marker.getLngLat();
+	return { lat: lngLat.lat, lng: lngLat.lng };
+}
 
 const sortWaypoints = (): void => {
 	if (!suctionPoint || wayPoints.length < 2) {
@@ -48,16 +74,16 @@ const sortWaypoints = (): void => {
 
 	let lastPoint = suctionPoint;
 	const remainingWaypoints = [...wayPoints];
-	const sortedWaypoints: L.Marker[] = [];
+	const sortedWaypoints: maplibregl.Marker[] = [];
 
 	while (remainingWaypoints.length > 0) {
 		let closestIndex = -1;
 		let minDistance = Infinity;
 
 		remainingWaypoints.forEach((point, index) => {
-			const distance = lastPoint.getLatLng().distanceTo(point.getLatLng());
-			if (distance < minDistance) {
-				minDistance = distance;
+			const dist = distanceTo(getMarkerLngLat(lastPoint), getMarkerLngLat(point));
+			if (dist < minDistance) {
+				minDistance = dist;
 				closestIndex = index;
 			}
 		});
@@ -71,91 +97,134 @@ const sortWaypoints = (): void => {
 };
 
 const updatePolyline = () => {
-	if (!suctionPoint || !targetPoint) {
+	if (!suctionPoint || !targetPoint || !rootMap) {
 		return;
 	}
 	sortWaypoints();
 	const allPoints = [suctionPoint, ...wayPoints, targetPoint];
-	const latLngs = allPoints.map((point) => point.getLatLng());
-	line.setLatLngs(latLngs);
-	layer.addLayer(line);
+	const coordinates = allPoints.map((m) => {
+		const lngLat = m.getLngLat();
+		return [lngLat.lng, lngLat.lat];
+	});
+
+	const source = rootMap.getSource(PUMP_LINE_SOURCE) as maplibregl.GeoJSONSource;
+	if (source) {
+		source.setData({
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates },
+			properties: {}
+		});
+	}
 };
 
-const setTargetPoint = (latlng?: LatLng) => {
-	const latLng = latlng || rootMap?.getCenter();
+function createMarkerElement(iconUrl: string, size: [number, number]): HTMLImageElement {
+	const el = document.createElement('img');
+	el.src = iconUrl;
+	el.style.width = `${size[0]}px`;
+	el.style.height = `${size[1]}px`;
+	return el;
+}
+
+const getMarkerConfig = (type: 'firePoint' | 'suctionPoint' | 'wayPoint') => {
+	let iconUrl = suctionPointIcon;
+	let size: [number, number] = [48, 48];
+	let anchor: 'center' | 'top' | 'bottom' | 'left' | 'right' = 'bottom';
+
+	if (type === 'firePoint') {
+		iconUrl = firepointIcon;
+	} else if (type === 'wayPoint') {
+		iconUrl = wayPointIcon;
+		size = [32, 32];
+		anchor = 'center';
+	}
+
+	return { iconUrl, size, anchor };
+};
+
+function getPolylineBounds(): maplibregl.LngLatBounds | null {
+	if (!suctionPoint || !targetPoint) return null;
+	const bounds = new maplibregl.LngLatBounds();
+	const allPoints = [suctionPoint, ...wayPoints, targetPoint, ...pumpMarkers];
+	allPoints.forEach((m) => bounds.extend(m.getLngLat()));
+	return bounds;
+}
+
+function hasPolyline(): boolean {
+	return Boolean(suctionPoint && targetPoint);
+}
+
+const setTargetPoint = (latlng?: GeoPoint) => {
+	const point =
+		latlng ||
+		(rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
+	if (!point || !rootMap) return;
+
 	if (!targetPoint) {
-		targetPoint = new L.Marker(latLng as LatLng, {
-			icon: getMarkerIcon('firePoint'),
+		const { iconUrl, size, anchor } = getMarkerConfig('firePoint');
+		targetPoint = new maplibregl.Marker({
+			element: createMarkerElement(iconUrl, size),
+			anchor,
 			draggable: true
 		});
+		targetPoint.setLngLat([point.lng, point.lat]).addTo(rootMap);
 	} else {
-		targetPoint.setLatLng(latLng as LatLng);
+		targetPoint.setLngLat([point.lng, point.lat]);
 	}
 
 	targetPoint.on('dragend', () => {
 		updatePolyline();
 	});
 
-	layer.addLayer(targetPoint);
 	firePointSet.value = true;
 	updatePolyline();
 };
 
-const removeWayPoint = (wayPointToRemove: L.Marker) => {
+const removeWayPoint = (wayPointToRemove: maplibregl.Marker) => {
 	const index = wayPoints.indexOf(wayPointToRemove);
 	if (index > -1) {
 		wayPoints.splice(index, 1);
-		layer.removeLayer(wayPointToRemove);
+		wayPointToRemove.remove();
 		updatePolyline();
 	}
 };
 
-const setWayPoint = (latlng?: LatLng) => {
-	const latLng = latlng || rootMap?.getCenter();
-	if (!latLng) return;
-	const wayPoint = new L.Marker(latLng as LatLng, {
-		icon: getMarkerIcon('wayPoint'),
+const setWayPoint = (latlng?: GeoPoint) => {
+	const point =
+		latlng ||
+		(rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
+	if (!point || !rootMap) return;
+
+	const { iconUrl, size, anchor } = getMarkerConfig('wayPoint');
+	const wayPoint = new maplibregl.Marker({
+		element: createMarkerElement(iconUrl, size),
+		anchor,
 		draggable: true
 	});
+	wayPoint.setLngLat([point.lng, point.lat]).addTo(rootMap);
+
 	wayPoint.on('dragend', () => {
 		updatePolyline();
 	});
 
-	const popup = L.popup();
+	const popup = new maplibregl.Popup({ offset: 12 });
 	const popupContent = document.createElement('div');
 	popupContent.style.textAlign = 'center';
 	const removeButton = document.createElement('button');
-	removeButton.textContent = '🗑'; // Set the UTF-8 trash can icon directly as text content
-	removeButton.style.color = 'red'; // Colorize the icon
-	removeButton.style.backgroundColor = 'transparent'; // Remove default button background
-	removeButton.style.border = 'none'; // Remove default button border
-	removeButton.style.cursor = 'pointer'; // Indicate it's clickable
-	removeButton.style.fontSize = '2em'; // Make the icon larger for better visibility
-	removeButton.style.padding = '0'; // Remove default padding
+	removeButton.textContent = '\u{1F5D1}'; // 🗑
+	removeButton.style.color = 'red';
+	removeButton.style.backgroundColor = 'transparent';
+	removeButton.style.border = 'none';
+	removeButton.style.cursor = 'pointer';
+	removeButton.style.fontSize = '2em';
+	removeButton.style.padding = '0';
 	removeButton.onclick = () => removeWayPoint(wayPoint);
 	popupContent.appendChild(removeButton);
 
-	popup.setContent(popupContent);
-	wayPoint.bindPopup(popup);
+	popup.setDOMContent(popupContent);
+	wayPoint.setPopup(popup);
 
 	wayPoints.push(wayPoint);
-	layer.addLayer(wayPoint);
 	updatePolyline();
-};
-
-const getMarkerIcon = (type: 'firePoint' | 'suctionPoint' | 'wayPoint') => {
-	let icon = suctionPointIcon;
-	if (type === 'firePoint') {
-		icon = firepointIcon;
-	} else if (type === 'wayPoint') {
-		icon = wayPointIcon;
-	}
-	return L.icon({
-		iconUrl: icon,
-		iconSize: type == 'wayPoint' ? [32, 32] : [48, 48],
-		iconAnchor: type !== 'wayPoint' ? [24, 48] : undefined,
-		popupAnchor: type !== 'wayPoint' ? [0, -48] : [0, -12]
-	});
 };
 
 export function usePumpCalculation() {
@@ -164,28 +233,36 @@ export function usePumpCalculation() {
 
 	const isActive = computed(() => route.path.includes('supplypipe'));
 
-	const setSuctionPoint = (latlng?: LatLng) => {
-		const latLng = latlng || rootMap?.getCenter();
+	const setSuctionPoint = (latlng?: GeoPoint) => {
+		const point =
+			latlng ||
+			(rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
+		if (!point || !rootMap) return;
+
 		if (!suctionPoint) {
-			suctionPoint = new L.Marker(latLng as LatLng, {
-				icon: getMarkerIcon('suctionPoint'),
+			const { iconUrl, size, anchor } = getMarkerConfig('suctionPoint');
+			suctionPoint = new maplibregl.Marker({
+				element: createMarkerElement(iconUrl, size),
+				anchor,
 				draggable: true
 			});
+			suctionPoint.setLngLat([point.lng, point.lat]).addTo(rootMap);
 		} else {
-			suctionPoint.setLatLng(latLng as LatLng);
+			suctionPoint.setLngLat([point.lng, point.lat]);
 		}
 
 		suctionPoint.on('dragend', () => {
 			updatePolyline();
 		});
-		const popup = L.popup();
-		popup.setContent(`
+
+		const popup = new maplibregl.Popup({ offset: [0, -48] });
+		popup.setHTML(`
 		<div class="pump-popup">
 			<b>${t('pumpCalculation.suctionPoint')}</b>
 		</div>
 	`);
-		suctionPoint?.bindPopup(popup);
-		layer.addLayer(suctionPoint);
+		suctionPoint.setPopup(popup);
+
 		suctionPointSet.value = true;
 		updatePolyline();
 	};
@@ -196,9 +273,6 @@ export function usePumpCalculation() {
 		elevations: ElevationPoint[]
 	) => {
 		const pumpStore = usePumpCalculationStore();
-		const popup = L.popup({
-			maxWidth: 400
-		});
 
 		const inpuPressure = t('pumpCalculation.pump.inputPressure');
 		const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
@@ -221,14 +295,15 @@ export function usePumpCalculation() {
 		const snippet = `B-${tubes}: ~${neededBTubes}<br>${distanceFromStart}: ~${distance.toFixed(0)}m<br>${riseFromStart}: ${elevation}m`;
 		const subDescription = `${inpuPressure}: ${pressure?.toFixed(0)}`;
 
-		popup.setContent(`
+		const popup = new maplibregl.Popup({ maxWidth: '400px', offset: [0, -48] });
+		popup.setHTML(`
 		<div class="pump-popup">
 			<b>${title}</b>
 			<div>${snippet}</div>
 			<div>${subDescription}</div>
 		</div>
 	`);
-		targetPoint?.bindPopup(popup);
+		targetPoint?.setPopup(popup);
 	};
 
 	const calculatePumpRequirements = async () => {
@@ -247,20 +322,23 @@ export function usePumpCalculation() {
 			return;
 		}
 		const pointsToCalculate = [suctionPoint, ...wayPoints, targetPoint].map((point) =>
-			point.getLatLng()
+			getMarkerLngLat(point)
 		);
 		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
 		console.log('Full Distance', distance);
 		const elevationData = await getElevationDataForPoints(points);
 		const { realDistance, pumpPositions } = await getPumpLocationMarkers(t, elevationData);
 		updateTargetMarker(pumpPositions, realDistance, elevationData);
-		pumpLayer.clearLayers();
+
+		// Remove old pump markers
+		pumpMarkers.forEach((m) => m.remove());
+		pumpMarkers.length = 0;
+
+		// Add new pump markers
 		pumpPositions.forEach(({ marker }) => {
-			pumpLayer.addLayer(marker);
+			if (rootMap) marker.addTo(rootMap);
+			pumpMarkers.push(marker);
 		});
-		if (!layer.hasLayer(pumpLayer)) {
-			layer.addLayer(pumpLayer);
-		}
 
 		calculationResult.value = {
 			pumpPositions,
@@ -276,17 +354,39 @@ export function usePumpCalculation() {
 
 	watch(isActive, (newValue) => {
 		if (!newValue) {
-			layer.clearLayers();
-			pumpLayer.clearLayers();
-			suctionPoint = null;
-			targetPoint = null;
+			// Clean up all markers
+			if (suctionPoint) {
+				suctionPoint.remove();
+				suctionPoint = null;
+			}
+			if (targetPoint) {
+				targetPoint.remove();
+				targetPoint = null;
+			}
+			wayPoints.forEach((m) => m.remove());
 			wayPoints.length = 0;
+			pumpMarkers.forEach((m) => m.remove());
+			pumpMarkers.length = 0;
+
+			// Clear polyline
+			if (rootMap) {
+				const source = rootMap.getSource(PUMP_LINE_SOURCE) as maplibregl.GeoJSONSource;
+				if (source) {
+					source.setData({
+						type: 'Feature',
+						geometry: { type: 'LineString', coordinates: [] },
+						properties: {}
+					});
+				}
+			}
+
 			suctionPointSet.value = false;
 			firePointSet.value = false;
+			calculationResult.value = null;
 		}
 	});
 
-	const markerSetAlert = async (latlng: LatLng) => {
+	const markerSetAlert = async (latlng: GeoPoint) => {
 		const alert = await alertController.create({
 			header: t('pumpCalculation.alert.title'),
 			inputs: [
@@ -328,7 +428,8 @@ export function usePumpCalculation() {
 
 	return {
 		isActive,
-		polyline: line,
+		getPolylineBounds,
+		hasPolyline,
 		setMap,
 		setSuctionPoint,
 		setTargetPoint,
