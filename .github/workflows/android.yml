@@ -19,7 +19,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY }}
+      VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY_ANDROID }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
