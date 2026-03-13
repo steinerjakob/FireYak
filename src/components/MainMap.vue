@@ -421,21 +421,24 @@ function fitMapToLayer() {
 		const bounds = new maplibregl.LngLatBounds();
 		selectedPathCoords.value.forEach((coord) => bounds.extend(coord as [number, number]));
 		rootMap.fitBounds(bounds, { padding });
-	} else if (selectedMarker) {
-		// If no polyline is visible but selectedMarker is, center it
-		const centerOffsetX = (padding.left - padding.right) / 2;
-		const centerOffsetY = (padding.top - padding.bottom) / 2;
+	} else {
+		// Center on the ghost marker (editing) or the selected marker
+		const marker = markerEditStore.isActive ? ghostMarker : selectedMarker;
+		if (marker) {
+			const centerOffsetX = (padding.left - padding.right) / 2;
+			const centerOffsetY = (padding.top - padding.bottom) / 2;
 
-		const markerLngLat = selectedMarker.getLngLat();
-		const markerPoint = rootMap.project(markerLngLat);
+			const markerLngLat = marker.getLngLat();
+			const markerPoint = rootMap.project(markerLngLat);
 
-		const adjustedPoint = new maplibregl.Point(
-			markerPoint.x - centerOffsetX,
-			markerPoint.y - centerOffsetY
-		);
+			const adjustedPoint = new maplibregl.Point(
+				markerPoint.x - centerOffsetX,
+				markerPoint.y - centerOffsetY
+			);
 
-		const adjustedLngLat = rootMap.unproject(adjustedPoint);
-		rootMap.panTo(adjustedLngLat);
+			const adjustedLngLat = rootMap.unproject(adjustedPoint);
+			rootMap.panTo(adjustedLngLat);
+		}
 	}
 }
 
