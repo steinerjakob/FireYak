@@ -18,6 +18,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: macos-latest
+    env:
+      VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4

@@ -156,7 +156,7 @@ const { t, locale } = useI18n();
 
 const isSatellite = ref(false);
 
-const PROTOMAPS_API_KEY = 'key';
+const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;

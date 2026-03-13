@@ -37,7 +37,7 @@
 		"@protomaps/basemaps": "^5.7.2",
 		"core-js": "^3.47.0",
 		"idb": "^8.0.3",
-		"maplibre-gl": "^5.20.0",
+		"maplibre-gl": "5.19.0",
 		"osm-api": "^4.0.0",
 		"photoswipe": "^5.4.4",
 		"pinia": "^3.0.4",
