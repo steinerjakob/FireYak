@@ -1,4 +1,4 @@
-import { LatLng } from 'leaflet';
+import { GeoPoint } from '@/types/geo';
 import { ELEVATION_RASTER } from '@/helper/elevationData';
 
 function toRadians(deg: number): number {
@@ -9,7 +9,7 @@ function toDegrees(rad: number): number {
 	return (rad * 180) / Math.PI;
 }
 
-export function distanceBetween2Points(start: LatLng, end: LatLng): number {
+export function distanceBetween2Points(start: GeoPoint, end: GeoPoint): number {
 	const R = 6371; // earth radius in km
 	const lat1 = start.lat;
 	const lat2 = end.lat;
@@ -24,25 +24,21 @@ export function distanceBetween2Points(start: LatLng, end: LatLng): number {
 		Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
 
 	const c = 2 * Math.asin(Math.sqrt(a));
-	const distanceKm = R * c;
 
-	const kmRounded = Math.round(distanceKm);
-	const meters = Math.round((distanceKm - Math.floor(distanceKm)) * 1000);
-
-	return distanceKm;
+	return R * c;
 }
 
 /**
  * Interpolates a point on the great circle path between two geographical locations.
  * The interpolation is determined by a fraction parameter.
  *
- * @param {LatLng} start - The starting geographical coordinates with latitude and longitude.
- * @param {LatLng} end - The ending geographical coordinates with latitude and longitude.
+ * @param {GeoPoint} start - The starting geographical coordinates with latitude and longitude.
+ * @param {GeoPoint} end - The ending geographical coordinates with latitude and longitude.
  * @param {number} fraction - The fraction along the great circle path, where 0 is the start
  *                            and 1 is the end.
- * @return {LatLng} The interpolated geographical coordinates as a LatLng object.
+ * @return {GeoPoint} The interpolated geographical coordinates.
  */
-function interpolateGreatCircle(start: LatLng, end: LatLng, fraction: number): LatLng {
+function interpolateGreatCircle(start: GeoPoint, end: GeoPoint, fraction: number): GeoPoint {
 	const φ1 = toRadians(start.lat);
 	const λ1 = toRadians(start.lng);
 	const φ2 = toRadians(end.lat);
@@ -56,13 +52,12 @@ function interpolateGreatCircle(start: LatLng, end: LatLng, fraction: number): L
 	const Δλ = λ2 - λ1;
 
 	const cosΔλ = Math.cos(Δλ);
-	const sinΔλ = Math.sin(Δλ);
 
 	// Winkel zwischen Punkten
 	const δ = Math.acos(Math.max(-1, Math.min(1, sinφ1 * sinφ2 + cosφ1 * cosφ2 * cosΔλ)));
 
 	if (δ === 0) {
-		return new LatLng(start.lat, start.lng);
+		return { lat: start.lat, lng: start.lng };
 	}
 
 	const A = Math.sin((1 - fraction) * δ) / Math.sin(δ);
@@ -75,7 +70,7 @@ function interpolateGreatCircle(start: LatLng, end: LatLng, fraction: number): L
 	const φi = Math.atan2(z, Math.sqrt(x * x + y * y));
 	const λi = Math.atan2(y, x);
 
-	return new LatLng(toDegrees(φi), toDegrees(λi));
+	return { lat: toDegrees(φi), lng: toDegrees(λi) };
 }
 
 /**
@@ -83,10 +78,10 @@ function interpolateGreatCircle(start: LatLng, end: LatLng, fraction: number): L
  * im Abstand `stepMeters` (Standard 90).
  */
 export function pointsEveryMetersBetween(
-	start: LatLng,
-	end: LatLng,
+	start: GeoPoint,
+	end: GeoPoint,
 	stepMeters = ELEVATION_RASTER
-): { distance: number; points: LatLng[] } {
+): { distance: number; points: GeoPoint[] } {
 	const totalKm = distanceBetween2Points(start, end);
 	const totalMeters = totalKm * 1000;
 
@@ -94,11 +89,14 @@ export function pointsEveryMetersBetween(
 	if (totalMeters <= stepMeters) {
 		return {
 			distance: totalKm,
-			points: [new LatLng(start.lat, start.lng), new LatLng(end.lat, end.lng)]
+			points: [
+				{ lat: start.lat, lng: start.lng },
+				{ lat: end.lat, lng: end.lng }
+			]
 		};
 	}
 
-	const points: LatLng[] = [];
+	const points: GeoPoint[] = [];
 	const steps = Math.floor(totalMeters / stepMeters);
 
 	// generiere Punkte bei Abständen 0, step, 2*step, ..., steps*step
@@ -111,15 +109,15 @@ export function pointsEveryMetersBetween(
 	// falls letzter Punkt nicht exakt das Ende ist, stelle Ende sicher
 	const last = points[points.length - 1];
 	if (Math.abs(last.lat - end.lat) > 1e-8 || Math.abs(last.lng - end.lng) > 1e-8) {
-		points.push(new LatLng(end.lat, end.lng));
+		points.push({ lat: end.lat, lng: end.lng });
 	}
 
 	return { distance: totalKm, points };
 }
 
-export function distanceBetweenMultiplePoints(wayPoints: LatLng[]) {
+export function distanceBetweenMultiplePoints(wayPoints: GeoPoint[]) {
 	let totalDistance = 0;
-	const allPoints: LatLng[] = [];
+	const allPoints: GeoPoint[] = [];
 	for (let i = 0; i < wayPoints.length - 1; i++) {
 		const { points, distance } = pointsEveryMetersBetween(wayPoints[i], wayPoints[i + 1]);
 		totalDistance += distance;

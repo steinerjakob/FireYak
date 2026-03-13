@@ -1,4 +1,4 @@
-import L, { LatLngBounds } from 'leaflet';
+import { GeoBounds } from '@/types/geo';
 
 const OverpassBaseURL = `https://overpass-api.de/api/interpreter?data=`;
 
@@ -17,7 +17,7 @@ export interface OverPassElement {
 		[key: string]: string;
 	};
 }
-export async function fetchMarkerData(mapBounds: LatLngBounds): Promise<OverPassElement[]> {
+export async function fetchMarkerData(mapBounds: GeoBounds): Promise<OverPassElement[]> {
 	let fetchData = '[out:json][timeout:15];(';
 
 	const osmDataKeys = [
@@ -29,13 +29,13 @@ export async function fetchMarkerData(mapBounds: LatLngBounds): Promise<OverPass
 	];
 	const boundString =
 		'(' +
-		mapBounds.getSouth() +
+		mapBounds.south +
 		',' +
-		mapBounds.getWest() +
+		mapBounds.west +
 		',' +
-		mapBounds.getNorth() +
+		mapBounds.north +
 		',' +
-		mapBounds.getEast() +
+		mapBounds.east +
 		')';
 
 	osmDataKeys.forEach((key) => {
