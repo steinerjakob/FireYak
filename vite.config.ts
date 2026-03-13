@@ -90,10 +90,10 @@ const pwaOptions: Partial<VitePWAOptions> = {
 				}),
 		runtimeCaching: [
 			{
-				urlPattern: /^https?:\/\/tile\.openstreetmap\.org\/.*/,
+				urlPattern: /^https?:\/\/api\.protomaps\.com\/.*/,
 				handler: 'StaleWhileRevalidate',
 				options: {
-					cacheName: 'osm-tiles-cache',
+					cacheName: 'protomaps-cache',
 					expiration: {
 						maxEntries: 500,
 						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
@@ -119,12 +119,26 @@ const pwaOptions: Partial<VitePWAOptions> = {
 				}
 			},
 			{
-				urlPattern: /^https?:\/\/a\.basemaps\.cartocdn\.com\/rastertiles\/voyager_only_labels\/.*/,
+				urlPattern: /^https?:\/\/commons\.wikimedia\.org\/w\/api\.php\?.*/,
 				handler: 'StaleWhileRevalidate',
 				options: {
-					cacheName: 'carto-tiles-cache',
+					cacheName: 'wikimedia-api-cache',
 					expiration: {
-						maxEntries: 500,
+						maxEntries: 100,
+						maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
+			},
+			{
+				urlPattern: /^https?:\/\/upload\.wikimedia\.org\/.*/,
+				handler: 'CacheFirst',
+				options: {
+					cacheName: 'wikimedia-images-cache',
+					expiration: {
+						maxEntries: 200,
 						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
 					},
 					cacheableResponse: {
