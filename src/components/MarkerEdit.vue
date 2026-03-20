@@ -210,6 +210,22 @@ const login = () => {
 				</ion-select>
 			</ion-item>
 
+			<!-- Water Source -->
+			<ion-item lines="none">
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.waterSource')"
+					v-model="markerEditStore.editableTags['water_source']"
+					:placeholder="t('markerInfo.tags.waterSource')"
+					:helper-text="t('markerEdit.hints.waterSource')"
+				>
+					<ion-select-option v-for="ws in waterSources" :key="ws" :value="ws">
+						{{ t(`markerInfo.values.water_source.${ws}`) }}
+					</ion-select-option>
+				</ion-select>
+			</ion-item>
+
 			<!-- Diameter -->
 			<ion-item lines="none">
 				<ion-input
