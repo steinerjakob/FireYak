@@ -92,6 +92,11 @@
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<LayerSelectorModal
+			:is-open="layerModalOpen"
+			@update:is-open="layerModalOpen = $event"
+			@changed="syncMapStyleWithPreferences"
+		/>
 	</div>
 </template>
 <script lang="ts" setup>
@@ -105,7 +110,8 @@ import { getMarkersForView, getNearbyMarkers, markerIconUrls } from '@/mapHandle
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
-import { alertController, IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import LayerSelectorModal from '@/components/LayerSelectorModal.vue';
 import {
 	informationCircle,
 	analyticsOutline,
@@ -123,10 +129,9 @@ import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { useDefaultStore } from '@/store/defaultStore';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-import { MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
+import { type MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
-import { useSettings } from '@/composable/settings';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds } from '@/types/geo';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
@@ -150,13 +155,13 @@ const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
 const defaultStore = useDefaultStore();
 const settingsStore = useSettingsStore();
-const { showZoomButtons, mapLayer } = storeToRefs(settingsStore);
-const { saveMapLayer } = useSettings();
+const { showZoomButtons, mapLayer, terrain3d } = storeToRefs(settingsStore);
 const { t, locale } = useI18n();
 
 const isSatellite = ref(false);
+const layerModalOpen = ref(false);
 
-const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
+const PROTOMAPS_API_KEY = '111410f5c74ab4c7';
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
@@ -213,8 +218,19 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 			url: `https://api.protomaps.com/tiles/v4.json?key=${PROTOMAPS_API_KEY}`,
 			attribution:
 				'&copy; <a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
+		},
+		hillshadeSource: {
+			type: 'raster-dem',
+			url: 'https://tiles.mapterhorn.com/tilejson.json'
 		}
 	};
+
+	if (terrain3d.value) {
+		sources['terrainSource'] = {
+			type: 'raster-dem',
+			url: 'https://tiles.mapterhorn.com/tilejson.json'
+		};
+	}
 
 	const baseLayers: maplibregl.LayerSpecification[] = [];
 
@@ -235,7 +251,7 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 		} as maplibregl.LayerSpecification);
 	}
 
-	return {
+	const style: maplibregl.StyleSpecification = {
 		version: 8,
 		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
 		sprite: `https://protomaps.github.io/basemaps-assets/sprites/v4/${spriteFlavor}`,
@@ -257,9 +273,24 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 					};
 				}
 				return layer;
-			})
+			}),
+			{
+				id: 'hills',
+				type: 'hillshade',
+				source: 'hillshadeSource',
+				paint: { 'hillshade-shadow-color': '#473B24' }
+			}
 		]
 	};
+
+	if (terrain3d.value) {
+		style.terrain = {
+			source: 'terrainSource',
+			exaggeration: 1
+		};
+	}
+
+	return style;
 }
 
 function applyMapLayerSelection(selection: MapLayerSetting) {
@@ -274,40 +305,38 @@ function syncMapStyleWithPreferences() {
 	}
 }
 
-async function openLayerSelector() {
-	const alert = await alertController.create({
-		header: t('map.layers.title'),
-		inputs: [
-			{
-				type: 'radio',
-				label: t('map.layers.standard'),
-				value: 'standard',
-				checked: mapLayer.value === 'standard'
-			},
-			{
-				type: 'radio',
-				label: t('map.layers.satellite'),
-				value: 'satellite',
-				checked: mapLayer.value === 'satellite'
-			}
-		],
-		buttons: [
-			{
-				text: t('map.layers.cancel'),
-				role: 'cancel'
-			},
-			{
-				text: 'OK',
-				handler: async (value: MapLayerSetting) => {
-					await saveMapLayer(value);
-					applyMapLayerSelection(value);
-					syncMapStyleWithPreferences();
-				}
-			}
-		]
-	});
+let navControl: maplibregl.NavigationControl | null = null;
 
-	await alert.present();
+function applyTerrainSettings() {
+	if (!rootMap) return;
+
+	if (terrain3d.value) {
+		rootMap.touchPitch.enable();
+		rootMap.touchZoomRotate.enableRotation();
+		rootMap.dragRotate.enable();
+		if (!navControl) {
+			navControl = new maplibregl.NavigationControl({
+				visualizePitch: true,
+				showCompass: true,
+				showZoom: false
+			});
+			rootMap.addControl(navControl, 'top-right');
+		}
+	} else {
+		rootMap.touchPitch.disable();
+		rootMap.touchZoomRotate.disableRotation();
+		rootMap.dragRotate.disable();
+		rootMap.setPitch(0);
+		rootMap.setBearing(0);
+		if (navControl) {
+			rootMap.removeControl(navControl);
+			navControl = null;
+		}
+	}
+}
+
+function openLayerSelector() {
+	layerModalOpen.value = true;
 }
 
 // Save/restore map view via localStorage
@@ -866,14 +895,16 @@ async function initMap() {
 		center: savedView?.center || [15.274102, 48.135314],
 		zoom: savedView?.zoom || 13,
 		maxZoom: 19,
-		dragRotate: false,
+		dragRotate: terrain3d.value,
 		touchZoomRotate: true,
-		pitchWithRotate: false,
-		maxPitch: 0
+		pitchWithRotate: terrain3d.value,
+		pitch: terrain3d.value ? 60 : 0
 	});
 
-	rootMap.touchPitch.disable();
-	rootMap.touchZoomRotate.disableRotation();
+	if (!terrain3d.value) {
+		rootMap.touchPitch.disable();
+		rootMap.touchZoomRotate.disableRotation();
+	}
 
 	// Important: force MapLibre to recalc size after layout is ready
 	await ensureMapSize();
@@ -926,6 +957,11 @@ function watchExternalLocationQuery() {
 
 function reloadMapStyle() {
 	if (!rootMap || !mapReady) return;
+	// Remove nav control before style swap — setStyle can orphan its DOM
+	if (navControl) {
+		rootMap.removeControl(navControl);
+		navControl = null;
+	}
 	rootMap.setStyle(getProtomapsStyle());
 	rootMap.once('style.load', async () => {
 		if (!rootMap) return;
@@ -933,6 +969,7 @@ function reloadMapStyle() {
 		await loadMarkerImages(rootMap);
 		addMapLayers(rootMap);
 		handleMapMovement();
+		applyTerrainSettings();
 	});
 }
 function zoomIn() {
@@ -990,6 +1027,10 @@ onMounted(async () => {
 	watch(locale, () => {
 		reloadMapStyle();
 	});
+
+	watch(terrain3d, () => {
+		syncMapStyleWithPreferences();
+	});
 });
 
 onUnmounted(() => {
@@ -1039,6 +1080,37 @@ ion-fab {
 :deep(.maplibregl-ctrl-bottom-left),
 :deep(.maplibregl-ctrl-bottom-right) {
 	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
+}
+
+:deep(.maplibregl-ctrl-top-right) {
+	top: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 48px);
+	right: 4px;
+}
+
+:deep(.maplibregl-ctrl-group) {
+	background: var(--ion-color-light, #f4f5f8);
+	border-radius: 50%;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+	border: none;
+	overflow: visible;
+}
+
+:deep(.maplibregl-ctrl-group button) {
+	width: 40px;
+	height: 40px;
+	border: none;
+	border-radius: 50%;
+	background: var(--ion-color-light, #f4f5f8);
+}
+
+:deep(.maplibregl-ctrl-group button + button) {
+	border-top: none;
+}
+
+:deep(.maplibregl-ctrl-group button:focus:first-child),
+:deep(.maplibregl-ctrl-group button:focus:last-child),
+:deep(.maplibregl-ctrl-group button:focus:only-child) {
+	border-radius: 50%;
 }
 </style>
 

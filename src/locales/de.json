@@ -163,8 +163,10 @@
 			"title": "Kartenlayer",
 			"standard": "Standard",
 			"satellite": "Satellit",
+			"terrain3d": "3D Gelände",
 			"cancel": "Abbrechen"
-		}
+		},
+		"resetView": "Ansicht zurücksetzen"
 	},
 	"markerEdit": {
 		"title": {
