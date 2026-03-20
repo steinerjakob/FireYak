@@ -53,9 +53,8 @@
 				"street": "Street"
 			},
 			"fire_hydrant:pressure": {
-				"pressurised": "Pressurised",
-				"suction": "Suction",
-				"gravity": "Gravity"
+				"yes": "Yes (unknown value)",
+				"suction": "Suction"
 			},
 			"fire_hydrant:diameter": {
 				"80": "80 mm",
@@ -202,7 +201,7 @@
 			"emergency": "Specifies that this is a fire hydrant.",
 			"type": "Specifies the type of fire hydrant. Pillar hydrants are above ground, underground hydrants are beneath a cover, wall hydrants are mounted on or in a wall.",
 			"diameter": "The internal diameter of the water pipe connected to the hydrant in millimeters (e.g., 80, 100, 150).",
-			"pressure": "Indicates how water is delivered. 'pressurised' for water mains, 'suction' for non-pressurized sources like ponds, 'gravity' for high-level tanks.",
+			"pressure": "Pressure in bar, 'yes' if under pressure but value unknown, or 'suction' if a pump is needed (e.g. pond/stream/tank).",
 			"flowCapacity": "The maximum water flow rate the hydrant can provide (l/min, usgal/min, ukgal/min, m3/h). (z.B. 600 l/min)",
 			"position": "The physical location of the hydrant relative to the surroundings (e.g., sidewalk, parking lot).",
 			"couplings": "The number of hose connections available on the hydrant.",

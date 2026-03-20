@@ -53,9 +53,8 @@
 				"street": "Straße"
 			},
 			"fire_hydrant:pressure": {
-				"pressurised": "Druckleitung",
-				"suction": "Saugleitung",
-				"gravity": "Schwerkraft"
+				"yes": "Ja (Wert unbekannt)",
+				"suction": "Saugleitung"
 			},
 			"fire_hydrant:diameter": {
 				"80": "80 mm",
@@ -202,7 +201,7 @@
 			"emergency": "Gibt an, dass es sich um einen Hydranten handelt.",
 			"type": "Gibt den Typ des Hydranten an. Überflurhydranten sind über der Erde, Unterflurhydranten liegen unter einer Abdeckung, Wandhydranten sind an oder in einer Wand montiert.",
 			"diameter": "Der Innendurchmesser der an den Hydranten angeschlossenen Wasserleitung in Millimetern (z.B. 80, 100, 150).",
-			"pressure": "Gibt an, wie das Wasser bereitgestellt wird. 'Druckleitung' für Druckleitungen, 'Saugleitung' für drucklose Quellen wie Teiche, 'Schwerkraft' für Hochbehälter.",
+			"pressure": "Druck in bar, 'yes' wenn unter Druck aber Wert unbekannt, oder 'suction' wenn eine Pumpe benötigt wird (z.B. Teich/Bach/Tank).",
 			"flowCapacity": "Die maximale Wassermenge, die der Hydrant liefern kann (l/min, usgal/min, ukgal/min, m3/h). (z.B. 600 l/min)",
 			"position": "Die physische Lage des Hydranten im Verhältnis zur Umgebung (z.B. Gehweg, Parkplatz).",
 			"couplings": "Die Anzahl der am Hydranten verfügbaren Schlauchanschlüsse.",

@@ -11,7 +11,7 @@ import {
 	IonNote,
 	IonItemGroup,
 	IonItemDivider,
-	IonTextarea,
+	IonTextarea
 } from '@ionic/vue';
 import { saveOutline, closeOutline, logInOutline } from 'ionicons/icons';
 import { computed } from 'vue';
@@ -25,7 +25,6 @@ const { t } = useI18n();
 
 const hydrantTypes = ['pillar', 'underground', 'wall' /*, 'pond'*/];
 const hydrantPositions = ['sidewalk', 'lane', 'parking_lot', 'green', 'street'];
-const pressures = ['pressurised', 'suction', 'gravity'];
 const waterSources = [
 	'main',
 	'pond',
@@ -185,18 +184,14 @@ const login = () => {
 
 			<!-- Pressure -->
 			<ion-item lines="none">
-				<ion-select
+				<ion-input
 					fill="outline"
 					label-placement="stacked"
 					:label="t('markerInfo.tags.pressure')"
 					v-model="markerEditStore.editableTags['fire_hydrant:pressure']"
-					:placeholder="t('markerInfo.tags.pressure')"
+					placeholder="6, yes, suction..."
 					:helper-text="t('markerEdit.hints.pressure')"
-				>
-					<ion-select-option v-for="p in pressures" :key="p" :value="p">
-						{{ t(`markerInfo.values.fire_hydrant:pressure.${p}`) }}
-					</ion-select-option>
-				</ion-select>
+				></ion-input>
 			</ion-item>
 
 			<!-- Flow Capacity -->

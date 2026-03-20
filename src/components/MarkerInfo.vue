@@ -87,6 +87,11 @@ const translateValue = (key: string, value: string): string => {
 		}
 	}
 
+	// Add unit for pressure (numeric values are in bar)
+	if (key === 'fire_hydrant:pressure' && !isNaN(Number(value))) {
+		return `${value} bar`;
+	}
+
 	// Add unit for flow rate
 	if (['capacity', 'volume', 'water_tank:volume', 'water_volume'].includes(key)) {
 		return `${value} l`;
