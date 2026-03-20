@@ -36,6 +36,21 @@
 				<ion-icon :icon="settings"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<!-- Reset View / Compass FAB (only visible when pitch or bearing changed) -->
+		<ion-fab v-if="showResetView" vertical="top" horizontal="end" slot="fixed" class="compass-fab">
+			<ion-fab-button
+				class="md-small"
+				color="light"
+				size="small"
+				@click="resetView"
+				:title="$t('map.resetView')"
+			>
+				<ion-icon
+					:icon="compass"
+					:style="{ transform: `rotate(${compassRotation}deg)` }"
+				></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 		<!-- Zoom FAB Buttons -->
 		<ion-fab
 			v-if="showZoomButtons"
@@ -121,7 +136,8 @@ import {
 	remove,
 	settings,
 	addOutline,
-	layers
+	layers,
+	compass
 } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
@@ -161,7 +177,7 @@ const { t, locale } = useI18n();
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
 
-const PROTOMAPS_API_KEY = '';
+const PROTOMAPS_API_KEY = '111410f5c74ab4c7';
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
@@ -309,7 +325,8 @@ function syncMapStyleWithPreferences() {
 	}
 }
 
-let navControl: maplibregl.NavigationControl | null = null;
+const showResetView = ref(false);
+const compassRotation = ref(0);
 
 function applyTerrainSettings() {
 	if (!rootMap) return;
@@ -318,25 +335,31 @@ function applyTerrainSettings() {
 		rootMap.touchPitch.enable();
 		rootMap.touchZoomRotate.enableRotation();
 		rootMap.dragRotate.enable();
-		if (!navControl) {
-			navControl = new maplibregl.NavigationControl({
-				visualizePitch: true,
-				showCompass: true,
-				showZoom: false
-			});
-			rootMap.addControl(navControl, 'top-right');
-		}
 	} else {
 		rootMap.touchPitch.disable();
 		rootMap.touchZoomRotate.disableRotation();
 		rootMap.dragRotate.disable();
 		rootMap.setPitch(0);
 		rootMap.setBearing(0);
-		if (navControl) {
-			rootMap.removeControl(navControl);
-			navControl = null;
-		}
 	}
+	updateResetViewVisibility();
+}
+
+function updateResetViewVisibility() {
+	if (!rootMap) {
+		showResetView.value = false;
+		compassRotation.value = 0;
+		return;
+	}
+	const pitch = rootMap.getPitch();
+	const bearing = rootMap.getBearing();
+	showResetView.value = pitch !== 0 || Math.abs(bearing) > 0.5;
+	compassRotation.value = -bearing;
+}
+
+function resetView() {
+	if (!rootMap) return;
+	rootMap.easeTo({ pitch: 0, bearing: 0, duration: 300 });
 }
 
 function openLayerSelector() {
@@ -902,7 +925,7 @@ async function initMap() {
 		dragRotate: terrain3d.value,
 		touchZoomRotate: true,
 		pitchWithRotate: terrain3d.value,
-		pitch: terrain3d.value ? 60 : 0
+		pitch: 0
 	});
 
 	if (!terrain3d.value) {
@@ -930,6 +953,10 @@ async function initMap() {
 		rootMap.on('zoomend', debouncedMapMove);
 		rootMap.on('dragend', debouncedMapMove);
 		rootMap.on('moveend', debouncedMapMove);
+
+		rootMap.on('pitchend', updateResetViewVisibility);
+		rootMap.on('rotateend', updateResetViewVisibility);
+		rootMap.on('moveend', updateResetViewVisibility);
 
 		pumpCalculation.setMap(rootMap);
 
@@ -961,11 +988,6 @@ function watchExternalLocationQuery() {
 
 function reloadMapStyle() {
 	if (!rootMap || !mapReady) return;
-	// Remove nav control before style swap — setStyle can orphan its DOM
-	if (navControl) {
-		rootMap.removeControl(navControl);
-		navControl = null;
-	}
 	rootMap.setStyle(getProtomapsStyle());
 	rootMap.once('style.load', async () => {
 		if (!rootMap) return;
@@ -1086,35 +1108,8 @@ ion-fab {
 	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
 }
 
-:deep(.maplibregl-ctrl-top-right) {
-	top: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 48px);
-	right: 4px;
-}
-
-:deep(.maplibregl-ctrl-group) {
-	background: var(--ion-color-light, #f4f5f8);
-	border-radius: 50%;
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-	border: none;
-	overflow: visible;
-}
-
-:deep(.maplibregl-ctrl-group button) {
-	width: 40px;
-	height: 40px;
-	border: none;
-	border-radius: 50%;
-	background: var(--ion-color-light, #f4f5f8);
-}
-
-:deep(.maplibregl-ctrl-group button + button) {
-	border-top: none;
-}
-
-:deep(.maplibregl-ctrl-group button:focus:first-child),
-:deep(.maplibregl-ctrl-group button:focus:last-child),
-:deep(.maplibregl-ctrl-group button:focus:only-child) {
-	border-radius: 50%;
+.compass-fab {
+	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px));
 }
 </style>
 
