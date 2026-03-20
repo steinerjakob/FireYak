@@ -11,7 +11,10 @@ import {
 	IonNote,
 	IonItemGroup,
 	IonItemDivider,
-	IonTextarea
+	IonTextarea,
+	IonDatetime,
+	IonDatetimeButton,
+	IonModal
 } from '@ionic/vue';
 import { saveOutline, closeOutline, logInOutline } from 'ionicons/icons';
 import { computed } from 'vue';
@@ -90,10 +93,6 @@ const relevantTags = [
 	'operator',
 	'name',
 	'amenity',
-	'addr:street',
-	'addr:housenumber',
-	'addr:city',
-	'addr:postcode',
 	'description',
 	'note',
 	'survey:date'
@@ -426,6 +425,33 @@ const login = () => {
 				></ion-textarea>
 			</ion-item>
 		</ion-item-group>
+
+		<!-- ==================== SURVEY DATE ==================== -->
+		<ion-item-group>
+			<ion-item-divider>
+				<ion-label>{{ t('markerInfo.tags.surveyDate') }}</ion-label>
+			</ion-item-divider>
+
+			<ion-item lines="none">
+				<ion-label>
+					<p>{{ t('markerEdit.hints.surveyDate') }}</p>
+				</ion-label>
+				<ion-datetime-button datetime="survey-date" slot="end"></ion-datetime-button>
+				<ion-modal :keep-contents-mounted="true">
+					<ion-datetime
+						id="survey-date"
+						presentation="date"
+						:value="markerEditStore.editableTags['survey:date']"
+						@ionChange="
+							(e: CustomEvent) =>
+								(markerEditStore.editableTags['survey:date'] = e.detail.value?.split('T')[0])
+						"
+						:max="new Date().toISOString().split('T')[0]"
+					></ion-datetime>
+				</ion-modal>
+			</ion-item>
+		</ion-item-group>
+
 		<!-- Unknown / Other Tags -->
 		<ion-item-group v-if="getOtherTags().length > 0">
 			<ion-item-divider>

@@ -215,7 +215,8 @@
 			"access": "Gibt an, wer Zugang zu dieser Wasserentnahmestelle hat. 'Öffentlich' für freien Zugang, 'Privat' für eingeschränkten Zugang.",
 			"volume": "Gesamtfassungsvermögen des Wassertanks in Litern (z.B. 50000 für 50.000 Liter).",
 			"tankLocation": "Ob der Tank ober- oder unterirdisch aufgestellt ist.",
-			"name": "Ein charakteristischer Name für diese Wasserentnahmestelle, falls vorhanden."
+			"name": "Ein charakteristischer Name für diese Wasserentnahmestelle, falls vorhanden.",
+			"surveyDate": "Datum, an dem diese Wasserentnahmestelle zuletzt vor Ort überprüft wurde."
 		},
 		"messages": {
 			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",

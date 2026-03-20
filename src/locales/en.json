@@ -215,7 +215,8 @@
 			"access": "Indicates who can access this water source. Use 'Public' for openly accessible locations, 'Private' for restricted access.",
 			"volume": "Total storage volume of the water tank in litres (e.g. 50000 for 50,000 litres).",
 			"tankLocation": "Whether the tank is located above or below ground.",
-			"name": "A distinctive name for this water source, if it has one."
+			"name": "A distinctive name for this water source, if it has one.",
+			"surveyDate": "Date when this water source was last surveyed or verified on site."
 		},
 		"messages": {
 			"saveSuccess": "Successfully saved to OpenStreetMap!",
