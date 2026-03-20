@@ -2,18 +2,13 @@
 import { ref, watch } from 'vue';
 import {
 	IonModal,
-	IonContent,
 	IonList,
 	IonItem,
 	IonLabel,
 	IonRadioGroup,
 	IonRadio,
 	IonToggle,
-	IonToolbar,
-	IonTitle,
-	IonButtons,
-	IonButton,
-	IonHeader
+	IonTitle
 } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import { type MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
@@ -58,24 +53,17 @@ async function onTerrainToggle(enabled: boolean) {
 	await saveTerrain3d(enabled);
 	emit('changed');
 }
-
-function close() {
-	emit('update:isOpen', false);
-}
 </script>
 
 <template>
-	<ion-modal :is-open="isOpen" @didDismiss="close" :initial-breakpoint="1" :breakpoints="[0, 1]">
-		<ion-header>
-			<ion-toolbar>
-				<ion-title>{{ t('map.layers.title') }}</ion-title>
-				<ion-buttons slot="end">
-					<ion-button @click="close">{{ t('map.layers.cancel') }}</ion-button>
-				</ion-buttons>
-			</ion-toolbar>
-		</ion-header>
-		<ion-content>
-			<ion-list>
+	<ion-modal
+		:is-open="isOpen"
+		@didDismiss="emit('update:isOpen', false)"
+		class="layer-selector-modal"
+	>
+		<div class="layer-selector-wrapper">
+			<ion-title class="layer-selector-title">{{ t('map.layers.title') }}</ion-title>
+			<ion-list lines="none">
 				<ion-radio-group :value="selectedLayer" @ionChange="onLayerChange($event.detail.value)">
 					<ion-item>
 						<ion-radio value="standard">{{ t('map.layers.standard') }}</ion-radio>
@@ -90,6 +78,27 @@ function close() {
 					</ion-toggle>
 				</ion-item>
 			</ion-list>
-		</ion-content>
+		</div>
 	</ion-modal>
 </template>
+
+<style>
+ion-modal.layer-selector-modal {
+	--width: fit-content;
+	--min-width: 250px;
+	--height: fit-content;
+	--border-radius: 16px;
+	--box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+</style>
+
+<style scoped>
+.layer-selector-wrapper {
+	padding: 8px 0;
+}
+
+.layer-selector-title {
+	margin: 8px 16px 4px;
+	font-weight: 600;
+}
+</style>

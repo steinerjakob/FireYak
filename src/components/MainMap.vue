@@ -161,7 +161,7 @@ const { t, locale } = useI18n();
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
 
-const PROTOMAPS_API_KEY = '111410f5c74ab4c7';
+const PROTOMAPS_API_KEY = '';
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
@@ -218,15 +218,15 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 			url: `https://api.protomaps.com/tiles/v4.json?key=${PROTOMAPS_API_KEY}`,
 			attribution:
 				'&copy; <a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
-		},
-		hillshadeSource: {
-			type: 'raster-dem',
-			url: 'https://tiles.mapterhorn.com/tilejson.json'
 		}
 	};
 
 	if (terrain3d.value) {
 		sources['terrainSource'] = {
+			type: 'raster-dem',
+			url: 'https://tiles.mapterhorn.com/tilejson.json'
+		};
+		sources['hillshadeSource'] = {
 			type: 'raster-dem',
 			url: 'https://tiles.mapterhorn.com/tilejson.json'
 		};
@@ -274,12 +274,16 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 				}
 				return layer;
 			}),
-			{
-				id: 'hills',
-				type: 'hillshade',
-				source: 'hillshadeSource',
-				paint: { 'hillshade-shadow-color': '#473B24' }
-			}
+			...(terrain3d.value
+				? [
+						{
+							id: 'hills',
+							type: 'hillshade' as const,
+							source: 'hillshadeSource',
+							paint: { 'hillshade-shadow-color': '#473B24' }
+						}
+					]
+				: [])
 		]
 	};
 
