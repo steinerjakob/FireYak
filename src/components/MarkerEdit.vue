@@ -183,6 +183,7 @@ const login = () => {
 					:helper-text="t('markerEdit.hints.type')"
 					@ionChange="onHydrantTypeChange"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="type in hydrantTypes" :key="type" :value="type">
 						{{ t(`markerInfo.values.fire_hydrant:type.${type}`) }}
 					</ion-select-option>
@@ -198,14 +199,12 @@ const login = () => {
 					v-model="pillarTypeValue"
 					:helper-text="t('markerEdit.hints.pillarType')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option value="dry_barrel">{{
 						t('markerInfo.values.pillar:type.dry_barrel')
 					}}</ion-select-option>
 					<ion-select-option value="wet_barrel">{{
 						t('markerInfo.values.pillar:type.wet_barrel')
-					}}</ion-select-option>
-					<ion-select-option value="unknown">{{
-						t('markerInfo.values.pillar:type.unknown')
 					}}</ion-select-option>
 				</ion-select>
 			</ion-item>
@@ -220,6 +219,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.waterSource')"
 					:helper-text="t('markerEdit.hints.waterSource')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="ws in waterSources" :key="ws" :value="ws">
 						{{ t(`markerInfo.values.water_source.${ws}`) }}
 					</ion-select-option>
@@ -232,6 +232,7 @@ const login = () => {
 					type="number"
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.diameter') + `(mm)`"
 					v-model="markerEditStore.editableTags['fire_hydrant:diameter']"
 					placeholder="80, 100, 150..."
@@ -244,6 +245,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.pressure')"
 					v-model="markerEditStore.editableTags['fire_hydrant:pressure']"
 					placeholder="6, yes, suction..."
@@ -256,6 +258,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.flowCapacity') + ` (l/min)`"
 					v-model="markerEditStore.editableTags['flow_rate']"
 					placeholder="800 l/min, 1200 l/min..."
@@ -273,6 +276,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.position')"
 					:helper-text="t('markerEdit.hints.position')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="pos in hydrantPositions" :key="pos" :value="pos">
 						{{ t(`markerInfo.values.fire_hydrant:position.${pos}`) }}
 					</ion-select-option>
@@ -292,6 +296,7 @@ const login = () => {
 					type="number"
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.couplings')"
 					v-model="markerEditStore.editableTags['couplings']"
 					placeholder="1, 2, 3..."
@@ -304,6 +309,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.couplingType')"
 					v-model="markerEditStore.editableTags['couplings:type']"
 					placeholder="Storz, NH, BS 336..."
@@ -316,6 +322,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.couplingDiameters')"
 					v-model="markerEditStore.editableTags['couplings:diameters']"
 					placeholder="A;B;C or 110;75;52"
@@ -340,6 +347,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.waterSource')"
 					:helper-text="t('markerEdit.hints.waterSource')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="ws in waterSources" :key="ws" :value="ws">
 						{{ t(`markerInfo.values.water_source.${ws}`) }}
 					</ion-select-option>
@@ -356,6 +364,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.access')"
 					:helper-text="t('markerEdit.hints.access')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="a in accessOptions" :key="a" :value="a">
 						{{ t(`markerInfo.values.access.${a}`) }}
 					</ion-select-option>
@@ -367,6 +376,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.name')"
 					v-model="markerEditStore.editableTags['name']"
 					:helper-text="t('markerEdit.hints.name')"
@@ -386,6 +396,7 @@ const login = () => {
 					type="number"
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.volume') + ' (l)'"
 					v-model="markerEditStore.editableTags['water_tank:volume']"
 					placeholder="10000, 50000..."
@@ -403,6 +414,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.location')"
 					:helper-text="t('markerEdit.hints.tankLocation')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="loc in locationOptions" :key="loc" :value="loc">
 						{{ t(`markerInfo.values.location.${loc}`) }}
 					</ion-select-option>
@@ -419,6 +431,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.access')"
 					:helper-text="t('markerEdit.hints.access')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="a in accessOptions" :key="a" :value="a">
 						{{ t(`markerInfo.values.access.${a}`) }}
 					</ion-select-option>
@@ -430,6 +443,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.name')"
 					v-model="markerEditStore.editableTags['name']"
 					:helper-text="t('markerEdit.hints.name')"
@@ -451,6 +465,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.operator')"
 					v-model="markerEditStore.editableTags['operator']"
 					:helper-text="t('markerEdit.hints.operator')"
@@ -462,6 +477,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.referenceNumber')"
 					v-model="markerEditStore.editableTags['ref']"
 					:helper-text="t('markerEdit.hints.ref')"
@@ -520,6 +536,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="tag.key"
 					v-model="markerEditStore.editableTags[tag.key]"
 				></ion-input>
