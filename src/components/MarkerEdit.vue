@@ -44,6 +44,18 @@ const locationOptions = ['overground', 'underground'];
 const accessOptions = ['yes', 'private', 'permissive', 'no'];
 
 const emergencyType = computed(() => markerEditStore.editableTags['emergency'] || 'fire_hydrant');
+const hydrantType = computed(() => markerEditStore.editableTags['fire_hydrant:type']);
+
+const pillarTypeValue = computed({
+	get: () => markerEditStore.editableTags['pillar:type'] || 'unknown',
+	set: (val: string) => {
+		if (val === 'unknown') {
+			delete markerEditStore.editableTags['pillar:type'];
+		} else {
+			markerEditStore.editableTags['pillar:type'] = val;
+		}
+	}
+});
 
 const onTypeChange = () => {
 	const type = markerEditStore.editableTags['emergency'];
@@ -57,6 +69,7 @@ const onTypeChange = () => {
 		delete markerEditStore.editableTags['couplings'];
 		delete markerEditStore.editableTags['couplings:type'];
 		delete markerEditStore.editableTags['couplings:diameters'];
+		delete markerEditStore.editableTags['pillar:type'];
 	}
 	if (type !== 'water_tank') {
 		delete markerEditStore.editableTags['water_tank:volume'];
@@ -71,9 +84,16 @@ const onTypeChange = () => {
 	}
 };
 
+const onHydrantTypeChange = () => {
+	if (markerEditStore.editableTags['fire_hydrant:type'] !== 'pillar') {
+		delete markerEditStore.editableTags['pillar:type'];
+	}
+};
+
 const relevantTags = [
 	'emergency',
 	'fire_hydrant:type',
+	'pillar:type',
 	'fire_hydrant:diameter',
 	'fire_hydrant:pressure',
 	'fire_hydrant:flow_capacity',
@@ -161,10 +181,32 @@ const login = () => {
 					v-model="markerEditStore.editableTags['fire_hydrant:type']"
 					:placeholder="t('markerInfo.tags.hydrantType')"
 					:helper-text="t('markerEdit.hints.type')"
+					@ionChange="onHydrantTypeChange"
 				>
 					<ion-select-option v-for="type in hydrantTypes" :key="type" :value="type">
 						{{ t(`markerInfo.values.fire_hydrant:type.${type}`) }}
 					</ion-select-option>
+				</ion-select>
+			</ion-item>
+
+			<!-- Pillar Type (only for pillar hydrants) -->
+			<ion-item v-if="hydrantType === 'pillar'" lines="none">
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.pillarType')"
+					v-model="pillarTypeValue"
+					:helper-text="t('markerEdit.hints.pillarType')"
+				>
+					<ion-select-option value="dry_barrel">{{
+						t('markerInfo.values.pillar:type.dry_barrel')
+					}}</ion-select-option>
+					<ion-select-option value="wet_barrel">{{
+						t('markerInfo.values.pillar:type.wet_barrel')
+					}}</ion-select-option>
+					<ion-select-option value="unknown">{{
+						t('markerInfo.values.pillar:type.unknown')
+					}}</ion-select-option>
 				</ion-select>
 			</ion-item>
 

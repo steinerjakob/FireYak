@@ -16,6 +16,7 @@ const waterTankVolume = 'markerInfo.tags.volume';
 const tagTranslationKeys: Record<string, string> = {
 	emergency: 'markerInfo.tags.emergencyType',
 	'fire_hydrant:type': 'markerInfo.tags.hydrantType',
+	'pillar:type': 'markerInfo.tags.pillarType',
 	'fire_hydrant:diameter': 'markerInfo.tags.diameter',
 	'fire_hydrant:pressure': 'markerInfo.tags.pressure',
 	'fire_hydrant:flow_capacity': 'markerInfo.tags.flowCapacity',
@@ -48,6 +49,7 @@ const tagTranslationKeys: Record<string, string> = {
 const relevantTags = [
 	//'emergency',
 	'fire_hydrant:type',
+	'pillar:type',
 	'fire_hydrant:diameter',
 	'fire_hydrant:pressure',
 	'fire_hydrant:flow_capacity',
@@ -79,7 +81,7 @@ const relevantTags = [
 // Translate value if translation exists
 const translateValue = (key: string, value: string): string => {
 	// Check if this is a fire_hydrant field or water_source
-	if (key.startsWith('fire_hydrant:') || key === 'water_source') {
+	if (key.startsWith('fire_hydrant:') || key === 'water_source' || key === 'pillar:type') {
 		const translationKey = `markerInfo.values.${key}.${value}`;
 		// Check if translation exists
 		if (te(translationKey)) {
