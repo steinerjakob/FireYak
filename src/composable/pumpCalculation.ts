@@ -155,8 +155,7 @@ function hasPolyline(): boolean {
 
 const setTargetPoint = (latlng?: GeoPoint) => {
 	const point =
-		latlng ||
-		(rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
+		latlng || (rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
 	if (!point || !rootMap) return;
 
 	if (!targetPoint) {
@@ -188,10 +187,26 @@ const removeWayPoint = (wayPointToRemove: maplibregl.Marker) => {
 	}
 };
 
+function restoreMapState(map: maplibregl.Map) {
+	// Re-add suction point marker
+	if (suctionPoint) {
+		suctionPoint.addTo(map);
+	}
+	// Re-add target point marker
+	if (targetPoint) {
+		targetPoint.addTo(map);
+	}
+	// Re-add waypoint markers
+	wayPoints.forEach((wp) => wp.addTo(map));
+	// Re-add pump position markers
+	pumpMarkers.forEach((pm) => pm.addTo(map));
+	// Restore polyline data
+	updatePolyline();
+}
+
 const setWayPoint = (latlng?: GeoPoint) => {
 	const point =
-		latlng ||
-		(rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
+		latlng || (rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
 	if (!point || !rootMap) return;
 
 	const { iconUrl, size, anchor } = getMarkerConfig('wayPoint');
@@ -235,8 +250,7 @@ export function usePumpCalculation() {
 
 	const setSuctionPoint = (latlng?: GeoPoint) => {
 		const point =
-			latlng ||
-			(rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
+			latlng || (rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
 		if (!point || !rootMap) return;
 
 		if (!suctionPoint) {
@@ -431,6 +445,7 @@ export function usePumpCalculation() {
 		getPolylineBounds,
 		hasPolyline,
 		setMap,
+		restoreMapState,
 		setSuctionPoint,
 		setTargetPoint,
 		setWayPoint,
