@@ -36,6 +36,21 @@
 				<ion-icon :icon="settings"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<!-- Reset View / Compass FAB (only visible when pitch or bearing changed) -->
+		<ion-fab v-if="showResetView" vertical="top" horizontal="end" slot="fixed" class="compass-fab">
+			<ion-fab-button
+				class="md-small"
+				color="light"
+				size="small"
+				@click="resetView"
+				:title="$t('map.resetView')"
+			>
+				<ion-icon
+					:icon="compass"
+					:style="{ transform: `rotate(${compassRotation}deg)` }"
+				></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
 		<!-- Zoom FAB Buttons -->
 		<ion-fab
 			v-if="showZoomButtons"
@@ -92,6 +107,7 @@
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<LayerSelectorModal :is-open="layerModalOpen" @update:is-open="layerModalOpen = $event" />
 	</div>
 </template>
 <script lang="ts" setup>
@@ -105,7 +121,8 @@ import { getMarkersForView, getNearbyMarkers, markerIconUrls } from '@/mapHandle
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
-import { alertController, IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import LayerSelectorModal from '@/components/LayerSelectorModal.vue';
 import {
 	informationCircle,
 	analyticsOutline,
@@ -115,7 +132,8 @@ import {
 	remove,
 	settings,
 	addOutline,
-	layers
+	layers,
+	compass
 } from 'ionicons/icons';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
@@ -123,10 +141,9 @@ import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { useDefaultStore } from '@/store/defaultStore';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-import { MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
+import { type MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
-import { useSettings } from '@/composable/settings';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds } from '@/types/geo';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
@@ -150,16 +167,18 @@ const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
 const defaultStore = useDefaultStore();
 const settingsStore = useSettingsStore();
-const { showZoomButtons, mapLayer } = storeToRefs(settingsStore);
-const { saveMapLayer } = useSettings();
+const { showZoomButtons, mapLayer, terrain3d } = storeToRefs(settingsStore);
 const { t, locale } = useI18n();
 
 const isSatellite = ref(false);
+const layerModalOpen = ref(false);
 
-const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
+const PROTOMAPS_API_KEY = '111410f5c74ab4c7';
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
+let styleReloadVersion = 0;
+let pendingStyleLoadCallback: (() => void) | null = null;
 
 // Markers (DOM-based MapLibre markers)
 let selectedMarker: maplibregl.Marker | null = null;
@@ -216,6 +235,17 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 		}
 	};
 
+	if (terrain3d.value) {
+		sources['terrainSource'] = {
+			type: 'raster-dem',
+			url: 'https://tiles.mapterhorn.com/tilejson.json'
+		};
+		sources['hillshadeSource'] = {
+			type: 'raster-dem',
+			url: 'https://tiles.mapterhorn.com/tilejson.json'
+		};
+	}
+
 	const baseLayers: maplibregl.LayerSpecification[] = [];
 
 	if (isSatellite.value) {
@@ -235,7 +265,7 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 		} as maplibregl.LayerSpecification);
 	}
 
-	return {
+	const style: maplibregl.StyleSpecification = {
 		version: 8,
 		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
 		sprite: `https://protomaps.github.io/basemaps-assets/sprites/v4/${spriteFlavor}`,
@@ -257,9 +287,28 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 					};
 				}
 				return layer;
-			})
+			}),
+			...(terrain3d.value
+				? [
+						{
+							id: 'hills',
+							type: 'hillshade' as const,
+							source: 'hillshadeSource',
+							paint: { 'hillshade-shadow-color': '#473B24' }
+						}
+					]
+				: [])
 		]
 	};
+
+	if (terrain3d.value) {
+		style.terrain = {
+			source: 'terrainSource',
+			exaggeration: 1
+		};
+	}
+
+	return style;
 }
 
 function applyMapLayerSelection(selection: MapLayerSetting) {
@@ -274,40 +323,45 @@ function syncMapStyleWithPreferences() {
 	}
 }
 
-async function openLayerSelector() {
-	const alert = await alertController.create({
-		header: t('map.layers.title'),
-		inputs: [
-			{
-				type: 'radio',
-				label: t('map.layers.standard'),
-				value: 'standard',
-				checked: mapLayer.value === 'standard'
-			},
-			{
-				type: 'radio',
-				label: t('map.layers.satellite'),
-				value: 'satellite',
-				checked: mapLayer.value === 'satellite'
-			}
-		],
-		buttons: [
-			{
-				text: t('map.layers.cancel'),
-				role: 'cancel'
-			},
-			{
-				text: 'OK',
-				handler: async (value: MapLayerSetting) => {
-					await saveMapLayer(value);
-					applyMapLayerSelection(value);
-					syncMapStyleWithPreferences();
-				}
-			}
-		]
-	});
+const showResetView = ref(false);
+const compassRotation = ref(0);
 
-	await alert.present();
+function applyTerrainSettings() {
+	if (!rootMap) return;
+
+	if (terrain3d.value) {
+		rootMap.touchPitch.enable();
+		rootMap.touchZoomRotate.enableRotation();
+		rootMap.dragRotate.enable();
+	} else {
+		rootMap.touchPitch.disable();
+		rootMap.touchZoomRotate.disableRotation();
+		rootMap.dragRotate.disable();
+		rootMap.setPitch(0);
+		rootMap.setBearing(0);
+	}
+	updateResetViewVisibility();
+}
+
+function updateResetViewVisibility() {
+	if (!rootMap) {
+		showResetView.value = false;
+		compassRotation.value = 0;
+		return;
+	}
+	const pitch = rootMap.getPitch();
+	const bearing = rootMap.getBearing();
+	showResetView.value = pitch !== 0 || Math.abs(bearing) > 0.5;
+	compassRotation.value = -bearing;
+}
+
+function resetView() {
+	if (!rootMap) return;
+	rootMap.easeTo({ pitch: 0, bearing: 0, duration: 300 });
+}
+
+function openLayerSelector() {
+	layerModalOpen.value = true;
 }
 
 // Save/restore map view via localStorage
@@ -473,6 +527,46 @@ function hideSelectedPath() {
 	selectedPathCoords.value = [];
 	if (rootMap && mapReady && rootMap.getLayer(SELECTED_PATH_LAYER)) {
 		rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'none');
+	}
+}
+
+function restoreSelectedPath() {
+	if (!rootMap || !selectedPathVisible.value || selectedPathCoords.value.length < 2) return;
+
+	const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
+	if (source) {
+		source.setData({
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
+			properties: {}
+		});
+	}
+	if (rootMap.getLayer(SELECTED_PATH_LAYER)) {
+		rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'visible');
+	}
+}
+
+function restoreDomMarkers() {
+	if (!rootMap) return;
+
+	// Re-add selected marker
+	if (selectedMarker && markerStore.selectedMarker) {
+		selectedMarker.addTo(rootMap);
+	}
+
+	// Re-add ghost marker (editing mode)
+	if (ghostMarker && markerEditStore.isActive) {
+		ghostMarker.addTo(rootMap);
+	}
+
+	// Re-add user location marker
+	if (userLocationMarker && currentUserLocation.value) {
+		userLocationMarker.addTo(rootMap);
+	}
+
+	// Re-add custom location marker
+	if (customLocationMarker) {
+		customLocationMarker.addTo(rootMap);
 	}
 }
 
@@ -680,8 +774,15 @@ async function loadMarkerImages(map: maplibregl.Map) {
 	const entries = Object.entries(markerIconUrls);
 	for (const [name, url] of entries) {
 		if (map.hasImage(name)) continue;
-		const response = await map.loadImage(url);
-		map.addImage(name, response.data);
+		try {
+			const response = await map.loadImage(url);
+			if (!map.hasImage(name)) {
+				map.addImage(name, response.data);
+			}
+		} catch (e) {
+			// Image may have been added by a concurrent style reload
+			console.warn(`Failed to load marker image "${name}":`, e);
+		}
 	}
 }
 
@@ -868,14 +969,11 @@ async function initMap() {
 		center: savedView?.center || [15.274102, 48.135314],
 		zoom: savedView?.zoom || 13,
 		maxZoom: 19,
-		dragRotate: false,
+		dragRotate: true,
 		touchZoomRotate: true,
-		pitchWithRotate: false,
-		maxPitch: 0
+		pitchWithRotate: true,
+		pitch: 0
 	});
-
-	rootMap.touchPitch.disable();
-	rootMap.touchZoomRotate.disableRotation();
 
 	// Important: force MapLibre to recalc size after layout is ready
 	await ensureMapSize();
@@ -885,18 +983,18 @@ async function initMap() {
 		mapReady = true;
 
 		await loadMarkerImages(rootMap);
-
-		syncMapStyleWithPreferences();
-
 		addMapLayers(rootMap);
 		setupMapEventListeners(rootMap);
-
+		applyTerrainSettings();
 		handleMapMovement();
 
-		// watch map movement
 		rootMap.on('zoomend', debouncedMapMove);
 		rootMap.on('dragend', debouncedMapMove);
 		rootMap.on('moveend', debouncedMapMove);
+
+		rootMap.on('pitchend', updateResetViewVisibility);
+		rootMap.on('rotateend', updateResetViewVisibility);
+		rootMap.on('moveend', updateResetViewVisibility);
 
 		watchExternalLocationQuery();
 	});
@@ -926,14 +1024,36 @@ function watchExternalLocationQuery() {
 
 function reloadMapStyle() {
 	if (!rootMap || !mapReady) return;
-	rootMap.setStyle(getProtomapsStyle());
-	rootMap.once('style.load', async () => {
-		if (!rootMap) return;
+	const currentVersion = ++styleReloadVersion;
+
+	// Remove any previously registered style.load handler to prevent stale callbacks
+	if (pendingStyleLoadCallback) {
+		rootMap.off('style.load', pendingStyleLoadCallback);
+		pendingStyleLoadCallback = null;
+	}
+
+	const onStyleLoad = async () => {
+		pendingStyleLoadCallback = null;
+		if (!rootMap || currentVersion !== styleReloadVersion) return;
 
 		await loadMarkerImages(rootMap);
 		addMapLayers(rootMap);
 		handleMapMovement();
-	});
+		applyTerrainSettings();
+
+		// Restore selected path if it was visible
+		restoreSelectedPath();
+
+		// Re-add DOM markers that may have been detached
+		restoreDomMarkers();
+
+		// Restore pump calculation markers and polyline
+		pumpCalculation.restoreMapState(rootMap);
+	};
+
+	pendingStyleLoadCallback = onStyleLoad;
+	rootMap.once('style.load', onStyleLoad);
+	rootMap.setStyle(getProtomapsStyle());
 }
 function zoomIn() {
 	rootMap?.zoomIn();
@@ -973,22 +1093,27 @@ onMounted(async () => {
 		() => mapLayer.value,
 		() => {
 			syncMapStyleWithPreferences();
-		},
-		{ immediate: true }
+			// If map isn't ready yet, queue the style sync for after load
+			if (rootMap && !mapReady) {
+				rootMap.once('load', () => {
+					syncMapStyleWithPreferences();
+				});
+			}
+		}
 	);
 
-	watch(
-		isDarkMode,
-		() => {
-			if (!isSatellite.value) {
-				syncMapStyleWithPreferences();
-			}
-		},
-		{ immediate: true }
-	);
+	watch(isDarkMode, () => {
+		if (!isSatellite.value) {
+			syncMapStyleWithPreferences();
+		}
+	});
 
 	watch(locale, () => {
 		reloadMapStyle();
+	});
+
+	watch(terrain3d, () => {
+		syncMapStyleWithPreferences();
 	});
 });
 
@@ -1039,6 +1164,10 @@ ion-fab {
 :deep(.maplibregl-ctrl-bottom-left),
 :deep(.maplibregl-ctrl-bottom-right) {
 	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
+}
+
+.compass-fab {
+	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px));
 }
 </style>
 
