@@ -11,6 +11,7 @@
 		"tags": {
 			"emergencyType": "Emergency Type",
 			"hydrantType": "Hydrant Type",
+			"pillarType": "Pillar Type",
 			"diameter": "Diameter",
 			"pressure": "Pressure",
 			"position": "Position",
@@ -36,7 +37,8 @@
 			"coordinates": "Coordinates",
 			"osmId": "OSM ID",
 			"flowCapacity": "Flow Capacity",
-			"flowRate": "Flow Rate"
+			"flowRate": "Flow Rate",
+			"awwaClass": "AWWA Class"
 		},
 		"values": {
 			"fire_hydrant:type": {
@@ -52,10 +54,14 @@
 				"sidewalk": "Sidewalk",
 				"street": "Street"
 			},
+			"pillar:type": {
+				"dry_barrel": "Dry Barrel",
+				"wet_barrel": "Wet Barrel",
+				"unknown": "Unknown"
+			},
 			"fire_hydrant:pressure": {
-				"pressurised": "Pressurised",
-				"suction": "Suction",
-				"gravity": "Gravity"
+				"yes": "Yes (unknown value)",
+				"suction": "Suction"
 			},
 			"fire_hydrant:diameter": {
 				"80": "80 mm",
@@ -84,6 +90,12 @@
 				"private": "Private",
 				"permissive": "Permissive",
 				"no": "No Access"
+			},
+			"fire_hydrant:awwa_class": {
+				"AA": "Class AA — >1500 gal/min (Light blue)",
+				"A": "Class A — 1000–1500 gal/min (Green)",
+				"B": "Class B — 500–1000 gal/min (Yellow)",
+				"C": "Class C — <500 gal/min (Red)"
 			}
 		},
 		"navigation": {
@@ -203,8 +215,9 @@
 			"location": "Tap on the map to set the hydrant's location.",
 			"emergency": "Specifies that this is a fire hydrant.",
 			"type": "Specifies the type of fire hydrant. Pillar hydrants are above ground, underground hydrants are beneath a cover, wall hydrants are mounted on or in a wall.",
+			"pillarType": "Dry barrel hydrants have the shutoff valve underground. Wet barrel hydrants are pressurised at all times.",
 			"diameter": "The internal diameter of the water pipe connected to the hydrant in millimeters (e.g., 80, 100, 150).",
-			"pressure": "Indicates how water is delivered. 'pressurised' for water mains, 'suction' for non-pressurized sources like ponds, 'gravity' for high-level tanks.",
+			"pressure": "Pressure in bar, 'yes' if under pressure but value unknown, or 'suction' if a pump is needed (e.g. pond/stream/tank).",
 			"flowCapacity": "The maximum water flow rate the hydrant can provide (l/min, usgal/min, ukgal/min, m3/h). (z.B. 600 l/min)",
 			"position": "The physical location of the hydrant relative to the surroundings (e.g., sidewalk, parking lot).",
 			"couplings": "The number of hose connections available on the hydrant.",
@@ -218,7 +231,9 @@
 			"access": "Indicates who can access this water source. Use 'Public' for openly accessible locations, 'Private' for restricted access.",
 			"volume": "Total storage volume of the water tank in litres (e.g. 50000 for 50,000 litres).",
 			"tankLocation": "Whether the tank is located above or below ground.",
-			"name": "A distinctive name for this water source, if it has one."
+			"name": "A distinctive name for this water source, if it has one.",
+			"surveyDate": "Date when this water source was last surveyed or verified on site.",
+			"awwaClass": "AWWA colour classification based on flow capacity. Used in some US jurisdictions to indicate hydrant performance by bonnet/cap colour."
 		},
 		"messages": {
 			"saveSuccess": "Successfully saved to OpenStreetMap!",

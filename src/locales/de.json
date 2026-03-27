@@ -11,6 +11,7 @@
 		"tags": {
 			"emergencyType": "Notfall-Typ",
 			"hydrantType": "Hydrantentyp",
+			"pillarType": "Bauart",
 			"diameter": "Durchmesser",
 			"pressure": "Druck",
 			"position": "Position",
@@ -36,7 +37,8 @@
 			"coordinates": "Koordinaten",
 			"osmId": "OSM-ID",
 			"flowCapacity": "Durchfluss",
-			"flowRate": "Durchflussrate"
+			"flowRate": "Durchflussrate",
+			"awwaClass": "AWWA-Klasse"
 		},
 		"values": {
 			"fire_hydrant:type": {
@@ -52,10 +54,14 @@
 				"sidewalk": "Gehweg",
 				"street": "Straße"
 			},
+			"pillar:type": {
+				"dry_barrel": "Trockenhydrant",
+				"wet_barrel": "Nasshydrant",
+				"unknown": "Unbekannt"
+			},
 			"fire_hydrant:pressure": {
-				"pressurised": "Druckleitung",
-				"suction": "Saugleitung",
-				"gravity": "Schwerkraft"
+				"yes": "Ja (Wert unbekannt)",
+				"suction": "Saugleitung"
 			},
 			"fire_hydrant:diameter": {
 				"80": "80 mm",
@@ -84,6 +90,12 @@
 				"private": "Privat",
 				"permissive": "Zugänglich",
 				"no": "Kein Zugang"
+			},
+			"fire_hydrant:awwa_class": {
+				"AA": "Klasse AA — >1500 gal/min (Hellblau)",
+				"A": "Klasse A — 1000–1500 gal/min (Grün)",
+				"B": "Klasse B — 500–1000 gal/min (Gelb)",
+				"C": "Klasse C — <500 gal/min (Rot)"
 			}
 		},
 		"navigation": {
@@ -203,8 +215,9 @@
 			"location": "Tippen Sie auf die Karte, um die Position festzulegen.",
 			"emergency": "Gibt an, dass es sich um einen Hydranten handelt.",
 			"type": "Gibt den Typ des Hydranten an. Überflurhydranten sind über der Erde, Unterflurhydranten liegen unter einer Abdeckung, Wandhydranten sind an oder in einer Wand montiert.",
+			"pillarType": "Trockenhydranten haben das Absperrventil unterirdisch. Nasshydranten stehen dauerhaft unter Druck.",
 			"diameter": "Der Innendurchmesser der an den Hydranten angeschlossenen Wasserleitung in Millimetern (z.B. 80, 100, 150).",
-			"pressure": "Gibt an, wie das Wasser bereitgestellt wird. 'Druckleitung' für Druckleitungen, 'Saugleitung' für drucklose Quellen wie Teiche, 'Schwerkraft' für Hochbehälter.",
+			"pressure": "Druck in bar, 'yes' wenn unter Druck aber Wert unbekannt, oder 'suction' wenn eine Pumpe benötigt wird (z.B. Teich/Bach/Tank).",
 			"flowCapacity": "Die maximale Wassermenge, die der Hydrant liefern kann (l/min, usgal/min, ukgal/min, m3/h). (z.B. 600 l/min)",
 			"position": "Die physische Lage des Hydranten im Verhältnis zur Umgebung (z.B. Gehweg, Parkplatz).",
 			"couplings": "Die Anzahl der am Hydranten verfügbaren Schlauchanschlüsse.",
@@ -218,7 +231,9 @@
 			"access": "Gibt an, wer Zugang zu dieser Wasserentnahmestelle hat. 'Öffentlich' für freien Zugang, 'Privat' für eingeschränkten Zugang.",
 			"volume": "Gesamtfassungsvermögen des Wassertanks in Litern (z.B. 50000 für 50.000 Liter).",
 			"tankLocation": "Ob der Tank ober- oder unterirdisch aufgestellt ist.",
-			"name": "Ein charakteristischer Name für diese Wasserentnahmestelle, falls vorhanden."
+			"name": "Ein charakteristischer Name für diese Wasserentnahmestelle, falls vorhanden.",
+			"surveyDate": "Datum, an dem diese Wasserentnahmestelle zuletzt vor Ort überprüft wurde.",
+			"awwaClass": "AWWA-Farbklassifizierung basierend auf der Durchflusskapazität. Wird in einigen US-Bezirken verwendet, um die Hydrantenleistung anhand der Farbe von Haube und Kappen anzuzeigen."
 		},
 		"messages": {
 			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",

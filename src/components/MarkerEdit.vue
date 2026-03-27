@@ -12,6 +12,10 @@ import {
 	IonItemGroup,
 	IonItemDivider,
 	IonTextarea,
+	IonDatetime,
+	IonDatetimeButton,
+	IonModal,
+	IonChip
 } from '@ionic/vue';
 import { saveOutline, closeOutline, logInOutline } from 'ionicons/icons';
 import { computed } from 'vue';
@@ -25,7 +29,6 @@ const { t } = useI18n();
 
 const hydrantTypes = ['pillar', 'underground', 'wall' /*, 'pond'*/];
 const hydrantPositions = ['sidewalk', 'lane', 'parking_lot', 'green', 'street'];
-const pressures = ['pressurised', 'suction', 'gravity'];
 const waterSources = [
 	'main',
 	'pond',
@@ -41,7 +44,45 @@ const waterSources = [
 const locationOptions = ['overground', 'underground'];
 const accessOptions = ['yes', 'private', 'permissive', 'no'];
 
+const commonDiameters = ['80', '100', '150', '200', '300'];
+const commonPressures = ['yes', 'suction', '3', '4', '6', '8'];
+const awwaClasses = [
+	{ value: 'AA', color: '#73B2FF' },
+	{ value: 'A', color: '#4CAF50' },
+	{ value: 'B', color: '#FFEB3B' },
+	{ value: 'C', color: '#F44336' }
+];
+const commonFlowRates = ['600 l/min', '800 l/min', '1200 l/min'];
+const commonCouplingsCounts = ['1', '2', '3'];
+const commonCouplingTypes = [
+	'Storz',
+	'Bayonet',
+	'Barcelona',
+	'Guillemin',
+	'Klaue',
+	'Sprawny',
+	'UNI',
+	'NH'
+];
+const commonCouplingDiameters = ['B;B', 'B;B;A', 'B;C;C', '75 mm', '55 mm', '65 mm;65 mm;100 mm'];
+
+const applySuggestion = (tag: string, value: string) => {
+	markerEditStore.editableTags[tag] = value;
+};
+
 const emergencyType = computed(() => markerEditStore.editableTags['emergency'] || 'fire_hydrant');
+const hydrantType = computed(() => markerEditStore.editableTags['fire_hydrant:type']);
+
+const pillarTypeValue = computed({
+	get: () => markerEditStore.editableTags['pillar:type'] || 'unknown',
+	set: (val: string) => {
+		if (val === 'unknown') {
+			delete markerEditStore.editableTags['pillar:type'];
+		} else {
+			markerEditStore.editableTags['pillar:type'] = val;
+		}
+	}
+});
 
 const onTypeChange = () => {
 	const type = markerEditStore.editableTags['emergency'];
@@ -55,6 +96,8 @@ const onTypeChange = () => {
 		delete markerEditStore.editableTags['couplings'];
 		delete markerEditStore.editableTags['couplings:type'];
 		delete markerEditStore.editableTags['couplings:diameters'];
+		delete markerEditStore.editableTags['pillar:type'];
+		delete markerEditStore.editableTags['fire_hydrant:awwa_class'];
 	}
 	if (type !== 'water_tank') {
 		delete markerEditStore.editableTags['water_tank:volume'];
@@ -69,13 +112,21 @@ const onTypeChange = () => {
 	}
 };
 
+const onHydrantTypeChange = () => {
+	if (markerEditStore.editableTags['fire_hydrant:type'] !== 'pillar') {
+		delete markerEditStore.editableTags['pillar:type'];
+	}
+};
+
 const relevantTags = [
 	'emergency',
 	'fire_hydrant:type',
+	'pillar:type',
 	'fire_hydrant:diameter',
 	'fire_hydrant:pressure',
 	'fire_hydrant:flow_capacity',
 	'fire_hydrant:position',
+	'fire_hydrant:awwa_class',
 	'flow_rate',
 	'couplings',
 	'couplings:type',
@@ -91,10 +142,6 @@ const relevantTags = [
 	'operator',
 	'name',
 	'amenity',
-	'addr:street',
-	'addr:housenumber',
-	'addr:city',
-	'addr:postcode',
 	'description',
 	'note',
 	'survey:date'
@@ -163,9 +210,47 @@ const login = () => {
 					v-model="markerEditStore.editableTags['fire_hydrant:type']"
 					:placeholder="t('markerInfo.tags.hydrantType')"
 					:helper-text="t('markerEdit.hints.type')"
+					@ionChange="onHydrantTypeChange"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="type in hydrantTypes" :key="type" :value="type">
 						{{ t(`markerInfo.values.fire_hydrant:type.${type}`) }}
+					</ion-select-option>
+				</ion-select>
+			</ion-item>
+
+			<!-- Pillar Type (only for pillar hydrants) -->
+			<ion-item v-if="hydrantType === 'pillar'" lines="none">
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.pillarType')"
+					v-model="pillarTypeValue"
+					:helper-text="t('markerEdit.hints.pillarType')"
+				>
+					<ion-select-option value="">—</ion-select-option>
+					<ion-select-option value="dry_barrel">{{
+						t('markerInfo.values.pillar:type.dry_barrel')
+					}}</ion-select-option>
+					<ion-select-option value="wet_barrel">{{
+						t('markerInfo.values.pillar:type.wet_barrel')
+					}}</ion-select-option>
+				</ion-select>
+			</ion-item>
+
+			<!-- Water Source -->
+			<ion-item lines="none">
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.waterSource')"
+					v-model="markerEditStore.editableTags['water_source']"
+					:placeholder="t('markerInfo.tags.waterSource')"
+					:helper-text="t('markerEdit.hints.waterSource')"
+				>
+					<ion-select-option value="">—</ion-select-option>
+					<ion-select-option v-for="ws in waterSources" :key="ws" :value="ws">
+						{{ t(`markerInfo.values.water_source.${ws}`) }}
 					</ion-select-option>
 				</ion-select>
 			</ion-item>
@@ -176,40 +261,66 @@ const login = () => {
 					type="number"
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.diameter') + `(mm)`"
 					v-model="markerEditStore.editableTags['fire_hydrant:diameter']"
 					placeholder="80, 100, 150..."
 					:helper-text="t('markerEdit.hints.diameter')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="d in commonDiameters"
+					:key="d"
+					:outline="markerEditStore.editableTags['fire_hydrant:diameter'] !== d"
+					@click="applySuggestion('fire_hydrant:diameter', d)"
+					>{{ d }}</ion-chip
+				>
+			</div>
 
 			<!-- Pressure -->
 			<ion-item lines="none">
-				<ion-select
+				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.pressure')"
 					v-model="markerEditStore.editableTags['fire_hydrant:pressure']"
-					:placeholder="t('markerInfo.tags.pressure')"
+					placeholder="6, yes, suction..."
 					:helper-text="t('markerEdit.hints.pressure')"
-				>
-					<ion-select-option v-for="p in pressures" :key="p" :value="p">
-						{{ t(`markerInfo.values.fire_hydrant:pressure.${p}`) }}
-					</ion-select-option>
-				</ion-select>
+				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="p in commonPressures"
+					:key="p"
+					:outline="markerEditStore.editableTags['fire_hydrant:pressure'] !== p"
+					@click="applySuggestion('fire_hydrant:pressure', p)"
+					>{{ p }}</ion-chip
+				>
+			</div>
 
 			<!-- Flow Capacity -->
 			<ion-item lines="none">
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.flowCapacity') + ` (l/min)`"
 					v-model="markerEditStore.editableTags['flow_rate']"
 					placeholder="800 l/min, 1200 l/min..."
 					:helper-text="t('markerEdit.hints.flowCapacity')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="f in commonFlowRates"
+					:key="f"
+					:outline="markerEditStore.editableTags['flow_rate'] !== f"
+					@click="applySuggestion('flow_rate', f)"
+					>{{ f }}</ion-chip
+				>
+			</div>
 
 			<!-- Position -->
 			<ion-item lines="none">
@@ -221,11 +332,46 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.position')"
 					:helper-text="t('markerEdit.hints.position')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="pos in hydrantPositions" :key="pos" :value="pos">
 						{{ t(`markerInfo.values.fire_hydrant:position.${pos}`) }}
 					</ion-select-option>
 				</ion-select>
 			</ion-item>
+
+			<!-- AWWA Class -->
+			<ion-item lines="none">
+				<ion-input
+					fill="outline"
+					label-placement="stacked"
+					:clear-input="true"
+					:label="t('markerInfo.tags.awwaClass')"
+					v-model="markerEditStore.editableTags['fire_hydrant:awwa_class']"
+					placeholder="AA, A, B, C"
+					:helper-text="t('markerEdit.hints.awwaClass')"
+				></ion-input>
+			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="ac in awwaClasses"
+					:key="ac.value"
+					:outline="markerEditStore.editableTags['fire_hydrant:awwa_class'] !== ac.value"
+					:style="{
+						'--background':
+							markerEditStore.editableTags['fire_hydrant:awwa_class'] === ac.value
+								? ac.color
+								: undefined,
+						'--color':
+							markerEditStore.editableTags['fire_hydrant:awwa_class'] === ac.value &&
+							ac.value === 'B'
+								? '#000'
+								: undefined,
+						borderColor: ac.color
+					}"
+					@click="applySuggestion('fire_hydrant:awwa_class', ac.value)"
+					>{{ ac.value }}</ion-chip
+				>
+			</div>
 		</ion-item-group>
 
 		<!-- Couplings (fire hydrant only) -->
@@ -240,36 +386,66 @@ const login = () => {
 					type="number"
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.couplings')"
 					v-model="markerEditStore.editableTags['couplings']"
 					placeholder="1, 2, 3..."
 					:helper-text="t('markerEdit.hints.couplings')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="c in commonCouplingsCounts"
+					:key="c"
+					:outline="markerEditStore.editableTags['couplings'] !== c"
+					@click="applySuggestion('couplings', c)"
+					>{{ c }}</ion-chip
+				>
+			</div>
 
 			<!-- Coupling Type -->
 			<ion-item lines="none">
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.couplingType')"
 					v-model="markerEditStore.editableTags['couplings:type']"
-					placeholder="Storz, NH, BS 336..."
+					placeholder="Storz, NH..."
 					:helper-text="t('markerEdit.hints.couplingType')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="ct in commonCouplingTypes"
+					:key="ct"
+					:outline="markerEditStore.editableTags['couplings:type'] !== ct"
+					@click="applySuggestion('couplings:type', ct)"
+					>{{ ct }}</ion-chip
+				>
+			</div>
 
 			<!-- Coupling Diameters -->
 			<ion-item lines="none">
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.couplingDiameters')"
 					v-model="markerEditStore.editableTags['couplings:diameters']"
-					placeholder="A;B;C or 110;75;52"
+					placeholder="B;B;A or 65 mm;65 mm;100 mm"
 					:helper-text="t('markerEdit.hints.couplingDiameters')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="cd in commonCouplingDiameters"
+					:key="cd"
+					:outline="markerEditStore.editableTags['couplings:diameters'] !== cd"
+					@click="applySuggestion('couplings:diameters', cd)"
+					>{{ cd }}</ion-chip
+				>
+			</div>
 		</ion-item-group>
 
 		<!-- ==================== SUCTION POINT FIELDS ==================== -->
@@ -288,6 +464,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.waterSource')"
 					:helper-text="t('markerEdit.hints.waterSource')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="ws in waterSources" :key="ws" :value="ws">
 						{{ t(`markerInfo.values.water_source.${ws}`) }}
 					</ion-select-option>
@@ -304,6 +481,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.access')"
 					:helper-text="t('markerEdit.hints.access')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="a in accessOptions" :key="a" :value="a">
 						{{ t(`markerInfo.values.access.${a}`) }}
 					</ion-select-option>
@@ -315,6 +493,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.name')"
 					v-model="markerEditStore.editableTags['name']"
 					:helper-text="t('markerEdit.hints.name')"
@@ -334,6 +513,7 @@ const login = () => {
 					type="number"
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.volume') + ' (l)'"
 					v-model="markerEditStore.editableTags['water_tank:volume']"
 					placeholder="10000, 50000..."
@@ -351,6 +531,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.location')"
 					:helper-text="t('markerEdit.hints.tankLocation')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="loc in locationOptions" :key="loc" :value="loc">
 						{{ t(`markerInfo.values.location.${loc}`) }}
 					</ion-select-option>
@@ -367,6 +548,7 @@ const login = () => {
 					:placeholder="t('markerInfo.tags.access')"
 					:helper-text="t('markerEdit.hints.access')"
 				>
+					<ion-select-option value="">—</ion-select-option>
 					<ion-select-option v-for="a in accessOptions" :key="a" :value="a">
 						{{ t(`markerInfo.values.access.${a}`) }}
 					</ion-select-option>
@@ -378,6 +560,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.name')"
 					v-model="markerEditStore.editableTags['name']"
 					:helper-text="t('markerEdit.hints.name')"
@@ -399,6 +582,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.operator')"
 					v-model="markerEditStore.editableTags['operator']"
 					:helper-text="t('markerEdit.hints.operator')"
@@ -410,6 +594,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="t('markerInfo.tags.referenceNumber')"
 					v-model="markerEditStore.editableTags['ref']"
 					:helper-text="t('markerEdit.hints.ref')"
@@ -431,6 +616,33 @@ const login = () => {
 				></ion-textarea>
 			</ion-item>
 		</ion-item-group>
+
+		<!-- ==================== SURVEY DATE ==================== -->
+		<ion-item-group>
+			<ion-item-divider>
+				<ion-label>{{ t('markerInfo.tags.surveyDate') }}</ion-label>
+			</ion-item-divider>
+
+			<ion-item lines="none">
+				<ion-label>
+					<p>{{ t('markerEdit.hints.surveyDate') }}</p>
+				</ion-label>
+				<ion-datetime-button datetime="survey-date" slot="end"></ion-datetime-button>
+				<ion-modal :keep-contents-mounted="true">
+					<ion-datetime
+						id="survey-date"
+						presentation="date"
+						:value="markerEditStore.editableTags['survey:date']"
+						@ionChange="
+							(e: CustomEvent) =>
+								(markerEditStore.editableTags['survey:date'] = e.detail.value?.split('T')[0])
+						"
+						:max="new Date().toISOString().split('T')[0]"
+					></ion-datetime>
+				</ion-modal>
+			</ion-item>
+		</ion-item-group>
+
 		<!-- Unknown / Other Tags -->
 		<ion-item-group v-if="getOtherTags().length > 0">
 			<ion-item-divider>
@@ -441,6 +653,7 @@ const login = () => {
 				<ion-input
 					fill="outline"
 					label-placement="stacked"
+					:clear-input="true"
 					:label="tag.key"
 					v-model="markerEditStore.editableTags[tag.key]"
 				></ion-input>
@@ -489,6 +702,19 @@ ion-item-divider {
 	--padding-top: 16px;
 	--padding-bottom: 8px;
 	font-weight: bold;
+}
+
+.suggestion-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 0 16px 8px;
+}
+
+.suggestion-chips ion-chip {
+	height: 28px;
+	font-size: 13px;
+	cursor: pointer;
 }
 
 .action-buttons {
