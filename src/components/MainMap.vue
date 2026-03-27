@@ -1,6 +1,39 @@
 <template>
 	<div :class="{ darkMap: isDarkMode && !isSatellite }" style="height: 100%; width: 100%">
 		<div id="map" style="height: 100%; width: 100%"></div>
+		<!-- Address Search Bar -->
+		<div class="search-container">
+			<ion-searchbar
+				:value="searchQuery"
+				:placeholder="$t('addressSearch.placeholder')"
+				:debounce="0"
+				show-clear-button="focus"
+				@ionInput="onSearchInput"
+				@ionClear="onSearchClear"
+				class="search-bar"
+			></ion-searchbar>
+			<!-- Loading indicator -->
+			<div v-if="searchLoading" class="search-loading">
+				<ion-spinner name="crescent" color="primary"></ion-spinner>
+			</div>
+			<!-- Search Results -->
+			<ion-list v-if="showSearchResults && searchResults.length > 0" class="search-results">
+				<ion-item
+					v-for="(feature, index) in searchResults"
+					:key="index"
+					button
+					@click="selectSearchResult(feature)"
+					class="search-result-item"
+				>
+					<ion-label>
+						<h3 style="font-weight: bold; margin: 0">{{ getFeatureName(feature) }}</h3>
+						<p style="margin: 2px 0 0 0; font-size: 13px; color: var(--ion-color-medium)">
+							{{ formatAddress(feature) }}
+						</p>
+					</ion-label>
+				</ion-item>
+			</ion-list>
+		</div>
 		<!-- About FAB Button -->
 		<ion-fab vertical="top" horizontal="start" slot="fixed">
 			<ion-fab-button
@@ -105,7 +138,17 @@ import { getMarkersForView, getNearbyMarkers, markerIconUrls } from '@/mapHandle
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
-import { alertController, IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import {
+	alertController,
+	IonFab,
+	IonFabButton,
+	IonIcon,
+	IonSpinner,
+	IonSearchbar,
+	IonList,
+	IonItem,
+	IonLabel
+} from '@ionic/vue';
 import {
 	informationCircle,
 	analyticsOutline,
@@ -115,8 +158,10 @@ import {
 	remove,
 	settings,
 	addOutline,
-	layers
+	layers,
+	searchOutline
 } from 'ionicons/icons';
+import { usePhotonSearch, PhotonFeature } from '@/composable/photonSearch';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
@@ -153,7 +198,17 @@ const settingsStore = useSettingsStore();
 const { showZoomButtons, mapLayer } = storeToRefs(settingsStore);
 const { saveMapLayer } = useSettings();
 const { t, locale } = useI18n();
+const {
+	query: searchQuery,
+	results: searchResults,
+	isLoading: searchLoading,
+	searchPhoton,
+	clearSearch,
+	formatAddress,
+	getFeatureName
+} = usePhotonSearch();
 
+const showSearchResults = ref(false);
 const isSatellite = ref(false);
 
 const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
@@ -168,6 +223,7 @@ let userLocationMarker: maplibregl.Marker | null = null;
 
 // Custom external location marker
 let customLocationMarker: maplibregl.Marker | null = null;
+let searchMarker: maplibregl.Marker | null = null;
 
 function createSelectedMarker(): maplibregl.Marker {
 	const el = document.createElement('img');
@@ -484,6 +540,74 @@ watch(pumpCalculation.calculationResult, (val) => {
 });
 
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
+
+const debouncedSearch = debounce((text: string) => {
+	if (!text || text.trim().length < 2) {
+		searchResults.value = [];
+		showSearchResults.value = false;
+		return;
+	}
+	const center = rootMap?.getCenter();
+	const lang = locale.value === 'de' ? 'de' : 'en';
+	searchPhoton(text, lang, center?.lat, center?.lng);
+	showSearchResults.value = true;
+}, 300);
+
+function onSearchInput(event: CustomEvent) {
+	const text = event.detail.value || '';
+	searchQuery.value = text;
+	if (!text || text.trim().length < 2) {
+		searchResults.value = [];
+		showSearchResults.value = false;
+		return;
+	}
+	debouncedSearch(text);
+}
+
+function onSearchClear() {
+	clearSearch();
+	showSearchResults.value = false;
+	// Remove search marker from map when search is cleared
+	if (searchMarker) {
+		searchMarker.remove();
+		searchMarker = null;
+	}
+}
+
+function selectSearchResult(feature: PhotonFeature) {
+	const [lng, lat] = feature.geometry.coordinates;
+	const name = getFeatureName(feature);
+	const address = formatAddress(feature);
+
+	// Build popup HTML: name in bold, address below
+	const popupHtml = `<div style="font-size: 14px; line-height: 1.4;">
+		<strong>${name}</strong>
+		${address ? `<br><span style="color: #666; font-size: 12px;">${address}</span>` : ''}
+	</div>`;
+
+	// Remove previous search marker
+	if (searchMarker) {
+		searchMarker.remove();
+		searchMarker = null;
+	}
+
+	if (rootMap) {
+		searchMarker = new maplibregl.Marker()
+			.setLngLat([lng, lat])
+			.setPopup(new maplibregl.Popup({ offset: 25, maxWidth: '300px' }).setHTML(popupHtml))
+			.addTo(rootMap);
+
+		// Open the popup immediately
+		searchMarker.togglePopup();
+
+		// Fly to the location
+		rootMap.flyTo({ center: [lng, lat], zoom: Math.max(rootMap.getZoom(), 15) });
+	}
+
+	// Hide search results and clear the query text
+	showSearchResults.value = false;
+	searchQuery.value = name;
+}
 
 const showPathToSelectedMarker = async () => {
 	if (nearbyWaterSource.isActive.value && selectedMarker) {
@@ -994,6 +1118,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
 	stopWatchingLocation();
+	if (searchMarker) {
+		searchMarker.remove();
+		searchMarker = null;
+	}
 	if (rootMap) {
 		rootMap.remove();
 		rootMap = null;
@@ -1039,6 +1167,53 @@ ion-fab {
 :deep(.maplibregl-ctrl-bottom-left),
 :deep(.maplibregl-ctrl-bottom-right) {
 	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
+}
+
+.search-container {
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1001;
+	width: 100%;
+	max-width: 500px;
+	padding: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 8px) 8px 0 8px;
+	pointer-events: none;
+}
+
+.search-container > * {
+	pointer-events: auto;
+}
+
+.search-bar {
+	--background: var(--ion-background-color, #fff);
+	--box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+	--border-radius: 8px;
+	padding: 0;
+}
+
+.search-loading {
+	display: flex;
+	justify-content: center;
+	padding: 8px 0;
+}
+
+.search-results {
+	background: var(--ion-background-color, #fff);
+	border-radius: 0 0 8px 8px;
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+	margin-top: -4px;
+	overflow: hidden;
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.search-result-item {
+	--padding-start: 12px;
+	--padding-end: 12px;
+	--inner-padding-top: 8px;
+	--inner-padding-bottom: 8px;
+	cursor: pointer;
 }
 </style>
 

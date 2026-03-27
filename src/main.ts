@@ -38,6 +38,7 @@ import App from './App.vue';
 // Composables
 import { createApp } from 'vue';
 import { useOsmAuthStore, isNativeAuthInProgress } from '@/store/osmAuthStore';
+import { usePhotonSearch } from '@/composable/photonSearch';
 
 const app = createApp(App);
 
@@ -116,27 +117,28 @@ const parseGeoQueryParams = (queryPart: string) => {
 /**
  * Parses and handles the geo: URL
  * Example geo:40.7128,-74.0060?z=10 (latitude, longitude, optional zoom)
+ * Also supports text queries like geo:0,0?q=Vienna+Austria
  */
-const handleGeoUrl = (geoUrl: string) => {
+const handleGeoUrl = async (geoUrl: string) => {
 	// Remove the 'geo:' prefix and parse the coordinates/query
 	const parts = geoUrl.replace('geo:', '').split('?');
 	const coords = parts[0].split(',');
 
-	if (coords.length >= 2) {
-		let latitude = parseFloat(coords[0]);
-		let longitude = parseFloat(coords[1]);
-		let zoom = 15;
+	let latitude = coords.length >= 2 ? parseFloat(coords[0]) : NaN;
+	let longitude = coords.length >= 2 ? parseFloat(coords[1]) : NaN;
+	let zoom = 15;
 
-		if (parts[1]) {
-			const parsedParams = parseGeoQueryParams(parts[1]);
-			zoom = parsedParams.zoom;
-			if (parsedParams.latitude !== undefined && parsedParams.longitude !== undefined) {
-				latitude = parsedParams.latitude;
-				longitude = parsedParams.longitude;
-			}
+	if (parts[1]) {
+		const parsedParams = parseGeoQueryParams(parts[1]);
+		zoom = parsedParams.zoom;
+		if (parsedParams.latitude !== undefined && parsedParams.longitude !== undefined) {
+			latitude = parsedParams.latitude;
+			longitude = parsedParams.longitude;
 		}
+	}
 
-		// Navigate to the map with the location and external flag
+	// If we have valid non-zero coordinates, navigate directly
+	if (!isNaN(latitude) && !isNaN(longitude) && (latitude !== 0 || longitude !== 0)) {
 		router.push({
 			path: '/',
 			query: {
@@ -146,5 +148,48 @@ const handleGeoUrl = (geoUrl: string) => {
 				external: 'true'
 			}
 		});
+		return;
 	}
+
+	// No valid coordinates — try to resolve the `q` parameter as a text search
+	const queryPart = parts[1] || '';
+	const queryParams = new URLSearchParams(queryPart);
+	const qParam = queryParams.get('q');
+
+	if (qParam) {
+		// Check if q is a text query (not just coordinates that were already parsed)
+		const qTrimmed = qParam.trim();
+		if (qTrimmed) {
+			try {
+				const { searchPhoton, results } = usePhotonSearch();
+
+				// Determine language from navigator or default to 'en'
+				const lang = navigator.language?.startsWith('de') ? 'de' : 'en';
+
+				// Use forward geocoding to resolve the text query
+				await searchPhoton(qTrimmed, lang);
+
+				if (results.value.length > 0) {
+					const feature = results.value[0];
+					const [lng, lat] = feature.geometry.coordinates;
+
+					router.push({
+						path: '/',
+						query: {
+							lat: lat.toString(),
+							lng: lng.toString(),
+							zoom: zoom.toString(),
+							external: 'true'
+						}
+					});
+					return;
+				}
+			} catch (error) {
+				console.error('Failed to resolve geo query:', error);
+			}
+		}
+	}
+
+	// Fallback: navigate to home
+	router.push('/');
 };

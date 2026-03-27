@@ -178,6 +178,11 @@
 			"cancel": "Abbrechen"
 		}
 	},
+	"addressSearch": {
+		"placeholder": "Adresse suchen...",
+		"noResults": "Keine Ergebnisse gefunden",
+		"error": "Suche fehlgeschlagen"
+	},
 	"markerEdit": {
 		"title": {
 			"add": "Marker hinzufügen",

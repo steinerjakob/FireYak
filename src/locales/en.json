@@ -178,6 +178,11 @@
 			"cancel": "Cancel"
 		}
 	},
+	"addressSearch": {
+		"placeholder": "Search address...",
+		"noResults": "No results found",
+		"error": "Search failed"
+	},
 	"markerEdit": {
 		"title": {
 			"add": "Add Marker",
