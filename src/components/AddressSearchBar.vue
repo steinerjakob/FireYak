@@ -11,7 +11,7 @@
 				@click="emit('about-click')"
 				:title="$t('about.openInfo')"
 			>
-				<ion-icon :icon="informationCircle" style="color: #333333"></ion-icon>
+				<ion-icon :icon="informationCircle" class="search-icon-btn"></ion-icon>
 			</button>
 			<ion-searchbar
 				:value="searchQuery"
@@ -39,7 +39,7 @@
 				@click="emit('settings-click')"
 				:title="$t('settings.title')"
 			>
-				<ion-icon :icon="settingsIcon" style="color: #333333"></ion-icon>
+				<ion-icon :icon="settingsIcon" class="search-icon-btn"></ion-icon>
 			</button>
 		</div>
 		<!-- Search Results -->
@@ -171,7 +171,7 @@ function onSelectResult(feature: PhotonFeature) {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	background: #ffffff;
+	background: #ffffff !important;
 	border-radius: 24px;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	padding: 0 4px;
@@ -183,11 +183,13 @@ function onSelectResult(feature: PhotonFeature) {
 }
 
 .search-bar {
-	--background: transparent;
-	--box-shadow: none;
+	--background: transparent !important;
+	--box-shadow: none !important;
 	--border-radius: 24px;
-	--placeholder-color: #888888;
-	--color: #1a1a1a;
+	--placeholder-color: #666666 !important;
+	--color: #1a1a1a !important;
+	--icon-color: #333333 !important;
+	--clear-button-color: #333333 !important;
 	padding: 0;
 	flex: 1;
 	min-width: 0;
@@ -195,6 +197,20 @@ function onSelectResult(feature: PhotonFeature) {
 
 .search-bar-mobile {
 	--padding-start: 0;
+}
+
+/* Deep overrides for Ionic MD searchbar internal elements */
+.search-bar :deep(.searchbar-input) {
+	color: #1a1a1a !important;
+	border: 0 !important;
+}
+
+.search-bar :deep(.searchbar-search-icon) {
+	color: #333333 !important;
+}
+
+.search-bar :deep(.searchbar-clear-button) {
+	color: #333333 !important;
 }
 
 .search-spinner {
@@ -225,7 +241,15 @@ function onSelectResult(feature: PhotonFeature) {
 
 .search-action-btn ion-icon {
 	font-size: 22px;
-	color: #333333;
+	color: #333333 !important;
+	--color: #333333 !important;
+	opacity: 1 !important;
+}
+
+.search-icon-btn {
+	color: #333333 !important;
+	--color: #333333 !important;
+	opacity: 1 !important;
 }
 
 .search-action-btn-start {
@@ -237,7 +261,7 @@ function onSelectResult(feature: PhotonFeature) {
 }
 
 .search-results {
-	background: #ffffff;
+	background: #ffffff !important;
 	border-radius: 0 0 16px 16px;
 	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 	overflow: hidden;
@@ -265,20 +289,20 @@ function onSelectResult(feature: PhotonFeature) {
 	font-weight: 600;
 	font-size: 14px;
 	line-height: 1.3;
-	color: #1a1a1a;
+	color: #1a1a1a !important;
 }
 
 .result-address {
 	font-size: 12px;
 	line-height: 1.3;
 	margin-top: 1px;
-	color: #555555;
+	color: #555555 !important;
 }
 
 .search-no-results {
 	padding: 12px 16px;
 	font-size: 13px;
-	color: #555555;
+	color: #555555 !important;
 	text-align: center;
 }
 </style>

@@ -122,7 +122,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { layers as protomapsLayers } from '@protomaps/basemaps';
 import selectedMarkerIconUrl from '../assets/markers/selectedmarker.png';
-import { nextTick, onMounted, watch, ref, computed, onUnmounted } from 'vue';
+import { nextTick, onMounted, watch, ref, onUnmounted } from 'vue';
 import { debounce } from '@/helper/helper';
 import { getMarkersForView, getNearbyMarkers, markerIconUrls } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
@@ -204,15 +204,17 @@ let customLocationMarker: maplibregl.Marker | null = null;
 // Search result marker
 let searchMarker: maplibregl.Marker | null = null;
 
-const mapCenterForSearch = computed(() => {
-	if (!rootMap) return undefined;
+const mapCenterForSearch = ref<{ lat: number; lng: number } | undefined>(undefined);
+
+function updateMapCenterForSearch() {
+	if (!rootMap) return;
 	try {
 		const center = rootMap.getCenter();
-		return { lat: center.lat, lng: center.lng };
+		mapCenterForSearch.value = { lat: center.lat, lng: center.lng };
 	} catch {
-		return undefined;
+		// ignore
 	}
-});
+}
 
 function onSearchResultSelected(feature: PhotonFeature) {
 	if (!rootMap) return;
@@ -1047,6 +1049,10 @@ async function initMap() {
 		setupMapEventListeners(rootMap);
 		applyTerrainSettings();
 		handleMapMovement();
+
+		// Set initial map center for search bias and keep it updated on movement
+		updateMapCenterForSearch();
+		rootMap.on('moveend', updateMapCenterForSearch);
 
 		rootMap.on('zoomend', debouncedMapMove);
 		rootMap.on('dragend', debouncedMapMove);
