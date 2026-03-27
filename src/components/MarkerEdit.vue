@@ -14,7 +14,8 @@ import {
 	IonTextarea,
 	IonDatetime,
 	IonDatetimeButton,
-	IonModal
+	IonModal,
+	IonChip
 } from '@ionic/vue';
 import { saveOutline, closeOutline, logInOutline } from 'ionicons/icons';
 import { computed } from 'vue';
@@ -42,6 +43,26 @@ const waterSources = [
 ];
 const locationOptions = ['overground', 'underground'];
 const accessOptions = ['yes', 'private', 'permissive', 'no'];
+
+const commonDiameters = ['80', '100', '150', '200', '300'];
+const commonPressures = ['yes', 'suction', '3', '4', '6', '8'];
+const commonFlowRates = ['600 l/min', '800 l/min', '1200 l/min'];
+const commonCouplingsCounts = ['1', '2', '3'];
+const commonCouplingTypes = [
+	'Storz',
+	'Bayonet',
+	'Barcelona',
+	'Guillemin',
+	'Klaue',
+	'Sprawny',
+	'UNI',
+	'NH'
+];
+const commonCouplingDiameters = ['B;B', 'B;B;A', 'B;C;C', '75 mm', '55 mm', '65 mm;65 mm;100 mm'];
+
+const applySuggestion = (tag: string, value: string) => {
+	markerEditStore.editableTags[tag] = value;
+};
 
 const emergencyType = computed(() => markerEditStore.editableTags['emergency'] || 'fire_hydrant');
 const hydrantType = computed(() => markerEditStore.editableTags['fire_hydrant:type']);
@@ -239,6 +260,15 @@ const login = () => {
 					:helper-text="t('markerEdit.hints.diameter')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="d in commonDiameters"
+					:key="d"
+					:outline="markerEditStore.editableTags['fire_hydrant:diameter'] !== d"
+					@click="applySuggestion('fire_hydrant:diameter', d)"
+					>{{ d }}</ion-chip
+				>
+			</div>
 
 			<!-- Pressure -->
 			<ion-item lines="none">
@@ -252,6 +282,15 @@ const login = () => {
 					:helper-text="t('markerEdit.hints.pressure')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="p in commonPressures"
+					:key="p"
+					:outline="markerEditStore.editableTags['fire_hydrant:pressure'] !== p"
+					@click="applySuggestion('fire_hydrant:pressure', p)"
+					>{{ p }}</ion-chip
+				>
+			</div>
 
 			<!-- Flow Capacity -->
 			<ion-item lines="none">
@@ -265,6 +304,15 @@ const login = () => {
 					:helper-text="t('markerEdit.hints.flowCapacity')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="f in commonFlowRates"
+					:key="f"
+					:outline="markerEditStore.editableTags['flow_rate'] !== f"
+					@click="applySuggestion('flow_rate', f)"
+					>{{ f }}</ion-chip
+				>
+			</div>
 
 			<!-- Position -->
 			<ion-item lines="none">
@@ -303,6 +351,15 @@ const login = () => {
 					:helper-text="t('markerEdit.hints.couplings')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="c in commonCouplingsCounts"
+					:key="c"
+					:outline="markerEditStore.editableTags['couplings'] !== c"
+					@click="applySuggestion('couplings', c)"
+					>{{ c }}</ion-chip
+				>
+			</div>
 
 			<!-- Coupling Type -->
 			<ion-item lines="none">
@@ -312,10 +369,19 @@ const login = () => {
 					:clear-input="true"
 					:label="t('markerInfo.tags.couplingType')"
 					v-model="markerEditStore.editableTags['couplings:type']"
-					placeholder="Storz, NH, BS 336..."
+					placeholder="Storz, NH..."
 					:helper-text="t('markerEdit.hints.couplingType')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="ct in commonCouplingTypes"
+					:key="ct"
+					:outline="markerEditStore.editableTags['couplings:type'] !== ct"
+					@click="applySuggestion('couplings:type', ct)"
+					>{{ ct }}</ion-chip
+				>
+			</div>
 
 			<!-- Coupling Diameters -->
 			<ion-item lines="none">
@@ -325,10 +391,19 @@ const login = () => {
 					:clear-input="true"
 					:label="t('markerInfo.tags.couplingDiameters')"
 					v-model="markerEditStore.editableTags['couplings:diameters']"
-					placeholder="A;B;C or 110;75;52"
+					placeholder="B;B;A or 65 mm;65 mm;100 mm"
 					:helper-text="t('markerEdit.hints.couplingDiameters')"
 				></ion-input>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="cd in commonCouplingDiameters"
+					:key="cd"
+					:outline="markerEditStore.editableTags['couplings:diameters'] !== cd"
+					@click="applySuggestion('couplings:diameters', cd)"
+					>{{ cd }}</ion-chip
+				>
+			</div>
 		</ion-item-group>
 
 		<!-- ==================== SUCTION POINT FIELDS ==================== -->
@@ -585,6 +660,19 @@ ion-item-divider {
 	--padding-top: 16px;
 	--padding-bottom: 8px;
 	font-weight: bold;
+}
+
+.suggestion-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 0 16px 8px;
+}
+
+.suggestion-chips ion-chip {
+	height: 28px;
+	font-size: 13px;
+	cursor: pointer;
 }
 
 .action-buttons {
