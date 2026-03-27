@@ -753,6 +753,8 @@ function addMapLayers(map: maplibregl.Map) {
 			'line-width': 3
 		}
 	});
+
+	pumpCalculation.setMap(map);
 }
 
 function setupMapEventListeners(map: maplibregl.Map) {
@@ -895,8 +897,6 @@ async function initMap() {
 		rootMap.on('zoomend', debouncedMapMove);
 		rootMap.on('dragend', debouncedMapMove);
 		rootMap.on('moveend', debouncedMapMove);
-
-		pumpCalculation.setMap(rootMap);
 
 		watchExternalLocationQuery();
 	});
