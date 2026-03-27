@@ -27,6 +27,7 @@ export const useSettingsStore = defineStore('settings', {
 		theme: 'auto' as ThemeSetting,
 		showZoomButtons: true,
 		mapLayer: 'standard' as MapLayerSetting,
+		terrain3d: false,
 		osmAuthToken: '',
 		_darkModeListener: null as ((e: MediaQueryListEvent) => void) | null
 	}),
@@ -41,6 +42,9 @@ export const useSettingsStore = defineStore('settings', {
 		},
 		setMapLayer(mapLayer: MapLayerSetting) {
 			this.mapLayer = mapLayer;
+		},
+		setTerrain3d(enabled: boolean) {
+			this.terrain3d = enabled;
 		},
 		setOsmAuthToken(token: string) {
 			this.osmAuthToken = token;

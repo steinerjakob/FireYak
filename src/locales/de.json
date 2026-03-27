@@ -175,8 +175,10 @@
 			"title": "Kartenlayer",
 			"standard": "Standard",
 			"satellite": "Satellit",
+			"terrain3d": "3D Gelände",
 			"cancel": "Abbrechen"
-		}
+		},
+		"resetView": "Ansicht zurücksetzen"
 	},
 	"addressSearch": {
 		"placeholder": "Adresse suchen...",

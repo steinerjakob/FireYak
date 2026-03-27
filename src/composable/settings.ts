@@ -4,6 +4,7 @@ import { Preferences } from '@capacitor/preferences';
 const THEME_KEY = 'theme';
 const SHOW_ZOOM_BUTTONS_KEY = 'show_zoom_buttons';
 const MAP_LAYER_KEY = 'map_layer';
+const TERRAIN_3D_KEY = 'terrain_3d';
 const OSM_AUTH_KEY = 'osm_token';
 
 export function useSettings() {
@@ -14,12 +15,14 @@ export function useSettings() {
 	 * Also initializes the theme system to apply the correct theme on startup.
 	 */
 	const loadSettings = async () => {
-		const [themeResult, showZoomButtonsResult, mapLayerResult, osmAuthKey] = await Promise.all([
-			Preferences.get({ key: THEME_KEY }),
-			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
-			Preferences.get({ key: MAP_LAYER_KEY }),
-			Preferences.get({ key: OSM_AUTH_KEY })
-		]);
+		const [themeResult, showZoomButtonsResult, mapLayerResult, terrain3dResult, osmAuthKey] =
+			await Promise.all([
+				Preferences.get({ key: THEME_KEY }),
+				Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
+				Preferences.get({ key: MAP_LAYER_KEY }),
+				Preferences.get({ key: TERRAIN_3D_KEY }),
+				Preferences.get({ key: OSM_AUTH_KEY })
+			]);
 
 		if (themeResult.value) {
 			settingsStore.setTheme(themeResult.value as ThemeSetting);
@@ -31,6 +34,10 @@ export function useSettings() {
 
 		if (mapLayerResult.value === 'standard' || mapLayerResult.value === 'satellite') {
 			settingsStore.setMapLayer(mapLayerResult.value);
+		}
+
+		if (terrain3dResult.value) {
+			settingsStore.setTerrain3d(terrain3dResult.value === 'true');
 		}
 
 		if (osmAuthKey.value) {
@@ -78,6 +85,14 @@ export function useSettings() {
 		});
 	};
 
+	const saveTerrain3d = async (enabled: boolean) => {
+		settingsStore.setTerrain3d(enabled);
+		await Preferences.set({
+			key: TERRAIN_3D_KEY,
+			value: String(enabled)
+		});
+	};
+
 	/**
 	 * Persists the OSM OAuth token and mirrors it into the settings store.
 	 */
@@ -87,7 +102,6 @@ export function useSettings() {
 			key: OSM_AUTH_KEY,
 			value: token
 		});
-
 	};
 	/**
 	 * Removes the persisted OSM OAuth token and clears it from the settings store.
@@ -110,6 +124,7 @@ export function useSettings() {
 		saveTheme,
 		saveShowZoomButtons,
 		saveMapLayer,
+		saveTerrain3d,
 		saveOsmAuthToken,
 		removeOsmAuthToken,
 		getOsmAuthToken

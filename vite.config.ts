@@ -119,6 +119,20 @@ const pwaOptions: Partial<VitePWAOptions> = {
 				}
 			},
 			{
+				urlPattern: /^https?:\/\/tiles\.mapterhorn\.com\/.*/,
+				handler: 'CacheFirst',
+				options: {
+					cacheName: 'mapterhorn-tiles-cache',
+					expiration: {
+						maxEntries: 500,
+						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
+			},
+			{
 				urlPattern: /^https?:\/\/commons\.wikimedia\.org\/w\/api\.php\?.*/,
 				handler: 'StaleWhileRevalidate',
 				options: {

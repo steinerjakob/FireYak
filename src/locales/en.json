@@ -175,8 +175,10 @@
 			"title": "Map layer",
 			"standard": "Standard",
 			"satellite": "Satellite",
+			"terrain3d": "3D Terrain",
 			"cancel": "Cancel"
-		}
+		},
+		"resetView": "Reset view"
 	},
 	"addressSearch": {
 		"placeholder": "Search address...",

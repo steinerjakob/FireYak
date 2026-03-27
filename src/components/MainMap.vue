@@ -1,39 +1,6 @@
 <template>
 	<div :class="{ darkMap: isDarkMode && !isSatellite }" style="height: 100%; width: 100%">
 		<div id="map" style="height: 100%; width: 100%"></div>
-		<!-- Address Search Bar -->
-		<div class="search-container">
-			<ion-searchbar
-				:value="searchQuery"
-				:placeholder="$t('addressSearch.placeholder')"
-				:debounce="0"
-				show-clear-button="focus"
-				@ionInput="onSearchInput"
-				@ionClear="onSearchClear"
-				class="search-bar"
-			></ion-searchbar>
-			<!-- Loading indicator -->
-			<div v-if="searchLoading" class="search-loading">
-				<ion-spinner name="crescent" color="primary"></ion-spinner>
-			</div>
-			<!-- Search Results -->
-			<ion-list v-if="showSearchResults && searchResults.length > 0" class="search-results">
-				<ion-item
-					v-for="(feature, index) in searchResults"
-					:key="index"
-					button
-					@click="selectSearchResult(feature)"
-					class="search-result-item"
-				>
-					<ion-label>
-						<h3 style="font-weight: bold; margin: 0">{{ getFeatureName(feature) }}</h3>
-						<p style="margin: 2px 0 0 0; font-size: 13px; color: var(--ion-color-medium)">
-							{{ formatAddress(feature) }}
-						</p>
-					</ion-label>
-				</ion-item>
-			</ion-list>
-		</div>
 		<!-- About FAB Button -->
 		<ion-fab vertical="top" horizontal="start" slot="fixed">
 			<ion-fab-button
@@ -67,6 +34,21 @@
 				:title="$t('settings.title')"
 			>
 				<ion-icon :icon="settings"></ion-icon>
+			</ion-fab-button>
+		</ion-fab>
+		<!-- Reset View / Compass FAB (only visible when pitch or bearing changed) -->
+		<ion-fab v-if="showResetView" vertical="top" horizontal="end" slot="fixed" class="compass-fab">
+			<ion-fab-button
+				class="md-small"
+				color="light"
+				size="small"
+				@click="resetView"
+				:title="$t('map.resetView')"
+			>
+				<ion-icon
+					:icon="compass"
+					:style="{ transform: `rotate(${compassRotation}deg)` }"
+				></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
 		<!-- Zoom FAB Buttons -->
@@ -125,6 +107,7 @@
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<LayerSelectorModal :is-open="layerModalOpen" @update:is-open="layerModalOpen = $event" />
 	</div>
 </template>
 <script lang="ts" setup>
@@ -138,17 +121,8 @@ import { getMarkersForView, getNearbyMarkers, markerIconUrls } from '@/mapHandle
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
-import {
-	alertController,
-	IonFab,
-	IonFabButton,
-	IonIcon,
-	IonSpinner,
-	IonSearchbar,
-	IonList,
-	IonItem,
-	IonLabel
-} from '@ionic/vue';
+import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import LayerSelectorModal from '@/components/LayerSelectorModal.vue';
 import {
 	informationCircle,
 	analyticsOutline,
@@ -159,19 +133,17 @@ import {
 	settings,
 	addOutline,
 	layers,
-	searchOutline
+	compass
 } from 'ionicons/icons';
-import { usePhotonSearch, PhotonFeature } from '@/composable/photonSearch';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { useDefaultStore } from '@/store/defaultStore';
 import { Geolocation } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-import { MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
+import { type MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
-import { useSettings } from '@/composable/settings';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds } from '@/types/geo';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
@@ -195,26 +167,18 @@ const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
 const defaultStore = useDefaultStore();
 const settingsStore = useSettingsStore();
-const { showZoomButtons, mapLayer } = storeToRefs(settingsStore);
-const { saveMapLayer } = useSettings();
+const { showZoomButtons, mapLayer, terrain3d } = storeToRefs(settingsStore);
 const { t, locale } = useI18n();
-const {
-	query: searchQuery,
-	results: searchResults,
-	isLoading: searchLoading,
-	searchPhoton,
-	clearSearch,
-	formatAddress,
-	getFeatureName
-} = usePhotonSearch();
 
-const showSearchResults = ref(false);
 const isSatellite = ref(false);
+const layerModalOpen = ref(false);
 
-const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
+const PROTOMAPS_API_KEY = '111410f5c74ab4c7';
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
+let styleReloadVersion = 0;
+let pendingStyleLoadCallback: (() => void) | null = null;
 
 // Markers (DOM-based MapLibre markers)
 let selectedMarker: maplibregl.Marker | null = null;
@@ -223,7 +187,6 @@ let userLocationMarker: maplibregl.Marker | null = null;
 
 // Custom external location marker
 let customLocationMarker: maplibregl.Marker | null = null;
-let searchMarker: maplibregl.Marker | null = null;
 
 function createSelectedMarker(): maplibregl.Marker {
 	const el = document.createElement('img');
@@ -272,6 +235,17 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 		}
 	};
 
+	if (terrain3d.value) {
+		sources['terrainSource'] = {
+			type: 'raster-dem',
+			url: 'https://tiles.mapterhorn.com/tilejson.json'
+		};
+		sources['hillshadeSource'] = {
+			type: 'raster-dem',
+			url: 'https://tiles.mapterhorn.com/tilejson.json'
+		};
+	}
+
 	const baseLayers: maplibregl.LayerSpecification[] = [];
 
 	if (isSatellite.value) {
@@ -291,7 +265,7 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 		} as maplibregl.LayerSpecification);
 	}
 
-	return {
+	const style: maplibregl.StyleSpecification = {
 		version: 8,
 		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
 		sprite: `https://protomaps.github.io/basemaps-assets/sprites/v4/${spriteFlavor}`,
@@ -313,9 +287,28 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 					};
 				}
 				return layer;
-			})
+			}),
+			...(terrain3d.value
+				? [
+						{
+							id: 'hills',
+							type: 'hillshade' as const,
+							source: 'hillshadeSource',
+							paint: { 'hillshade-shadow-color': '#473B24' }
+						}
+					]
+				: [])
 		]
 	};
+
+	if (terrain3d.value) {
+		style.terrain = {
+			source: 'terrainSource',
+			exaggeration: 1
+		};
+	}
+
+	return style;
 }
 
 function applyMapLayerSelection(selection: MapLayerSetting) {
@@ -330,40 +323,45 @@ function syncMapStyleWithPreferences() {
 	}
 }
 
-async function openLayerSelector() {
-	const alert = await alertController.create({
-		header: t('map.layers.title'),
-		inputs: [
-			{
-				type: 'radio',
-				label: t('map.layers.standard'),
-				value: 'standard',
-				checked: mapLayer.value === 'standard'
-			},
-			{
-				type: 'radio',
-				label: t('map.layers.satellite'),
-				value: 'satellite',
-				checked: mapLayer.value === 'satellite'
-			}
-		],
-		buttons: [
-			{
-				text: t('map.layers.cancel'),
-				role: 'cancel'
-			},
-			{
-				text: 'OK',
-				handler: async (value: MapLayerSetting) => {
-					await saveMapLayer(value);
-					applyMapLayerSelection(value);
-					syncMapStyleWithPreferences();
-				}
-			}
-		]
-	});
+const showResetView = ref(false);
+const compassRotation = ref(0);
 
-	await alert.present();
+function applyTerrainSettings() {
+	if (!rootMap) return;
+
+	if (terrain3d.value) {
+		rootMap.touchPitch.enable();
+		rootMap.touchZoomRotate.enableRotation();
+		rootMap.dragRotate.enable();
+	} else {
+		rootMap.touchPitch.disable();
+		rootMap.touchZoomRotate.disableRotation();
+		rootMap.dragRotate.disable();
+		rootMap.setPitch(0);
+		rootMap.setBearing(0);
+	}
+	updateResetViewVisibility();
+}
+
+function updateResetViewVisibility() {
+	if (!rootMap) {
+		showResetView.value = false;
+		compassRotation.value = 0;
+		return;
+	}
+	const pitch = rootMap.getPitch();
+	const bearing = rootMap.getBearing();
+	showResetView.value = pitch !== 0 || Math.abs(bearing) > 0.5;
+	compassRotation.value = -bearing;
+}
+
+function resetView() {
+	if (!rootMap) return;
+	rootMap.easeTo({ pitch: 0, bearing: 0, duration: 300 });
+}
+
+function openLayerSelector() {
+	layerModalOpen.value = true;
 }
 
 // Save/restore map view via localStorage
@@ -532,6 +530,46 @@ function hideSelectedPath() {
 	}
 }
 
+function restoreSelectedPath() {
+	if (!rootMap || !selectedPathVisible.value || selectedPathCoords.value.length < 2) return;
+
+	const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
+	if (source) {
+		source.setData({
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
+			properties: {}
+		});
+	}
+	if (rootMap.getLayer(SELECTED_PATH_LAYER)) {
+		rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'visible');
+	}
+}
+
+function restoreDomMarkers() {
+	if (!rootMap) return;
+
+	// Re-add selected marker
+	if (selectedMarker && markerStore.selectedMarker) {
+		selectedMarker.addTo(rootMap);
+	}
+
+	// Re-add ghost marker (editing mode)
+	if (ghostMarker && markerEditStore.isActive) {
+		ghostMarker.addTo(rootMap);
+	}
+
+	// Re-add user location marker
+	if (userLocationMarker && currentUserLocation.value) {
+		userLocationMarker.addTo(rootMap);
+	}
+
+	// Re-add custom location marker
+	if (customLocationMarker) {
+		customLocationMarker.addTo(rootMap);
+	}
+}
+
 watch(defaultStore.visibleMapView, fitMapToLayer);
 watch(pumpCalculation.calculationResult, (val) => {
 	if (val) {
@@ -540,74 +578,6 @@ watch(pumpCalculation.calculationResult, (val) => {
 });
 
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
-
-const debouncedSearch = debounce((text: string) => {
-	if (!text || text.trim().length < 2) {
-		searchResults.value = [];
-		showSearchResults.value = false;
-		return;
-	}
-	const center = rootMap?.getCenter();
-	const lang = locale.value === 'de' ? 'de' : 'en';
-	searchPhoton(text, lang, center?.lat, center?.lng);
-	showSearchResults.value = true;
-}, 300);
-
-function onSearchInput(event: CustomEvent) {
-	const text = event.detail.value || '';
-	searchQuery.value = text;
-	if (!text || text.trim().length < 2) {
-		searchResults.value = [];
-		showSearchResults.value = false;
-		return;
-	}
-	debouncedSearch(text);
-}
-
-function onSearchClear() {
-	clearSearch();
-	showSearchResults.value = false;
-	// Remove search marker from map when search is cleared
-	if (searchMarker) {
-		searchMarker.remove();
-		searchMarker = null;
-	}
-}
-
-function selectSearchResult(feature: PhotonFeature) {
-	const [lng, lat] = feature.geometry.coordinates;
-	const name = getFeatureName(feature);
-	const address = formatAddress(feature);
-
-	// Build popup HTML: name in bold, address below
-	const popupHtml = `<div style="font-size: 14px; line-height: 1.4;">
-		<strong>${name}</strong>
-		${address ? `<br><span style="color: #666; font-size: 12px;">${address}</span>` : ''}
-	</div>`;
-
-	// Remove previous search marker
-	if (searchMarker) {
-		searchMarker.remove();
-		searchMarker = null;
-	}
-
-	if (rootMap) {
-		searchMarker = new maplibregl.Marker()
-			.setLngLat([lng, lat])
-			.setPopup(new maplibregl.Popup({ offset: 25, maxWidth: '300px' }).setHTML(popupHtml))
-			.addTo(rootMap);
-
-		// Open the popup immediately
-		searchMarker.togglePopup();
-
-		// Fly to the location
-		rootMap.flyTo({ center: [lng, lat], zoom: Math.max(rootMap.getZoom(), 15) });
-	}
-
-	// Hide search results and clear the query text
-	showSearchResults.value = false;
-	searchQuery.value = name;
-}
 
 const showPathToSelectedMarker = async () => {
 	if (nearbyWaterSource.isActive.value && selectedMarker) {
@@ -804,8 +774,15 @@ async function loadMarkerImages(map: maplibregl.Map) {
 	const entries = Object.entries(markerIconUrls);
 	for (const [name, url] of entries) {
 		if (map.hasImage(name)) continue;
-		const response = await map.loadImage(url);
-		map.addImage(name, response.data);
+		try {
+			const response = await map.loadImage(url);
+			if (!map.hasImage(name)) {
+				map.addImage(name, response.data);
+			}
+		} catch (e) {
+			// Image may have been added by a concurrent style reload
+			console.warn(`Failed to load marker image "${name}":`, e);
+		}
 	}
 }
 
@@ -992,14 +969,11 @@ async function initMap() {
 		center: savedView?.center || [15.274102, 48.135314],
 		zoom: savedView?.zoom || 13,
 		maxZoom: 19,
-		dragRotate: false,
+		dragRotate: true,
 		touchZoomRotate: true,
-		pitchWithRotate: false,
-		maxPitch: 0
+		pitchWithRotate: true,
+		pitch: 0
 	});
-
-	rootMap.touchPitch.disable();
-	rootMap.touchZoomRotate.disableRotation();
 
 	// Important: force MapLibre to recalc size after layout is ready
 	await ensureMapSize();
@@ -1009,18 +983,18 @@ async function initMap() {
 		mapReady = true;
 
 		await loadMarkerImages(rootMap);
-
-		syncMapStyleWithPreferences();
-
 		addMapLayers(rootMap);
 		setupMapEventListeners(rootMap);
-
+		applyTerrainSettings();
 		handleMapMovement();
 
-		// watch map movement
 		rootMap.on('zoomend', debouncedMapMove);
 		rootMap.on('dragend', debouncedMapMove);
 		rootMap.on('moveend', debouncedMapMove);
+
+		rootMap.on('pitchend', updateResetViewVisibility);
+		rootMap.on('rotateend', updateResetViewVisibility);
+		rootMap.on('moveend', updateResetViewVisibility);
 
 		watchExternalLocationQuery();
 	});
@@ -1050,14 +1024,36 @@ function watchExternalLocationQuery() {
 
 function reloadMapStyle() {
 	if (!rootMap || !mapReady) return;
-	rootMap.setStyle(getProtomapsStyle());
-	rootMap.once('style.load', async () => {
-		if (!rootMap) return;
+	const currentVersion = ++styleReloadVersion;
+
+	// Remove any previously registered style.load handler to prevent stale callbacks
+	if (pendingStyleLoadCallback) {
+		rootMap.off('style.load', pendingStyleLoadCallback);
+		pendingStyleLoadCallback = null;
+	}
+
+	const onStyleLoad = async () => {
+		pendingStyleLoadCallback = null;
+		if (!rootMap || currentVersion !== styleReloadVersion) return;
 
 		await loadMarkerImages(rootMap);
 		addMapLayers(rootMap);
 		handleMapMovement();
-	});
+		applyTerrainSettings();
+
+		// Restore selected path if it was visible
+		restoreSelectedPath();
+
+		// Re-add DOM markers that may have been detached
+		restoreDomMarkers();
+
+		// Restore pump calculation markers and polyline
+		pumpCalculation.restoreMapState(rootMap);
+	};
+
+	pendingStyleLoadCallback = onStyleLoad;
+	rootMap.once('style.load', onStyleLoad);
+	rootMap.setStyle(getProtomapsStyle());
 }
 function zoomIn() {
 	rootMap?.zoomIn();
@@ -1097,31 +1093,32 @@ onMounted(async () => {
 		() => mapLayer.value,
 		() => {
 			syncMapStyleWithPreferences();
-		},
-		{ immediate: true }
+			// If map isn't ready yet, queue the style sync for after load
+			if (rootMap && !mapReady) {
+				rootMap.once('load', () => {
+					syncMapStyleWithPreferences();
+				});
+			}
+		}
 	);
 
-	watch(
-		isDarkMode,
-		() => {
-			if (!isSatellite.value) {
-				syncMapStyleWithPreferences();
-			}
-		},
-		{ immediate: true }
-	);
+	watch(isDarkMode, () => {
+		if (!isSatellite.value) {
+			syncMapStyleWithPreferences();
+		}
+	});
 
 	watch(locale, () => {
 		reloadMapStyle();
+	});
+
+	watch(terrain3d, () => {
+		syncMapStyleWithPreferences();
 	});
 });
 
 onUnmounted(() => {
 	stopWatchingLocation();
-	if (searchMarker) {
-		searchMarker.remove();
-		searchMarker = null;
-	}
 	if (rootMap) {
 		rootMap.remove();
 		rootMap = null;
@@ -1169,51 +1166,8 @@ ion-fab {
 	margin-bottom: var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px));
 }
 
-.search-container {
-	position: absolute;
-	top: 0;
-	left: 50%;
-	transform: translateX(-50%);
-	z-index: 1001;
-	width: 100%;
-	max-width: 500px;
-	padding: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 8px) 8px 0 8px;
-	pointer-events: none;
-}
-
-.search-container > * {
-	pointer-events: auto;
-}
-
-.search-bar {
-	--background: var(--ion-background-color, #fff);
-	--box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-	--border-radius: 8px;
-	padding: 0;
-}
-
-.search-loading {
-	display: flex;
-	justify-content: center;
-	padding: 8px 0;
-}
-
-.search-results {
-	background: var(--ion-background-color, #fff);
-	border-radius: 0 0 8px 8px;
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-	margin-top: -4px;
-	overflow: hidden;
-	max-height: 300px;
-	overflow-y: auto;
-}
-
-.search-result-item {
-	--padding-start: 12px;
-	--padding-end: 12px;
-	--inner-padding-top: 8px;
-	--inner-padding-bottom: 8px;
-	cursor: pointer;
+.compass-fab {
+	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px));
 }
 </style>
 
