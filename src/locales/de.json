@@ -37,7 +37,8 @@
 			"coordinates": "Koordinaten",
 			"osmId": "OSM-ID",
 			"flowCapacity": "Durchfluss",
-			"flowRate": "Durchflussrate"
+			"flowRate": "Durchflussrate",
+			"awwaClass": "AWWA-Klasse"
 		},
 		"values": {
 			"fire_hydrant:type": {
@@ -89,6 +90,12 @@
 				"private": "Privat",
 				"permissive": "Zugänglich",
 				"no": "Kein Zugang"
+			},
+			"fire_hydrant:awwa_class": {
+				"AA": "Klasse AA — >1500 gal/min (Hellblau)",
+				"A": "Klasse A — 1000–1500 gal/min (Grün)",
+				"B": "Klasse B — 500–1000 gal/min (Gelb)",
+				"C": "Klasse C — <500 gal/min (Rot)"
 			}
 		},
 		"navigation": {
@@ -223,7 +230,8 @@
 			"volume": "Gesamtfassungsvermögen des Wassertanks in Litern (z.B. 50000 für 50.000 Liter).",
 			"tankLocation": "Ob der Tank ober- oder unterirdisch aufgestellt ist.",
 			"name": "Ein charakteristischer Name für diese Wasserentnahmestelle, falls vorhanden.",
-			"surveyDate": "Datum, an dem diese Wasserentnahmestelle zuletzt vor Ort überprüft wurde."
+			"surveyDate": "Datum, an dem diese Wasserentnahmestelle zuletzt vor Ort überprüft wurde.",
+			"awwaClass": "AWWA-Farbklassifizierung basierend auf der Durchflusskapazität. Wird in einigen US-Bezirken verwendet, um die Hydrantenleistung anhand der Farbe von Haube und Kappen anzuzeigen."
 		},
 		"messages": {
 			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",
