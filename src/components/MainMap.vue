@@ -107,11 +107,7 @@
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
-		<LayerSelectorModal
-			:is-open="layerModalOpen"
-			@update:is-open="layerModalOpen = $event"
-			@changed="syncMapStyleWithPreferences"
-		/>
+		<LayerSelectorModal :is-open="layerModalOpen" @update:is-open="layerModalOpen = $event" />
 	</div>
 </template>
 <script lang="ts" setup>
@@ -181,6 +177,8 @@ const PROTOMAPS_API_KEY = '111410f5c74ab4c7';
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
+let styleReloadVersion = 0;
+let pendingStyleLoadCallback: (() => void) | null = null;
 
 // Markers (DOM-based MapLibre markers)
 let selectedMarker: maplibregl.Marker | null = null;
@@ -532,6 +530,46 @@ function hideSelectedPath() {
 	}
 }
 
+function restoreSelectedPath() {
+	if (!rootMap || !selectedPathVisible.value || selectedPathCoords.value.length < 2) return;
+
+	const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
+	if (source) {
+		source.setData({
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
+			properties: {}
+		});
+	}
+	if (rootMap.getLayer(SELECTED_PATH_LAYER)) {
+		rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'visible');
+	}
+}
+
+function restoreDomMarkers() {
+	if (!rootMap) return;
+
+	// Re-add selected marker
+	if (selectedMarker && markerStore.selectedMarker) {
+		selectedMarker.addTo(rootMap);
+	}
+
+	// Re-add ghost marker (editing mode)
+	if (ghostMarker && markerEditStore.isActive) {
+		ghostMarker.addTo(rootMap);
+	}
+
+	// Re-add user location marker
+	if (userLocationMarker && currentUserLocation.value) {
+		userLocationMarker.addTo(rootMap);
+	}
+
+	// Re-add custom location marker
+	if (customLocationMarker) {
+		customLocationMarker.addTo(rootMap);
+	}
+}
+
 watch(defaultStore.visibleMapView, fitMapToLayer);
 watch(pumpCalculation.calculationResult, (val) => {
 	if (val) {
@@ -736,8 +774,15 @@ async function loadMarkerImages(map: maplibregl.Map) {
 	const entries = Object.entries(markerIconUrls);
 	for (const [name, url] of entries) {
 		if (map.hasImage(name)) continue;
-		const response = await map.loadImage(url);
-		map.addImage(name, response.data);
+		try {
+			const response = await map.loadImage(url);
+			if (!map.hasImage(name)) {
+				map.addImage(name, response.data);
+			}
+		} catch (e) {
+			// Image may have been added by a concurrent style reload
+			console.warn(`Failed to load marker image "${name}":`, e);
+		}
 	}
 }
 
@@ -924,16 +969,11 @@ async function initMap() {
 		center: savedView?.center || [15.274102, 48.135314],
 		zoom: savedView?.zoom || 13,
 		maxZoom: 19,
-		dragRotate: terrain3d.value,
+		dragRotate: true,
 		touchZoomRotate: true,
-		pitchWithRotate: terrain3d.value,
+		pitchWithRotate: true,
 		pitch: 0
 	});
-
-	if (!terrain3d.value) {
-		rootMap.touchPitch.disable();
-		rootMap.touchZoomRotate.disableRotation();
-	}
 
 	// Important: force MapLibre to recalc size after layout is ready
 	await ensureMapSize();
@@ -943,15 +983,11 @@ async function initMap() {
 		mapReady = true;
 
 		await loadMarkerImages(rootMap);
-
-		syncMapStyleWithPreferences();
-
 		addMapLayers(rootMap);
 		setupMapEventListeners(rootMap);
-
+		applyTerrainSettings();
 		handleMapMovement();
 
-		// watch map movement
 		rootMap.on('zoomend', debouncedMapMove);
 		rootMap.on('dragend', debouncedMapMove);
 		rootMap.on('moveend', debouncedMapMove);
@@ -988,15 +1024,36 @@ function watchExternalLocationQuery() {
 
 function reloadMapStyle() {
 	if (!rootMap || !mapReady) return;
-	rootMap.setStyle(getProtomapsStyle());
-	rootMap.once('style.load', async () => {
-		if (!rootMap) return;
+	const currentVersion = ++styleReloadVersion;
+
+	// Remove any previously registered style.load handler to prevent stale callbacks
+	if (pendingStyleLoadCallback) {
+		rootMap.off('style.load', pendingStyleLoadCallback);
+		pendingStyleLoadCallback = null;
+	}
+
+	const onStyleLoad = async () => {
+		pendingStyleLoadCallback = null;
+		if (!rootMap || currentVersion !== styleReloadVersion) return;
 
 		await loadMarkerImages(rootMap);
 		addMapLayers(rootMap);
 		handleMapMovement();
 		applyTerrainSettings();
-	});
+
+		// Restore selected path if it was visible
+		restoreSelectedPath();
+
+		// Re-add DOM markers that may have been detached
+		restoreDomMarkers();
+
+		// Restore pump calculation markers and polyline
+		pumpCalculation.restoreMapState(rootMap);
+	};
+
+	pendingStyleLoadCallback = onStyleLoad;
+	rootMap.once('style.load', onStyleLoad);
+	rootMap.setStyle(getProtomapsStyle());
 }
 function zoomIn() {
 	rootMap?.zoomIn();
@@ -1036,19 +1093,20 @@ onMounted(async () => {
 		() => mapLayer.value,
 		() => {
 			syncMapStyleWithPreferences();
-		},
-		{ immediate: true }
+			// If map isn't ready yet, queue the style sync for after load
+			if (rootMap && !mapReady) {
+				rootMap.once('load', () => {
+					syncMapStyleWithPreferences();
+				});
+			}
+		}
 	);
 
-	watch(
-		isDarkMode,
-		() => {
-			if (!isSatellite.value) {
-				syncMapStyleWithPreferences();
-			}
-		},
-		{ immediate: true }
-	);
+	watch(isDarkMode, () => {
+		if (!isSatellite.value) {
+			syncMapStyleWithPreferences();
+		}
+	});
 
 	watch(locale, () => {
 		reloadMapStyle();
