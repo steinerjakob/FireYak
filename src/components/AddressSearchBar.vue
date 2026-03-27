@@ -2,7 +2,7 @@
 	<div class="search-container">
 		<div
 			class="search-bar-row"
-			:class="{ 'has-results': showSearchResults && searchResults.length > 0 }"
+			:class="{ 'has-results': showSearchResults && searchResults.length > 0, mobile: isMobile }"
 		>
 			<!-- Info button - mobile only, integrated into search bar -->
 			<button
@@ -17,7 +17,7 @@
 				:value="searchQuery"
 				:placeholder="$t('addressSearch.placeholder')"
 				:debounce="0"
-				show-clear-button="focus"
+				show-clear-button="always"
 				@ionInput="onSearchInput"
 				@ionClear="onSearchClear"
 				@ionFocus="onSearchFocus"
@@ -68,9 +68,9 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue';
-import { IonSearchbar, IonIcon, IonSpinner } from '@ionic/vue';
+import { IonIcon, IonSearchbar, IonSpinner } from '@ionic/vue';
 import { informationCircle, settings as settingsIcon } from 'ionicons/icons';
-import { usePhotonSearch, type PhotonFeature } from '@/composable/photonSearch';
+import { type PhotonFeature, usePhotonSearch } from '@/composable/photonSearch';
 import { useScreenDetection } from '@/composable/screenDetection';
 import { useI18n } from 'vue-i18n';
 import { debounce } from '@/helper/helper';
@@ -143,8 +143,7 @@ function onSearchBlur() {
 }
 
 function onSelectResult(feature: PhotonFeature) {
-	const name = getFeatureName(feature);
-	searchQuery.value = name;
+	searchQuery.value = getFeatureName(feature);
 	showSearchResults.value = false;
 	emit('select-result', feature);
 }
@@ -153,13 +152,13 @@ function onSelectResult(feature: PhotonFeature) {
 <style scoped>
 .search-container {
 	position: absolute;
-	top: 0;
+	top: 10px;
 	left: 50%;
 	transform: translateX(-50%);
 	z-index: 1001;
 	width: 100%;
 	max-width: 560px;
-	padding: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 8px) 8px 0 8px;
+	padding: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 8px) 16px 0 16px;
 	pointer-events: none;
 }
 
@@ -172,14 +171,18 @@ function onSelectResult(feature: PhotonFeature) {
 	align-items: center;
 	gap: 6px;
 	background: #ffffff !important;
-	border-radius: 24px;
+	border-radius: var(--md-sys-corner-medium);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-	padding: 0 4px;
+	padding: 0 16px;
 	position: relative;
+
+	&.mobile {
+		padding: 0 4px !important;
+	}
 }
 
 .search-bar-row.has-results {
-	border-radius: 24px 24px 0 0;
+	border-radius: var(--md-sys-corner-medium) var(--md-sys-corner-medium) 0 0;
 }
 
 .search-bar {
@@ -193,6 +196,7 @@ function onSelectResult(feature: PhotonFeature) {
 	padding: 0;
 	flex: 1;
 	min-width: 0;
+	min-height: 40px;
 }
 
 .search-bar-mobile {
