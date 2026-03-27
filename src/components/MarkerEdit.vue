@@ -46,6 +46,12 @@ const accessOptions = ['yes', 'private', 'permissive', 'no'];
 
 const commonDiameters = ['80', '100', '150', '200', '300'];
 const commonPressures = ['yes', 'suction', '3', '4', '6', '8'];
+const awwaClasses = [
+	{ value: 'AA', color: '#73B2FF' },
+	{ value: 'A', color: '#4CAF50' },
+	{ value: 'B', color: '#FFEB3B' },
+	{ value: 'C', color: '#F44336' }
+];
 const commonFlowRates = ['600 l/min', '800 l/min', '1200 l/min'];
 const commonCouplingsCounts = ['1', '2', '3'];
 const commonCouplingTypes = [
@@ -91,6 +97,7 @@ const onTypeChange = () => {
 		delete markerEditStore.editableTags['couplings:type'];
 		delete markerEditStore.editableTags['couplings:diameters'];
 		delete markerEditStore.editableTags['pillar:type'];
+		delete markerEditStore.editableTags['fire_hydrant:awwa_class'];
 	}
 	if (type !== 'water_tank') {
 		delete markerEditStore.editableTags['water_tank:volume'];
@@ -119,6 +126,7 @@ const relevantTags = [
 	'fire_hydrant:pressure',
 	'fire_hydrant:flow_capacity',
 	'fire_hydrant:position',
+	'fire_hydrant:awwa_class',
 	'flow_rate',
 	'couplings',
 	'couplings:type',
@@ -330,6 +338,40 @@ const login = () => {
 					</ion-select-option>
 				</ion-select>
 			</ion-item>
+
+			<!-- AWWA Class -->
+			<ion-item lines="none">
+				<ion-input
+					fill="outline"
+					label-placement="stacked"
+					:clear-input="true"
+					:label="t('markerInfo.tags.awwaClass')"
+					v-model="markerEditStore.editableTags['fire_hydrant:awwa_class']"
+					placeholder="AA, A, B, C"
+					:helper-text="t('markerEdit.hints.awwaClass')"
+				></ion-input>
+			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					v-for="ac in awwaClasses"
+					:key="ac.value"
+					:outline="markerEditStore.editableTags['fire_hydrant:awwa_class'] !== ac.value"
+					:style="{
+						'--background':
+							markerEditStore.editableTags['fire_hydrant:awwa_class'] === ac.value
+								? ac.color
+								: undefined,
+						'--color':
+							markerEditStore.editableTags['fire_hydrant:awwa_class'] === ac.value &&
+							ac.value === 'B'
+								? '#000'
+								: undefined,
+						borderColor: ac.color
+					}"
+					@click="applySuggestion('fire_hydrant:awwa_class', ac.value)"
+					>{{ ac.value }}</ion-chip
+				>
+			</div>
 		</ion-item-group>
 
 		<!-- Couplings (fire hydrant only) -->
