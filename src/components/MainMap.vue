@@ -1,8 +1,15 @@
 <template>
 	<div :class="{ darkMap: isDarkMode && !isSatellite }" style="height: 100%; width: 100%">
 		<div id="map" style="height: 100%; width: 100%"></div>
+		<AddressSearchBar
+			:map-center="mapCenterForSearch"
+			@select-result="onSearchResultSelected"
+			@about-click="router.push('/about')"
+			@settings-click="router.push('/settings')"
+			@clear-search="onSearchCleared"
+		/>
 		<!-- About FAB Button -->
-		<ion-fab vertical="top" horizontal="start" slot="fixed">
+		<ion-fab v-if="!isMobile" vertical="top" horizontal="start" slot="fixed">
 			<ion-fab-button
 				class="md-small"
 				color="light"
@@ -25,7 +32,7 @@
 			</ion-fab-button>
 		</ion-fab>
 		<!-- Settings FAB Button -->
-		<ion-fab vertical="top" horizontal="end" slot="fixed">
+		<ion-fab v-if="!isMobile" vertical="top" horizontal="end" slot="fixed">
 			<ion-fab-button
 				class="md-small"
 				color="light"
@@ -115,7 +122,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { layers as protomapsLayers } from '@protomaps/basemaps';
 import selectedMarkerIconUrl from '../assets/markers/selectedmarker.png';
-import { nextTick, onMounted, watch, ref, onUnmounted } from 'vue';
+import { nextTick, onMounted, watch, ref, computed, onUnmounted } from 'vue';
 import { debounce } from '@/helper/helper';
 import { getMarkersForView, getNearbyMarkers, markerIconUrls } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
@@ -123,6 +130,9 @@ import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
 import LayerSelectorModal from '@/components/LayerSelectorModal.vue';
+import AddressSearchBar from '@/components/AddressSearchBar.vue';
+import { useScreenDetection } from '@/composable/screenDetection';
+import { usePhotonSearch, type PhotonFeature } from '@/composable/photonSearch';
 import {
 	informationCircle,
 	analyticsOutline,
@@ -170,6 +180,9 @@ const settingsStore = useSettingsStore();
 const { showZoomButtons, mapLayer, terrain3d } = storeToRefs(settingsStore);
 const { t, locale } = useI18n();
 
+const { isMobile } = useScreenDetection();
+const { formatAddress, getFeatureName } = usePhotonSearch();
+
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
 
@@ -187,6 +200,53 @@ let userLocationMarker: maplibregl.Marker | null = null;
 
 // Custom external location marker
 let customLocationMarker: maplibregl.Marker | null = null;
+
+// Search result marker
+let searchMarker: maplibregl.Marker | null = null;
+
+const mapCenterForSearch = computed(() => {
+	if (!rootMap) return undefined;
+	try {
+		const center = rootMap.getCenter();
+		return { lat: center.lat, lng: center.lng };
+	} catch {
+		return undefined;
+	}
+});
+
+function onSearchResultSelected(feature: PhotonFeature) {
+	if (!rootMap) return;
+	const [lng, lat] = feature.geometry.coordinates;
+
+	// Remove previous search marker if exists
+	if (searchMarker) {
+		searchMarker.remove();
+		searchMarker = null;
+	}
+
+	// Create new marker with popup
+	searchMarker = new maplibregl.Marker()
+		.setLngLat([lng, lat])
+		.setPopup(
+			new maplibregl.Popup({ offset: 25 }).setHTML(
+				`<strong>${getFeatureName(feature)}</strong><br>${formatAddress(feature)}`
+			)
+		)
+		.addTo(rootMap);
+
+	// Open popup
+	searchMarker.togglePopup();
+
+	// Fly to location
+	rootMap.flyTo({ center: [lng, lat], zoom: 16 });
+}
+
+function onSearchCleared() {
+	if (searchMarker) {
+		searchMarker.remove();
+		searchMarker = null;
+	}
+}
 
 function createSelectedMarker(): maplibregl.Marker {
 	const el = document.createElement('img');
