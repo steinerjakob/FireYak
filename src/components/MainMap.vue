@@ -231,7 +231,7 @@ function onSearchResultSelected(feature: PhotonFeature) {
 	searchMarker = new maplibregl.Marker()
 		.setLngLat([lng, lat])
 		.setPopup(
-			new maplibregl.Popup({ offset: 25 }).setHTML(
+			new maplibregl.Popup({ offset: 35 }).setHTML(
 				`<strong>${getFeatureName(feature)}</strong><br>${formatAddress(feature)}`
 			)
 		)
