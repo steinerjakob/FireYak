@@ -187,7 +187,7 @@ const { formatAddress, getFeatureName } = usePhotonSearch();
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
 
-const PROTOMAPS_API_KEY = '111410f5c74ab4c7';
+const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
