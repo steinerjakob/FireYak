@@ -1,8 +1,15 @@
 <template>
 	<div :class="{ darkMap: isDarkMode && !isSatellite }" style="height: 100%; width: 100%">
 		<div id="map" style="height: 100%; width: 100%"></div>
+		<AddressSearchBar
+			:map-center="mapCenterForSearch"
+			@select-result="onSearchResultSelected"
+			@about-click="router.push('/about')"
+			@settings-click="router.push('/settings')"
+			@clear-search="onSearchCleared"
+		/>
 		<!-- About FAB Button -->
-		<ion-fab vertical="top" horizontal="start" slot="fixed">
+		<ion-fab v-if="!isMobile" vertical="top" horizontal="start" slot="fixed">
 			<ion-fab-button
 				class="md-small"
 				color="light"
@@ -25,7 +32,7 @@
 			</ion-fab-button>
 		</ion-fab>
 		<!-- Settings FAB Button -->
-		<ion-fab vertical="top" horizontal="end" slot="fixed">
+		<ion-fab v-if="!isMobile" vertical="top" horizontal="end" slot="fixed">
 			<ion-fab-button
 				class="md-small"
 				color="light"
@@ -123,6 +130,9 @@ import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
 import LayerSelectorModal from '@/components/LayerSelectorModal.vue';
+import AddressSearchBar from '@/components/AddressSearchBar.vue';
+import { useScreenDetection } from '@/composable/screenDetection';
+import { usePhotonSearch, type PhotonFeature } from '@/composable/photonSearch';
 import {
 	informationCircle,
 	analyticsOutline,
@@ -170,6 +180,9 @@ const settingsStore = useSettingsStore();
 const { showZoomButtons, mapLayer, terrain3d } = storeToRefs(settingsStore);
 const { t, locale } = useI18n();
 
+const { isMobile } = useScreenDetection();
+const { formatAddress, getFeatureName } = usePhotonSearch();
+
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
 
@@ -187,6 +200,55 @@ let userLocationMarker: maplibregl.Marker | null = null;
 
 // Custom external location marker
 let customLocationMarker: maplibregl.Marker | null = null;
+
+// Search result marker
+let searchMarker: maplibregl.Marker | null = null;
+
+const mapCenterForSearch = ref<{ lat: number; lng: number } | undefined>(undefined);
+
+function updateMapCenterForSearch() {
+	if (!rootMap) return;
+	try {
+		const center = rootMap.getCenter();
+		mapCenterForSearch.value = { lat: center.lat, lng: center.lng };
+	} catch {
+		// ignore
+	}
+}
+
+function onSearchResultSelected(feature: PhotonFeature) {
+	if (!rootMap) return;
+	const [lng, lat] = feature.geometry.coordinates;
+
+	// Remove previous search marker if exists
+	if (searchMarker) {
+		searchMarker.remove();
+		searchMarker = null;
+	}
+
+	// Create new marker with popup
+	searchMarker = new maplibregl.Marker()
+		.setLngLat([lng, lat])
+		.setPopup(
+			new maplibregl.Popup({ offset: 25 }).setHTML(
+				`<strong>${getFeatureName(feature)}</strong><br>${formatAddress(feature)}`
+			)
+		)
+		.addTo(rootMap);
+
+	// Open popup
+	searchMarker.togglePopup();
+
+	// Fly to location
+	rootMap.flyTo({ center: [lng, lat], zoom: 16 });
+}
+
+function onSearchCleared() {
+	if (searchMarker) {
+		searchMarker.remove();
+		searchMarker = null;
+	}
+}
 
 function createSelectedMarker(): maplibregl.Marker {
 	const el = document.createElement('img');
@@ -972,7 +1034,8 @@ async function initMap() {
 		dragRotate: true,
 		touchZoomRotate: true,
 		pitchWithRotate: true,
-		pitch: 0
+		pitch: 0,
+		maxPitch: 75
 	});
 
 	// Important: force MapLibre to recalc size after layout is ready
@@ -987,6 +1050,10 @@ async function initMap() {
 		setupMapEventListeners(rootMap);
 		applyTerrainSettings();
 		handleMapMovement();
+
+		// Set initial map center for search bias and keep it updated on movement
+		updateMapCenterForSearch();
+		rootMap.on('moveend', updateMapCenterForSearch);
 
 		rootMap.on('zoomend', debouncedMapMove);
 		rootMap.on('dragend', debouncedMapMove);
@@ -1168,6 +1235,67 @@ ion-fab {
 
 .compass-fab {
 	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px));
+}
+
+/* MapLibre popup styling aligned with the search UI theme */
+:deep(.maplibregl-popup) {
+	max-width: min(320px, calc(100vw - 32px));
+}
+
+:deep(.maplibregl-popup-content) {
+	background: var(--md-sys-surface-container-lowest);
+	color: var(--md-sys-on-surface);
+	border-radius: var(--md-sys-corner-medium);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+	padding: 12px 14px;
+	font-size: 14px;
+	line-height: 1.4;
+}
+
+:deep(.maplibregl-popup-tip) {
+	border-top-color: var(--md-sys-surface-container-lowest);
+	border-bottom-color: var(--md-sys-surface-container-lowest);
+}
+
+:deep(.maplibregl-popup-close-button) {
+	color: var(--md-sys-on-surface);
+	font-size: 20px;
+	width: 28px;
+	height: 28px;
+	line-height: 28px;
+	border-radius: 50%;
+	top: 4px;
+	right: 4px;
+}
+
+:deep(.maplibregl-popup-close-button:hover) {
+	background: rgba(0, 0, 0, 0.08);
+}
+
+:deep(.maplibregl-popup-content strong) {
+	font-weight: 600;
+	color: var(--md-sys-on-surface);
+}
+
+:deep(.maplibregl-popup-content a) {
+	color: var(--md-sys-primary);
+}
+
+:deep(.darkMap .maplibregl-popup-content),
+.darkMap :deep(.maplibregl-popup-content) {
+	background: var(--md-sys-surface-container-lowest);
+	color: var(--md-sys-on-surface);
+}
+
+:deep(.darkMap .maplibregl-popup-tip),
+.darkMap :deep(.maplibregl-popup-tip) {
+	border-top-color: var(--md-sys-surface-container-lowest);
+	border-bottom-color: var(--md-sys-surface-container-lowest);
+}
+
+:deep(.darkMap .maplibregl-popup-close-button:hover),
+.darkMap :deep(.maplibregl-popup-close-button:hover) {
+	background: rgba(255, 255, 255, 0.08);
 }
 </style>
 
