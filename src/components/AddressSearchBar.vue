@@ -170,7 +170,9 @@ function onSelectResult(feature: PhotonFeature) {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	background: #ffffff !important;
+	background: var(--md-sys-background);
+	--background: var(--md-sys-background);
+	--color: var(--md-sys-on-surface);
 	border-radius: var(--md-sys-corner-medium);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	padding: 0 16px;
@@ -189,10 +191,6 @@ function onSelectResult(feature: PhotonFeature) {
 	--background: transparent !important;
 	--box-shadow: none !important;
 	--border-radius: 24px;
-	--placeholder-color: #666666 !important;
-	--color: #1a1a1a !important;
-	--icon-color: #333333 !important;
-	--clear-button-color: #333333 !important;
 	padding: 0;
 	flex: 1;
 	min-width: 0;
@@ -205,18 +203,8 @@ function onSelectResult(feature: PhotonFeature) {
 
 /* Deep overrides for Ionic MD searchbar internal elements */
 .search-bar :deep(.searchbar-input) {
-	color: #1a1a1a !important;
 	border: 0 !important;
 }
-
-.search-bar :deep(.searchbar-search-icon) {
-	color: #333333 !important;
-}
-
-.search-bar :deep(.searchbar-clear-button) {
-	color: #333333 !important;
-}
-
 .search-spinner {
 	width: 20px;
 	height: 20px;
@@ -245,14 +233,10 @@ function onSelectResult(feature: PhotonFeature) {
 
 .search-action-btn ion-icon {
 	font-size: 22px;
-	color: #333333 !important;
-	--color: #333333 !important;
 	opacity: 1 !important;
 }
 
 .search-icon-btn {
-	color: #333333 !important;
-	--color: #333333 !important;
 	opacity: 1 !important;
 }
 
@@ -265,7 +249,10 @@ function onSelectResult(feature: PhotonFeature) {
 }
 
 .search-results {
-	background: #ffffff !important;
+	background: var(--md-sys-background);
+	--background: var(--md-sys-background);
+	--color: var(--md-sys-on-surface);
+	--box-shadow: var(--md-sys-level2);
 	border-radius: 0 0 16px 16px;
 	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 	overflow: hidden;
@@ -282,7 +269,8 @@ function onSelectResult(feature: PhotonFeature) {
 
 .search-result-item:active,
 .search-result-item:hover {
-	background: #f5f5f5;
+	--background-hover: var(--md-sys-surface-container);
+	background: var(--md-sys-surface-container);
 }
 
 .search-result-item + .search-result-item {
@@ -293,20 +281,17 @@ function onSelectResult(feature: PhotonFeature) {
 	font-weight: 600;
 	font-size: 14px;
 	line-height: 1.3;
-	color: #1a1a1a !important;
 }
 
 .result-address {
 	font-size: 12px;
 	line-height: 1.3;
 	margin-top: 1px;
-	color: #555555 !important;
 }
 
 .search-no-results {
 	padding: 12px 16px;
 	font-size: 13px;
-	color: #555555 !important;
 	text-align: center;
 }
 </style>
