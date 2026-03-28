@@ -157,7 +157,7 @@ function onSelectResult(feature: PhotonFeature) {
 	transform: translateX(-50%);
 	z-index: 1001;
 	width: 100%;
-	max-width: 560px;
+	max-width: 656px;
 	padding: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 8px) 16px 0 16px;
 	pointer-events: none;
 }
@@ -170,8 +170,8 @@ function onSelectResult(feature: PhotonFeature) {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	background: var(--md-sys-background);
-	--background: var(--md-sys-background);
+	background: var(--md-sys-surface-container-lowest);
+	--background: var(--md-sys-surface-container-lowest);
 	--color: var(--md-sys-on-surface);
 	border-radius: var(--md-sys-corner-medium);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
