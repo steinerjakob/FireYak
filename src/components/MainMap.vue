@@ -1034,7 +1034,8 @@ async function initMap() {
 		dragRotate: true,
 		touchZoomRotate: true,
 		pitchWithRotate: true,
-		pitch: 0
+		pitch: 0,
+		maxPitch: 75
 	});
 
 	// Important: force MapLibre to recalc size after layout is ready
@@ -1234,6 +1235,67 @@ ion-fab {
 
 .compass-fab {
 	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px));
+}
+
+/* MapLibre popup styling aligned with the search UI theme */
+:deep(.maplibregl-popup) {
+	max-width: min(320px, calc(100vw - 32px));
+}
+
+:deep(.maplibregl-popup-content) {
+	background: var(--md-sys-surface-container-lowest);
+	color: var(--md-sys-on-surface);
+	border-radius: var(--md-sys-corner-medium);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
+	padding: 12px 14px;
+	font-size: 14px;
+	line-height: 1.4;
+}
+
+:deep(.maplibregl-popup-tip) {
+	border-top-color: var(--md-sys-surface-container-lowest);
+	border-bottom-color: var(--md-sys-surface-container-lowest);
+}
+
+:deep(.maplibregl-popup-close-button) {
+	color: var(--md-sys-on-surface);
+	font-size: 20px;
+	width: 28px;
+	height: 28px;
+	line-height: 28px;
+	border-radius: 50%;
+	top: 4px;
+	right: 4px;
+}
+
+:deep(.maplibregl-popup-close-button:hover) {
+	background: rgba(0, 0, 0, 0.08);
+}
+
+:deep(.maplibregl-popup-content strong) {
+	font-weight: 600;
+	color: var(--md-sys-on-surface);
+}
+
+:deep(.maplibregl-popup-content a) {
+	color: var(--md-sys-primary);
+}
+
+:deep(.darkMap .maplibregl-popup-content),
+.darkMap :deep(.maplibregl-popup-content) {
+	background: var(--md-sys-surface-container-lowest);
+	color: var(--md-sys-on-surface);
+}
+
+:deep(.darkMap .maplibregl-popup-tip),
+.darkMap :deep(.maplibregl-popup-tip) {
+	border-top-color: var(--md-sys-surface-container-lowest);
+	border-bottom-color: var(--md-sys-surface-container-lowest);
+}
+
+:deep(.darkMap .maplibregl-popup-close-button:hover),
+.darkMap :deep(.maplibregl-popup-close-button:hover) {
+	background: rgba(255, 255, 255, 0.08);
 }
 </style>
 
