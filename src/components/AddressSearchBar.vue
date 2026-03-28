@@ -155,7 +155,7 @@ function onSelectResult(feature: PhotonFeature) {
 	top: 10px;
 	left: 50%;
 	transform: translateX(-50%);
-	z-index: 1001;
+	z-index: 1000;
 	width: 100%;
 	max-width: 656px;
 	padding: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 8px) 16px 0 16px;
