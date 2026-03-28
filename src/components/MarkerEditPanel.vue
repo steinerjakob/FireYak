@@ -65,7 +65,7 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 	top: 0;
 	bottom: 0;
 	width: 400px;
-	z-index: 1001;
+	z-index: 1002;
 	border-radius: 0;
 	overflow: hidden;
 	display: flex;
