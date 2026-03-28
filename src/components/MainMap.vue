@@ -162,7 +162,8 @@ import { satelliteFlavor } from '@/map/satelliteFlavor';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 200;
-const DISABLE_CLUSTERING_ZOOM = 15;
+const DISABLE_CLUSTERING_ZOOM = 14;
+const CLUSTER_RADIUS = 50;
 const MARKER_SOURCE_ID = 'markers';
 const SELECTED_PATH_SOURCE = 'selected-path';
 const SELECTED_PATH_LAYER = 'selected-path-layer';
@@ -855,7 +856,7 @@ function addMapLayers(map: maplibregl.Map) {
 		data: { type: 'FeatureCollection', features: [] },
 		cluster: true,
 		clusterMaxZoom: DISABLE_CLUSTERING_ZOOM - 1,
-		clusterRadius: 50
+		clusterRadius: CLUSTER_RADIUS
 	});
 
 	// Cluster circles
