@@ -221,6 +221,7 @@ function onSelectResult(feature: PhotonFeature) {
 	border-radius: 50%;
 	border: none;
 	background: transparent;
+	color: var(--md-sys-on-surface);
 	cursor: pointer;
 	flex-shrink: 0;
 	padding: 0;
@@ -233,6 +234,7 @@ function onSelectResult(feature: PhotonFeature) {
 
 .search-action-btn ion-icon {
 	font-size: 22px;
+	color: inherit;
 	opacity: 1 !important;
 }
 
