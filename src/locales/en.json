@@ -248,6 +248,10 @@
 			"deleteError": "Failed to remove from OpenStreetMap. Please try again."
 		}
 	},
+	"nativeApp": {
+		"headline": "Get the FireYak App",
+		"continueWeb": "Continue with Web Version"
+	},
 	"settings": {
 		"title": "Settings",
 		"account": {
