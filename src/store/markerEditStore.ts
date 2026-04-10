@@ -5,6 +5,7 @@ import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { storeMapNodes, deleteMapNode } from '@/mapHandler/databaseHandler';
+import { useImageUploadStore } from '@/store/imageUploadStore';
 import { toastController, alertController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import * as OSM from 'osm-api';
@@ -180,6 +181,31 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					color: 'success'
 				});
 				await toast.present();
+
+				// After OSM save succeeds, check for pending image uploads
+				const imageUploadStore = useImageUploadStore();
+				if (imageUploadStore.selectedImages.length > 0) {
+					try {
+						await imageUploadStore.uploadAll(finalId);
+						const imgToast = await toastController.create({
+							message: t('imageUpload.uploadSuccess'),
+							duration: 2000,
+							color: 'success'
+						});
+						await imgToast.present();
+					} catch (imgError) {
+						console.error('Image upload failed', imgError);
+						const imgToast = await toastController.create({
+							message: t('imageUpload.uploadError'),
+							duration: 3000,
+							color: 'warning'
+						});
+						await imgToast.present();
+						// DON'T call cancelEdit() — keep panel open for retry
+						return;
+					}
+				}
+
 				cancelEdit();
 			}
 		} catch (e) {

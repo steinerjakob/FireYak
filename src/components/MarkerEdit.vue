@@ -22,6 +22,7 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
+import MarkerImageUpload from '@/components/MarkerImageUpload.vue';
 
 const markerEditStore = useMarkerEditStore();
 const osmAuthStore = useOsmAuthStore();
@@ -659,6 +660,9 @@ const login = () => {
 				></ion-input>
 			</ion-item>
 		</ion-item-group>
+
+		<!-- Image Upload -->
+		<MarkerImageUpload />
 
 		<!-- Auth & Action Buttons -->
 		<div class="ion-padding action-buttons">

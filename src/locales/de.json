@@ -248,6 +248,40 @@
 			"deleteError": "Entfernen von OpenStreetMap fehlgeschlagen. Bitte versuchen Sie es erneut."
 		}
 	},
+	"wikimediaAuth": {
+		"authDialog": {
+			"title": "Wikimedia Commons Konto erforderlich",
+			"message": "Du benötigst ein Wikimedia Commons Konto, um Bilder hochzuladen."
+		},
+		"buttons": {
+			"login": "Bei Wikimedia anmelden",
+			"logout": "Abmelden"
+		},
+		"sessionExpired": "Deine Wikimedia-Sitzung ist abgelaufen. Bitte melde dich erneut an."
+	},
+	"imageUpload": {
+		"title": "Bilder",
+		"count": "{count} von {max}",
+		"addImage": "Bild hinzufügen",
+		"takePhoto": "Foto aufnehmen",
+		"chooseFromLibrary": "Aus Galerie wählen",
+		"uploading": "Lade Bild {current} von {total} hoch...",
+		"uploadSuccess": "Bilder wurden auf Wikimedia Commons hochgeladen!",
+		"uploadError": "Bild-Upload fehlgeschlagen. Der Marker wurde erfolgreich gespeichert.",
+		"retryUpload": "Upload wiederholen",
+		"existingImages": "Vorhandene Bilder",
+		"newImages": "Neue Bilder zum Hochladen",
+		"viewOnCommons": "Auf Wikimedia Commons ansehen",
+		"maxReached": "Maximal {max} Bilder pro Marker erreicht.",
+		"tooSmall": "Bild ist zu klein. Mindestauflösung ist 640×480.",
+		"tooLarge": "Bilddatei ist zu groß (max. {max}MB).",
+		"license": {
+			"title": "Bild-Upload Bedingungen",
+			"message": "Durch das Hochladen von Bildern auf Wikimedia Commons bestätigst du, dass:\n\n• Die Bilder dein eigenes Werk sind\n• Sie nützliche Informationen über Feuerwehreinrichtungen liefern\n• Sie den Wikimedia Commons Richtlinien entsprechen\n• Du sie unter CC BY-SA 4.0 lizenzierst",
+			"agree": "Ich stimme zu",
+			"decline": "Abbrechen"
+		}
+	},
 	"settings": {
 		"title": "Einstellungen",
 		"account": {
@@ -255,7 +289,10 @@
 			"osmAccount": "OpenStreetMap-Konto",
 			"loggedInAs": "Eingeloggt als {name}",
 			"loginDescription": "Einloggen, um Hydranten in OpenStreetMap hinzuzufügen oder zu bearbeiten.",
-			"manageAccount": "Konto verwalten"
+			"manageAccount": "Konto verwalten",
+			"wikimediaTitle": "Wikimedia Commons",
+			"wikimediaAccount": "Wikimedia Commons Konto",
+			"wikimediaLoginDescription": "Melde dich an, um Bilder von Feuerwehreinrichtungen auf Wikimedia Commons hochzuladen."
 		},
 		"appearance": {
 			"title": "Erscheinungsbild",

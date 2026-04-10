@@ -77,13 +77,41 @@
 						<p>{{ $t('settings.account.loginDescription') }}</p>
 					</ion-label>
 				</ion-item>
-				<ion-item v-if="!osmAuthStore.isAuthenticated" lines="none">
-					<ion-button expand="block" @click="osmAuthStore.login()">
-						<ion-icon slot="start" :icon="logInOutline"></ion-icon>
-						{{ $t('markerEdit.buttons.login') }}
-					</ion-button>
-				</ion-item>
-			</ion-list>
+			<ion-item v-if="!osmAuthStore.isAuthenticated" lines="none">
+				<ion-button expand="block" @click="osmAuthStore.login()">
+					<ion-icon slot="start" :icon="logInOutline"></ion-icon>
+					{{ $t('markerEdit.buttons.login') }}
+				</ion-button>
+			</ion-item>
+
+			<!-- Wikimedia Commons Account -->
+			<ion-list-header>
+				<ion-label>{{ $t('settings.account.wikimediaTitle') }}</ion-label>
+			</ion-list-header>
+
+			<ion-item v-if="wikimediaAuthStore.isAuthenticated" lines="none">
+				<ion-label>
+					<h2>{{ $t('settings.account.wikimediaAccount') }}</h2>
+					<p>{{ wikimediaAuthStore.user?.name }}</p>
+				</ion-label>
+				<ion-button slot="end" fill="clear" @click="wikimediaAuthStore.logout()">
+					<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
+					{{ $t('wikimediaAuth.buttons.logout') }}
+				</ion-button>
+			</ion-item>
+
+			<ion-item v-else lines="none">
+				<ion-label class="ion-text-wrap">
+					<p>{{ $t('settings.account.wikimediaLoginDescription') }}</p>
+				</ion-label>
+			</ion-item>
+			<ion-item v-if="!wikimediaAuthStore.isAuthenticated" lines="none">
+				<ion-button expand="block" @click="wikimediaAuthStore.login()">
+					<ion-icon slot="start" :icon="logInOutline"></ion-icon>
+					{{ $t('wikimediaAuth.buttons.login') }}
+				</ion-button>
+			</ion-item>
+		</ion-list>
 		</ion-content>
 	</ion-page>
 </template>
@@ -113,6 +141,7 @@ import { logInOutline, logOutOutline, openOutline } from 'ionicons/icons';
 import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
+import { useWikimediaAuthStore } from '@/store/wikimediaAuthStore';
 import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
 
@@ -120,6 +149,7 @@ const settingsStore = useSettingsStore();
 const { saveTheme, saveShowZoomButtons } = useSettings();
 const { theme, showZoomButtons } = storeToRefs(settingsStore);
 const osmAuthStore = useOsmAuthStore();
+const wikimediaAuthStore = useWikimediaAuthStore();
 
 const onThemeChange = (event: SegmentCustomEvent) => {
 	saveTheme(event.detail.value as ThemeSetting);

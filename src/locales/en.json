@@ -248,6 +248,40 @@
 			"deleteError": "Failed to remove from OpenStreetMap. Please try again."
 		}
 	},
+	"wikimediaAuth": {
+		"authDialog": {
+			"title": "Wikimedia Commons Account Required",
+			"message": "You need a Wikimedia Commons account to upload images."
+		},
+		"buttons": {
+			"login": "Login to Wikimedia",
+			"logout": "Logout"
+		},
+		"sessionExpired": "Your Wikimedia session has expired. Please log in again."
+	},
+	"imageUpload": {
+		"title": "Images",
+		"count": "{count} of {max}",
+		"addImage": "Add Image",
+		"takePhoto": "Take Photo",
+		"chooseFromLibrary": "Choose from Library",
+		"uploading": "Uploading image {current} of {total}...",
+		"uploadSuccess": "Images uploaded to Wikimedia Commons!",
+		"uploadError": "Image upload failed. The marker was saved successfully.",
+		"retryUpload": "Retry Upload",
+		"existingImages": "Existing images",
+		"newImages": "New images to upload",
+		"viewOnCommons": "View on Wikimedia Commons",
+		"maxReached": "Maximum of {max} images per marker reached.",
+		"tooSmall": "Image is too small. Minimum resolution is 640×480.",
+		"tooLarge": "Image file is too large (max {max}MB).",
+		"license": {
+			"title": "Image Upload Terms",
+			"message": "By uploading images to Wikimedia Commons, you confirm that:\n\n• The images are your own work\n• They provide useful information about fire-fighting facilities\n• They comply with Wikimedia Commons policies\n• You license them under CC BY-SA 4.0",
+			"agree": "I Agree",
+			"decline": "Cancel"
+		}
+	},
 	"settings": {
 		"title": "Settings",
 		"account": {
@@ -255,7 +289,10 @@
 			"osmAccount": "OpenStreetMap Account",
 			"loggedInAs": "Logged in as {name}",
 			"loginDescription": "Log in to add or edit markers on OpenStreetMap.",
-			"manageAccount": "Manage Account"
+			"manageAccount": "Manage Account",
+			"wikimediaTitle": "Wikimedia Commons",
+			"wikimediaAccount": "Wikimedia Commons Account",
+			"wikimediaLoginDescription": "Log in to upload images of fire-fighting facilities to Wikimedia Commons."
 		},
 		"appearance": {
 			"title": "Appearance",
