@@ -38,6 +38,7 @@ import App from './App.vue';
 // Composables
 import { createApp } from 'vue';
 import { useOsmAuthStore, isNativeAuthInProgress } from '@/store/osmAuthStore';
+import { isNativeWikimediaAuthInProgress } from '@/store/wikimediaAuthStore';
 import { usePhotonSearch } from '@/composable/photonSearch';
 
 const app = createApp(App);
@@ -63,7 +64,11 @@ CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 	// destructive window.location.replace() that destroys the WebView state.
 	if (url.includes('?code=')) {
 		if (isNativeAuthInProgress()) {
-			console.log('[OAuth] Ignoring appUrlOpen — InAppBrowser flow is active');
+			console.log('[OAuth/OSM] Ignoring appUrlOpen — InAppBrowser flow is active');
+			return;
+		}
+		if (isNativeWikimediaAuthInProgress()) {
+			console.log('[OAuth/Wikimedia] Ignoring appUrlOpen — InAppBrowser flow is active');
 			return;
 		}
 

@@ -85,8 +85,8 @@ const pwaOptions: Partial<VitePWAOptions> = {
 		...(isNativeBuild
 			? { globPatterns: [] }
 			: {
-					globIgnores: ['**/land.html'],
-					navigateFallbackDenylist: [/^\/land\.html/]
+					globIgnores: ['**/land.html', '**/wikimedia-callback/**'],
+					navigateFallbackDenylist: [/^\/land\.html/, /^\/wikimedia-callback/]
 				}),
 		runtimeCaching: [
 			{
@@ -133,7 +133,8 @@ const pwaOptions: Partial<VitePWAOptions> = {
 				}
 			},
 			{
-				urlPattern: /^https?:\/\/commons\.wikimedia\.org\/w\/api\.php\?.*/,
+				urlPattern:
+					/^https?:\/\/commons\.wikimedia\.(org|beta\.wmflabs\.org)\/w\/api\.php\?action=query.*/,
 				handler: 'StaleWhileRevalidate',
 				options: {
 					cacheName: 'wikimedia-api-cache',
