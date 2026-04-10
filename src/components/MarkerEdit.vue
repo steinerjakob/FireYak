@@ -55,16 +55,7 @@ const awwaClasses = [
 ];
 const commonFlowRates = ['600 l/min', '800 l/min', '1200 l/min'];
 const commonCouplingsCounts = ['1', '2', '3'];
-const commonCouplingTypes = [
-	'Storz',
-	'Bayonet',
-	'Barcelona',
-	'Guillemin',
-	'Klaue',
-	'Sprawny',
-	'UNI',
-	'NH'
-];
+const commonCouplingTypes = ['Storz', 'Bayonet', 'Barcelona', 'Guillemin', 'UNI', 'NH'];
 const commonCouplingDiameters = ['B;B', 'B;B;A', 'B;C;C', '75 mm', '55 mm', '65 mm;65 mm;100 mm'];
 
 const applySuggestion = (tag: string, value: string) => {
