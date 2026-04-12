@@ -14,7 +14,7 @@ import {
 } from '@/helper/wikimediaApi';
 import { version } from '../../package.json';
 
-const MAX_IMAGES_PER_MARKER = 10;
+const MAX_IMAGES_PER_MARKER = 5;
 const MAX_FILE_SIZE_MB = 20;
 const MIN_WIDTH = 640;
 const MIN_HEIGHT = 480;
@@ -194,6 +194,7 @@ export const useImageUploadStore = defineStore('imageUpload', () => {
 	}
 
 	return {
+		MAX_IMAGES_PER_MARKER,
 		// State
 		selectedImages,
 		uploadProgress,

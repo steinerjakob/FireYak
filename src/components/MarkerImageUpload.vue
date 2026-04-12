@@ -142,7 +142,7 @@ const retryUpload = async () => {
 				📷 {{ t('imageUpload.title') }} ({{
 					t('imageUpload.count', {
 						count: imageUploadStore.totalImages,
-						max: 10
+						max: imageUploadStore.MAX_IMAGES_PER_MARKER
 					})
 				}})
 			</ion-label>
@@ -183,7 +183,9 @@ const retryUpload = async () => {
 
 		<!-- Max reached message -->
 		<ion-item v-if="!imageUploadStore.canAddMore" lines="none">
-			<ion-note color="medium">{{ t('imageUpload.maxReached', { max: 10 }) }}</ion-note>
+			<ion-note color="medium">{{
+				t('imageUpload.maxReached', { max: imageUploadStore.MAX_IMAGES_PER_MARKER })
+			}}</ion-note>
 		</ion-item>
 
 		<!-- Existing Commons images -->
