@@ -248,6 +248,10 @@
 			"deleteError": "Entfernen von OpenStreetMap fehlgeschlagen. Bitte versuchen Sie es erneut."
 		}
 	},
+	"nativeApp": {
+		"headline": "FireYak App herunterladen",
+		"continueWeb": "Mit Web-Version fortfahren"
+	},
 	"settings": {
 		"title": "Einstellungen",
 		"account": {
