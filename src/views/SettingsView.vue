@@ -90,9 +90,17 @@
 
 				<ion-item v-if="wikimediaAuthStore.isAuthenticated" lines="none">
 					<ion-label>
-						<p>{{ wikimediaAuthStore.user?.name }}</p>
+						<p>
+							{{ $t('settings.account.loggedInAs', { name: wikimediaAuthStore.user?.name }) }}
+						</p>
 					</ion-label>
-					<ion-button slot="end" fill="clear" @click="wikimediaAuthStore.logout()">
+				</ion-item>
+				<ion-item v-if="wikimediaAuthStore.isAuthenticated" lines="none">
+					<ion-button fill="primary" @click="openWikimediaProfile()">
+						<ion-icon slot="start" :icon="openOutline"></ion-icon>
+						{{ $t('settings.account.manageAccount') }}
+					</ion-button>
+					<ion-button slot="end" fill="outline" @click="wikimediaAuthStore.logout()">
 						<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
 						{{ $t('wikimediaAuth.buttons.logout') }}
 					</ion-button>
@@ -158,6 +166,7 @@ const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 };
 
 const OSM_ACCOUNT_URL = 'https://www.openstreetmap.org/account/edit';
+const OPENMEDIA_ACCOUNT_URL = 'https://meta.wikimedia.org/wiki/Special:Preferences';
 
 /**
  * Opens the OpenStreetMap account profile page.
@@ -173,6 +182,18 @@ const openOsmProfile = async () => {
 		});
 	} else {
 		window.open(OSM_ACCOUNT_URL, '_blank');
+	}
+};
+
+const openWikimediaProfile = async () => {
+	if (Capacitor.isNativePlatform()) {
+		const { InAppBrowser, DefaultWebViewOptions } = await import('@capacitor/inappbrowser');
+		await InAppBrowser.openInWebView({
+			url: OPENMEDIA_ACCOUNT_URL,
+			options: DefaultWebViewOptions
+		});
+	} else {
+		window.open(OPENMEDIA_ACCOUNT_URL, '_blank');
 	}
 };
 </script>

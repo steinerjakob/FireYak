@@ -210,7 +210,7 @@ export const useWikimediaAuthStore = defineStore('wikimediaAuth', () => {
 		}
 
 		try {
-			const url = `${COMMONS_API_URL}?action=query&meta=userinfo&format=json&origin=*`;
+			const url = `https://commons.wikimedia.org/w/rest.php/oauth2/resource/profile`;
 			const response = await fetch(url, {
 				headers: {
 					Authorization: `Bearer ${token}`
@@ -222,10 +222,9 @@ export const useWikimediaAuthStore = defineStore('wikimediaAuth', () => {
 			}
 
 			const data = await response.json();
-			const userinfo = data?.query?.userinfo;
 
-			if (userinfo && userinfo.id && userinfo.id !== 0) {
-				user.value = { name: userinfo.name, id: userinfo.id };
+			if (data && data.sub && data.username) {
+				user.value = { name: data.username, id: data.sub };
 				isAuthenticated.value = true;
 			} else {
 				// Anonymous / invalid token

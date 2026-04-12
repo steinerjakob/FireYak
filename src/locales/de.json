@@ -212,7 +212,7 @@
 			"save": "In OSM speichern",
 			"cancel": "Abbrechen",
 			"login": "In OSM einloggen",
-			"logout": "Ausloggen",
+			"logout": "Abmelden",
 			"selectLocation": "Position auf Karte wählen",
 			"delete": "Aus OSM entfernen"
 		},
