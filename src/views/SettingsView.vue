@@ -49,12 +49,11 @@
 
 				<!-- Account Section -->
 				<ion-list-header>
-					<ion-label>{{ $t('settings.account.title') }}</ion-label>
+					<ion-label>{{ $t('settings.account.osmAccount') }}</ion-label>
 				</ion-list-header>
 
 				<ion-item v-if="osmAuthStore.isAuthenticated" lines="none">
 					<ion-label>
-						<h2>{{ $t('settings.account.osmAccount') }}</h2>
 						<p>
 							{{ $t('settings.account.loggedInAs', { name: osmAuthStore.user?.display_name }) }}
 						</p>
@@ -77,41 +76,40 @@
 						<p>{{ $t('settings.account.loginDescription') }}</p>
 					</ion-label>
 				</ion-item>
-			<ion-item v-if="!osmAuthStore.isAuthenticated" lines="none">
-				<ion-button expand="block" @click="osmAuthStore.login()">
-					<ion-icon slot="start" :icon="logInOutline"></ion-icon>
-					{{ $t('markerEdit.buttons.login') }}
-				</ion-button>
-			</ion-item>
+				<ion-item v-if="!osmAuthStore.isAuthenticated" lines="none">
+					<ion-button expand="block" @click="osmAuthStore.login()">
+						<ion-icon slot="start" :icon="logInOutline"></ion-icon>
+						{{ $t('markerEdit.buttons.login') }}
+					</ion-button>
+				</ion-item>
 
-			<!-- Wikimedia Commons Account -->
-			<ion-list-header>
-				<ion-label>{{ $t('settings.account.wikimediaTitle') }}</ion-label>
-			</ion-list-header>
+				<!-- Wikimedia Commons Account -->
+				<ion-list-header>
+					<ion-label>{{ $t('settings.account.wikimediaAccount') }}</ion-label>
+				</ion-list-header>
 
-			<ion-item v-if="wikimediaAuthStore.isAuthenticated" lines="none">
-				<ion-label>
-					<h2>{{ $t('settings.account.wikimediaAccount') }}</h2>
-					<p>{{ wikimediaAuthStore.user?.name }}</p>
-				</ion-label>
-				<ion-button slot="end" fill="clear" @click="wikimediaAuthStore.logout()">
-					<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
-					{{ $t('wikimediaAuth.buttons.logout') }}
-				</ion-button>
-			</ion-item>
+				<ion-item v-if="wikimediaAuthStore.isAuthenticated" lines="none">
+					<ion-label>
+						<p>{{ wikimediaAuthStore.user?.name }}</p>
+					</ion-label>
+					<ion-button slot="end" fill="clear" @click="wikimediaAuthStore.logout()">
+						<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
+						{{ $t('wikimediaAuth.buttons.logout') }}
+					</ion-button>
+				</ion-item>
 
-			<ion-item v-else lines="none">
-				<ion-label class="ion-text-wrap">
-					<p>{{ $t('settings.account.wikimediaLoginDescription') }}</p>
-				</ion-label>
-			</ion-item>
-			<ion-item v-if="!wikimediaAuthStore.isAuthenticated" lines="none">
-				<ion-button expand="block" @click="wikimediaAuthStore.login()">
-					<ion-icon slot="start" :icon="logInOutline"></ion-icon>
-					{{ $t('wikimediaAuth.buttons.login') }}
-				</ion-button>
-			</ion-item>
-		</ion-list>
+				<ion-item v-else lines="none">
+					<ion-label class="ion-text-wrap">
+						<p>{{ $t('settings.account.wikimediaLoginDescription') }}</p>
+					</ion-label>
+				</ion-item>
+				<ion-item v-if="!wikimediaAuthStore.isAuthenticated" lines="none">
+					<ion-button expand="block" @click="wikimediaAuthStore.login()">
+						<ion-icon slot="start" :icon="logInOutline"></ion-icon>
+						{{ $t('wikimediaAuth.buttons.login') }}
+					</ion-button>
+				</ion-item>
+			</ion-list>
 		</ion-content>
 	</ion-page>
 </template>
