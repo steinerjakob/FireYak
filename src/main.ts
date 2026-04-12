@@ -2,6 +2,7 @@
 import router from '@/router';
 import { registerPlugins } from '@/plugins';
 import { App as CapApp, URLOpenListenerEvent } from '@capacitor/app';
+import { defineCustomElements } from '@ionic/pwa-elements/loader';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/vue/css/core.css';
@@ -41,6 +42,7 @@ import { useOsmAuthStore, isNativeAuthInProgress } from '@/store/osmAuthStore';
 import { isNativeWikimediaAuthInProgress } from '@/store/wikimediaAuthStore';
 import { usePhotonSearch } from '@/composable/photonSearch';
 
+defineCustomElements(window);
 const app = createApp(App);
 
 registerPlugins(app);

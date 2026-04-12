@@ -32,6 +32,7 @@
 		"@capacitor/preferences": "^8.0.1",
 		"@capacitor/screen-orientation": "^8.0.1",
 		"@capacitor/share": "^8.0.1",
+		"@ionic/pwa-elements": "^3.4.0",
 		"@ionic/vue": "^8.8.2",
 		"@ionic/vue-router": "^8.8.2",
 		"@mdi/font": "7.4.47",
