@@ -131,7 +131,9 @@
 		"buyMeCoffeeDescription": "If you find this app useful and want to support its development, consider buying me a coffee! Your support helps keep the project alive and enables new features.",
 		"addHydrantsTitle": "How to add hydrants to OpenStreetMap",
 		"addHydrantsDescription": "If you want to add missing hydrants or water sources, please follow the guide in the FireYak README on GitHub. It explains how to use the OpenStreetMap editor and links to the official OSM tagging guidelines.",
-		"addHydrantsOpenReadme": "Open README guide"
+		"addHydrantsOpenReadme": "Open README guide",
+		"rateApp": "Rate this App",
+		"rateAppDescription": "Enjoying FireYak? A quick rating helps others discover the app!"
 	},
 	"pumpCalculation": {
 		"title": "Pump Calculation",
