@@ -17,7 +17,7 @@ const WIKIMEDIA_AUTH_URL = `${WIKIMEDIA_BASE_URL}/w/rest.php/oauth2/authorize`;
 const WIKIMEDIA_TOKEN_URL = `${WIKIMEDIA_BASE_URL}/w/rest.php/oauth2/access_token`;
 
 // Redirect URI — same for both native and web (universal link)
-const REDIRECT_URI = 'https://app.fireyak.org/wikimedia-callback';
+const REDIRECT_URI = 'https://app.fireyak.org/wikimedia-land.html';
 
 const SCOPES = ['basic', 'editpage', 'uploadfile'] as const;
 
