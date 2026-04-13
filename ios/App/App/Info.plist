@@ -28,6 +28,12 @@
 	<string>FireYak uses your location to show your position on the map, find nearby fire hydrants and calculate distances for water supply planning.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>FireYak uses your location to show your position on the map, find nearby fire hydrants and calculate distances for water supply planning.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Uses the Camera to capture photos of fire hydrants</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow selecting image from gallery</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allow selecting image from gallery</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
