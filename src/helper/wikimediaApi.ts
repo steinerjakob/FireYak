@@ -1,3 +1,6 @@
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+
 const COMMONS_API_URL =
 	import.meta.env.VITE_COMMONS_API_URL || 'https://commons.wikimedia.org/w/api.php';
 
@@ -13,10 +16,82 @@ export interface UploadResult {
 }
 
 /**
+ * Converts a Blob to a base64 string (without data URL prefix).
+ */
+function blobToBase64(blob: Blob): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onloadend = () => {
+			const dataUrl = reader.result as string;
+			// Strip the "data:...;base64," prefix
+			resolve(dataUrl.split(',')[1]);
+		};
+		reader.onerror = reject;
+		reader.readAsDataURL(blob);
+	});
+}
+
+/**
+ * Writes a Blob to a temporary file in the app's cache directory.
+ * Returns the file URI that can be used with CapacitorHttp.
+ */
+async function writeTempFile(blob: Blob, filename: string): Promise<string> {
+	const base64Data = await blobToBase64(blob);
+	const result = await Filesystem.writeFile({
+		path: `wikimedia-upload/${filename}`,
+		data: base64Data,
+		directory: Directory.Cache,
+		recursive: true
+	});
+	return result.uri;
+}
+
+/**
+ * Removes a temporary file written for upload.
+ */
+async function removeTempFile(path: string): Promise<void> {
+	try {
+		await Filesystem.deleteFile({
+			path: `wikimedia-upload/${path}`,
+			directory: Directory.Cache
+		});
+	} catch {
+		// Ignore cleanup errors
+	}
+}
+
+/**
  * Fetches a CSRF token from the Wikimedia Commons API.
  * Required for authenticated write operations (upload, edit).
+ *
+ * On native platforms, uses CapacitorHttp to bypass CORS restrictions.
  */
 export async function getCsrfToken(accessToken: string): Promise<string> {
+	if (Capacitor.isNativePlatform()) {
+		const response = await CapacitorHttp.get({
+			url: COMMONS_API_URL,
+			params: {
+				action: 'query',
+				meta: 'tokens',
+				type: 'csrf',
+				format: 'json'
+			},
+			headers: {
+				Authorization: `Bearer ${accessToken}`
+			}
+		});
+
+		const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+		const token = data?.query?.tokens?.csrftoken;
+
+		if (!token) {
+			throw new Error('No CSRF token in response');
+		}
+
+		return token;
+	}
+
+	// Web: use fetch with origin=* for CORS
 	const url = `${COMMONS_API_URL}?action=query&meta=tokens&type=csrf&format=json&origin=*`;
 
 	const response = await fetch(url, {
@@ -104,9 +179,83 @@ export async function compressImage(
 }
 
 /**
- * Uploads a file to Wikimedia Commons using XMLHttpRequest for progress tracking.
+ * Uploads a file to Wikimedia Commons.
+ *
+ * On web: uses XMLHttpRequest for progress tracking.
+ * On native: uses CapacitorHttp with a temp file to bypass CORS.
+ *   Progress tracking is not available on native (onProgress won't be called).
  */
 export function uploadFile(params: {
+	accessToken: string;
+	filename: string;
+	file: Blob;
+	description: string;
+	comment: string;
+	csrfToken: string;
+	onProgress?: (percent: number) => void;
+}): Promise<UploadResult> {
+	if (Capacitor.isNativePlatform()) {
+		return uploadFileNative(params);
+	}
+	return uploadFileWeb(params);
+}
+
+/**
+ * Native upload implementation using CapacitorHttp + Filesystem.
+ * Writes the blob to a temp file, uploads via native HTTP, then cleans up.
+ */
+async function uploadFileNative(params: {
+	accessToken: string;
+	filename: string;
+	file: Blob;
+	description: string;
+	comment: string;
+	csrfToken: string;
+	onProgress?: (percent: number) => void;
+}): Promise<UploadResult> {
+	const { accessToken, filename, file, description, comment, csrfToken } = params;
+
+	const tempFilename = `upload-${Date.now()}.jpg`;
+	const fileUri = await writeTempFile(file, tempFilename);
+
+	try {
+		const response = await CapacitorHttp.post({
+			url: COMMONS_API_URL,
+			headers: {
+				'Content-Type': 'multipart/form-data',
+				Authorization: `Bearer ${accessToken}`
+			},
+			data: {
+				action: 'upload',
+				format: 'json',
+				filename,
+				text: description,
+				comment,
+				token: csrfToken,
+				ignorewarnings: '1',
+				file: [fileUri, 'image/jpeg', filename]
+			}
+		});
+
+		const data =
+			typeof response.data === 'string'
+				? (JSON.parse(response.data) as UploadResult)
+				: (response.data as UploadResult);
+
+		if (data.upload?.result === 'Success') {
+			return data;
+		} else {
+			throw new Error(`Upload failed: ${data.upload?.result || 'Unknown error'}`);
+		}
+	} finally {
+		await removeTempFile(tempFilename);
+	}
+}
+
+/**
+ * Web upload implementation using XMLHttpRequest for progress tracking.
+ */
+function uploadFileWeb(params: {
 	accessToken: string;
 	filename: string;
 	file: Blob;
@@ -164,9 +313,37 @@ export function uploadFile(params: {
 /**
  * Queries Wikimedia Commons for existing files matching the OSM node prefix.
  * No authentication required (public query).
+ *
+ * On native platforms, uses CapacitorHttp to bypass CORS restrictions.
  */
 export async function queryExistingFiles(osmId: number): Promise<string[]> {
 	const prefix = `Fire-fighting-facility node-${osmId}`;
+
+	if (Capacitor.isNativePlatform()) {
+		const response = await CapacitorHttp.get({
+			url: COMMONS_API_URL,
+			params: {
+				action: 'query',
+				format: 'json',
+				generator: 'allpages',
+				gapnamespace: '6',
+				gapprefix: prefix,
+				gaplimit: '20'
+			}
+		});
+
+		const data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+
+		if (!data.query?.pages) {
+			return [];
+		}
+
+		return Object.values(data.query.pages as Record<string, { title: string }>).map(
+			(page) => page.title
+		);
+	}
+
+	// Web: use fetch with origin=* for CORS
 	const encodedPrefix = encodeURIComponent(prefix);
 	const url = `${COMMONS_API_URL}?action=query&format=json&generator=allpages&gapnamespace=6&gapprefix=${encodedPrefix}&gaplimit=20&origin=*`;
 
