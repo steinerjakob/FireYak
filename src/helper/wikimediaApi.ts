@@ -203,6 +203,12 @@ export function uploadFile(params: {
 /**
  * Native upload implementation using CapacitorHttp + Filesystem.
  * Writes the blob to a temp file, uploads via native HTTP, then cleans up.
+ *
+ * Key notes for Capacitor native HTTP:
+ * - Do NOT set Content-Type manually — the native layer must generate it with a boundary.
+ * - Use dataType: 'formData' so the native bridge serializes the data object as
+ *   multipart/form-data instead of JSON (the default when CapacitorHttp.enabled is false).
+ * - File arrays follow the [filePath, mimeType, fileName] convention understood by the native layer.
  */
 async function uploadFileNative(params: {
 	accessToken: string;
@@ -221,10 +227,15 @@ async function uploadFileNative(params: {
 	try {
 		const response = await CapacitorHttp.post({
 			url: COMMONS_API_URL,
+			// Do NOT set Content-Type — let the native layer generate multipart/form-data
+			// with a proper boundary when it sees dataType: 'formData'.
 			headers: {
-				'Content-Type': 'multipart/form-data',
 				Authorization: `Bearer ${accessToken}`
 			},
+			// dataType: 'formData' instructs the native bridge to serialize this JSON object
+			// as multipart/form-data. Without this, native would send it as JSON and the
+			// Wikimedia API would not find the 'action' parameter (returning the help page).
+			dataType: 'formData',
 			data: {
 				action: 'upload',
 				format: 'json',
@@ -233,18 +244,38 @@ async function uploadFileNative(params: {
 				comment,
 				token: csrfToken,
 				ignorewarnings: '1',
+				// [filePath, mimeType, fileName] — native HTTP treats arrays in this format
+				// as file fields in the multipart body.
 				file: [fileUri, 'image/jpeg', filename]
 			}
 		});
+
+		// Log raw response for diagnostics when something goes wrong
+		if (response.status !== 200) {
+			console.error(
+				'[wikimediaApi] Unexpected HTTP status from upload:',
+				response.status,
+				String(response.data).substring(0, 500)
+			);
+			throw new Error(`Upload HTTP error: ${response.status}`);
+		}
 
 		const data =
 			typeof response.data === 'string'
 				? (JSON.parse(response.data) as UploadResult)
 				: (response.data as UploadResult);
 
+		// Surface Wikimedia API-level errors (e.g. invalid token, duplicate file)
+		if ((data as any).error) {
+			const err = (data as any).error;
+			console.error('[wikimediaApi] Wikimedia API error:', err);
+			throw new Error(`Wikimedia API error: ${err.code} — ${err.info}`);
+		}
+
 		if (data.upload?.result === 'Success') {
 			return data;
 		} else {
+			console.error('[wikimediaApi] Upload result was not Success:', data);
 			throw new Error(`Upload failed: ${data.upload?.result || 'Unknown error'}`);
 		}
 	} finally {
