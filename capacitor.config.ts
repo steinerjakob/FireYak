@@ -10,12 +10,13 @@ const config: CapacitorConfig = {
 	},
 	plugins: {
 		StatusBar: {
-			overlaysWebView: true },
+			overlaysWebView: true
+		},
 		SystemBars: {
 			insetsHandling: 'disable'
 		},
 		CapacitorHttp: {
-			enabled: false
+			enabled: true
 		}
 	}
 };

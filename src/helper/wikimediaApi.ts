@@ -1,5 +1,4 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
 
 const COMMONS_API_URL =
 	import.meta.env.VITE_COMMONS_API_URL || 'https://commons.wikimedia.org/w/api.php';
@@ -13,51 +12,6 @@ export interface UploadResult {
 			descriptionurl: string;
 		};
 	};
-}
-
-/**
- * Converts a Blob to a base64 string (without data URL prefix).
- */
-function blobToBase64(blob: Blob): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onloadend = () => {
-			const dataUrl = reader.result as string;
-			// Strip the "data:...;base64," prefix
-			resolve(dataUrl.split(',')[1]);
-		};
-		reader.onerror = reject;
-		reader.readAsDataURL(blob);
-	});
-}
-
-/**
- * Writes a Blob to a temporary file in the app's cache directory.
- * Returns the file URI that can be used with CapacitorHttp.
- */
-async function writeTempFile(blob: Blob, filename: string): Promise<string> {
-	const base64Data = await blobToBase64(blob);
-	const result = await Filesystem.writeFile({
-		path: `wikimedia-upload/${filename}`,
-		data: base64Data,
-		directory: Directory.Cache,
-		recursive: true
-	});
-	return result.uri;
-}
-
-/**
- * Removes a temporary file written for upload.
- */
-async function removeTempFile(path: string): Promise<void> {
-	try {
-		await Filesystem.deleteFile({
-			path: `wikimedia-upload/${path}`,
-			directory: Directory.Cache
-		});
-	} catch {
-		// Ignore cleanup errors
-	}
 }
 
 /**
@@ -179,114 +133,16 @@ export async function compressImage(
 }
 
 /**
- * Uploads a file to Wikimedia Commons.
+ * Uploads a file to Wikimedia Commons using XMLHttpRequest with FormData.
  *
- * On web: uses XMLHttpRequest for progress tracking.
- * On native: uses CapacitorHttp with a temp file to bypass CORS.
- *   Progress tracking is not available on native (onProgress won't be called).
+ * This uses a single XHR-based approach for ALL platforms (web + native).
+ * On native (iOS/Android), CapacitorHttp.enabled=true in capacitor.config.ts
+ * patches XMLHttpRequest to route through the native HTTP layer, which:
+ *   - Properly handles FormData including Blob file attachments
+ *   - Bypasses CORS restrictions from the Capacitor localhost origin
+ *   - Supports upload progress tracking via XHR events
  */
 export function uploadFile(params: {
-	accessToken: string;
-	filename: string;
-	file: Blob;
-	description: string;
-	comment: string;
-	csrfToken: string;
-	onProgress?: (percent: number) => void;
-}): Promise<UploadResult> {
-	if (Capacitor.isNativePlatform()) {
-		return uploadFileNative(params);
-	}
-	return uploadFileWeb(params);
-}
-
-/**
- * Native upload implementation using CapacitorHttp + Filesystem.
- * Writes the blob to a temp file, uploads via native HTTP, then cleans up.
- *
- * Key notes for Capacitor native HTTP:
- * - Do NOT set Content-Type manually — the native layer must generate it with a boundary.
- * - Use dataType: 'formData' so the native bridge serializes the data object as
- *   multipart/form-data instead of JSON (the default when CapacitorHttp.enabled is false).
- * - File arrays follow the [filePath, mimeType, fileName] convention understood by the native layer.
- */
-async function uploadFileNative(params: {
-	accessToken: string;
-	filename: string;
-	file: Blob;
-	description: string;
-	comment: string;
-	csrfToken: string;
-	onProgress?: (percent: number) => void;
-}): Promise<UploadResult> {
-	const { accessToken, filename, file, description, comment, csrfToken } = params;
-
-	const tempFilename = `upload-${Date.now()}.jpg`;
-	const fileUri = await writeTempFile(file, tempFilename);
-
-	try {
-		const response = await CapacitorHttp.post({
-			url: COMMONS_API_URL,
-			// Do NOT set Content-Type — let the native layer generate multipart/form-data
-			// with a proper boundary when it sees dataType: 'formData'.
-			headers: {
-				Authorization: `Bearer ${accessToken}`
-			},
-			// dataType: 'formData' instructs the native bridge to serialize this JSON object
-			// as multipart/form-data. Without this, native would send it as JSON and the
-			// Wikimedia API would not find the 'action' parameter (returning the help page).
-			dataType: 'formData',
-			data: {
-				action: 'upload',
-				format: 'json',
-				filename,
-				text: description,
-				comment,
-				token: csrfToken,
-				ignorewarnings: '1',
-				// [filePath, mimeType, fileName] — native HTTP treats arrays in this format
-				// as file fields in the multipart body.
-				file: [fileUri, 'image/jpeg', filename]
-			}
-		});
-
-		// Log raw response for diagnostics when something goes wrong
-		if (response.status !== 200) {
-			console.error(
-				'[wikimediaApi] Unexpected HTTP status from upload:',
-				response.status,
-				String(response.data).substring(0, 500)
-			);
-			throw new Error(`Upload HTTP error: ${response.status}`);
-		}
-
-		const data =
-			typeof response.data === 'string'
-				? (JSON.parse(response.data) as UploadResult)
-				: (response.data as UploadResult);
-
-		// Surface Wikimedia API-level errors (e.g. invalid token, duplicate file)
-		if ((data as any).error) {
-			const err = (data as any).error;
-			console.error('[wikimediaApi] Wikimedia API error:', err);
-			throw new Error(`Wikimedia API error: ${err.code} — ${err.info}`);
-		}
-
-		if (data.upload?.result === 'Success') {
-			return data;
-		} else {
-			console.error('[wikimediaApi] Upload result was not Success:', data);
-			throw new Error(`Upload failed: ${data.upload?.result || 'Unknown error'}`);
-		}
-	} finally {
-		await removeTempFile(tempFilename);
-	}
-}
-
-/**
- * Web upload implementation using XMLHttpRequest for progress tracking.
- */
-function uploadFileWeb(params: {
 	accessToken: string;
 	filename: string;
 	file: Blob;
@@ -301,7 +157,10 @@ function uploadFileWeb(params: {
 		const formData = new FormData();
 		formData.append('action', 'upload');
 		formData.append('format', 'json');
-		formData.append('origin', '*');
+		// origin=* is needed for web CORS; on native the patched XHR ignores it
+		if (!Capacitor.isNativePlatform()) {
+			formData.append('origin', '*');
+		}
 		formData.append('filename', filename);
 		formData.append('text', description);
 		formData.append('comment', comment);
@@ -320,14 +179,27 @@ function uploadFileWeb(params: {
 
 		xhr.onload = () => {
 			try {
-				const data: UploadResult = JSON.parse(xhr.responseText);
+				const data = JSON.parse(xhr.responseText);
+
+				// Surface Wikimedia API-level errors (e.g. invalid token, duplicate file)
+				if (data.error) {
+					console.error('[wikimediaApi] Wikimedia API error:', data.error);
+					reject(new Error(`Wikimedia API error: ${data.error.code} — ${data.error.info}`));
+					return;
+				}
+
 				if (data.upload?.result === 'Success') {
-					resolve(data);
+					resolve(data as UploadResult);
 				} else {
+					console.error('[wikimediaApi] Upload result was not Success:', data);
 					reject(new Error(`Upload failed: ${data.upload?.result || 'Unknown error'}`));
 				}
 			} catch {
-				reject(new Error(`Failed to parse upload response: ${xhr.responseText}`));
+				console.error(
+					'[wikimediaApi] Failed to parse upload response:',
+					xhr.responseText?.substring(0, 500)
+				);
+				reject(new Error(`Failed to parse upload response`));
 			}
 		};
 
