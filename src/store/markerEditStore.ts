@@ -103,18 +103,99 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		originalMarker.value = null;
 	}
 
+	/**
+	 * Compares current editable state (tags + location) against the original marker.
+	 * Returns true if anything has changed and an OSM changeset is needed.
+	 * Always returns true when adding (new node always needs a changeset).
+	 */
+	function hasDataChanged(): boolean {
+		if (isAdding.value) return true;
+		if (!originalMarker.value) return false;
+
+		const original = originalMarker.value;
+
+		// Compare tags: filter out empty values, then deep-compare against original
+		const finalTags = Object.fromEntries(
+			Object.entries(editableTags.value).filter(([, v]) => v !== '' && v != null)
+		);
+		const originalTags = original.tags || {};
+
+		const finalKeys = Object.keys(finalTags).sort();
+		const originalKeys = Object.keys(originalTags).sort();
+
+		if (finalKeys.length !== originalKeys.length) return true;
+
+		for (const key of finalKeys) {
+			if (finalTags[key] !== originalTags[key]) return true;
+		}
+
+		for (const key of originalKeys) {
+			if (!(key in finalTags)) return true;
+		}
+
+		// Compare location with ~1 cm tolerance (1e-7 degrees ≈ 1.1 cm)
+		const newLat = pendingLocation.value?.lat || 0;
+		const newLon = pendingLocation.value?.lng || 0;
+		const origLat = original.lat || 0;
+		const origLon = original.lon || 0;
+
+		if (Math.abs(newLat - origLat) > 1e-7 || Math.abs(newLon - origLon) > 1e-7) return true;
+
+		return false;
+	}
+
 	async function saveMarker() {
 		if (!osmAuthStore.isAuthenticated) {
 			return;
 		}
 
+		// Filter out empty string values — empty means "remove this tag"
+		const finalTags = Object.fromEntries(
+			Object.entries(editableTags.value).filter(([, v]) => v !== '' && v != null)
+		);
+		const lat = pendingLocation.value?.lat || 0;
+		const lon = pendingLocation.value?.lng || 0;
+
+		const imageUploadStore = useImageUploadStore();
+		const dataChanged = hasDataChanged();
+
+		// If editing and nothing changed, skip the OSM changeset entirely
+		if (!dataChanged && isEditing.value) {
+			if (imageUploadStore.selectedImages.length > 0) {
+				// Only images to upload — use the existing node ID directly
+				try {
+					await imageUploadStore.uploadAll(originalMarker.value!.id);
+					const imgToast = await toastController.create({
+						message: t('imageUpload.uploadSuccess'),
+						duration: 2000,
+						color: 'success'
+					});
+					await imgToast.present();
+					cancelEdit();
+				} catch (imgError) {
+					console.error('Image upload failed', imgError);
+					const imgToast = await toastController.create({
+						message: t('imageUpload.uploadError'),
+						duration: 3000,
+						color: 'warning'
+					});
+					await imgToast.present();
+					// DON'T call cancelEdit() — keep panel open for retry
+				}
+			} else {
+				// Nothing changed at all — inform the user and close
+				const toast = await toastController.create({
+					message: t('markerEdit.messages.noChanges'),
+					duration: 2000,
+					color: 'medium'
+				});
+				await toast.present();
+				cancelEdit();
+			}
+			return;
+		}
+
 		try {
-			// Filter out empty string values — empty means "remove this tag"
-			const finalTags = Object.fromEntries(
-				Object.entries(editableTags.value).filter(([, v]) => v !== '' && v != null)
-			);
-			const lat = pendingLocation.value?.lat || 0;
-			const lon = pendingLocation.value?.lng || 0;
 			let result: OSM.UploadResult;
 
 			if (isAdding.value) {
@@ -183,7 +264,6 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				await toast.present();
 
 				// After OSM save succeeds, check for pending image uploads
-				const imageUploadStore = useImageUploadStore();
 				if (imageUploadStore.selectedImages.length > 0) {
 					try {
 						await imageUploadStore.uploadAll(finalId);
@@ -304,6 +384,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		requestStartAdding,
 		cancelEdit,
 		saveMarker,
+		hasDataChanged,
 		requestDeleteMarker,
 		updateTag
 	};

@@ -243,6 +243,7 @@
 		"messages": {
 			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",
 			"saveError": "Speichern in OpenStreetMap fehlgeschlagen. Bitte versuchen Sie es erneut.",
+			"noChanges": "Keine Änderungen zum Speichern.",
 			"locationSet": "Position erfolgreich gesetzt.",
 			"deleteSuccess": "Erfolgreich von OpenStreetMap entfernt!",
 			"deleteError": "Entfernen von OpenStreetMap fehlgeschlagen. Bitte versuchen Sie es erneut."

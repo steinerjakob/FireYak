@@ -243,6 +243,7 @@
 		"messages": {
 			"saveSuccess": "Successfully saved to OpenStreetMap!",
 			"saveError": "Failed to save to OpenStreetMap. Please try again.",
+			"noChanges": "No changes to save.",
 			"locationSet": "Location set successfully.",
 			"deleteSuccess": "Successfully removed from OpenStreetMap!",
 			"deleteError": "Failed to remove from OpenStreetMap. Please try again."
