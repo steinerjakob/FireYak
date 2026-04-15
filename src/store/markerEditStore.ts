@@ -214,7 +214,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				};
 				result = await OSM.uploadChangeset(
 					{ comment: `Add ${markerType.value} via FireYak ${version}` },
-					change
+					change,
+					{ disableCompression: true }
 				);
 			} else if (isEditing.value && originalMarker.value) {
 				const [node] = await OSM.getFeature('node', originalMarker.value.id);
@@ -230,7 +231,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				};
 				result = await OSM.uploadChangeset(
 					{ comment: `Update ${markerType.value} via FireYak ${version}` },
-					change
+					change,
+					{ disableCompression: true }
 				);
 			} else {
 				return;
@@ -338,7 +340,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			};
 			await OSM.uploadChangeset(
 				{ comment: `Remove ${markerType.value} via FireYak ${version}` },
-				change
+				change,
+				{ disableCompression: true }
 			);
 
 			await deleteMapNode(originalMarker.value.id);
