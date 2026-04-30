@@ -26,13 +26,6 @@
 					</ion-card-header>
 					<ion-card-content>
 						<p>{{ $t('about.description') }}</p>
-						<template v-if="isReviewAvailable">
-							<p class="rate-app-description">{{ $t('about.rateAppDescription') }}</p>
-							<ion-button expand="block" fill="outline" @click="requestReview">
-								<ion-icon :icon="starOutline" slot="start"></ion-icon>
-								{{ $t('about.rateApp') }}
-							</ion-button>
-						</template>
 					</ion-card-content>
 				</ion-card>
 
@@ -135,15 +128,12 @@ import {
 	IonButtons,
 	IonBackButton
 } from '@ionic/vue';
-import { logoGithub, heart, star, starOutline, bug, code, documentText, map } from 'ionicons/icons';
+import { logoGithub, heart, star, bug, code, documentText, map } from 'ionicons/icons';
 import { computed, onMounted, ref } from 'vue';
 import { App } from '@capacitor/app';
 import { AppInfo } from '@capacitor/app/dist/esm/definitions';
 import { Capacitor } from '@capacitor/core';
 import { version } from '@/../package.json';
-import { useInAppReview } from '@/composable/inAppReview';
-
-const { isReviewAvailable, requestReview } = useInAppReview();
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
 
