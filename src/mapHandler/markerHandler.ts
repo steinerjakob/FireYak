@@ -1,3 +1,4 @@
+import { ref } from 'vue';
 import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 
 import iconFirestation from '../assets/markers/firestation.png';
@@ -87,13 +88,21 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 	return mapElements;
 }
 
+/** Reactive flag – `true` while markers are being fetched from the Overpass API for an uncached area. */
+export const isLoadingMarkers = ref(false);
+
 export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.FeatureCollection> {
 	const features: GeoJSON.Feature[] = [];
 	try {
 		let mapElements = await getMapNodesForView(mapBounds);
 		// if nothing is in the cache wait for the api call
 		if (!mapElements.length) {
-			mapElements = await updateNodeCache(mapBounds);
+			isLoadingMarkers.value = true;
+			try {
+				mapElements = await updateNodeCache(mapBounds);
+			} finally {
+				isLoadingMarkers.value = false;
+			}
 		} else {
 			// Fire-and-forget background cache refresh — silently ignore
 			// abort errors (superseded by a newer request) and network failures.

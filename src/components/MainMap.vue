@@ -94,6 +94,10 @@
 				<ion-icon :icon="analyticsOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<!-- Marker loading indicator -->
+		<div v-if="isLoadingMarkers" class="marker-loading-indicator">
+			<ion-spinner name="crescent" color="none"></ion-spinner>
+		</div>
 		<ion-fab class="location-fab" vertical="bottom" horizontal="end" slot="fixed">
 			<ion-fab-button color="light" @click="showUserLocation" title="Location">
 				<ion-spinner v-show="waitingForLocation" color="primary"></ion-spinner>
@@ -124,7 +128,12 @@ import { layers as protomapsLayers } from '@protomaps/basemaps';
 import selectedMarkerIconUrl from '../assets/markers/selectedmarker.png';
 import { nextTick, onMounted, watch, ref, onUnmounted } from 'vue';
 import { debounce } from '@/helper/helper';
-import { getMarkersForView, getNearbyMarkers, markerIconUrls } from '@/mapHandler/markerHandler';
+import {
+	getMarkersForView,
+	getNearbyMarkers,
+	markerIconUrls,
+	isLoadingMarkers
+} from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
@@ -1196,6 +1205,20 @@ onUnmounted(() => {
 <style scoped>
 ion-fab {
 	z-index: 1000;
+}
+
+.marker-loading-indicator {
+	position: absolute;
+	bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 8px);
+	left: 24px;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .fab-vertical-top {
