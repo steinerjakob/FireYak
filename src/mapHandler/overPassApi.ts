@@ -6,9 +6,8 @@ import { GeoBounds } from '@/types/geo';
 
 /** Primary instance for area queries (bulk data fetching). */
 const OVERPASS_PRIMARY_URL = 'https://overpass-api.de/api/interpreter';
-//'https://overpass.private.coffee/api/interpreter';
 /** Fallback instance for area queries when the primary is unavailable. */
-const OVERPASS_FALLBACK_URL = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_FALLBACK_URL = 'https://overpass.private.coffee/api/interpreter';
 /** Instance for single-node requests (low volume, public API is fine). */
 const OVERPASS_NODE_URL = 'https://overpass-api.de/api/interpreter';
 
