@@ -1056,8 +1056,8 @@ async function initMap() {
 		updateMapCenterForSearch();
 		rootMap.on('moveend', updateMapCenterForSearch);
 
-		rootMap.on('zoomend', debouncedMapMove);
-		rootMap.on('dragend', debouncedMapMove);
+		// moveend already fires after dragend, zoomend, flyTo, easeTo, etc.
+		// Using only moveend avoids duplicate handler invocations per interaction.
 		rootMap.on('moveend', debouncedMapMove);
 
 		rootMap.on('pitchend', updateResetViewVisibility);
