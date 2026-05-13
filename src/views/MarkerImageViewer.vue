@@ -51,9 +51,6 @@ const sourceConfig: Record<
 	}
 };
 
-/** Whether a Mapillary image entry should be rendered as an iframe embed */
-const isMapillaryEmbed = (url: string) => url.startsWith('https://www.mapillary.com/embed');
-
 // Function to handle gallery close event — navigate back when the user closes the viewer
 const handleClose = () => {
 	if (ionRouter.canGoBack()) {
@@ -93,20 +90,13 @@ onMounted(async () => {
 		});
 
 	// Map image data to PhotoSwipe slide items.
-	//  • Mapillary embed → HTML slide with iframe (no direct image URL available)
-	//  • Images with known dimensions → pass width/height directly
-	//  • Images with unknown dimensions (Panoramax etc.) → preload to get natural size
+	// Images with known dimensions use them directly; images with unknown
+	// dimensions (e.g. Panoramax) are preloaded so PhotoSwipe gets the correct
+	// natural size and doesn't stretch them to fill the viewport.
 	const pswpItems = await Promise.all(
 		markerImages.map(async (image) => {
-			if (image.source === 'mapillary' && isMapillaryEmbed(image.url)) {
-				return {
-					html: `<div class="pswp-mapillary-slide"><iframe src="${image.url}" allowfullscreen frameborder="0"></iframe></div>`,
-					_source: image.source as ImageSource,
-					_descriptionurl: image.descriptionurl
-				};
-			}
-
-			// Resolve dimensions: use provided values if known, otherwise preload
+			// Resolve dimensions: use provided values if both are positive,
+			// otherwise preload the image to read naturalWidth/naturalHeight.
 			let { width, height } = image;
 			if (!width || !height) {
 				({ width, height } = await resolveImageSize(image.url));
@@ -223,20 +213,5 @@ onUnmounted(() => {
 .pswp-source-link:hover {
 	opacity: 1;
 	text-decoration: underline;
-}
-
-/* ── Mapillary iframe slide ─────────────────────────────────────────────── */
-
-.pswp-mapillary-slide {
-	width: 100vw;
-	height: 100vh;
-	display: flex;
-	align-items: stretch;
-}
-
-.pswp-mapillary-slide iframe {
-	width: 100%;
-	height: 100%;
-	border: none;
 }
 </style>

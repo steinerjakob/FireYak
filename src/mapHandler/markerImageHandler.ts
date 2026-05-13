@@ -193,8 +193,9 @@ export async function fetchMapillaryImages(mapillaryKey: string): Promise<ImageI
 	const accessToken = import.meta.env.VITE_MAPILLARY_ACCESS_TOKEN as string | undefined;
 
 	if (!accessToken) {
-		// No token — return an embed-based entry that renders an iframe slide
-		return [createMapillaryEmbedInfo(mapillaryKey)];
+		// No token configured — silently skip Mapillary so it doesn't affect
+		// Panoramax or Wikimedia Commons images shown to the user.
+		return [];
 	}
 
 	const apiUrl = `https://graph.mapillary.com/${encodeURIComponent(mapillaryKey)}?fields=id,thumb_2048_url,thumb_256_url,width,height,captured_at&access_token=${encodeURIComponent(accessToken)}`;
@@ -231,21 +232,4 @@ export async function fetchMapillaryImages(mapillaryKey: string): Promise<ImageI
 		console.error('Error fetching Mapillary data:', error);
 		return [];
 	}
-}
-
-/**
- * Creates a Mapillary image entry that renders as an embedded iframe when no
- * API token is available.
- */
-function createMapillaryEmbedInfo(mapillaryKey: string): ImageInfo {
-	return {
-		url: `https://www.mapillary.com/embed?image_key=${encodeURIComponent(mapillaryKey)}`,
-		width: 0,
-		height: 0,
-		thumburl: '',
-		thumbwidth: 0,
-		thumbheight: 0,
-		source: 'mapillary',
-		descriptionurl: `https://www.mapillary.com/app/?image_key=${encodeURIComponent(mapillaryKey)}`
-	};
 }
