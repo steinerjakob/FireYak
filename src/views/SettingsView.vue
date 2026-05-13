@@ -47,7 +47,7 @@
 					></ion-toggle>
 				</ion-item>
 
-				<!-- Account Section -->
+				<!-- OSM Account Section -->
 				<ion-list-header>
 					<ion-label>{{ $t('settings.account.osmAccount') }}</ion-label>
 				</ion-list-header>
@@ -83,38 +83,38 @@
 					</ion-button>
 				</ion-item>
 
-				<!-- Wikimedia Commons Account -->
+				<!-- Panoramax Account -->
 				<ion-list-header>
-					<ion-label>{{ $t('settings.account.wikimediaAccount') }}</ion-label>
+					<ion-label>{{ $t('settings.account.panoramaxAccount') }}</ion-label>
 				</ion-list-header>
 
-				<ion-item v-if="wikimediaAuthStore.isAuthenticated" lines="none">
+				<ion-item v-if="panoramaxAuthStore.isAuthenticated" lines="none">
 					<ion-label>
 						<p>
-							{{ $t('settings.account.loggedInAs', { name: wikimediaAuthStore.user?.name }) }}
+							{{ $t('settings.account.loggedInAs', { name: panoramaxAuthStore.user?.name }) }}
 						</p>
 					</ion-label>
 				</ion-item>
-				<ion-item v-if="wikimediaAuthStore.isAuthenticated" lines="none">
-					<ion-button fill="primary" @click="openWikimediaProfile()">
+				<ion-item v-if="panoramaxAuthStore.isAuthenticated" lines="none">
+					<ion-button fill="primary" @click="openPanoramaxProfile()">
 						<ion-icon slot="start" :icon="openOutline"></ion-icon>
 						{{ $t('settings.account.manageAccount') }}
 					</ion-button>
-					<ion-button slot="end" fill="outline" @click="wikimediaAuthStore.logout()">
+					<ion-button slot="end" fill="outline" @click="panoramaxAuthStore.logout()">
 						<ion-icon slot="start" :icon="logOutOutline"></ion-icon>
-						{{ $t('wikimediaAuth.buttons.logout') }}
+						{{ $t('panoramaxAuth.buttons.logout') }}
 					</ion-button>
 				</ion-item>
 
 				<ion-item v-else lines="none">
 					<ion-label class="ion-text-wrap">
-						<p>{{ $t('settings.account.wikimediaLoginDescription') }}</p>
+						<p>{{ $t('settings.account.panoramaxLoginDescription') }}</p>
 					</ion-label>
 				</ion-item>
-				<ion-item v-if="!wikimediaAuthStore.isAuthenticated" lines="none">
-					<ion-button expand="block" @click="wikimediaAuthStore.login()">
+				<ion-item v-if="!panoramaxAuthStore.isAuthenticated" lines="none">
+					<ion-button expand="block" @click="panoramaxAuthStore.login()">
 						<ion-icon slot="start" :icon="logInOutline"></ion-icon>
-						{{ $t('wikimediaAuth.buttons.login') }}
+						{{ $t('panoramaxAuth.buttons.login') }}
 					</ion-button>
 				</ion-item>
 			</ion-list>
@@ -147,7 +147,7 @@ import { logInOutline, logOutOutline, openOutline } from 'ionicons/icons';
 import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
-import { useWikimediaAuthStore } from '@/store/wikimediaAuthStore';
+import { usePanoramaxAuthStore } from '@/store/panoramaxAuthStore';
 import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
 
@@ -155,7 +155,7 @@ const settingsStore = useSettingsStore();
 const { saveTheme, saveShowZoomButtons } = useSettings();
 const { theme, showZoomButtons } = storeToRefs(settingsStore);
 const osmAuthStore = useOsmAuthStore();
-const wikimediaAuthStore = useWikimediaAuthStore();
+const panoramaxAuthStore = usePanoramaxAuthStore();
 
 const onThemeChange = (event: SegmentCustomEvent) => {
 	saveTheme(event.detail.value as ThemeSetting);
@@ -166,7 +166,7 @@ const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 };
 
 const OSM_ACCOUNT_URL = 'https://www.openstreetmap.org/account/edit';
-const OPENMEDIA_ACCOUNT_URL = 'https://meta.wikimedia.org/wiki/Special:Preferences';
+const PANORAMAX_PROFILE_URL = 'https://panoramax.openstreetmap.fr/profile';
 
 /**
  * Opens the OpenStreetMap account profile page.
@@ -185,15 +185,15 @@ const openOsmProfile = async () => {
 	}
 };
 
-const openWikimediaProfile = async () => {
+const openPanoramaxProfile = async () => {
 	if (Capacitor.isNativePlatform()) {
 		const { InAppBrowser, DefaultWebViewOptions } = await import('@capacitor/inappbrowser');
 		await InAppBrowser.openInWebView({
-			url: OPENMEDIA_ACCOUNT_URL,
+			url: PANORAMAX_PROFILE_URL,
 			options: DefaultWebViewOptions
 		});
 	} else {
-		window.open(OPENMEDIA_ACCOUNT_URL, '_blank');
+		window.open(PANORAMAX_PROFILE_URL, '_blank');
 	}
 };
 </script>

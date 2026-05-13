@@ -29,9 +29,7 @@ export const useSettingsStore = defineStore('settings', {
 		mapLayer: 'standard' as MapLayerSetting,
 		terrain3d: false,
 		osmAuthToken: '',
-		wikimediaAccessToken: '',
-		wikimediaRefreshToken: '',
-		wikimediaLicenseAccepted: false,
+		panoramaxToken: '',
 		_darkModeListener: null as ((e: MediaQueryListEvent) => void) | null
 	}),
 	actions: {
@@ -52,14 +50,8 @@ export const useSettingsStore = defineStore('settings', {
 		setOsmAuthToken(token: string) {
 			this.osmAuthToken = token;
 		},
-		setWikimediaAccessToken(token: string) {
-			this.wikimediaAccessToken = token;
-		},
-		setWikimediaRefreshToken(token: string) {
-			this.wikimediaRefreshToken = token;
-		},
-		setWikimediaLicenseAccepted(accepted: boolean) {
-			this.wikimediaLicenseAccepted = accepted;
+		setPanoramaxToken(token: string) {
+			this.panoramaxToken = token;
 		},
 		/**
 		 * Sets up or removes the system dark mode listener based on the current theme setting.

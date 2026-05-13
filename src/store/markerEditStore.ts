@@ -149,49 +149,46 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			return;
 		}
 
+		const lat = pendingLocation.value?.lat || 0;
+		const lon = pendingLocation.value?.lng || 0;
+		const imageUploadStore = useImageUploadStore();
+
+		// Step 1: If there's a selected image, upload it to Panoramax first to get the UUID
+		// The UUID must be embedded in the OSM changeset tags
+		if (imageUploadStore.hasSelectedImage) {
+			try {
+				const pictureId = await imageUploadStore.uploadImage(lat, lon);
+				// Set the panoramax tag — it will be included in the changeset below
+				editableTags.value['panoramax'] = pictureId;
+			} catch (imgError) {
+				console.error('Panoramax upload failed', imgError);
+				const imgToast = await toastController.create({
+					message: t('imageUpload.uploadError'),
+					duration: 3000,
+					color: 'warning'
+				});
+				await imgToast.present();
+				// DON'T call cancelEdit() — keep panel open for retry
+				return;
+			}
+		}
+
 		// Filter out empty string values — empty means "remove this tag"
 		const finalTags = Object.fromEntries(
 			Object.entries(editableTags.value).filter(([, v]) => v !== '' && v != null)
 		);
-		const lat = pendingLocation.value?.lat || 0;
-		const lon = pendingLocation.value?.lng || 0;
 
-		const imageUploadStore = useImageUploadStore();
 		const dataChanged = hasDataChanged();
 
-		// If editing and nothing changed, skip the OSM changeset entirely
+		// If editing and nothing changed (including no image upload happened), inform and close
 		if (!dataChanged && isEditing.value) {
-			if (imageUploadStore.selectedImages.length > 0) {
-				// Only images to upload — use the existing node ID directly
-				try {
-					await imageUploadStore.uploadAll(originalMarker.value!.id);
-					const imgToast = await toastController.create({
-						message: t('imageUpload.uploadSuccess'),
-						duration: 2000,
-						color: 'success'
-					});
-					await imgToast.present();
-					cancelEdit();
-				} catch (imgError) {
-					console.error('Image upload failed', imgError);
-					const imgToast = await toastController.create({
-						message: t('imageUpload.uploadError'),
-						duration: 3000,
-						color: 'warning'
-					});
-					await imgToast.present();
-					// DON'T call cancelEdit() — keep panel open for retry
-				}
-			} else {
-				// Nothing changed at all — inform the user and close
-				const toast = await toastController.create({
-					message: t('markerEdit.messages.noChanges'),
-					duration: 2000,
-					color: 'medium'
-				});
-				await toast.present();
-				cancelEdit();
-			}
+			const toast = await toastController.create({
+				message: t('markerEdit.messages.noChanges'),
+				duration: 2000,
+				color: 'medium'
+			});
+			await toast.present();
+			cancelEdit();
 			return;
 		}
 
@@ -264,29 +261,6 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					color: 'success'
 				});
 				await toast.present();
-
-				// After OSM save succeeds, check for pending image uploads
-				if (imageUploadStore.selectedImages.length > 0) {
-					try {
-						await imageUploadStore.uploadAll(finalId);
-						const imgToast = await toastController.create({
-							message: t('imageUpload.uploadSuccess'),
-							duration: 2000,
-							color: 'success'
-						});
-						await imgToast.present();
-					} catch (imgError) {
-						console.error('Image upload failed', imgError);
-						const imgToast = await toastController.create({
-							message: t('imageUpload.uploadError'),
-							duration: 3000,
-							color: 'warning'
-						});
-						await imgToast.present();
-						// DON'T call cancelEdit() — keep panel open for retry
-						return;
-					}
-				}
 
 				cancelEdit();
 			}

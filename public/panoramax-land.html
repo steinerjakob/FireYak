@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>Panoramax Auth</title>
+	</head>
+	<body>
+		<script>
+			// Panoramax returns the JWT token as a query parameter: ?token=<JWT>
+			const token = new URLSearchParams(location.search).get('token');
+			if (token) {
+				new BroadcastChannel('panoramax-auth-complete').postMessage(token);
+				window.close();
+			}
+		</script>
+	</body>
+</html>

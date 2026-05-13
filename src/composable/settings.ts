@@ -6,9 +6,7 @@ const SHOW_ZOOM_BUTTONS_KEY = 'show_zoom_buttons';
 const MAP_LAYER_KEY = 'map_layer';
 const TERRAIN_3D_KEY = 'terrain_3d';
 const OSM_AUTH_KEY = 'osm_token';
-const WIKIMEDIA_ACCESS_TOKEN_KEY = 'wikimedia_access_token';
-const WIKIMEDIA_REFRESH_TOKEN_KEY = 'wikimedia_refresh_token';
-const WIKIMEDIA_LICENSE_KEY = 'wikimedia_license_accepted';
+const PANORAMAX_TOKEN_KEY = 'panoramax_token';
 
 export function useSettings() {
 	const settingsStore = useSettingsStore();
@@ -24,18 +22,14 @@ export function useSettings() {
 			mapLayerResult,
 			terrain3dResult,
 			osmAuthKey,
-			wikimediaAccessTokenResult,
-			wikimediaRefreshTokenResult,
-			wikimediaLicenseResult
+			panoramaxTokenResult
 		] = await Promise.all([
 			Preferences.get({ key: THEME_KEY }),
 			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
 			Preferences.get({ key: MAP_LAYER_KEY }),
 			Preferences.get({ key: TERRAIN_3D_KEY }),
 			Preferences.get({ key: OSM_AUTH_KEY }),
-			Preferences.get({ key: WIKIMEDIA_ACCESS_TOKEN_KEY }),
-			Preferences.get({ key: WIKIMEDIA_REFRESH_TOKEN_KEY }),
-			Preferences.get({ key: WIKIMEDIA_LICENSE_KEY })
+			Preferences.get({ key: PANORAMAX_TOKEN_KEY })
 		]);
 
 		if (themeResult.value) {
@@ -58,16 +52,8 @@ export function useSettings() {
 			settingsStore.setOsmAuthToken(osmAuthKey.value);
 		}
 
-		if (wikimediaAccessTokenResult.value) {
-			settingsStore.setWikimediaAccessToken(wikimediaAccessTokenResult.value);
-		}
-
-		if (wikimediaRefreshTokenResult.value) {
-			settingsStore.setWikimediaRefreshToken(wikimediaRefreshTokenResult.value);
-		}
-
-		if (wikimediaLicenseResult.value) {
-			settingsStore.setWikimediaLicenseAccepted(wikimediaLicenseResult.value === 'true');
+		if (panoramaxTokenResult.value) {
+			settingsStore.setPanoramaxToken(panoramaxTokenResult.value);
 		}
 
 		// Initialize the theme system after loading settings
@@ -147,66 +133,28 @@ export function useSettings() {
 	};
 
 	/**
-	 * Persists both Wikimedia OAuth tokens and mirrors them into the settings store.
+	 * Persists the Panoramax JWT token and mirrors it into the settings store.
 	 */
-	const saveWikimediaTokens = async (accessToken: string, refreshToken: string) => {
-		settingsStore.setWikimediaAccessToken(accessToken);
-		settingsStore.setWikimediaRefreshToken(refreshToken);
-		await Promise.all([
-			Preferences.set({ key: WIKIMEDIA_ACCESS_TOKEN_KEY, value: accessToken }),
-			Preferences.set({ key: WIKIMEDIA_REFRESH_TOKEN_KEY, value: refreshToken })
-		]);
+	const savePanoramaxToken = async (token: string) => {
+		settingsStore.setPanoramaxToken(token);
+		await Preferences.set({ key: PANORAMAX_TOKEN_KEY, value: token });
 	};
 
 	/**
-	 * Removes both Wikimedia OAuth tokens from persistent storage and clears the store.
+	 * Removes the persisted Panoramax token from persistent storage and clears the store.
 	 */
-	const removeWikimediaTokens = async () => {
-		settingsStore.setWikimediaAccessToken('');
-		settingsStore.setWikimediaRefreshToken('');
-		await Promise.all([
-			Preferences.remove({ key: WIKIMEDIA_ACCESS_TOKEN_KEY }),
-			Preferences.remove({ key: WIKIMEDIA_REFRESH_TOKEN_KEY })
-		]);
+	const removePanoramaxToken = async () => {
+		settingsStore.setPanoramaxToken('');
+		await Preferences.remove({ key: PANORAMAX_TOKEN_KEY });
 	};
 
 	/**
-	 * Reads the persisted Wikimedia access token (and mirrors it into the settings store if present).
+	 * Reads the persisted Panoramax token (and mirrors it into the settings store if present).
 	 */
-	const getWikimediaAccessToken = async (): Promise<string | null> => {
-		const { value } = await Preferences.get({ key: WIKIMEDIA_ACCESS_TOKEN_KEY });
-		if (value) settingsStore.setWikimediaAccessToken(value);
+	const getPanoramaxToken = async (): Promise<string | null> => {
+		const { value } = await Preferences.get({ key: PANORAMAX_TOKEN_KEY });
+		if (value) settingsStore.setPanoramaxToken(value);
 		return value ?? null;
-	};
-
-	/**
-	 * Reads the persisted Wikimedia refresh token (and mirrors it into the settings store if present).
-	 */
-	const getWikimediaRefreshToken = async (): Promise<string | null> => {
-		const { value } = await Preferences.get({ key: WIKIMEDIA_REFRESH_TOKEN_KEY });
-		if (value) settingsStore.setWikimediaRefreshToken(value);
-		return value ?? null;
-	};
-
-	/**
-	 * Persists the Wikimedia license accepted state and mirrors it into the settings store.
-	 */
-	const saveWikimediaLicenseAccepted = async (accepted: boolean) => {
-		settingsStore.setWikimediaLicenseAccepted(accepted);
-		await Preferences.set({
-			key: WIKIMEDIA_LICENSE_KEY,
-			value: String(accepted)
-		});
-	};
-
-	/**
-	 * Reads the persisted Wikimedia license accepted state.
-	 */
-	const getWikimediaLicenseAccepted = async (): Promise<boolean> => {
-		const { value } = await Preferences.get({ key: WIKIMEDIA_LICENSE_KEY });
-		const accepted = value === 'true';
-		settingsStore.setWikimediaLicenseAccepted(accepted);
-		return accepted;
 	};
 
 	return {
@@ -218,11 +166,8 @@ export function useSettings() {
 		saveOsmAuthToken,
 		removeOsmAuthToken,
 		getOsmAuthToken,
-		saveWikimediaTokens,
-		removeWikimediaTokens,
-		getWikimediaAccessToken,
-		getWikimediaRefreshToken,
-		saveWikimediaLicenseAccepted,
-		getWikimediaLicenseAccepted
+		savePanoramaxToken,
+		removePanoramaxToken,
+		getPanoramaxToken
 	};
 }

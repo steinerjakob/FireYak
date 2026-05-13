@@ -11,31 +11,27 @@ import {
 	alertController,
 	toastController
 } from '@ionic/vue';
-import { cameraOutline, closeCircle, openOutline } from 'ionicons/icons';
-import { watch } from 'vue';
+import { cameraOutline, closeCircle, trashOutline } from 'ionicons/icons';
+import { computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useImageUploadStore } from '@/store/imageUploadStore';
-import { useWikimediaAuthStore } from '@/store/wikimediaAuthStore';
-import { useSettingsStore } from '@/store/settingsStore';
-import { useSettings } from '@/composable/settings';
+import { usePanoramaxAuthStore } from '@/store/panoramaxAuthStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 
 const imageUploadStore = useImageUploadStore();
-const wikimediaAuthStore = useWikimediaAuthStore();
-const settingsStore = useSettingsStore();
+const panoramaxAuthStore = usePanoramaxAuthStore();
 const markerEditStore = useMarkerEditStore();
-const { saveWikimediaLicenseAccepted, getWikimediaLicenseAccepted } = useSettings();
 const { t } = useI18n();
 
-// Load existing images when editing an existing marker
-watch(
-	() => markerEditStore.originalMarker,
-	(marker) => {
-		if (marker) {
-			imageUploadStore.loadExistingImages(marker.id);
-		}
-	},
-	{ immediate: true }
+// The existing panoramax tag on the marker being edited (if any)
+const existingPanoramaxId = computed(
+	() => markerEditStore.originalMarker?.tags?.['panoramax'] ?? null
+);
+
+// Whether the user has removed the existing panoramax image in this edit session
+// (i.e., the panoramax tag was present originally but is now cleared in editableTags)
+const isPanoramaxDetached = computed(
+	() => existingPanoramaxId.value !== null && !markerEditStore.editableTags['panoramax']
 );
 
 // Reset image upload store when editing is deactivated
@@ -50,17 +46,17 @@ watch(
 
 const showAuthAlert = async () => {
 	const alert = await alertController.create({
-		header: t('wikimediaAuth.authDialog.title'),
-		message: t('wikimediaAuth.authDialog.message'),
+		header: t('panoramaxAuth.authDialog.title'),
+		message: t('panoramaxAuth.authDialog.message'),
 		buttons: [
 			{
-				text: t('imageUpload.license.decline'),
+				text: t('common.cancel'),
 				role: 'cancel'
 			},
 			{
-				text: t('wikimediaAuth.buttons.login'),
+				text: t('panoramaxAuth.buttons.login'),
 				handler: () => {
-					wikimediaAuthStore.login();
+					panoramaxAuthStore.login();
 				}
 			}
 		]
@@ -68,49 +64,14 @@ const showAuthAlert = async () => {
 	await alert.present();
 };
 
-const showLicenseDialog = async (): Promise<boolean> => {
-	return new Promise((resolve) => {
-		alertController
-			.create({
-				header: t('imageUpload.license.title'),
-				message: t('imageUpload.license.message'),
-				buttons: [
-					{
-						text: t('imageUpload.license.decline'),
-						role: 'cancel',
-						handler: () => resolve(false)
-					},
-					{
-						text: t('imageUpload.license.agree'),
-						handler: () => {
-							saveWikimediaLicenseAccepted(true);
-							resolve(true);
-						}
-					}
-				]
-			})
-			.then((alert) => alert.present());
-	});
-};
-
 const handleAddImage = async () => {
-	// Check authentication
-	if (!wikimediaAuthStore.isAuthenticated) {
+	// Check authentication with Panoramax
+	if (!panoramaxAuthStore.isAuthenticated) {
 		await showAuthAlert();
 		return;
 	}
 
-	// Check license acceptance
-	let licenseAccepted = settingsStore.wikimediaLicenseAccepted;
-	if (!licenseAccepted) {
-		licenseAccepted = await getWikimediaLicenseAccepted();
-	}
-	if (!licenseAccepted) {
-		const accepted = await showLicenseDialog();
-		if (!accepted) return;
-	}
-
-	// Select image
+	// Select image from camera/gallery
 	try {
 		await imageUploadStore.selectImage();
 	} catch (error) {
@@ -124,13 +85,33 @@ const handleAddImage = async () => {
 	}
 };
 
-const openCommonsUrl = (url: string) => {
-	window.open(url, '_blank');
+/**
+ * Detaches the existing Panoramax image from this marker.
+ * Removes the `panoramax` tag from editableTags — the old image
+ * remains on the Panoramax server but is no longer linked to this node.
+ */
+const handleDetachImage = async () => {
+	const alert = await alertController.create({
+		header: t('imageUpload.detach.title'),
+		message: t('imageUpload.detach.message'),
+		buttons: [
+			{
+				text: t('common.cancel'),
+				role: 'cancel'
+			},
+			{
+				text: t('imageUpload.detach.confirm'),
+				role: 'destructive',
+				handler: () => {
+					markerEditStore.updateTag('panoramax', '');
+				}
+			}
+		]
+	});
+	await alert.present();
 };
 
 const retryUpload = async () => {
-	// Retry will be handled in the save flow of markerEditStore
-	// For now, just clear the error so user can try saving again
 	imageUploadStore.uploadError = null;
 };
 </script>
@@ -138,91 +119,91 @@ const retryUpload = async () => {
 <template>
 	<ion-item-group>
 		<ion-item-divider>
-			<ion-label>
-				📷 {{ t('imageUpload.title') }} ({{
-					t('imageUpload.count', {
-						count: imageUploadStore.totalImages,
-						max: imageUploadStore.MAX_IMAGES_PER_MARKER
-					})
-				}})
-			</ion-label>
+			<ion-label> 📷 {{ t('imageUpload.title') }} </ion-label>
 		</ion-item-divider>
 
-		<!-- New images to upload -->
-		<ion-item v-if="imageUploadStore.selectedImages.length > 0" lines="none">
-			<ion-label>{{ t('imageUpload.newImages') }}</ion-label>
-		</ion-item>
-		<div
-			v-if="imageUploadStore.selectedImages.length > 0 || imageUploadStore.canAddMore"
-			class="image-thumbnails"
+		<!-- Existing Panoramax image linked to this marker -->
+		<template
+			v-if="existingPanoramaxId && !isPanoramaxDetached && !imageUploadStore.hasSelectedImage"
 		>
-			<div
-				v-for="(image, index) in imageUploadStore.selectedImages"
-				:key="'new-' + index"
-				class="thumbnail-wrapper"
-			>
-				<img :src="image.webPath" :alt="image.name" />
-				<ion-button
-					class="remove-btn"
-					fill="clear"
-					size="small"
-					color="danger"
-					@click="imageUploadStore.removeSelectedImage(index)"
-				>
-					<ion-icon slot="icon-only" :icon="closeCircle"></ion-icon>
+			<ion-item lines="none">
+				<ion-label class="ion-text-wrap">
+					<p>{{ t('imageUpload.existingImage') }}</p>
+					<p>
+						<small>ID: {{ existingPanoramaxId }}</small>
+					</p>
+				</ion-label>
+			</ion-item>
+			<ion-item lines="none">
+				<ion-button fill="outline" color="primary" @click="handleAddImage()">
+					<ion-icon slot="start" :icon="cameraOutline"></ion-icon>
+					{{ t('imageUpload.replaceImage') }}
 				</ion-button>
-			</div>
-
-			<!-- Add button -->
-			<div v-if="imageUploadStore.canAddMore" class="thumbnail-wrapper add-button">
-				<ion-button fill="clear" @click="handleAddImage()">
-					<ion-icon slot="icon-only" :icon="cameraOutline"></ion-icon>
+				<ion-button slot="end" fill="clear" color="danger" @click="handleDetachImage()">
+					<ion-icon slot="start" :icon="trashOutline"></ion-icon>
+					{{ t('imageUpload.detachImage') }}
 				</ion-button>
-			</div>
-		</div>
+			</ion-item>
+		</template>
 
-		<!-- Max reached message -->
-		<ion-item v-if="!imageUploadStore.canAddMore" lines="none">
-			<ion-note color="medium">{{
-				t('imageUpload.maxReached', { max: imageUploadStore.MAX_IMAGES_PER_MARKER })
-			}}</ion-note>
-		</ion-item>
-
-		<!-- Existing Commons images -->
-		<ion-item v-if="imageUploadStore.existingImages.length > 0" lines="none">
-			<ion-label>{{ t('imageUpload.existingImages') }}</ion-label>
-		</ion-item>
-		<div v-if="imageUploadStore.existingImages.length > 0" class="image-thumbnails">
-			<div
-				v-for="image in imageUploadStore.existingImages"
-				:key="'existing-' + image.pageid"
-				class="thumbnail-wrapper"
-			>
-				<img
-					:src="image.imageinfo[0]?.thumburl"
-					:alt="image.title"
-					@click="openCommonsUrl(image.imageinfo[0]?.descriptionurl)"
-				/>
-				<ion-button
-					class="open-btn"
-					fill="clear"
-					size="small"
-					@click="openCommonsUrl(image.imageinfo[0]?.descriptionurl)"
-				>
-					<ion-icon slot="icon-only" :icon="openOutline"></ion-icon>
+		<!-- Detached state: panoramax tag removed in this edit session -->
+		<template v-else-if="isPanoramaxDetached && !imageUploadStore.hasSelectedImage">
+			<ion-item lines="none">
+				<ion-label>
+					<p>{{ t('imageUpload.imageDetached') }}</p>
+				</ion-label>
+			</ion-item>
+			<ion-item lines="none">
+				<ion-button fill="outline" color="primary" @click="handleAddImage()">
+					<ion-icon slot="start" :icon="cameraOutline"></ion-icon>
+					{{ t('imageUpload.addImage') }}
 				</ion-button>
+			</ion-item>
+		</template>
+
+		<!-- New image selected for upload -->
+		<template v-else-if="imageUploadStore.hasSelectedImage">
+			<ion-item lines="none">
+				<ion-label>{{ t('imageUpload.newImage') }}</ion-label>
+			</ion-item>
+			<div class="image-preview">
+				<div class="thumbnail-wrapper">
+					<img
+						:src="imageUploadStore.selectedImage!.webPath"
+						:alt="imageUploadStore.selectedImage!.name"
+					/>
+					<ion-button
+						class="remove-btn"
+						fill="clear"
+						size="small"
+						color="danger"
+						@click="imageUploadStore.removeSelectedImage()"
+					>
+						<ion-icon slot="icon-only" :icon="closeCircle"></ion-icon>
+					</ion-button>
+				</div>
 			</div>
-		</div>
+		</template>
+
+		<!-- No image: add button (no existing image and none selected) -->
+		<template v-else>
+			<ion-item lines="none">
+				<ion-button fill="outline" color="primary" @click="handleAddImage()">
+					<ion-icon slot="start" :icon="cameraOutline"></ion-icon>
+					{{ t('imageUpload.addImage') }}
+				</ion-button>
+			</ion-item>
+			<ion-item v-if="!panoramaxAuthStore.isAuthenticated" lines="none">
+				<ion-note color="medium" class="ion-text-wrap">
+					{{ t('panoramaxAuth.loginHint') }}
+				</ion-note>
+			</ion-item>
+		</template>
 
 		<!-- Upload progress -->
 		<ion-item v-if="imageUploadStore.isUploading" lines="none">
 			<ion-label>
-				{{
-					t('imageUpload.uploading', {
-						current: imageUploadStore.currentUploadIndex + 1,
-						total: imageUploadStore.selectedImages.length
-					})
-				}}
+				{{ t('imageUpload.uploading') }}
 			</ion-label>
 		</ion-item>
 		<ion-item v-if="imageUploadStore.isUploading" lines="none">
@@ -242,18 +223,15 @@ const retryUpload = async () => {
 </template>
 
 <style scoped>
-.image-thumbnails {
+.image-preview {
 	display: flex;
-	overflow-x: auto;
-	gap: 8px;
 	padding: 8px 16px;
 }
 
 .thumbnail-wrapper {
 	position: relative;
-	flex-shrink: 0;
-	width: 80px;
-	height: 80px;
+	width: 100px;
+	height: 100px;
 }
 
 .thumbnail-wrapper img {
@@ -261,26 +239,11 @@ const retryUpload = async () => {
 	height: 100%;
 	object-fit: cover;
 	border-radius: 8px;
-	cursor: pointer;
 }
 
 .thumbnail-wrapper .remove-btn {
 	position: absolute;
 	top: -4px;
 	right: -4px;
-}
-
-.thumbnail-wrapper .open-btn {
-	position: absolute;
-	bottom: -4px;
-	right: -4px;
-}
-
-.thumbnail-wrapper.add-button {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	border: 2px dashed var(--ion-color-medium);
-	border-radius: 8px;
 }
 </style>

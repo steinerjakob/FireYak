@@ -39,7 +39,7 @@ import App from './App.vue';
 // Composables
 import { createApp } from 'vue';
 import { useOsmAuthStore, isNativeAuthInProgress } from '@/store/osmAuthStore';
-import { isNativeWikimediaAuthInProgress } from '@/store/wikimediaAuthStore';
+import { isNativePanoramaxAuthInProgress } from '@/store/panoramaxAuthStore';
 import { usePhotonSearch } from '@/composable/photonSearch';
 
 defineCustomElements(window);
@@ -69,8 +69,8 @@ CapApp.addListener('appUrlOpen', async function (event: URLOpenListenerEvent) {
 			console.log('[OAuth/OSM] Ignoring appUrlOpen — InAppBrowser flow is active');
 			return;
 		}
-		if (isNativeWikimediaAuthInProgress()) {
-			console.log('[OAuth/Wikimedia] Ignoring appUrlOpen — InAppBrowser flow is active');
+		if (isNativePanoramaxAuthInProgress()) {
+			console.log('[OAuth/Panoramax] Ignoring appUrlOpen — InAppBrowser flow is active');
 			return;
 		}
 
