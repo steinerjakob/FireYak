@@ -160,6 +160,48 @@ const pwaOptions: Partial<VitePWAOptions> = {
 						statuses: [0, 200]
 					}
 				}
+			},
+			{
+				urlPattern: /^https?:\/\/api\.panoramax\.xyz\/api\/pictures\/.*/,
+				handler: 'StaleWhileRevalidate',
+				options: {
+					cacheName: 'panoramax-api-cache',
+					expiration: {
+						maxEntries: 100,
+						maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
+			},
+			{
+				urlPattern: /^https?:\/\/graph\.mapillary\.com\/.*/,
+				handler: 'StaleWhileRevalidate',
+				options: {
+					cacheName: 'mapillary-api-cache',
+					expiration: {
+						maxEntries: 100,
+						maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
+			},
+			{
+				urlPattern: /^https?:\/\/thumbnails\.mapillary\.com\/.*/,
+				handler: 'CacheFirst',
+				options: {
+					cacheName: 'mapillary-thumbs-cache',
+					expiration: {
+						maxEntries: 200,
+						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
 			}
 		]
 	}

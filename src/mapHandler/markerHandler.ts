@@ -1,3 +1,4 @@
+import { ref } from 'vue';
 import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 
 import iconFirestation from '../assets/markers/firestation.png';
@@ -37,10 +38,12 @@ function getIconKeyForNode(element: OverPassElement): string {
 		switch (emergency) {
 			case 'fire_hydrant':
 				return (
-					({ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<
-						string,
-						string
-					>)[type as string] || 'hydrant'
+					(
+						{ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<
+							string,
+							string
+						>
+					)[type as string] || 'hydrant'
 				);
 			case 'suction_point':
 				return 'pump';
@@ -67,8 +70,15 @@ async function reconcileDeletedNodes(mapBounds: GeoBounds, freshElements: OverPa
 	await hardDeleteMapNodes(staleIds);
 }
 
-async function updateNodeCache(mapBounds: GeoBounds) {
+async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]> {
 	const mapElements = await fetchMarkerData(mapBounds);
+
+	// null means the request was aborted or failed — skip cache operations
+	// to avoid falsely deleting cached markers.
+	if (mapElements === null) {
+		return [];
+	}
+
 	await storeMapNodes(mapElements);
 	// Only reconcile when the result is not truncated by the 2000-element limit,
 	// otherwise we'd falsely hard-delete nodes that were just cut off.
@@ -78,17 +88,25 @@ async function updateNodeCache(mapBounds: GeoBounds) {
 	return mapElements;
 }
 
-export async function getMarkersForView(
-	mapBounds: GeoBounds
-): Promise<GeoJSON.FeatureCollection> {
+/** Reactive flag – `true` while markers are being fetched from the Overpass API for an uncached area. */
+export const isLoadingMarkers = ref(false);
+
+export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.FeatureCollection> {
 	const features: GeoJSON.Feature[] = [];
 	try {
 		let mapElements = await getMapNodesForView(mapBounds);
 		// if nothing is in the cache wait for the api call
 		if (!mapElements.length) {
-			mapElements = await updateNodeCache(mapBounds);
+			isLoadingMarkers.value = true;
+			try {
+				mapElements = await updateNodeCache(mapBounds);
+			} finally {
+				isLoadingMarkers.value = false;
+			}
 		} else {
-			updateNodeCache(mapBounds);
+			// Fire-and-forget background cache refresh — silently ignore
+			// abort errors (superseded by a newer request) and network failures.
+			updateNodeCache(mapBounds).catch(() => {});
 		}
 		for (const element of mapElements) {
 			const lat = (element?.lat || element.center?.lat) as number;
@@ -146,10 +164,7 @@ async function sortElementsByDistance(
  * @param {number} radius - The search radius in meters around the center point (default: 5000 meters).
  * @return {Promise<NearbyMarker[]>} A promise that resolves with a list of sorted markers containing their distance and icons.
  */
-export async function getNearbyMarkers(
-	latLng: GeoPoint,
-	radius = 2000
-): Promise<NearbyMarker[]> {
+export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise<NearbyMarker[]> {
 	const elements = await getNearbyMapNodes(latLng, radius);
 	return sortElementsByDistance(elements, latLng);
 }

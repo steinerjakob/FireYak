@@ -207,4 +207,9 @@ ion-list {
 .coffee-button-img:hover {
 	transform: scale(1.05);
 }
+
+.rate-app-description {
+	margin-top: 20px;
+	margin-bottom: 8px;
+}
 </style>
