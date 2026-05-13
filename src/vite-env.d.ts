@@ -3,6 +3,7 @@
 
 interface ImportMetaEnv {
 	readonly VITE_PROTOMAPS_API_KEY: string;
+	readonly VITE_MAPILLARY_ACCESS_TOKEN?: string;
 }
 
 interface ImportMeta {

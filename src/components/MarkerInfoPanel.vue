@@ -19,7 +19,10 @@ const showMarkerInfo = computed(() => {
 	return !!route.params.markerId && !nearbyWaterSource.isActive.value;
 });
 
-const markerImage = computed(() => markerStore.selectedMarkerImages[0] || null);
+// Use the first image that has a usable thumbnail URL
+const markerImage = computed(
+	() => markerStore.selectedMarkerImages.find((img) => !!img.thumburl) || null
+);
 
 const { isMobile } = useScreenDetection();
 const showImages = async () => {
