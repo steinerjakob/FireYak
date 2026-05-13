@@ -80,30 +80,48 @@ onMounted(async () => {
 		markerImages = await markerStore.fetchMarkerImageInfoById(markerId, tags);
 	}
 
+	/**
+	 * Resolves the natural pixel dimensions of an image URL.
+	 * Used for sources (Panoramax) that don't provide dimensions in their API.
+	 */
+	const resolveImageSize = (src: string): Promise<{ width: number; height: number }> =>
+		new Promise((resolve) => {
+			const img = new Image();
+			img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+			img.onerror = () => resolve({ width: 1920, height: 1080 }); // sensible fallback
+			img.src = src;
+		});
+
 	// Map image data to PhotoSwipe slide items.
 	//  • Mapillary embed → HTML slide with iframe (no direct image URL available)
-	//  • Regular images  → standard src/width/height slide
-	//    For images with unknown dimensions (width=0) PhotoSwipe will
-	//    determine the size after the image loads.
-	const pswpItems = markerImages.map((image) => {
-		if (image.source === 'mapillary' && isMapillaryEmbed(image.url)) {
+	//  • Images with known dimensions → pass width/height directly
+	//  • Images with unknown dimensions (Panoramax etc.) → preload to get natural size
+	const pswpItems = await Promise.all(
+		markerImages.map(async (image) => {
+			if (image.source === 'mapillary' && isMapillaryEmbed(image.url)) {
+				return {
+					html: `<div class="pswp-mapillary-slide"><iframe src="${image.url}" allowfullscreen frameborder="0"></iframe></div>`,
+					_source: image.source as ImageSource,
+					_descriptionurl: image.descriptionurl
+				};
+			}
+
+			// Resolve dimensions: use provided values if known, otherwise preload
+			let { width, height } = image;
+			if (!width || !height) {
+				({ width, height } = await resolveImageSize(image.url));
+			}
+
 			return {
-				html: `<div class="pswp-mapillary-slide"><iframe src="${image.url}" allowfullscreen frameborder="0"></iframe></div>`,
+				src: image.url,
+				width,
+				height,
+				alt: 'Water source image',
 				_source: image.source as ImageSource,
 				_descriptionurl: image.descriptionurl
 			};
-		}
-
-		return {
-			src: image.url,
-			// Pass explicit dimensions when available; PhotoSwipe handles 0 gracefully
-			// by resolving size after the image loads.
-			...(image.width && image.height ? { width: image.width, height: image.height } : {}),
-			alt: 'Water source image',
-			_source: image.source as ImageSource,
-			_descriptionurl: image.descriptionurl
-		};
-	});
+		})
+	);
 
 	lightbox.value = new PhotoSwipeLightbox({
 		gallery: '#container',
