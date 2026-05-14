@@ -4,7 +4,12 @@ import { ref } from 'vue';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { fetchNodeById } from '@/mapHandler/overPassApi';
 import { getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
-import { fetchMediaWikiFiles, ImageInfo } from '@/mapHandler/markerImageHandler';
+import {
+	fetchMediaWikiFiles,
+	fetchPanoramaxImages,
+	fetchMapillaryImages,
+	ImageInfo
+} from '@/mapHandler/markerImageHandler';
 
 export const useMapMarkerStore = defineStore('marker', () => {
 	// State
@@ -47,12 +52,54 @@ export const useMapMarkerStore = defineStore('marker', () => {
 		return fetchPromise;
 	}
 
-	async function fetchMarkerImageInfoById(markerId: number) {
-		const imageData = await fetchMediaWikiFiles(markerId);
+	/**
+	 * Fetches images for a marker from all available sources in parallel:
+	 * - Wikimedia Commons (by OSM node ID prefix)
+	 * - Panoramax (from the `panoramax` OSM tag)
+	 * - Mapillary (from the `mapillary` OSM tag)
+	 *
+	 * @param markerId  The OSM node/way ID
+	 * @param tags      Optional marker tags used to resolve Panoramax / Mapillary keys
+	 */
+	async function fetchMarkerImageInfoById(
+		markerId: number,
+		tags?: Record<string, string>
+	): Promise<ImageInfo[]> {
+		const promises: Promise<ImageInfo[]>[] = [fetchMediaWikiFiles(markerId)];
+
+		const panoramaxId = tags?.['panoramax'];
+		if (panoramaxId) {
+			promises.push(fetchPanoramaxImages(panoramaxId));
+		}
+
+		const mapillaryKey = tags?.['mapillary'];
+		if (mapillaryKey) {
+			promises.push(fetchMapillaryImages(mapillaryKey));
+		}
+
+		const results = await Promise.allSettled(promises);
 		const imageDataList: ImageInfo[] = [];
-		imageData.forEach((image) => {
-			imageDataList.push(...image.imageinfo);
+		for (const result of results) {
+			if (result.status === 'fulfilled') {
+				imageDataList.push(...result.value);
+			}
+		}
+
+		// Sort priority:
+		//  1. Panoramax first (most recent field-captured photos)
+		//  2. Mapillary second
+		//  3. Wikimedia Commons last
+		// Within each source group, sort newest capturedAt first.
+		const sourcePriority: Record<string, number> = { panoramax: 0, mapillary: 1, wikimedia: 2 };
+		imageDataList.sort((a, b) => {
+			const priorityDiff = (sourcePriority[a.source] ?? 99) - (sourcePriority[b.source] ?? 99);
+			if (priorityDiff !== 0) return priorityDiff;
+			// Same source: newer first (undefined dates go to the end)
+			const aTime = a.capturedAt ? new Date(a.capturedAt).getTime() : 0;
+			const bTime = b.capturedAt ? new Date(b.capturedAt).getTime() : 0;
+			return bTime - aTime;
 		});
+
 		selectedMarkerImages.value = imageDataList;
 		return imageDataList;
 	}
@@ -66,7 +113,8 @@ export const useMapMarkerStore = defineStore('marker', () => {
 			const marker = await fetchMarkerById(markerId);
 			if (marker) {
 				selectedMarker.value = marker;
-				fetchMarkerImageInfoById(markerId);
+				// Pass marker tags so Panoramax / Mapillary IDs can be resolved
+				fetchMarkerImageInfoById(markerId, marker.tags);
 			}
 		}
 	}
