@@ -254,6 +254,10 @@
 		"headline": "FireYak App herunterladen",
 		"continueWeb": "Mit Web-Version fortfahren"
 	},
+	"network": {
+		"fetchFailed": "Wasserentnahmestellen konnten vorübergehend nicht geladen werden",
+		"retry": "Erneut versuchen"
+	},
 	"settings": {
 		"title": "Einstellungen",
 		"account": {
