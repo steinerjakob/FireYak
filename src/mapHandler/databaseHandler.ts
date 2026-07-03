@@ -231,6 +231,32 @@ export async function hardDeleteMapNodes(ids: number[]) {
 	}
 }
 
+/**
+ * Deletes cached nodes older than {@link maxAgeMs} to keep the cache from
+ * growing unboundedly as the user pans around (§2.2). Nodes are stamped with a
+ * `fetchedAt` timestamp on every store; anything older than the cutoff (or
+ * without a timestamp) is treated as stale. Iterates the `fetchedAt` index so
+ * only stale rows are visited.
+ */
+export async function pruneStaleMapNodes(maxAgeMs: number) {
+	try {
+		const cutoff = Date.now() - maxAgeMs;
+		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
+		const index = tx.store.index('fetchedAt');
+
+		// upperBound(cutoff, true) → strictly `fetchedAt < cutoff`.
+		let cursor = await index.openCursor(IDBKeyRange.upperBound(cutoff, true));
+		while (cursor) {
+			await cursor.delete();
+			cursor = await cursor.continue();
+		}
+
+		await tx.done;
+	} catch (e) {
+		console.error('Error pruning stale map nodes:', e);
+	}
+}
+
 export async function deleteMapNode(id: number) {
 	try {
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
