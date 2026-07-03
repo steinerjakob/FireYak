@@ -193,7 +193,7 @@ const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
 const defaultStore = useDefaultStore();
 const settingsStore = useSettingsStore();
-const { showZoomButtons, mapLayer, terrain3d } = storeToRefs(settingsStore);
+const { showZoomButtons, mapLayer, terrain3d, markerFilters } = storeToRefs(settingsStore);
 const { t, locale } = useI18n();
 
 const { isMobile } = useScreenDetection();
@@ -1233,6 +1233,14 @@ onMounted(async () => {
 	watch(terrain3d, () => {
 		syncMapStyleWithPreferences();
 	});
+
+	watch(
+		markerFilters,
+		() => {
+			if (mapReady) handleMapMovement();
+		},
+		{ deep: true }
+	);
 });
 
 onUnmounted(() => {

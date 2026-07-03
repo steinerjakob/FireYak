@@ -1,4 +1,9 @@
-import { useSettingsStore, type ThemeSetting, MapLayerSetting } from '@/store/settingsStore';
+import {
+	useSettingsStore,
+	type ThemeSetting,
+	MapLayerSetting,
+	type MarkerFilters
+} from '@/store/settingsStore';
 import { Preferences } from '@capacitor/preferences';
 
 const THEME_KEY = 'theme';
@@ -6,6 +11,7 @@ const SHOW_ZOOM_BUTTONS_KEY = 'show_zoom_buttons';
 const MAP_LAYER_KEY = 'map_layer';
 const TERRAIN_3D_KEY = 'terrain_3d';
 const OSM_AUTH_KEY = 'osm_token';
+const MARKER_FILTERS_KEY = 'marker_filters';
 
 export function useSettings() {
 	const settingsStore = useSettingsStore();
@@ -15,14 +21,21 @@ export function useSettings() {
 	 * Also initializes the theme system to apply the correct theme on startup.
 	 */
 	const loadSettings = async () => {
-		const [themeResult, showZoomButtonsResult, mapLayerResult, terrain3dResult, osmAuthKey] =
-			await Promise.all([
-				Preferences.get({ key: THEME_KEY }),
-				Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
-				Preferences.get({ key: MAP_LAYER_KEY }),
-				Preferences.get({ key: TERRAIN_3D_KEY }),
-				Preferences.get({ key: OSM_AUTH_KEY })
-			]);
+		const [
+			themeResult,
+			showZoomButtonsResult,
+			mapLayerResult,
+			terrain3dResult,
+			osmAuthKey,
+			markerFiltersResult
+		] = await Promise.all([
+			Preferences.get({ key: THEME_KEY }),
+			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
+			Preferences.get({ key: MAP_LAYER_KEY }),
+			Preferences.get({ key: TERRAIN_3D_KEY }),
+			Preferences.get({ key: OSM_AUTH_KEY }),
+			Preferences.get({ key: MARKER_FILTERS_KEY })
+		]);
 
 		if (themeResult.value) {
 			settingsStore.setTheme(themeResult.value as ThemeSetting);
@@ -42,6 +55,15 @@ export function useSettings() {
 
 		if (osmAuthKey.value) {
 			settingsStore.setOsmAuthToken(osmAuthKey.value);
+		}
+
+		if (markerFiltersResult.value) {
+			try {
+				const parsed = JSON.parse(markerFiltersResult.value) as MarkerFilters;
+				settingsStore.setMarkerFilters({ ...settingsStore.markerFilters, ...parsed });
+			} catch {
+				// ignore malformed stored value; defaults remain
+			}
 		}
 
 		// Initialize the theme system after loading settings
@@ -119,6 +141,19 @@ export function useSettings() {
 		if (value) settingsStore.setOsmAuthToken(value);
 		return value ?? null;
 	};
+
+	/**
+	 * Saves the marker filter settings to persistent storage and updates the store.
+	 * @param filters The marker filters to save.
+	 */
+	const saveMarkerFilters = async (filters: MarkerFilters) => {
+		settingsStore.setMarkerFilters(filters);
+		await Preferences.set({
+			key: MARKER_FILTERS_KEY,
+			value: JSON.stringify(filters)
+		});
+	};
+
 	return {
 		loadSettings,
 		saveTheme,
@@ -127,6 +162,7 @@ export function useSettings() {
 		saveTerrain3d,
 		saveOsmAuthToken,
 		removeOsmAuthToken,
-		getOsmAuthToken
+		getOsmAuthToken,
+		saveMarkerFilters
 	};
 }

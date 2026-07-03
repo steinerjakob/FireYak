@@ -181,6 +181,20 @@
 			"terrain3d": "3D Terrain",
 			"cancel": "Cancel"
 		},
+		"filters": {
+			"title": "Water sources",
+			"fireHydrant": "Fire Hydrant",
+			"suctionPoint": "Suction Point",
+			"waterTank": "Water Tank",
+			"fireWaterPond": "Fire Water Pond",
+			"fireStation": "Fire Station"
+		},
+		"legend": {
+			"title": "Hydrant types",
+			"pillarHydrant": "Pillar Hydrant",
+			"undergroundHydrant": "Underground Hydrant",
+			"wallHydrant": "Wall Hydrant"
+		},
 		"resetView": "Reset view"
 	},
 	"addressSearch": {

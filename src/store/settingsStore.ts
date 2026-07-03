@@ -4,6 +4,14 @@ import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 export type ThemeSetting = 'light' | 'dark' | 'auto';
 export type MapLayerSetting = 'standard' | 'satellite';
 
+export type MarkerFilterKey =
+	| 'fireHydrant'
+	| 'suctionPoint'
+	| 'waterTank'
+	| 'fireWaterPond'
+	| 'fireStation';
+export type MarkerFilters = Record<MarkerFilterKey, boolean>;
+
 // Media query for detecting system dark mode preference
 const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -22,6 +30,14 @@ const applyThemeToDocument = (theme: ThemeSetting) => {
 	}
 };
 
+const DEFAULT_MARKER_FILTERS: MarkerFilters = {
+	fireHydrant: true,
+	suctionPoint: true,
+	waterTank: true,
+	fireWaterPond: true,
+	fireStation: true
+};
+
 export const useSettingsStore = defineStore('settings', {
 	state: () => ({
 		theme: 'auto' as ThemeSetting,
@@ -29,6 +45,7 @@ export const useSettingsStore = defineStore('settings', {
 		mapLayer: 'standard' as MapLayerSetting,
 		terrain3d: false,
 		osmAuthToken: '',
+		markerFilters: { ...DEFAULT_MARKER_FILTERS } as MarkerFilters,
 		_darkModeListener: null as ((e: MediaQueryListEvent) => void) | null
 	}),
 	actions: {
@@ -48,6 +65,9 @@ export const useSettingsStore = defineStore('settings', {
 		},
 		setOsmAuthToken(token: string) {
 			this.osmAuthToken = token;
+		},
+		setMarkerFilters(filters: MarkerFilters) {
+			this.markerFilters = { ...filters };
 		},
 		/**
 		 * Sets up or removes the system dark mode listener based on the current theme setting.
