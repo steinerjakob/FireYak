@@ -256,7 +256,8 @@
 	},
 	"network": {
 		"fetchFailed": "Wasserentnahmestellen konnten vorübergehend nicht geladen werden",
-		"retry": "Erneut versuchen"
+		"retry": "Erneut versuchen",
+		"offline": "Offline – gespeicherte Wasserentnahmestellen werden angezeigt"
 	},
 	"settings": {
 		"title": "Einstellungen",
