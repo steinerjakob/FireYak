@@ -19,6 +19,7 @@ import {
 } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
+import { lngLatToTile, tileKey } from '@/helper/tileMath';
 
 // Map icon keys to URLs for use in MapLibre image loading
 export const markerIconUrls: Record<string, string> = {
@@ -63,6 +64,65 @@ function getIconUrlForNode(element: OverPassElement): string {
 	return markerIconUrls[getIconKeyForNode(element)];
 }
 
+// --- Freshness registry (§1.4) -------------------------------------------
+// Slippy-tile keys at a fixed zoom mapped to the last successful fetch time.
+// Lets us skip a background Overpass refresh when the whole (padded) view was
+// fetched only moments ago — cuts redundant load and rate-limiting on pans.
+
+/** Zoom level whose tiles act as freshness buckets. */
+const FRESHNESS_ZOOM = 12;
+/** How long a fetched tile is considered fresh. */
+const FRESHNESS_TTL_MS = 15 * 60 * 1000;
+/** Fraction the requested bbox is grown by (per axis) before fetching. */
+const BBOX_PADDING_RATIO = 0.25;
+
+const tileFreshness = new Map<string, number>();
+
+/**
+ * Grows the bounds by {@link ratio} per axis (split evenly on each side) so a
+ * small pan tends to stay inside an already-fetched area.
+ */
+function padBounds(bounds: GeoBounds, ratio: number): GeoBounds {
+	const latPad = ((bounds.north - bounds.south) * ratio) / 2;
+	const lngPad = ((bounds.east - bounds.west) * ratio) / 2;
+	return {
+		south: bounds.south - latPad,
+		north: bounds.north + latPad,
+		west: bounds.west - lngPad,
+		east: bounds.east + lngPad
+	};
+}
+
+/** All z{@link FRESHNESS_ZOOM} tile keys covering the given bounds. */
+function coveringTileKeys(bounds: GeoBounds): string[] {
+	const nw = lngLatToTile(bounds.north, bounds.west, FRESHNESS_ZOOM);
+	const se = lngLatToTile(bounds.south, bounds.east, FRESHNESS_ZOOM);
+	const keys: string[] = [];
+	for (let x = nw.x; x <= se.x; x++) {
+		for (let y = nw.y; y <= se.y; y++) {
+			keys.push(tileKey({ z: FRESHNESS_ZOOM, x, y }));
+		}
+	}
+	return keys;
+}
+
+/** True when every given tile was fetched within the freshness TTL. */
+function areTilesFresh(keys: string[]): boolean {
+	const now = Date.now();
+	return keys.every((key) => {
+		const fetchedAt = tileFreshness.get(key);
+		return fetchedAt !== undefined && now - fetchedAt < FRESHNESS_TTL_MS;
+	});
+}
+
+/** Stamps the given tiles as freshly fetched. */
+function markTilesFresh(keys: string[]): void {
+	const now = Date.now();
+	for (const key of keys) {
+		tileFreshness.set(key, now);
+	}
+}
+
 async function reconcileDeletedNodes(mapBounds: GeoBounds, freshElements: OverPassElement[]) {
 	const freshIds = new Set(freshElements.map((e) => e.id));
 	const cachedIds = await getMapNodeIdsForBounds(mapBounds);
@@ -71,7 +131,10 @@ async function reconcileDeletedNodes(mapBounds: GeoBounds, freshElements: OverPa
 }
 
 async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]> {
-	const mapElements = await fetchMarkerData(mapBounds);
+	// Pad the query bbox so small subsequent pans stay inside the fetched area.
+	// (overPassApi clamps oversized bounds afterwards — padding first is fine.)
+	const queryBounds = padBounds(mapBounds, BBOX_PADDING_RATIO);
+	const mapElements = await fetchMarkerData(queryBounds);
 
 	// null means the request was aborted or failed — skip cache operations
 	// to avoid falsely deleting cached markers.
@@ -79,11 +142,15 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 		return [];
 	}
 
+	// Mark the covering tiles fresh so a following pan within this area can
+	// skip its background refresh.
+	markTilesFresh(coveringTileKeys(queryBounds));
+
 	await storeMapNodes(mapElements);
 	// Only reconcile when the result is not truncated by the 2000-element limit,
 	// otherwise we'd falsely hard-delete nodes that were just cut off.
 	if (mapElements.length < 2000) {
-		await reconcileDeletedNodes(mapBounds, mapElements);
+		await reconcileDeletedNodes(queryBounds, mapElements);
 	}
 	return mapElements;
 }
@@ -103,7 +170,7 @@ export const markerFetchFailed = ref(false);
 export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.FeatureCollection> {
 	const features: GeoJSON.Feature[] = [];
 	try {
-		let mapElements = await getMapNodesForView(mapBounds);
+		let mapElements: OverPassElement[] = await getMapNodesForView(mapBounds);
 		// if nothing is in the cache wait for the api call
 		if (!mapElements.length) {
 			isLoadingMarkers.value = true;
@@ -116,11 +183,17 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 				isLoadingMarkers.value = false;
 			}
 		} else {
-			// Fire-and-forget background cache refresh — silently ignore
-			// abort errors (superseded by a newer request) and network failures.
-			// Background failures while cached data is already on screen are
-			// intentionally not surfaced (markerFetchFailed stays unchanged).
-			updateNodeCache(mapBounds).catch(() => {});
+			// Cache hit. Skip the background refresh entirely when the whole
+			// (padded) view was already fetched within the freshness TTL —
+			// avoids redundant Overpass load and rate-limiting on small pans.
+			const tileKeys = coveringTileKeys(padBounds(mapBounds, BBOX_PADDING_RATIO));
+			if (!areTilesFresh(tileKeys)) {
+				// Fire-and-forget background cache refresh — silently ignore
+				// abort errors (superseded by a newer request) and network failures.
+				// Background failures while cached data is already on screen are
+				// intentionally not surfaced (markerFetchFailed stays unchanged).
+				updateNodeCache(mapBounds).catch(() => {});
+			}
 		}
 		for (const element of mapElements) {
 			const lat = (element?.lat || element.center?.lat) as number;
