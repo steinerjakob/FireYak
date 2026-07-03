@@ -62,7 +62,32 @@ export interface OverPassElement {
 // Query builders
 // ---------------------------------------------------------------------------
 
+/** Maximum span (in degrees) allowed per axis for an area query bbox. */
+const MAX_AREA_SPAN_DEGREES = 0.5;
+
+/**
+ * Clamps the requested bounds to at most {@link MAX_AREA_SPAN_DEGREES} on each
+ * axis, keeping the same center. Huge desktop viewports would otherwise ask the
+ * server for an area so large it overruns the `[timeout:15]` directive.
+ */
+function clampBounds(mapBounds: GeoBounds): GeoBounds {
+	const clampAxis = (low: number, high: number): { low: number; high: number } => {
+		const span = high - low;
+		if (span <= MAX_AREA_SPAN_DEGREES) {
+			return { low, high };
+		}
+		const center = (low + high) / 2;
+		const half = MAX_AREA_SPAN_DEGREES / 2;
+		return { low: center - half, high: center + half };
+	};
+
+	const lat = clampAxis(mapBounds.south, mapBounds.north);
+	const lon = clampAxis(mapBounds.west, mapBounds.east);
+	return { south: lat.low, north: lat.high, west: lon.low, east: lon.high };
+}
+
 function buildAreaQuery(mapBounds: GeoBounds): string {
+	const bounds = clampBounds(mapBounds);
 	const osmDataKeys = [
 		'node[emergency=fire_hydrant]',
 		'way[amenity=fire_station]',
@@ -70,7 +95,7 @@ function buildAreaQuery(mapBounds: GeoBounds): string {
 		'node[emergency=suction_point]',
 		'node[emergency=fire_water_pond]'
 	];
-	const boundString = `(${mapBounds.south},${mapBounds.west},${mapBounds.north},${mapBounds.east})`;
+	const boundString = `(${bounds.south},${bounds.west},${bounds.north},${bounds.east})`;
 
 	let query = '[out:json][timeout:15];(';
 	for (const key of osmDataKeys) {
