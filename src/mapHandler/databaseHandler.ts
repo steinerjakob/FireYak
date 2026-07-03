@@ -4,24 +4,54 @@ import { GeoPoint, GeoBounds, distanceTo, boundsContains } from '@/types/geo';
 
 const markerStoreName = 'fireMarker';
 
-type CachedMapNode = OverPassElement & { __deleted?: boolean };
+/**
+ * A node as it lives in the IndexedDB cache: the raw Overpass element plus
+ * cache-only bookkeeping (`__deleted` soft-delete flag and the `fetchedAt`
+ * timestamp added in DB v2). The optional fields let it be used anywhere an
+ * {@link OverPassElement} is expected while still exposing `fetchedAt`.
+ */
+export type CachedMapNode = OverPassElement & { __deleted?: boolean; fetchedAt?: number };
 
 function isDeleted(node: unknown): boolean {
 	return Boolean((node as CachedMapNode | null | undefined)?.__deleted);
 }
 
-const dbPromise = openDB('FireMarker', 1, {
-	upgrade(db) {
-		// Create a store of objects
-		const store = db.createObjectStore(markerStoreName, {
-			// The 'id' property of the object will be the key.
-			keyPath: 'id',
-			// If it isn't explicitly set, create a value by auto incrementing.
-			autoIncrement: true
-		});
-		// Create an index on the 'date' property of the objects.
-		store.createIndex('id', 'id');
-		store.createIndex('lat, lon', ['lat', 'lon']);
+const dbPromise = openDB('FireMarker', 2, {
+	async upgrade(db, oldVersion, _newVersion, tx) {
+		if (oldVersion < 1) {
+			// Fresh install: create the store keyed by the node `id`.
+			const store = db.createObjectStore(markerStoreName, {
+				keyPath: 'id',
+				autoIncrement: true
+			});
+			store.createIndex('lat, lon', ['lat', 'lon']);
+		}
+
+		if (oldVersion < 2) {
+			const store = tx.objectStore(markerStoreName);
+
+			// The `id` index is redundant — `id` is already the keyPath.
+			if (store.indexNames.contains('id')) {
+				store.deleteIndex('id');
+			}
+			// Freshness index powering the TTL refresh (§1.4) and pruning (§2.2).
+			if (!store.indexNames.contains('fetchedAt')) {
+				store.createIndex('fetchedAt', 'fetchedAt');
+			}
+
+			// Stamp pre-existing rows with `Date.now()` (not 0): a per-session
+			// freshness refresh handles staleness, and stamping 0 here would make
+			// the startup prune wipe the user's whole cache right after upgrading.
+			const now = Date.now();
+			let cursor = await store.openCursor();
+			while (cursor) {
+				const value = cursor.value as CachedMapNode;
+				if (value.fetchedAt === undefined) {
+					await cursor.update({ ...value, fetchedAt: now });
+				}
+				cursor = await cursor.continue();
+			}
+		}
 	}
 });
 
@@ -39,6 +69,7 @@ function getNodePoint(node: OverPassElement): GeoPoint | null {
 export async function storeMapNodes(nodes: OverPassElement[]) {
 	try {
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
+		const fetchedAt = Date.now();
 		await Promise.all([
 			...nodes.map(async (node) => {
 				const point = getNodePoint(node);
@@ -52,6 +83,7 @@ export async function storeMapNodes(nodes: OverPassElement[]) {
 				const toStore: CachedMapNode = {
 					...(node as CachedMapNode),
 					__deleted: deletedFlag,
+					fetchedAt,
 					lat: point.lat,
 					lon: point.lng
 				};
@@ -73,7 +105,7 @@ export async function getMapNodesForView(mapBounds: GeoBounds) {
 		const index = markerStore.index('lat, lon');
 
 		// Initialize an empty array to store the results
-		const results: OverPassElement[] = [];
+		const results: CachedMapNode[] = [];
 
 		const range = IDBKeyRange.bound(
 			[mapBounds.south, mapBounds.west],
