@@ -7,8 +7,40 @@ import { useMapMarkerStore } from '@/store/mapMarkerStore';
 
 const markerStore = useMapMarkerStore();
 
-const { t, te } = useI18n();
+const { t, te, locale } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
+
+/**
+ * Formats a timestamp as a locale-aware relative string ("2 hours ago"),
+ * picking the largest fitting unit via `Intl.RelativeTimeFormat`.
+ */
+const formatRelativeTime = (timestamp: number): string => {
+	const rtf = new Intl.RelativeTimeFormat(locale.value, { numeric: 'auto' });
+	let duration = (timestamp - Date.now()) / 1000; // seconds; negative in the past
+	const divisions: { amount: number; unit: Intl.RelativeTimeFormatUnit }[] = [
+		{ amount: 60, unit: 'seconds' },
+		{ amount: 60, unit: 'minutes' },
+		{ amount: 24, unit: 'hours' },
+		{ amount: 7, unit: 'days' },
+		{ amount: 4.34524, unit: 'weeks' },
+		{ amount: 12, unit: 'months' },
+		{ amount: Number.POSITIVE_INFINITY, unit: 'years' }
+	];
+	for (const division of divisions) {
+		if (Math.abs(duration) < division.amount) {
+			return rtf.format(Math.round(duration), division.unit);
+		}
+		duration /= division.amount;
+	}
+	return rtf.format(Math.round(duration), 'years');
+};
+
+// "Data updated X ago" line for the cached node — only when a timestamp exists.
+const dataAge = computed(() => {
+	const fetchedAt = markerData.value?.fetchedAt;
+	if (!fetchedAt) return null;
+	return t('markerInfo.messages.dataUpdated', { time: formatRelativeTime(fetchedAt) });
+});
 
 const waterTankVolume = 'markerInfo.tags.volume';
 
@@ -189,6 +221,11 @@ const openOsmEditUrl = () => {
 				<ion-note>{{ t('markerInfo.messages.noAdditionalInfo') }}</ion-note>
 			</ion-label>
 		</ion-item>
+
+		<!-- Cache freshness -->
+		<ion-item v-if="dataAge" lines="none">
+			<ion-note class="data-age">{{ dataAge }}</ion-note>
+		</ion-item>
 	</ion-list>
 	<ion-note v-else class="loading-note">{{ t('markerInfo.messages.loading') }}</ion-note>
 </template>
@@ -221,5 +258,10 @@ ion-label p {
 .loading-note {
 	padding: 12px;
 	display: block;
+}
+
+.data-age {
+	font-size: 0.75rem;
+	opacity: 0.7;
 }
 </style>

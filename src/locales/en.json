@@ -108,7 +108,8 @@
 		},
 		"messages": {
 			"noAdditionalInfo": "No additional information available",
-			"loading": "Loading marker information..."
+			"loading": "Loading marker information...",
+			"dataUpdated": "Data updated {time}"
 		}
 	},
 	"about": {
