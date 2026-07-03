@@ -256,7 +256,8 @@
 	},
 	"network": {
 		"fetchFailed": "Water source data temporarily unavailable",
-		"retry": "Retry"
+		"retry": "Retry",
+		"offline": "Offline — showing cached water sources"
 	},
 	"settings": {
 		"title": "Settings",

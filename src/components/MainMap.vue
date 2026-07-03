@@ -94,6 +94,10 @@
 				<ion-icon :icon="analyticsOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<!-- Offline banner -->
+		<div v-if="!isOnline" class="offline-banner">
+			{{ $t('network.offline') }}
+		</div>
 		<!-- Marker loading indicator -->
 		<div v-if="isLoadingMarkers" class="marker-loading-indicator">
 			<ion-spinner name="crescent" color="none"></ion-spinner>
@@ -135,6 +139,7 @@ import {
 	isLoadingMarkers,
 	markerFetchFailed
 } from '@/mapHandler/markerHandler';
+import { useOnlineStatus } from '@/composable/onlineStatus';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
@@ -193,6 +198,7 @@ const { t, locale } = useI18n();
 
 const { isMobile } = useScreenDetection();
 const { formatAddress, getFeatureName } = usePhotonSearch();
+const { isOnline } = useOnlineStatus();
 
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
@@ -1240,6 +1246,24 @@ onUnmounted(() => {
 <style scoped>
 ion-fab {
 	z-index: 1000;
+}
+
+.offline-banner {
+	position: absolute;
+	/* Below the search bar (~48 px) + safe area, above other controls */
+	top: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 56px);
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1000;
+	background: var(--md-sys-surface-container);
+	color: var(--md-sys-on-surface);
+	border-radius: var(--md-sys-corner-medium, 12px);
+	padding: 6px 16px;
+	font-size: 13px;
+	line-height: 1.4;
+	white-space: nowrap;
+	pointer-events: none;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .marker-loading-indicator {
