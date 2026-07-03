@@ -9,7 +9,7 @@ import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
-import { fetchMarkerData, OverPassElement } from './overPassApi';
+import { fetchMarkerData, OverPassElement, wasLastAreaQueryFailure } from './overPassApi';
 import {
 	getMapNodesForView,
 	getNearbyMapNodes,
@@ -91,6 +91,15 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 /** Reactive flag – `true` while markers are being fetched from the Overpass API for an uncached area. */
 export const isLoadingMarkers = ref(false);
 
+/**
+ * Reactive flag – `true` when the most recent **uncached-area** fetch
+ * genuinely failed (network error, server error, all instances timed out).
+ * Reset to `false` as soon as any subsequent fetch succeeds.
+ * Background refresh failures while cached data is already on screen do NOT
+ * set this flag — only the blocking foreground load path does.
+ */
+export const markerFetchFailed = ref(false);
+
 export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.FeatureCollection> {
 	const features: GeoJSON.Feature[] = [];
 	try {
@@ -100,12 +109,17 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 			isLoadingMarkers.value = true;
 			try {
 				mapElements = await updateNodeCache(mapBounds);
+				// updateNodeCache returns [] on both abort and genuine failure.
+				// wasLastAreaQueryFailure() distinguishes them.
+				markerFetchFailed.value = wasLastAreaQueryFailure();
 			} finally {
 				isLoadingMarkers.value = false;
 			}
 		} else {
 			// Fire-and-forget background cache refresh — silently ignore
 			// abort errors (superseded by a newer request) and network failures.
+			// Background failures while cached data is already on screen are
+			// intentionally not surfaced (markerFetchFailed stays unchanged).
 			updateNodeCache(mapBounds).catch(() => {});
 		}
 		for (const element of mapElements) {

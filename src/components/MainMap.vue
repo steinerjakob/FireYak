@@ -132,12 +132,13 @@ import {
 	getMarkersForView,
 	getNearbyMarkers,
 	markerIconUrls,
-	isLoadingMarkers
+	isLoadingMarkers,
+	markerFetchFailed
 } from '@/mapHandler/markerHandler';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
-import { IonFab, IonFabButton, IonIcon, IonSpinner } from '@ionic/vue';
+import { IonFab, IonFabButton, IonIcon, IonSpinner, toastController } from '@ionic/vue';
 import LayerSelectorModal from '@/components/LayerSelectorModal.vue';
 import AddressSearchBar from '@/components/AddressSearchBar.vue';
 import { useScreenDetection } from '@/composable/screenDetection';
@@ -650,6 +651,40 @@ watch(pumpCalculation.calculationResult, (val) => {
 });
 
 const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
+
+// ---------------------------------------------------------------------------
+// Fetch-error toast (§1.5)
+// Show once when a foreground fetch fails; include a Retry button.
+// A module-level ref prevents duplicate toasts from stacking.
+// ---------------------------------------------------------------------------
+
+let activeFetchErrorToast: HTMLIonToastElement | null = null;
+
+async function showFetchErrorToast() {
+	if (activeFetchErrorToast) return; // already showing — don't stack
+	activeFetchErrorToast = await toastController.create({
+		message: t('network.fetchFailed'),
+		duration: 6000,
+		buttons: [
+			{
+				text: t('network.retry'),
+				handler: () => {
+					handleMapMovement();
+				}
+			}
+		]
+	});
+	activeFetchErrorToast.onDidDismiss().then(() => {
+		activeFetchErrorToast = null;
+	});
+	await activeFetchErrorToast.present();
+}
+
+watch(markerFetchFailed, (failed) => {
+	if (failed) {
+		showFetchErrorToast();
+	}
+});
 
 const showPathToSelectedMarker = async () => {
 	if (nearbyWaterSource.isActive.value && selectedMarker) {

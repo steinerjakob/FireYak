@@ -41,6 +41,28 @@ const MAX_COOLDOWN_SECONDS = 3600;
 let areaQueryController: AbortController | null = null;
 
 // ---------------------------------------------------------------------------
+// Last-area-query failure flag
+// Tracks whether the most recent call to fetchMarkerData ended in a genuine
+// network/server error, so callers can distinguish failure from supersession
+// (abort) without changing the null-return contract.
+// ---------------------------------------------------------------------------
+
+let lastAreaQueryFailed = false;
+
+/**
+ * Returns `true` if the most recent {@link fetchMarkerData} call ended with a
+ * genuine network or server error.  Returns `false` when the last call either
+ * succeeded or was **superseded** (aborted by a newer request) — neither case
+ * is an error worth surfacing to the user.
+ *
+ * The value is only meaningful immediately after `fetchMarkerData` resolves; it
+ * is not reactive.
+ */
+export function wasLastAreaQueryFailure(): boolean {
+	return lastAreaQueryFailed;
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -233,13 +255,17 @@ export async function fetchMarkerData(mapBounds: GeoBounds): Promise<OverPassEle
 
 	try {
 		const query = buildAreaQuery(mapBounds);
-		return await fetchFromPool(query, controller.signal);
+		const result = await fetchFromPool(query, controller.signal);
+		lastAreaQueryFailed = false;
+		return result;
 	} catch (error) {
-		// Aborted (superseded by a newer call) → return null
+		// Aborted (superseded by a newer call) → not a genuine failure
 		if (controller.signal.aborted) {
+			lastAreaQueryFailed = false;
 			return null;
 		}
 		console.error('Overpass area query failed:', error);
+		lastAreaQueryFailed = true;
 		return null;
 	} finally {
 		// Only clear the module reference if it is still ours
