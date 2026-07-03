@@ -80,7 +80,14 @@ async function fetchFromInstance(
 	query: string,
 	signal: AbortSignal
 ): Promise<OverPassElement[]> {
-	const response = await fetch(`${baseUrl}?data=${encodeURI(query)}`, { signal });
+	// POST the query (rather than encoding it into the URL) so that the special
+	// characters used by Overpass QL (`=`, `;`, `[`, `]`, `,`) can never be
+	// mangled by URL encoding, which was a source of flaky responses.
+	const response = await fetch(baseUrl, {
+		method: 'POST',
+		body: new URLSearchParams({ data: query }),
+		signal
+	});
 
 	if (!response.ok) {
 		throw new Error(`Overpass ${response.status} ${response.statusText} from ${baseUrl}`);
@@ -176,7 +183,9 @@ export async function fetchNodeById(nodeId: number): Promise<OverPassElement | n
 	const timeoutId = setTimeout(() => controller.abort(), NODE_QUERY_TIMEOUT_MS);
 
 	try {
-		const response = await fetch(`${OVERPASS_NODE_URL}?data=${encodeURI(query)}`, {
+		const response = await fetch(OVERPASS_NODE_URL, {
+			method: 'POST',
+			body: new URLSearchParams({ data: query }),
 			signal: controller.signal
 		});
 
