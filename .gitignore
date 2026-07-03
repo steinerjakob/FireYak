@@ -21,3 +21,6 @@ pnpm-debug.log*
 *.sln
 *.sw?
 /play-credentials.json
+
+# Local SSH keys (e.g. GitHub Actions deploy keys) — never commit
+id_rsa*
