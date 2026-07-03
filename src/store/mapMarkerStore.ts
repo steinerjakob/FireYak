@@ -3,17 +3,17 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { fetchNodeById } from '@/mapHandler/overPassApi';
-import { getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
+import { CachedMapNode, getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
 import { fetchMediaWikiFiles, ImageInfo } from '@/mapHandler/markerImageHandler';
 
 export const useMapMarkerStore = defineStore('marker', () => {
 	// State
-	const fetchPromises = ref<Map<number, Promise<OverPassElement | null>>>(new Map());
-	const selectedMarker = ref<OverPassElement | null>(null);
+	const fetchPromises = ref<Map<number, Promise<CachedMapNode | null>>>(new Map());
+	const selectedMarker = ref<CachedMapNode | null>(null);
 	const selectedMarkerImages = ref<ImageInfo[]>([]);
 
 	// Actions
-	async function fetchMarkerById(markerId: number): Promise<OverPassElement | null> {
+	async function fetchMarkerById(markerId: number): Promise<CachedMapNode | null> {
 		// Return in-flight promise if already fetching
 		if (fetchPromises.value.has(markerId)) {
 			return fetchPromises.value.get(markerId) || null;
