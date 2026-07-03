@@ -181,6 +181,20 @@
 			"terrain3d": "3D Gelände",
 			"cancel": "Abbrechen"
 		},
+		"filters": {
+			"title": "Wasserentnahmestellen",
+			"fireHydrant": "Hydrant",
+			"suctionPoint": "Saugstelle",
+			"waterTank": "Wassertank",
+			"fireWaterPond": "Löschwasserteich",
+			"fireStation": "Feuerwehrhaus"
+		},
+		"legend": {
+			"title": "Hydrantentypen",
+			"pillarHydrant": "Überflurhydrant",
+			"undergroundHydrant": "Unterflurhydrant",
+			"wallHydrant": "Wandhydrant"
+		},
 		"resetView": "Ansicht zurücksetzen"
 	},
 	"addressSearch": {

@@ -18,6 +18,7 @@ import {
 	hardDeleteMapNodes
 } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
+import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 import { lngLatToTile, tileKey } from '@/helper/tileMath';
 
@@ -62,6 +63,25 @@ function getIconKeyForNode(element: OverPassElement): string {
 
 function getIconUrlForNode(element: OverPassElement): string {
 	return markerIconUrls[getIconKeyForNode(element)];
+}
+
+/** Maps an OSM element to its filter category key. */
+function categoryForNode(element: OverPassElement): MarkerFilterKey {
+	if (element.type === 'node') {
+		const emergency = element.tags?.emergency;
+		switch (emergency) {
+			case 'fire_hydrant':
+				return 'fireHydrant';
+			case 'suction_point':
+				return 'suctionPoint';
+			case 'water_tank':
+				return 'waterTank';
+			case 'fire_water_pond':
+				return 'fireWaterPond';
+		}
+	}
+	if (element.type === 'way') return 'fireStation';
+	return 'fireHydrant';
 }
 
 // --- Freshness registry (§1.4) -------------------------------------------
@@ -195,7 +215,10 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 				updateNodeCache(mapBounds).catch(() => {});
 			}
 		}
+		// Apply category filters — call inside the function so Pinia is active.
+		const { markerFilters } = useSettingsStore();
 		for (const element of mapElements) {
+			if (!markerFilters[categoryForNode(element)]) continue;
 			const lat = (element?.lat || element.center?.lat) as number;
 			const lng = (element.lon || element.center?.lon) as number;
 			features.push({
