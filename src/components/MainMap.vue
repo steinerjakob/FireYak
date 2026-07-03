@@ -185,6 +185,9 @@ const SELECTED_PATH_LAYER = 'selected-path-layer';
 const MAP_VIEW_STORAGE_KEY = 'mapView';
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_MAX_MOVEMENT_PX = 10;
+const USER_ACCURACY_SOURCE = 'user-accuracy';
+const USER_ACCURACY_FILL_LAYER = 'user-accuracy-fill';
+const ACCURACY_CIRCLE_POINTS = 64;
 
 const router = useRouter();
 const route = useRoute();
@@ -750,7 +753,47 @@ watch(
 // Location tracking
 const watchId = ref<string | null>(null);
 const currentUserLocation = ref<GeoPoint | null>(null);
+const currentUserAccuracy = ref<number | null>(null);
 const waitingForLocation = ref(false);
+
+/** Build an approximate circle polygon (lon/lat degrees) for a given accuracy radius in metres. */
+function generateAccuracyCircle(
+	lat: number,
+	lng: number,
+	accuracyMeters: number
+): GeoJSON.Feature<GeoJSON.Polygon> {
+	// Same lat/lng-delta math as getNearbyMapNodes in databaseHandler.ts
+	const latDelta = accuracyMeters / 111320;
+	const lngDelta = accuracyMeters / (111320 * Math.cos((lat * Math.PI) / 180));
+	const coords: [number, number][] = [];
+	for (let i = 0; i <= ACCURACY_CIRCLE_POINTS; i++) {
+		const angle = (i * 2 * Math.PI) / ACCURACY_CIRCLE_POINTS;
+		coords.push([lng + lngDelta * Math.cos(angle), lat + latDelta * Math.sin(angle)]);
+	}
+	return {
+		type: 'Feature',
+		geometry: { type: 'Polygon', coordinates: [coords] },
+		properties: {}
+	};
+}
+
+/** Push the current accuracy circle geometry to the map source (or clear it when unavailable). */
+function updateAccuracyCircle() {
+	if (!rootMap) return;
+	const source = rootMap.getSource(USER_ACCURACY_SOURCE) as maplibregl.GeoJSONSource | undefined;
+	if (!source) return;
+	if (currentUserLocation.value !== null && currentUserAccuracy.value !== null) {
+		source.setData(
+			generateAccuracyCircle(
+				currentUserLocation.value.lat,
+				currentUserLocation.value.lng,
+				currentUserAccuracy.value
+			)
+		);
+	} else {
+		source.setData({ type: 'FeatureCollection', features: [] });
+	}
+}
 
 async function showUserLocation() {
 	try {
@@ -785,6 +828,7 @@ async function showUserLocation() {
 				lng: position.coords.longitude
 			};
 			currentUserLocation.value = point;
+			currentUserAccuracy.value = position.coords.accuracy ?? null;
 
 			// Update or create location marker
 			updateLocationMarker(point);
@@ -816,6 +860,9 @@ function updateLocationMarker(point: GeoPoint) {
 	userLocationMarker.setLngLat([point.lng, point.lat]);
 	userLocationMarker.addTo(rootMap);
 
+	// Keep the accuracy circle in sync with the new position/accuracy
+	updateAccuracyCircle();
+
 	// Trigger nearby search if active
 	searchNearbyMarkers();
 }
@@ -839,6 +886,7 @@ function startWatchingLocation() {
 					lng: position.coords.longitude
 				};
 				currentUserLocation.value = point;
+				currentUserAccuracy.value = position.coords.accuracy ?? null;
 				updateLocationMarker(point);
 			}
 		}
@@ -902,6 +950,23 @@ async function loadMarkerImages(map: maplibregl.Map) {
 }
 
 function addMapLayers(map: maplibregl.Map) {
+	// GPS accuracy circle — added first so it renders below all marker layers.
+	// DOM markers (the location dot) are always above GL layers automatically.
+	// The fill layer is not included in interactiveLayers, so it never captures clicks.
+	map.addSource(USER_ACCURACY_SOURCE, {
+		type: 'geojson',
+		data: { type: 'FeatureCollection', features: [] }
+	});
+	map.addLayer({
+		id: USER_ACCURACY_FILL_LAYER,
+		type: 'fill',
+		source: USER_ACCURACY_SOURCE,
+		paint: {
+			'fill-color': 'rgba(19, 106, 236, 0.15)',
+			'fill-outline-color': 'rgba(19, 106, 236, 0.4)'
+		}
+	});
+
 	// Marker source with clustering
 	map.addSource(MARKER_SOURCE_ID, {
 		type: 'geojson',
@@ -1235,6 +1300,9 @@ function reloadMapStyle() {
 
 		// Re-add DOM markers that may have been detached
 		restoreDomMarkers();
+
+		// Restore accuracy circle data (addMapLayers seeded the source with empty data)
+		updateAccuracyCircle();
 
 		// Restore pump calculation markers and polyline
 		pumpCalculation.restoreMapState(rootMap);
