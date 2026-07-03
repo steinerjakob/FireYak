@@ -1,24 +1,37 @@
 import { GeoBounds } from '@/types/geo';
 
 // ---------------------------------------------------------------------------
-// Overpass API instances
+// Overpass API instance pool
+// Ordered list of public interpreters tried in sequence. All instances share
+// the same request/response contract, so any of them can serve any query.
 // ---------------------------------------------------------------------------
 
-/** Primary instance for area queries (bulk data fetching). */
-const OVERPASS_PRIMARY_URL = 'https://overpass-api.de/api/interpreter';
-/** Fallback instance for area queries when the primary is unavailable. */
-const OVERPASS_FALLBACK_URL = 'https://overpass.private.coffee/api/interpreter';
-/** Instance for single-node requests (low volume, public API is fine). */
-const OVERPASS_NODE_URL = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_INSTANCES = [
+	'https://overpass-api.de/api/interpreter',
+	'https://overpass.private.coffee/api/interpreter',
+	'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+];
 
 // ---------------------------------------------------------------------------
 // Timeouts (client-side, in addition to the Overpass [timeout:…] directive)
 // ---------------------------------------------------------------------------
 
-/** Client-side timeout for area queries in milliseconds. */
-const AREA_QUERY_TIMEOUT_MS = 20_000;
-/** Client-side timeout for single-node queries in milliseconds. */
+/** Client-side timeout applied to each individual instance attempt. */
+const PER_ATTEMPT_TIMEOUT_MS = 12_000;
+/** Overall client-side timeout for a single-node query (spans all attempts). */
 const NODE_QUERY_TIMEOUT_MS = 15_000;
+
+// ---------------------------------------------------------------------------
+// Rate-limit cool-downs
+// When an instance replies with HTTP 429 it is parked until a deadline so the
+// pool skips it while it recovers. Deadlines are epoch-milliseconds.
+// ---------------------------------------------------------------------------
+
+const instanceCooldowns = new Map<string, number>();
+/** Fallback cool-down when the server does not send a usable Retry-After. */
+const DEFAULT_COOLDOWN_MS = 5 * 60_000;
+/** Upper bound for an accepted Retry-After value (guards against garbage). */
+const MAX_COOLDOWN_SECONDS = 3600;
 
 // ---------------------------------------------------------------------------
 // Module-level AbortController for area queries
@@ -71,9 +84,32 @@ function buildAreaQuery(mapBounds: GeoBounds): string {
 // Fetch helpers
 // ---------------------------------------------------------------------------
 
+/** Returns true while the given instance is parked on a rate-limit cool-down. */
+function isCooledDown(baseUrl: string): boolean {
+	const deadline = instanceCooldowns.get(baseUrl);
+	return deadline !== undefined && deadline > Date.now();
+}
+
+/**
+ * Parks an instance on a cool-down after a 429 response. Honours the
+ * `Retry-After` header (in seconds) when present and sane, otherwise falls
+ * back to {@link DEFAULT_COOLDOWN_MS}.
+ */
+function applyCooldown(baseUrl: string, retryAfter: string | null): void {
+	let cooldownMs = DEFAULT_COOLDOWN_MS;
+	if (retryAfter) {
+		const seconds = Number(retryAfter);
+		if (Number.isFinite(seconds) && seconds > 0 && seconds <= MAX_COOLDOWN_SECONDS) {
+			cooldownMs = seconds * 1000;
+		}
+	}
+	instanceCooldowns.set(baseUrl, Date.now() + cooldownMs);
+}
+
 /**
  * Attempts to fetch from a single Overpass instance.
- * Throws on any failure (network, HTTP error, abort, timeout).
+ * Throws on any failure (network, HTTP error, abort, timeout). A 429 response
+ * additionally parks the instance on a cool-down before throwing.
  */
 async function fetchFromInstance(
 	baseUrl: string,
@@ -89,6 +125,10 @@ async function fetchFromInstance(
 		signal
 	});
 
+	if (response.status === 429) {
+		applyCooldown(baseUrl, response.headers.get('Retry-After'));
+	}
+
 	if (!response.ok) {
 		throw new Error(`Overpass ${response.status} ${response.statusText} from ${baseUrl}`);
 	}
@@ -98,26 +138,41 @@ async function fetchFromInstance(
 }
 
 /**
- * Tries the primary Overpass instance first; on rate-limit (429), server
- * errors (5xx), network failures, or timeouts it automatically retries with
- * the fallback instance.
+ * Runs a query against the instance pool, trying each interpreter in order.
  *
- * **Abort errors are never retried** and always re-thrown so callers can
- * distinguish a deliberate cancellation from a transient failure.
+ * - Instances currently on a 429 cool-down are skipped; if every instance is
+ *   cooled down they are all tried anyway (best effort).
+ * - Each attempt gets its own {@link PER_ATTEMPT_TIMEOUT_MS} timeout, combined
+ *   with `outerSignal` via `AbortSignal.any`.
+ * - If `outerSignal` aborts (the request was superseded, or an owner-level
+ *   timeout fired) the error is re-thrown immediately without trying further
+ *   instances. A per-attempt timeout, 429, server or network error is treated
+ *   as transient and moves on to the next instance.
+ *
+ * @throws the last encountered error when every attempted instance fails.
  */
-async function fetchWithFallback(query: string, signal: AbortSignal): Promise<OverPassElement[]> {
-	try {
-		return await fetchFromInstance(OVERPASS_PRIMARY_URL, query, signal);
-	} catch (error) {
-		// Never retry an intentional abort (new request superseded this one)
-		if (signal.aborted) {
-			throw error;
+async function fetchFromPool(query: string, outerSignal: AbortSignal): Promise<OverPassElement[]> {
+	const available = OVERPASS_INSTANCES.filter((url) => !isCooledDown(url));
+	const instances = available.length > 0 ? available : OVERPASS_INSTANCES;
+
+	let lastError: unknown = new Error('No Overpass instances available');
+	for (const baseUrl of instances) {
+		const signal = AbortSignal.any([outerSignal, AbortSignal.timeout(PER_ATTEMPT_TIMEOUT_MS)]);
+		try {
+			return await fetchFromInstance(baseUrl, query, signal);
+		} catch (error) {
+			// The outer signal aborting means this query was superseded by a newer
+			// one (or its owner timed out) — never fall through to the next instance.
+			if (outerSignal.aborted) {
+				throw error;
+			}
+			// Per-attempt timeout, 429, server or network error → try the next.
+			console.warn(`Overpass instance ${baseUrl} failed, trying next…`, error);
+			lastError = error;
 		}
-		console.warn('Primary Overpass instance failed, trying fallback…', error);
 	}
 
-	// Fallback — let errors propagate naturally
-	return fetchFromInstance(OVERPASS_FALLBACK_URL, query, signal);
+	throw lastError;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,15 +185,17 @@ async function fetchWithFallback(query: string, signal: AbortSignal): Promise<Ov
  * - Automatically **aborts** any previous in-flight area query so only the
  *   latest request completes (prevents "too many requests" errors during
  *   rapid map panning).
- * - Uses **overpass.private.coffee** as primary with **overpass-api.de** as
- *   automatic fallback on failure.
- * - Enforces a client-side timeout of {@link AREA_QUERY_TIMEOUT_MS} ms in
- *   addition to the server-side `[timeout:15]` directive.
+ * - Runs against the ordered {@link OVERPASS_INSTANCES} pool, moving to the
+ *   next interpreter on any transient failure and skipping instances that are
+ *   on a 429 cool-down.
+ * - Applies a per-attempt client-side timeout of {@link PER_ATTEMPT_TIMEOUT_MS}
+ *   ms in addition to the server-side `[timeout:15]` directive.
  *
  * @returns The fetched elements on success (may be an empty array for areas
- *          with no data), or **`null`** when the request was aborted or
- *          failed — so callers can distinguish "no data in this area" from
- *          "we never got a valid response" and avoid deleting cached markers.
+ *          with no data), or **`null`** when the request was aborted
+ *          (superseded by a newer call) or every instance failed — so callers
+ *          can distinguish "no data in this area" from "we never got a valid
+ *          response" and avoid deleting cached markers.
  */
 export async function fetchMarkerData(mapBounds: GeoBounds): Promise<OverPassElement[] | null> {
 	// Cancel any previous in-flight area query
@@ -149,20 +206,17 @@ export async function fetchMarkerData(mapBounds: GeoBounds): Promise<OverPassEle
 	const controller = new AbortController();
 	areaQueryController = controller;
 
-	const timeoutId = setTimeout(() => controller.abort(), AREA_QUERY_TIMEOUT_MS);
-
 	try {
 		const query = buildAreaQuery(mapBounds);
-		return await fetchWithFallback(query, controller.signal);
+		return await fetchFromPool(query, controller.signal);
 	} catch (error) {
-		// Aborted (superseded by a newer call or timed out) → return null
+		// Aborted (superseded by a newer call) → return null
 		if (controller.signal.aborted) {
 			return null;
 		}
 		console.error('Overpass area query failed:', error);
 		return null;
 	} finally {
-		clearTimeout(timeoutId);
 		// Only clear the module reference if it is still ours
 		if (areaQueryController === controller) {
 			areaQueryController = null;
@@ -173,37 +227,25 @@ export async function fetchMarkerData(mapBounds: GeoBounds): Promise<OverPassEle
 /**
  * Fetches a single node or way by its OSM ID.
  *
- * Uses the public **overpass-api.de** instance (low-volume, single-element
- * queries). Includes a client-side timeout of {@link NODE_QUERY_TIMEOUT_MS}.
+ * Runs against the same {@link OVERPASS_INSTANCES} pool (with shared 429
+ * cool-downs) as area queries. An overall client-side timeout of
+ * {@link NODE_QUERY_TIMEOUT_MS} ms spans all instance attempts; on timeout or
+ * total failure it returns `null`.
  */
 export async function fetchNodeById(nodeId: number): Promise<OverPassElement | null> {
 	const query = `[out:json][timeout:15];(node(${nodeId});way(${nodeId}););out center tags;`;
 
-	const controller = new AbortController();
-	const timeoutId = setTimeout(() => controller.abort(), NODE_QUERY_TIMEOUT_MS);
+	const outerSignal = AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS);
 
 	try {
-		const response = await fetch(OVERPASS_NODE_URL, {
-			method: 'POST',
-			body: new URLSearchParams({ data: query }),
-			signal: controller.signal
-		});
-
-		if (!response.ok) {
-			throw new Error(`Overpass API error: ${response.status} ${response.statusText}`);
-		}
-
-		const data = await response.json();
-		const elements = data?.elements as OverPassElement[];
-		return elements && elements.length > 0 ? elements[0] : null;
+		const elements = await fetchFromPool(query, outerSignal);
+		return elements.length > 0 ? elements[0] : null;
 	} catch (e) {
-		if (e instanceof DOMException && e.name === 'AbortError') {
+		if (outerSignal.aborted) {
 			console.warn('Overpass node query timed out for node:', nodeId);
 			return null;
 		}
 		console.error('Error fetching node by ID:', e);
 		return null;
-	} finally {
-		clearTimeout(timeoutId);
 	}
 }
