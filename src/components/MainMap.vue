@@ -183,6 +183,8 @@ const MARKER_SOURCE_ID = 'markers';
 const SELECTED_PATH_SOURCE = 'selected-path';
 const SELECTED_PATH_LAYER = 'selected-path-layer';
 const MAP_VIEW_STORAGE_KEY = 'mapView';
+const LONG_PRESS_MS = 500;
+const LONG_PRESS_MAX_MOVEMENT_PX = 10;
 
 const router = useRouter();
 const route = useRoute();
@@ -972,6 +974,75 @@ function addMapLayers(map: maplibregl.Map) {
 }
 
 function setupMapEventListeners(map: maplibregl.Map) {
+	// -----------------------------------------------------------------------
+	// Touch long-press → add marker at the pressed location (§3.4)
+	// Uses MapLibre touch events so we can read the lngLat directly.
+	// Guards:
+	//   • Only single-finger touch (multi-touch = pinch/zoom → ignore)
+	//   • Not while edit is already active
+	//   • Not on the supply-pipe route (that route uses `contextmenu` for its
+	//     own marker placement; MapLibre also emits `contextmenu` for touch
+	//     long-press on mobile — by skipping the timer here we ensure the two
+	//     handlers never fire simultaneously on that route)
+	// -----------------------------------------------------------------------
+	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+	let longPressLngLat: maplibregl.LngLat | null = null;
+	let longPressStartPixel: { x: number; y: number } | null = null;
+
+	function cancelLongPress() {
+		if (longPressTimer !== null) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+		longPressLngLat = null;
+		longPressStartPixel = null;
+	}
+
+	map.on('touchstart', (e: maplibregl.MapTouchEvent) => {
+		cancelLongPress(); // clear any previous timer
+		if (markerEditStore.isActive) return;
+		if (route.path.includes('supplypipe')) return;
+		if (e.originalEvent.touches.length !== 1) return;
+
+		const touch = e.originalEvent.touches[0];
+		longPressStartPixel = { x: touch.clientX, y: touch.clientY };
+		longPressLngLat = e.lngLat;
+
+		longPressTimer = setTimeout(() => {
+			if (longPressLngLat) {
+				markerEditStore.requestStartAdding({
+					lat: longPressLngLat.lat,
+					lng: longPressLngLat.lng
+				});
+			}
+			cancelLongPress();
+		}, LONG_PRESS_MS);
+	});
+
+	map.on('touchmove', (e: maplibregl.MapTouchEvent) => {
+		if (longPressTimer === null || !longPressStartPixel) return;
+		const touch = e.originalEvent.changedTouches[0] ?? e.originalEvent.touches[0];
+		if (!touch) {
+			cancelLongPress();
+			return;
+		}
+		const dx = touch.clientX - longPressStartPixel.x;
+		const dy = touch.clientY - longPressStartPixel.y;
+		if (Math.hypot(dx, dy) > LONG_PRESS_MAX_MOVEMENT_PX) {
+			cancelLongPress();
+		}
+	});
+
+	map.on('touchend', cancelLongPress);
+	map.on('touchcancel', cancelLongPress);
+
+	// Cancel on any map-driven movement (drag pan or zoom animation)
+	map.on('move', () => {
+		if (longPressTimer !== null) {
+			cancelLongPress();
+		}
+	});
+
 	// General map click handler
 	map.on('click', async (e) => {
 		// Check if click was on a marker or cluster
