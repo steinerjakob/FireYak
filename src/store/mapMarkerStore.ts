@@ -5,6 +5,7 @@ import { OverPassElement } from '@/mapHandler/overPassApi';
 import { fetchNodeById } from '@/mapHandler/overPassApi';
 import { CachedMapNode, getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
 import { fetchMediaWikiFiles, ImageInfo } from '@/mapHandler/markerImageHandler';
+import { useNetworkStatus } from '@/composable/networkStatus';
 
 export const useMapMarkerStore = defineStore('marker', () => {
 	// State
@@ -48,6 +49,14 @@ export const useMapMarkerStore = defineStore('marker', () => {
 	}
 
 	async function fetchMarkerImageInfoById(markerId: number) {
+		// Photo galleries (Wikimedia Commons) need a connection — skip the
+		// request entirely while offline instead of letting it fail.
+		const { isOnline } = useNetworkStatus();
+		if (!isOnline.value) {
+			selectedMarkerImages.value = [];
+			return [];
+		}
+
 		const imageData = await fetchMediaWikiFiles(markerId);
 		const imageDataList: ImageInfo[] = [];
 		imageData.forEach((image) => {

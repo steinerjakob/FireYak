@@ -16,6 +16,7 @@
 			<ion-searchbar
 				:value="searchQuery"
 				:placeholder="$t('addressSearch.placeholder')"
+				:disabled="!isOnline"
 				:debounce="0"
 				show-clear-button="always"
 				@ionInput="onSearchInput"
@@ -42,8 +43,13 @@
 				<ion-icon :icon="settingsIcon" class="search-icon-btn"></ion-icon>
 			</button>
 		</div>
+		<!-- Offline hint: address search needs a connection -->
+		<div v-if="!isOnline" class="search-offline-hint">
+			<ion-icon :icon="cloudOfflineOutline"></ion-icon>
+			<span>{{ $t('addressSearch.offlineHint') }}</span>
+		</div>
 		<!-- Search Results -->
-		<div v-if="showSearchResults && searchResults.length > 0" class="search-results">
+		<div v-if="isOnline && showSearchResults && searchResults.length > 0" class="search-results">
 			<div
 				v-for="(feature, index) in searchResults"
 				:key="index"
@@ -57,7 +63,11 @@
 		<!-- No results message -->
 		<div
 			v-if="
-				showSearchResults && searchResults.length === 0 && !searchLoading && searchQuery.length >= 2
+				isOnline &&
+				showSearchResults &&
+				searchResults.length === 0 &&
+				!searchLoading &&
+				searchQuery.length >= 2
 			"
 			class="search-results"
 		>
@@ -69,9 +79,10 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
 import { IonIcon, IonSearchbar, IonSpinner } from '@ionic/vue';
-import { informationCircle, settings as settingsIcon } from 'ionicons/icons';
+import { cloudOfflineOutline, informationCircle, settings as settingsIcon } from 'ionicons/icons';
 import { type PhotonFeature, usePhotonSearch } from '@/composable/photonSearch';
 import { useScreenDetection } from '@/composable/screenDetection';
+import { useNetworkStatus } from '@/composable/networkStatus';
 import { useI18n } from 'vue-i18n';
 import { debounce } from '@/helper/helper';
 
@@ -88,6 +99,7 @@ const emit = defineEmits<{
 
 const { locale } = useI18n();
 const { isMobile } = useScreenDetection();
+const { isOnline } = useNetworkStatus();
 const {
 	query: searchQuery,
 	results: searchResults,
@@ -295,5 +307,19 @@ function onSelectResult(feature: PhotonFeature) {
 	padding: 12px 16px;
 	font-size: 13px;
 	text-align: center;
+}
+
+.search-offline-hint {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background: var(--md-sys-background);
+	--background: var(--md-sys-background);
+	--color: var(--md-sys-on-surface);
+	padding: 10px 16px;
+	font-size: 13px;
+	border-radius: 0 0 16px 16px;
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+	border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 </style>

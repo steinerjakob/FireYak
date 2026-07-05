@@ -8,18 +8,24 @@ import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
 import { useScreenDetection } from '@/composable/screenDetection';
+import { useNetworkStatus } from '@/composable/networkStatus';
 
 const route = useRoute();
 const modal = ref<typeof IonModal>();
 const nearbyWaterSource = useNearbyWaterSource();
 const markerStore = useMapMarkerStore();
 const router = useRouter();
+const { isOnline } = useNetworkStatus();
 
 const showMarkerInfo = computed(() => {
 	return !!route.params.markerId && !nearbyWaterSource.isActive.value;
 });
 
-const markerImage = computed(() => markerStore.selectedMarkerImages[0] || null);
+// Photos need a connection — hide the thumbnail entry point while offline
+// rather than showing a stale/broken image.
+const markerImage = computed(
+	() => (isOnline.value ? markerStore.selectedMarkerImages[0] : null) || null
+);
 
 const { isMobile } = useScreenDetection();
 const showImages = async () => {
