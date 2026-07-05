@@ -315,6 +315,7 @@
 			"autoRefresh": "Automatisch über WLAN aktualisieren",
 			"autoRefreshHint": "Automatisch über WLAN aktualisieren, wenn älter als 30 Tage.",
 			"estimate": "Etwa {width} × {height} km · {chunks} Datenblöcke",
+			"sizeEstimate": "Geschätzter Download: {low}–{high} MB",
 			"tooLarge": "Dieser Bereich ist zu groß. Zoome hinein, um einen kleineren Bereich zu wählen.",
 			"download": "Herunterladen",
 			"locationError": "Standort konnte nicht ermittelt werden."

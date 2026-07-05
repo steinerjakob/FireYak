@@ -315,6 +315,7 @@
 			"autoRefresh": "Auto-refresh on Wi-Fi",
 			"autoRefreshHint": "Refresh automatically over Wi-Fi when older than 30 days.",
 			"estimate": "About {width} × {height} km · {chunks} data chunks",
+			"sizeEstimate": "Estimated download: {low}–{high} MB",
 			"tooLarge": "This area is too large. Zoom in to select a smaller region.",
 			"download": "Download",
 			"locationError": "Couldn't determine your location."

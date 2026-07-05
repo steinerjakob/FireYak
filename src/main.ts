@@ -39,6 +39,11 @@ import App from './App.vue';
 import { createApp } from 'vue';
 import { useOsmAuthStore, isNativeAuthInProgress } from '@/store/osmAuthStore';
 import { usePhotonSearch } from '@/composable/photonSearch';
+import { registerOfflineProtocol } from '@/offline/offlineProtocol';
+
+// Register the `offline://` MapLibre protocol before any map is constructed so
+// tile/glyph/sprite requests are served cache-first from the offline store.
+registerOfflineProtocol();
 
 const app = createApp(App);
 

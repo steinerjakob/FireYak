@@ -208,8 +208,6 @@ const { isOnline } = useNetworkStatus();
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
 
-const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
-
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
 let styleReloadVersion = 0;
@@ -310,24 +308,36 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 
 	const spriteFlavor = isSatellite.value ? 'light' : isDarkMode.value ? 'dark' : 'light';
 
+	// All sources route through the `offline://` protocol (registered in main.ts)
+	// so they are served cache-first from the offline tile store and fall back to
+	// the network online. The TileJSON `url:` form can't work offline (its
+	// metadata isn't fetchable), so every source inlines an explicit tile
+	// template plus the metadata (minzoom/maxzoom/encoding/tileSize) instead.
 	const sources: Record<string, maplibregl.SourceSpecification> = {
 		protomaps: {
 			type: 'vector',
-			url: `https://api.protomaps.com/tiles/v4.json?key=${PROTOMAPS_API_KEY}`,
+			tiles: ['offline://protomaps/{z}/{x}/{y}'],
+			minzoom: 0,
+			maxzoom: 15,
 			attribution:
 				'&copy; <a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
 		}
 	};
 
 	if (terrain3d.value) {
-		sources['terrainSource'] = {
+		// Mapterhorn DEM: terrarium-encoded, 512 px, `.webp` tiles (values inlined
+		// from tiles.mapterhorn.com/tilejson.json). maxzoom 12 matches the download
+		// cap; MapLibre overzooms the DEM for hillshade/terrain above that.
+		const terrainSource: maplibregl.SourceSpecification = {
 			type: 'raster-dem',
-			url: 'https://tiles.mapterhorn.com/tilejson.json'
+			tiles: ['offline://terrain/{z}/{x}/{y}'],
+			encoding: 'terrarium',
+			tileSize: 512,
+			maxzoom: 12,
+			attribution: "<a href='https://mapterhorn.com/attribution'>© Mapterhorn</a>"
 		};
-		sources['hillshadeSource'] = {
-			type: 'raster-dem',
-			url: 'https://tiles.mapterhorn.com/tilejson.json'
-		};
+		sources['terrainSource'] = terrainSource;
+		sources['hillshadeSource'] = terrainSource;
 	}
 
 	const baseLayers: maplibregl.LayerSpecification[] = [];
@@ -335,10 +345,10 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 	if (isSatellite.value) {
 		sources['satellite'] = {
 			type: 'raster',
-			tiles: [
-				'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-			],
+			tiles: ['offline://satellite/{z}/{x}/{y}'],
 			tileSize: 256,
+			// Display up to z19; downloads cap at z17, so 18–19 render as overzoomed
+			// z17 tiles offline.
 			maxzoom: 19,
 			attribution: '&copy; Esri'
 		};
@@ -351,8 +361,11 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 
 	const style: maplibregl.StyleSpecification = {
 		version: 8,
-		glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
-		sprite: `https://protomaps.github.io/basemaps-assets/sprites/v4/${spriteFlavor}`,
+		// Glyphs & sprites also go through the protocol; the assets handler resolves
+		// the requested path (MapLibre appends .json/.png/@2x and encodes the
+		// fontstack) against the upstream basemaps-assets host.
+		glyphs: 'offline://assets/fonts/{fontstack}/{range}.pbf',
+		sprite: `offline://assets/sprites/v4/${spriteFlavor}`,
 		sources,
 		layers: [
 			...baseLayers,

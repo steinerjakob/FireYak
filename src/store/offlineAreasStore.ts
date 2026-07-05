@@ -9,6 +9,15 @@ import {
 	deleteOfflineArea
 } from '@/mapHandler/databaseHandler';
 import { countChunks, downloadAreaData } from '@/offline/areaDataDownloader';
+import { downloadTiles, downloadStyleAssets } from '@/offline/tileDownloader';
+import { tileStore } from '@/offline/tileStore';
+import {
+	tileCount,
+	PROTOMAPS_MAX_ZOOM,
+	SATELLITE_MAX_ZOOM,
+	TERRAIN_MAX_ZOOM
+} from '@/offline/tileMath';
+import { invalidateDownloadedAreasCache } from '@/offline/offlineProtocol';
 import { useNetworkStatus } from '@/composable/networkStatus';
 
 /**
@@ -50,6 +59,25 @@ export function isAreaTooLarge(bounds: GeoBounds): boolean {
 		bounds.north - bounds.south > MAX_AREA_SPAN_DEGREES ||
 		bounds.east - bounds.west > MAX_AREA_SPAN_DEGREES
 	);
+}
+
+/** One tile source to download for an area, with its max zoom. */
+interface TileJob {
+	source: string;
+	zMax: number;
+}
+
+/** The tile sources an area needs: protomaps always, satellite/terrain per toggles. */
+function tileJobsFor(area: OfflineArea): TileJob[] {
+	const jobs: TileJob[] = [{ source: 'protomaps', zMax: PROTOMAPS_MAX_ZOOM }];
+	if (area.includeSatellite) jobs.push({ source: 'satellite', zMax: SATELLITE_MAX_ZOOM });
+	if (area.includeTerrain) jobs.push({ source: 'terrain', zMax: TERRAIN_MAX_ZOOM });
+	return jobs;
+}
+
+/** Total tiles across all of the area's enabled sources (for the progress total). */
+function totalTilesFor(area: OfflineArea): number {
+	return tileJobsFor(area).reduce((sum, job) => sum + tileCount(area.bounds, 0, job.zMax), 0);
 }
 
 export interface CreateAreaInput {
@@ -108,18 +136,52 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 		if (controllers.has(id)) return;
 
 		await requestPersistentStorage();
+		// A new/updated area affects the protocol's write-through gate.
+		invalidateDownloadedAreasCache();
 
 		const controller = new AbortController();
 		controllers.set(id, controller);
+		const signal = controller.signal;
 
+		// Unified progress: data chunks first, then tiles. `total` covers both so a
+		// single progress bar spans the whole download.
+		const dataTotal = countChunks(area.bounds);
+		const combinedTotal = dataTotal + totalTilesFor(area);
 		const startChunk = refresh ? -1 : area.lastCompletedChunk;
+		const dataDoneAtStart = Math.max(startChunk + 1, 0);
+
+		// Tile-phase resume state. Reset on refresh (re-verify every tile — cheap,
+		// has() hits skip re-download); carried over on retry.
+		const tileResume: Record<string, number> = refresh ? {} : { ...(area.tileResume ?? {}) };
+		// Tiles persist across a refresh, so keep the accumulated size; only genuinely
+		// new tiles add to it.
+		let sizeBytes = area.sizeBytes;
+		let tilesProcessed = Object.values(tileResume).reduce((a, b) => a + b, 0);
+
+		// Persisting per tile would mean thousands of IDB writes; throttle to ~300ms
+		// (and force-flush at phase boundaries). Losing <300ms of resume cursor on a
+		// crash is harmless — has() re-checks make the redone tiles free.
+		let lastFlush = 0;
+		async function flushTileProgress(force: boolean): Promise<void> {
+			const now = Date.now();
+			if (!force && now - lastFlush < 300) return;
+			lastFlush = now;
+			await persist(id, {
+				progress: { done: dataDoneAtStart + tilesProcessed, total: combinedTotal },
+				tileCount: tilesProcessed,
+				sizeBytes,
+				tileResume: { ...tileResume }
+			});
+		}
+
 		await persist(id, {
 			status: refresh ? 'refreshing' : 'downloading',
 			lastCompletedChunk: startChunk,
-			progress: { done: Math.max(startChunk + 1, 0), total: countChunks(area.bounds) }
+			progress: { done: dataDoneAtStart + tilesProcessed, total: combinedTotal }
 		});
 
 		try {
+			// --- Phase 1: water-source data ---
 			await downloadAreaData(
 				{
 					bounds: area.bounds,
@@ -129,13 +191,46 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 					onProgress: (progress) =>
 						persist(id, {
 							lastCompletedChunk: progress.lastCompletedChunk,
-							progress: { done: progress.done, total: progress.total },
+							// Offset by tiles already done so the bar never goes backwards.
+							progress: { done: progress.done + tilesProcessed, total: combinedTotal },
 							nodeCount: progress.nodeCount
 						})
 				},
-				controller.signal
+				signal
 			);
-			await persist(id, { status: 'ready', lastRefreshedAt: Date.now() });
+
+			// --- Phase 2: map tiles + style assets ---
+			// Assets first (small, idempotent) so labels/icons render as soon as the
+			// tiles arrive.
+			await downloadStyleAssets(signal);
+
+			const currentArea = areas.value.find((a) => a.id === id) ?? area;
+			for (const job of tileJobsFor(currentArea)) {
+				await downloadTiles({
+					bounds: currentArea.bounds,
+					source: job.source,
+					zMax: job.zMax,
+					areaId: id,
+					signal,
+					resumeFrom: tileResume[job.source] ?? 0,
+					onProgress: async ({ processed, bytesAdded }) => {
+						const prev = tileResume[job.source] ?? 0;
+						tilesProcessed += processed - prev;
+						tileResume[job.source] = processed;
+						sizeBytes += bytesAdded;
+						await flushTileProgress(false);
+					}
+				});
+				await flushTileProgress(true);
+			}
+
+			await persist(id, {
+				status: 'ready',
+				lastRefreshedAt: Date.now(),
+				tileCount: tilesProcessed,
+				sizeBytes,
+				progress: { done: combinedTotal, total: combinedTotal }
+			});
 		} catch (error) {
 			// Both a user cancel (aborted signal) and a genuine failure leave the
 			// area `error`/incomplete: its persisted `lastCompletedChunk` is the
@@ -204,8 +299,12 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 	async function removeArea(id: number): Promise<void> {
 		cancelDownload(id);
 		controllers.delete(id);
+		// Drop this area's tile references; tiles unreferenced afterwards are freed
+		// (tiles shared with another overlapping area survive).
+		await tileStore.deleteArea(id);
 		await deleteOfflineArea(id);
 		areas.value = areas.value.filter((area) => area.id !== id);
+		invalidateDownloadedAreasCache();
 	}
 
 	/**
