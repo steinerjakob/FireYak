@@ -43,6 +43,11 @@ const routes = [
 		component: () => import('@/views/SettingsView.vue')
 	},
 	{
+		path: '/settings/offline-areas',
+		name: 'Offline areas',
+		component: () => import('@/views/OfflineAreasView.vue')
+	},
+	{
 		path: '/markerimages/:relatedId',
 		name: 'markerimages',
 		component: () => import('@/views/MarkerImageViewer.vue')

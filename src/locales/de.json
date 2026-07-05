@@ -274,6 +274,52 @@
 		"retry": "Erneut versuchen",
 		"offline": "Offline – gespeicherte Wasserentnahmestellen werden angezeigt"
 	},
+	"common": {
+		"cancel": "Abbrechen",
+		"save": "Speichern"
+	},
+	"offlineAreas": {
+		"title": "Offline-Bereiche",
+		"offlineHint": "Du bist offline. Zum Herunterladen von Bereichen wird eine Verbindung benötigt.",
+		"empty": {
+			"title": "Noch keine Offline-Bereiche",
+			"description": "Lade einen Bereich herunter, damit die Wasserentnahmestellen auch ohne Verbindung verfügbar bleiben."
+		},
+		"status": {
+			"downloading": "Wird heruntergeladen … {done}/{total}",
+			"refreshing": "Wird aktualisiert … {done}/{total}",
+			"error": "Download unvollständig",
+			"nodeCount": "{count} Wasserentnahmestellen",
+			"lastRefreshed": "aktualisiert {date}"
+		},
+		"actions": {
+			"refresh": "Aktualisieren",
+			"retry": "Download fortsetzen",
+			"rename": "Umbenennen",
+			"delete": "Löschen",
+			"cancel": "Download abbrechen"
+		},
+		"deleteDialog": {
+			"title": "Offline-Bereich löschen?",
+			"message": "„{name}“ wird entfernt. Gespeicherte Wasserentnahmestellen bleiben bis zum Ablauf erhalten."
+		},
+		"add": {
+			"button": "Bereich hinzufügen",
+			"title": "Neuer Offline-Bereich",
+			"captureHint": "Diesen Ausschnitt herunterladen",
+			"radiusLabel": "Um mich herum:",
+			"nameLabel": "Name",
+			"defaultName": "Mein Bereich",
+			"includeSatellite": "Satellitenbilder einschließen",
+			"includeTerrain": "Gelände einschließen",
+			"autoRefresh": "Automatisch über WLAN aktualisieren",
+			"autoRefreshHint": "Automatisch über WLAN aktualisieren, wenn älter als 30 Tage.",
+			"estimate": "Etwa {width} × {height} km · {chunks} Datenblöcke",
+			"tooLarge": "Dieser Bereich ist zu groß. Zoome hinein, um einen kleineren Bereich zu wählen.",
+			"download": "Herunterladen",
+			"locationError": "Standort konnte nicht ermittelt werden."
+		}
+	},
 	"settings": {
 		"title": "Einstellungen",
 		"account": {
@@ -295,6 +341,10 @@
 		"map": {
 			"title": "Karte",
 			"showZoomButtons": "Zoom-Buttons anzeigen"
+		},
+		"offline": {
+			"title": "Offline",
+			"offlineAreas": "Offline-Bereiche"
 		}
 	}
 }

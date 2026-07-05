@@ -12,11 +12,59 @@ const markerStoreName = 'fireMarker';
  */
 export type CachedMapNode = OverPassElement & { __deleted?: boolean; fetchedAt?: number };
 
+const offlineAreasStoreName = 'offlineAreas';
+const pendingEditsStoreName = 'pendingEdits';
+
+/**
+ * A pre-downloaded offline area: the geographic bounds plus download bookkeeping.
+ * The `includeSatellite`/`includeTerrain` flags and the `tileCount`/`sizeBytes`
+ * fields are part of the final schema but are only acted on by the later tile
+ * package (Part 2); for now they are stored and default to `false`/`0`.
+ */
+export interface OfflineArea {
+	id?: number;
+	name: string;
+	bounds: GeoBounds;
+	createdAt: number;
+	lastRefreshedAt: number | null;
+	includeSatellite: boolean;
+	includeTerrain: boolean;
+	/** When set, the area is auto-refreshed on Wi-Fi once it is older than 30 days. */
+	autoRefreshOnWifi: boolean;
+	nodeCount: number;
+	tileCount: number;
+	sizeBytes: number;
+	status: 'downloading' | 'ready' | 'error' | 'refreshing';
+	progress: { done: number; total: number };
+	/** Resume info: index of the last successfully completed data chunk (−1 = none). */
+	lastCompletedChunk: number;
+}
+
+/**
+ * A queued OSM edit made while offline. The store is created here (DB v3) so the
+ * schema is final, but the queue/sync logic itself lands in a later package.
+ */
+export interface PendingEdit {
+	localId?: number;
+	action: 'create' | 'update' | 'delete';
+	elementType: 'node';
+	/** Negative temp ID for creates (−1, −2, …), real OSM ID otherwise. */
+	osmId: number;
+	/** Snapshot of the tags at edit time — used for conflict detection. */
+	baseTags: Record<string, string> | null;
+	tags: Record<string, string>;
+	lat: number;
+	lon: number;
+	createdAt: number;
+	status: 'pending' | 'uploading' | 'conflict' | 'error';
+	errorMessage?: string;
+}
+
 function isDeleted(node: unknown): boolean {
 	return Boolean((node as CachedMapNode | null | undefined)?.__deleted);
 }
 
-const dbPromise = openDB('FireMarker', 2, {
+const dbPromise = openDB('FireMarker', 3, {
 	async upgrade(db, oldVersion, _newVersion, tx) {
 		if (oldVersion < 1) {
 			// Fresh install: create the store keyed by the node `id`.
@@ -51,6 +99,18 @@ const dbPromise = openDB('FireMarker', 2, {
 				}
 				cursor = await cursor.continue();
 			}
+		}
+
+		if (oldVersion < 3) {
+			// Offline data areas (§1.1). `id` autoIncrements.
+			db.createObjectStore(offlineAreasStoreName, { keyPath: 'id', autoIncrement: true });
+			// Offline edit queue (§1.3) — store created now so the schema is final;
+			// the queue logic lands in a later package.
+			const edits = db.createObjectStore(pendingEditsStoreName, {
+				keyPath: 'localId',
+				autoIncrement: true
+			});
+			edits.createIndex('status', 'status');
 		}
 	}
 });
@@ -240,6 +300,16 @@ export async function hardDeleteMapNodes(ids: number[]) {
  */
 export async function pruneStaleMapNodes(maxAgeMs: number) {
 	try {
+		// Nodes inside a downloaded offline area must never be pruned, even when
+		// stale — the whole point of an offline area is that its data survives.
+		// Membership is a pure bounds check, so we load the areas once per run.
+		const areas = await getAllOfflineAreas();
+		const isProtected = (node: CachedMapNode): boolean => {
+			if (areas.length === 0) return false;
+			const point = getNodePoint(node);
+			return point !== null && areas.some((area) => boundsContains(area.bounds, point));
+		};
+
 		const cutoff = Date.now() - maxAgeMs;
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
 		const index = tx.store.index('fetchedAt');
@@ -247,7 +317,9 @@ export async function pruneStaleMapNodes(maxAgeMs: number) {
 		// upperBound(cutoff, true) → strictly `fetchedAt < cutoff`.
 		let cursor = await index.openCursor(IDBKeyRange.upperBound(cutoff, true));
 		while (cursor) {
-			await cursor.delete();
+			if (!isProtected(cursor.value as CachedMapNode)) {
+				await cursor.delete();
+			}
 			cursor = await cursor.continue();
 		}
 
@@ -271,5 +343,59 @@ export async function deleteMapNode(id: number) {
 		await tx.done;
 	} catch (e) {
 		console.error(e);
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Offline area CRUD (§1.1)
+// ---------------------------------------------------------------------------
+
+/** Returns all stored offline areas (empty array on error). */
+export async function getAllOfflineAreas(): Promise<OfflineArea[]> {
+	try {
+		return (await (await dbPromise).getAll(offlineAreasStoreName)) as OfflineArea[];
+	} catch (e) {
+		console.error('Error reading offline areas:', e);
+		return [];
+	}
+}
+
+/** Returns a single offline area by id, or `undefined` if it does not exist. */
+export async function getOfflineArea(id: number): Promise<OfflineArea | undefined> {
+	try {
+		return (await (await dbPromise).get(offlineAreasStoreName, id)) as OfflineArea | undefined;
+	} catch (e) {
+		console.error('Error reading offline area:', e);
+		return undefined;
+	}
+}
+
+/** Persists a new offline area and returns its generated id. */
+export async function addOfflineArea(area: OfflineArea): Promise<number> {
+	const key = await (await dbPromise).add(offlineAreasStoreName, area);
+	return key as number;
+}
+
+/**
+ * Merges `patch` into the stored area. No-op if the area no longer exists (it
+ * may have been deleted while a download was still running).
+ */
+export async function updateOfflineArea(id: number, patch: Partial<OfflineArea>): Promise<void> {
+	try {
+		const db = await dbPromise;
+		const existing = (await db.get(offlineAreasStoreName, id)) as OfflineArea | undefined;
+		if (!existing) return;
+		await db.put(offlineAreasStoreName, { ...existing, ...patch, id });
+	} catch (e) {
+		console.error('Error updating offline area:', e);
+	}
+}
+
+/** Removes an offline area record. Cached nodes are left for pruning to reclaim. */
+export async function deleteOfflineArea(id: number): Promise<void> {
+	try {
+		await (await dbPromise).delete(offlineAreasStoreName, id);
+	} catch (e) {
+		console.error('Error deleting offline area:', e);
 	}
 }

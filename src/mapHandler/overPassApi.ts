@@ -276,6 +276,27 @@ export async function fetchMarkerData(mapBounds: GeoBounds): Promise<OverPassEle
 }
 
 /**
+ * Fetches raw Overpass data for a single area chunk, used exclusively by the
+ * offline area downloader (§1.2).
+ *
+ * Unlike {@link fetchMarkerData} this takes its **own** {@link AbortSignal} and
+ * does not touch the module-level area-query {@link AbortController}. That split
+ * is deliberate: map panning must never cancel an in-progress area download, and
+ * an area download must never cancel the map's live queries. The downloader owns
+ * the signal (per-area cancel), while sharing the same instance pool, POST
+ * transport and 429 cool-downs as every other query.
+ *
+ * @throws on failure (network, HTTP error, timeout, abort) so the downloader can
+ *         retry / mark the chunk as failed.
+ */
+export async function fetchAreaRaw(
+	bounds: GeoBounds,
+	signal: AbortSignal
+): Promise<OverPassElement[]> {
+	return fetchFromPool(buildAreaQuery(bounds), signal);
+}
+
+/**
  * Fetches a single node or way by its OSM ID.
  *
  * Runs against the same {@link OVERPASS_INSTANCES} pool (with shared 429
