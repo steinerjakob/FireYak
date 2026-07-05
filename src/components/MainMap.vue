@@ -139,7 +139,7 @@ import {
 	isLoadingMarkers,
 	markerFetchFailed
 } from '@/mapHandler/markerHandler';
-import { useOnlineStatus } from '@/composable/onlineStatus';
+import { useNetworkStatus } from '@/composable/networkStatus';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
@@ -203,7 +203,7 @@ const { t, locale } = useI18n();
 
 const { isMobile } = useScreenDetection();
 const { formatAddress, getFeatureName } = usePhotonSearch();
-const { isOnline } = useOnlineStatus();
+const { isOnline } = useNetworkStatus();
 
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
