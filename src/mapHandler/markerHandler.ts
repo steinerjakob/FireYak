@@ -61,7 +61,7 @@ function getIconKeyForNode(element: OverPassElement): string {
 	return 'hydrant';
 }
 
-function getIconUrlForNode(element: OverPassElement): string {
+export function getIconUrlForNode(element: OverPassElement): string {
 	return markerIconUrls[getIconKeyForNode(element)];
 }
 

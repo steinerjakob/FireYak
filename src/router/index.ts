@@ -48,6 +48,11 @@ const routes = [
 		component: () => import('@/views/OfflineAreasView.vue')
 	},
 	{
+		path: '/settings/pending-edits',
+		name: 'Pending edits',
+		component: () => import('@/views/PendingEditsView.vue')
+	},
+	{
 		path: '/markerimages/:relatedId',
 		name: 'markerimages',
 		component: () => import('@/views/MarkerImageViewer.vue')

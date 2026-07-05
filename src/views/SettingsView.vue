@@ -57,6 +57,14 @@
 					<ion-label>{{ $t('settings.offline.offlineAreas') }}</ion-label>
 				</ion-item>
 
+				<ion-item button detail router-link="/settings/pending-edits">
+					<ion-icon slot="start" :icon="cloudUploadOutline"></ion-icon>
+					<ion-label>{{ $t('settings.offline.pendingEdits') }}</ion-label>
+					<ion-badge v-if="pendingCount > 0" slot="end" color="warning">
+						{{ pendingCount }}
+					</ion-badge>
+				</ion-item>
+
 				<!-- Account Section -->
 				<ion-list-header>
 					<ion-label>{{ $t('settings.account.title') }}</ion-label>
@@ -116,13 +124,21 @@ import {
 	IonToggle,
 	IonButton,
 	IonIcon,
+	IonBadge,
 	SegmentCustomEvent,
 	ToggleCustomEvent
 } from '@ionic/vue';
-import { logInOutline, logOutOutline, openOutline, cloudDownloadOutline } from 'ionicons/icons';
+import {
+	logInOutline,
+	logOutOutline,
+	openOutline,
+	cloudDownloadOutline,
+	cloudUploadOutline
+} from 'ionicons/icons';
 import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
+import { usePendingEditsStore } from '@/store/pendingEditsStore';
 import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
 
@@ -130,6 +146,8 @@ const settingsStore = useSettingsStore();
 const { saveTheme, saveShowZoomButtons } = useSettings();
 const { theme, showZoomButtons } = storeToRefs(settingsStore);
 const osmAuthStore = useOsmAuthStore();
+const pendingEditsStore = usePendingEditsStore();
+const { pendingCount } = storeToRefs(pendingEditsStore);
 
 const onThemeChange = (event: SegmentCustomEvent) => {
 	saveTheme(event.detail.value as ThemeSetting);

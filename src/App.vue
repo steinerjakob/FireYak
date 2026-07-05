@@ -15,6 +15,7 @@ import { useSettings } from '@/composable/settings';
 import { useInAppReview } from '@/composable/inAppReview';
 import { pruneStaleMapNodes } from '@/mapHandler/databaseHandler';
 import { useOfflineAreasStore } from '@/store/offlineAreasStore';
+import { usePendingEditsStore } from '@/store/pendingEditsStore';
 import { useNetworkStatus } from '@/composable/networkStatus';
 
 // Load user settings from storage on app startup
@@ -30,8 +31,13 @@ const { recordActiveDay, tryAutoPrompt } = useInAppReview();
 // Offline areas: load records and run the Wi-Fi auto-refresh check on startup,
 // and re-check whenever connectivity is regained.
 const offlineAreasStore = useOfflineAreasStore();
+// Offline edit queue: drain queued edits on startup and on every reconnect.
+const pendingEditsStore = usePendingEditsStore();
 const { onOnline } = useNetworkStatus();
-onOnline(() => offlineAreasStore.checkAutoRefresh());
+onOnline(() => {
+	offlineAreasStore.checkAutoRefresh();
+	pendingEditsStore.sync();
+});
 
 onMounted(async () => {
 	// Fire-and-forget: drop cache entries older than 90 days so the local
@@ -41,6 +47,9 @@ onMounted(async () => {
 
 	// Fire-and-forget: hydrate the offline-areas store (also triggers auto-refresh).
 	offlineAreasStore.init();
+
+	// Fire-and-forget: hydrate the pending-edits queue and attempt a sync.
+	pendingEditsStore.init();
 
 	await recordActiveDay();
 	await tryAutoPrompt();
