@@ -109,7 +109,8 @@
 		"messages": {
 			"noAdditionalInfo": "Keine zusätzlichen Informationen verfügbar",
 			"loading": "Lade Marker-Informationen...",
-			"dataUpdated": "Daten aktualisiert {time}"
+			"dataUpdated": "Daten aktualisiert {time}",
+			"photosOfflineHint": "Fotos sind offline nicht verfügbar."
 		}
 	},
 	"about": {
@@ -156,6 +157,7 @@
 		"wayPoint": "Wegpunkt",
 		"setPosition": "Set",
 		"updatePosition": "Update",
+		"elevationIgnored": "Höhenunterschied ignoriert (offline)",
 		"pump": {
 			"title": "Tragkraftspritze",
 			"inputPressure": "Eingangsdruck (bar)",
@@ -200,7 +202,8 @@
 	"addressSearch": {
 		"placeholder": "Adresse suchen...",
 		"noResults": "Keine Ergebnisse gefunden",
-		"error": "Suche fehlgeschlagen"
+		"error": "Suche fehlgeschlagen",
+		"offlineHint": "Adresssuche ist offline nicht verfügbar."
 	},
 	"markerEdit": {
 		"title": {

@@ -109,7 +109,8 @@
 		"messages": {
 			"noAdditionalInfo": "No additional information available",
 			"loading": "Loading marker information...",
-			"dataUpdated": "Data updated {time}"
+			"dataUpdated": "Data updated {time}",
+			"photosOfflineHint": "Photos are unavailable offline."
 		}
 	},
 	"about": {
@@ -156,6 +157,7 @@
 		"wayPoint": "Way point",
 		"setPosition": "Set",
 		"updatePosition": "Update",
+		"elevationIgnored": "Elevation ignored (offline)",
 		"pump": {
 			"title": "Pump",
 			"inputPressure": "Input Pressure (bar)",
@@ -200,7 +202,8 @@
 	"addressSearch": {
 		"placeholder": "Search address...",
 		"noResults": "No results found",
-		"error": "Search failed"
+		"error": "Search failed",
+		"offlineHint": "Address search is unavailable offline."
 	},
 	"markerEdit": {
 		"title": {

@@ -30,6 +30,8 @@ export interface CalculationResult {
 	pumpCount: number;
 	elevationData: ElevationPoint[];
 	pumpPositions: PumpPosition[];
+	/** True when elevation was ignored (offline flat-terrain fallback) for this result. */
+	elevationIgnored: boolean;
 }
 
 const calculationResult = ref<CalculationResult | null>(null);
@@ -340,7 +342,7 @@ export function usePumpCalculation() {
 		);
 		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
 		console.log('Full Distance', distance);
-		const elevationData = await getElevationDataForPoints(points);
+		const { points: elevationData, elevationIgnored } = await getElevationDataForPoints(points);
 		const { realDistance, pumpPositions } = await getPumpLocationMarkers(t, elevationData);
 		updateTargetMarker(pumpPositions, realDistance, elevationData);
 
@@ -362,7 +364,8 @@ export function usePumpCalculation() {
 			elevation: elevationData[elevationData.length - 1].elevation - elevationData[0].elevation,
 			suctionPoint,
 			targetPoint,
-			wayPoints
+			wayPoints,
+			elevationIgnored
 		};
 	};
 
