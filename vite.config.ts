@@ -86,7 +86,11 @@ const pwaOptions: Partial<VitePWAOptions> = {
 			? { globPatterns: [] }
 			: {
 					globIgnores: ['**/land.html'],
-					navigateFallbackDenylist: [/^\/land\.html/]
+					navigateFallbackDenylist: [/^\/land\.html/],
+					// The main chunk grew past workbox's 2 MiB default with the offline
+					// feature; the app shell must stay precached or the PWA won't start
+					// without connectivity.
+					maximumFileSizeToCacheInBytes: 3 * 1024 * 1024
 				}),
 		runtimeCaching: [
 			{
