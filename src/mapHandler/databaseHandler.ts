@@ -377,9 +377,20 @@ export async function getOfflineArea(id: number): Promise<OfflineArea | undefine
 	}
 }
 
+/**
+ * Deep-copies a record into plain objects. Callers hand in values that may be
+ * (or contain) Vue reactive proxies — e.g. bounds coming from a `ref` in the
+ * add-area form, or a selected marker's `tags` — and IndexedDB's structured
+ * clone throws a `DataCloneError` on proxies. Area and pending-edit records
+ * are pure JSON data, so a JSON round-trip is loss-free.
+ */
+function toPlain<T>(value: T): T {
+	return JSON.parse(JSON.stringify(value)) as T;
+}
+
 /** Persists a new offline area and returns its generated id. */
 export async function addOfflineArea(area: OfflineArea): Promise<number> {
-	const key = await (await dbPromise).add(offlineAreasStoreName, area);
+	const key = await (await dbPromise).add(offlineAreasStoreName, toPlain(area));
 	return key as number;
 }
 
@@ -392,7 +403,7 @@ export async function updateOfflineArea(id: number, patch: Partial<OfflineArea>)
 		const db = await dbPromise;
 		const existing = (await db.get(offlineAreasStoreName, id)) as OfflineArea | undefined;
 		if (!existing) return;
-		await db.put(offlineAreasStoreName, { ...existing, ...patch, id });
+		await db.put(offlineAreasStoreName, toPlain({ ...existing, ...patch, id }));
 	} catch (e) {
 		console.error('Error updating offline area:', e);
 	}
@@ -415,7 +426,7 @@ export async function deleteOfflineArea(id: number): Promise<void> {
 
 /** Persists a new queued edit and returns its generated `localId`. */
 export async function addPendingEdit(edit: PendingEdit): Promise<number> {
-	const key = await (await dbPromise).add(pendingEditsStoreName, edit);
+	const key = await (await dbPromise).add(pendingEditsStoreName, toPlain(edit));
 	return key as number;
 }
 
@@ -465,7 +476,7 @@ export async function updatePendingEdit(
 		const db = await dbPromise;
 		const existing = (await db.get(pendingEditsStoreName, localId)) as PendingEdit | undefined;
 		if (!existing) return;
-		await db.put(pendingEditsStoreName, { ...existing, ...patch, localId });
+		await db.put(pendingEditsStoreName, toPlain({ ...existing, ...patch, localId }));
 	} catch (e) {
 		console.error('Error updating pending edit:', e);
 	}
