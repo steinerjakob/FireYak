@@ -38,6 +38,13 @@ export interface OfflineArea {
 	progress: { done: number; total: number };
 	/** Resume info: index of the last successfully completed data chunk (−1 = none). */
 	lastCompletedChunk: number;
+	/**
+	 * Tile-phase resume cursor: per-source count of tiles already processed
+	 * (`{ protomaps: n, satellite: n, terrain: n }`). Optional — absent on records
+	 * created before the tile package and reset to `{}` on refresh. As a new
+	 * optional field it needs no IndexedDB migration.
+	 */
+	tileResume?: Record<string, number>;
 }
 
 /**

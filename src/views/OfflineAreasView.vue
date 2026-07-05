@@ -126,6 +126,7 @@
 
 					<div class="estimate">
 						<p>{{ estimateLine }}</p>
+						<p v-if="sizeEstimateLine">{{ sizeEstimateLine }}</p>
 						<p v-if="tooLarge" class="estimate-error">
 							{{ $t('offlineAreas.add.tooLarge') }}
 						</p>
@@ -192,6 +193,12 @@ import { GeoBounds, GeoPoint } from '@/types/geo';
 import { useNetworkStatus } from '@/composable/networkStatus';
 import { useOfflineAreasStore, isAreaTooLarge } from '@/store/offlineAreasStore';
 import { countChunks } from '@/offline/areaDataDownloader';
+import {
+	tileCount,
+	PROTOMAPS_MAX_ZOOM,
+	SATELLITE_MAX_ZOOM,
+	TERRAIN_MAX_ZOOM
+} from '@/offline/tileMath';
 import type { OfflineArea } from '@/mapHandler/databaseHandler';
 
 const { t, locale } = useI18n();
@@ -381,14 +388,42 @@ const estimateLine = computed(() => {
 	const midLat = (b.north + b.south) / 2;
 	const widthKm = (b.east - b.west) * 111 * Math.cos((midLat * Math.PI) / 180);
 	const heightKm = (b.north - b.south) * 111;
-	// Node/tile counts are only known after download; show the covered area and
-	// chunk count as the pre-download estimate. TODO(tiles): add a tile-size
-	// range here once the tile package lands (plan §2.6).
 	return t('offlineAreas.add.estimate', {
 		width: widthKm.toFixed(1),
 		height: heightKm.toFixed(1),
 		chunks: countChunks(b)
 	});
+});
+
+/**
+ * Calibration constants for the pre-download size estimate (plan §2.6). Average
+ * compressed bytes per tile per source — rough, so the estimate is shown as a
+ * ±40% range rather than a fake exact figure.
+ */
+const AVG_TILE_BYTES: Record<string, number> = {
+	protomaps: 45_000,
+	satellite: 25_000,
+	terrain: 35_000
+};
+
+/** Estimated total download bytes for the current bounds + toggles. */
+const estimateBytes = computed(() => {
+	const b = selectedBounds.value;
+	if (!b) return 0;
+	let bytes = tileCount(b, 0, PROTOMAPS_MAX_ZOOM) * AVG_TILE_BYTES.protomaps;
+	if (includeSatellite.value)
+		bytes += tileCount(b, 0, SATELLITE_MAX_ZOOM) * AVG_TILE_BYTES.satellite;
+	if (includeTerrain.value) bytes += tileCount(b, 0, TERRAIN_MAX_ZOOM) * AVG_TILE_BYTES.terrain;
+	return bytes;
+});
+
+/** Formats the estimate as a range string, e.g. "30–50 MB". */
+const sizeEstimateLine = computed(() => {
+	if (!selectedBounds.value) return '';
+	const mb = estimateBytes.value / (1024 * 1024);
+	const low = Math.max(1, Math.round(mb * 0.6));
+	const high = Math.max(low, Math.round(mb * 1.4));
+	return t('offlineAreas.add.sizeEstimate', { low: formatCount(low), high: formatCount(high) });
 });
 
 function openAddModal(): void {
