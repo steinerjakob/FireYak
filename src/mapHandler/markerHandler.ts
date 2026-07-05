@@ -143,7 +143,16 @@ function markTilesFresh(keys: string[]): void {
 	}
 }
 
-async function reconcileDeletedNodes(mapBounds: GeoBounds, freshElements: OverPassElement[]) {
+/**
+ * Hard-deletes cached nodes in `mapBounds` that are absent from `freshElements`.
+ * Callers must only invoke this when the fresh result is **not** truncated by
+ * the Overpass 2000-element limit, otherwise cut-off nodes would be wrongly
+ * deleted. Exported for reuse by the offline area refresh (§1.2).
+ */
+export async function reconcileDeletedNodes(
+	mapBounds: GeoBounds,
+	freshElements: OverPassElement[]
+) {
 	const freshIds = new Set(freshElements.map((e) => e.id));
 	const cachedIds = await getMapNodeIdsForBounds(mapBounds);
 	const staleIds = cachedIds.filter((id) => !freshIds.has(id));

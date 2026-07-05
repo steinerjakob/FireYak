@@ -47,6 +47,16 @@
 					></ion-toggle>
 				</ion-item>
 
+				<!-- Offline Section -->
+				<ion-list-header>
+					<ion-label>{{ $t('settings.offline.title') }}</ion-label>
+				</ion-list-header>
+
+				<ion-item button detail router-link="/settings/offline-areas">
+					<ion-icon slot="start" :icon="cloudDownloadOutline"></ion-icon>
+					<ion-label>{{ $t('settings.offline.offlineAreas') }}</ion-label>
+				</ion-item>
+
 				<!-- Account Section -->
 				<ion-list-header>
 					<ion-label>{{ $t('settings.account.title') }}</ion-label>
@@ -109,7 +119,7 @@ import {
 	SegmentCustomEvent,
 	ToggleCustomEvent
 } from '@ionic/vue';
-import { logInOutline, logOutOutline, openOutline } from 'ionicons/icons';
+import { logInOutline, logOutOutline, openOutline, cloudDownloadOutline } from 'ionicons/icons';
 import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
