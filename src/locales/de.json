@@ -344,7 +344,47 @@
 		},
 		"offline": {
 			"title": "Offline",
-			"offlineAreas": "Offline-Bereiche"
+			"offlineAreas": "Offline-Bereiche",
+			"pendingEdits": "Ausstehende Änderungen"
+		}
+	},
+	"pendingEdits": {
+		"title": "Ausstehende Änderungen",
+		"offlineHint": "Du bist offline. Änderungen werden synchronisiert, sobald du wieder online bist.",
+		"noExtraTags": "keine weiteren Angaben",
+		"empty": {
+			"title": "Alles synchronisiert",
+			"description": "Offline vorgenommene Änderungen erscheinen hier und werden automatisch synchronisiert, sobald du wieder online bist."
+		},
+		"status": {
+			"pending": "Ausstehend",
+			"uploading": "Wird hochgeladen…",
+			"conflict": "Konflikt",
+			"error": "Fehlgeschlagen"
+		},
+		"actions": {
+			"create": "Neue Wasserentnahmestelle",
+			"update": "Bearbeitung",
+			"delete": "Entfernung",
+			"retry": "Erneut versuchen",
+			"discard": "Verwerfen",
+			"syncNow": "Jetzt synchronisieren"
+		},
+		"conflict": {
+			"mine": "Deine Änderung",
+			"server": "Aktuell auf OSM",
+			"loading": "Wird geladen…",
+			"serverMissing": "Nicht mehr auf OpenStreetMap vorhanden",
+			"applyMine": "Meine trotzdem übernehmen",
+			"discard": "Verwerfen"
+		},
+		"discardDialog": {
+			"title": "Änderung verwerfen?",
+			"message": "Diese vorgemerkte Änderung wird verworfen und die Karte zeigt wieder die OpenStreetMap-Version."
+		},
+		"messages": {
+			"queued": "Änderung gespeichert – sie wird synchronisiert, sobald du wieder online bist.",
+			"synced": "{count} Änderung(en) synchronisiert"
 		}
 	}
 }

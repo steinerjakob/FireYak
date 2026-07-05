@@ -4,12 +4,15 @@ import { GeoPoint } from '@/types/geo';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
+import { usePendingEditsStore } from '@/store/pendingEditsStore';
 import { storeMapNodes, deleteMapNode } from '@/mapHandler/databaseHandler';
 import { toastController, alertController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import * as OSM from 'osm-api';
 import { useRoute, useRouter } from 'vue-router';
 import { version } from '@/../package.json';
+import { useNetworkStatus } from '@/composable/networkStatus';
+import { enqueueEdit, isNetworkError } from '@/offline/editQueue';
 
 export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const isEditing = ref(false);
@@ -22,6 +25,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 
 	const osmAuthStore = useOsmAuthStore();
 	const markerStore = useMapMarkerStore();
+	const pendingEditsStore = usePendingEditsStore();
+	const { isOnline } = useNetworkStatus();
 	const { t } = useI18n();
 
 	const isActive = computed(() => isEditing.value || isAdding.value);
@@ -102,18 +107,72 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		originalMarker.value = null;
 	}
 
+	/** Toast shown when an edit is queued for later sync instead of uploaded. */
+	async function showQueuedToast() {
+		const toast = await toastController.create({
+			message: t('pendingEdits.messages.queued'),
+			duration: 2500,
+			color: 'warning'
+		});
+		await toast.present();
+	}
+
+	/**
+	 * Persists the current save/delete into the offline queue instead of uploading
+	 * it. Used when we're offline, when an online upload fails with a network
+	 * error, or when the edited node is itself a not-yet-synced offline create
+	 * (negative id) — the latter must never hit the OSM API, so `enqueueEdit`
+	 * coalesces it into the queue.
+	 */
+	async function enqueueCurrentEdit(finalTags: Record<string, string>, lat: number, lon: number) {
+		if (isAdding.value) {
+			await enqueueEdit({ action: 'create', osmId: 0, baseTags: null, tags: finalTags, lat, lon });
+		} else if (isEditing.value && originalMarker.value) {
+			await enqueueEdit({
+				action: 'update',
+				osmId: originalMarker.value.id,
+				baseTags: originalMarker.value.tags ?? null,
+				tags: finalTags,
+				lat,
+				lon
+			});
+			markerStore.updateSelectedMarker({
+				id: originalMarker.value.id,
+				type: 'node',
+				lat,
+				lon,
+				tags: finalTags
+			});
+		} else {
+			return;
+		}
+		await pendingEditsStore.refresh();
+		await showQueuedToast();
+		cancelEdit();
+	}
+
 	async function saveMarker() {
 		if (!osmAuthStore.isAuthenticated) {
 			return;
 		}
 
+		// Filter out empty string values — empty means "remove this tag"
+		const finalTags = Object.fromEntries(
+			Object.entries(editableTags.value).filter(([, v]) => v !== '' && v != null)
+		);
+		const lat = pendingLocation.value?.lat || 0;
+		const lon = pendingLocation.value?.lng || 0;
+
+		// Offline, or editing a node that is still a pending offline create
+		// (negative id) — queue it; the online path would fail / hit OSM with a
+		// temp id.
+		const isTempNode = (originalMarker.value?.id ?? 0) < 0;
+		if (!isOnline.value || isTempNode) {
+			await enqueueCurrentEdit(finalTags, lat, lon);
+			return;
+		}
+
 		try {
-			// Filter out empty string values — empty means "remove this tag"
-			const finalTags = Object.fromEntries(
-				Object.entries(editableTags.value).filter(([, v]) => v !== '' && v != null)
-			);
-			const lat = pendingLocation.value?.lat || 0;
-			const lon = pendingLocation.value?.lng || 0;
 			let result: OSM.UploadResult;
 
 			if (isAdding.value) {
@@ -183,6 +242,12 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				cancelEdit();
 			}
 		} catch (e) {
+			// A network failure mid-upload → fall back to the offline queue rather
+			// than telling the user the save failed.
+			if (isNetworkError(e)) {
+				await enqueueCurrentEdit(finalTags, lat, lon);
+				return;
+			}
 			console.error('Failed to save to OSM', e);
 			const toast = await toastController.create({
 				message: t('markerEdit.messages.saveError'),
@@ -218,8 +283,34 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		await alert.present();
 	}
 
+	/** Queues a delete for later sync (offline, temp node, or network fallback). */
+	async function enqueueDelete() {
+		if (!originalMarker.value) return;
+		const marker = originalMarker.value;
+		await enqueueEdit({
+			action: 'delete',
+			osmId: marker.id,
+			baseTags: marker.tags ?? null,
+			tags: marker.tags ?? {},
+			lat: marker.lat ?? 0,
+			lon: marker.lon ?? 0
+		});
+		await pendingEditsStore.refresh();
+		markerStore.selectMarker(null);
+		cancelEdit();
+		await showQueuedToast();
+	}
+
 	async function deleteMarker() {
 		if (!osmAuthStore.isAuthenticated || !originalMarker.value) {
+			return;
+		}
+
+		// Offline, or the node is still a pending offline create (negative id) —
+		// queue it; enqueueEdit drops the create instead of calling OSM.
+		const isTempNode = originalMarker.value.id < 0;
+		if (!isOnline.value || isTempNode) {
+			await enqueueDelete();
 			return;
 		}
 
@@ -246,6 +337,11 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			});
 			await toast.present();
 		} catch (e) {
+			// Network failure mid-upload → fall back to the offline queue.
+			if (isNetworkError(e)) {
+				await enqueueDelete();
+				return;
+			}
 			console.error('Failed to delete from OSM', e);
 			const toast = await toastController.create({
 				message: t('markerEdit.messages.deleteError'),

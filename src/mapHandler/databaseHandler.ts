@@ -399,3 +399,76 @@ export async function deleteOfflineArea(id: number): Promise<void> {
 		console.error('Error deleting offline area:', e);
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Offline edit queue CRUD (§1.3)
+// DB access lives here (repo convention); the queue/sync logic sits in
+// `src/offline/editQueue.ts`.
+// ---------------------------------------------------------------------------
+
+/** Persists a new queued edit and returns its generated `localId`. */
+export async function addPendingEdit(edit: PendingEdit): Promise<number> {
+	const key = await (await dbPromise).add(pendingEditsStoreName, edit);
+	return key as number;
+}
+
+/** Returns all queued edits in FIFO order (ascending `localId`). */
+export async function getAllPendingEdits(): Promise<PendingEdit[]> {
+	try {
+		return (await (await dbPromise).getAll(pendingEditsStoreName)) as PendingEdit[];
+	} catch (e) {
+		console.error('Error reading pending edits:', e);
+		return [];
+	}
+}
+
+/**
+ * Returns queued edits with the given status. Because the query is scoped to a
+ * single status value, IndexedDB yields the matches in primary-key order, i.e.
+ * FIFO by `localId` — the order the sync engine relies on.
+ */
+export async function getPendingEditsByStatus(
+	status: PendingEdit['status']
+): Promise<PendingEdit[]> {
+	try {
+		const db = await dbPromise;
+		return (await db.getAllFromIndex(pendingEditsStoreName, 'status', status)) as PendingEdit[];
+	} catch (e) {
+		console.error('Error reading pending edits by status:', e);
+		return [];
+	}
+}
+
+/** Returns a single queued edit by id, or `undefined` if it no longer exists. */
+export async function getPendingEdit(localId: number): Promise<PendingEdit | undefined> {
+	try {
+		return (await (await dbPromise).get(pendingEditsStoreName, localId)) as PendingEdit | undefined;
+	} catch (e) {
+		console.error('Error reading pending edit:', e);
+		return undefined;
+	}
+}
+
+/** Merges `patch` into the stored edit. No-op if the edit no longer exists. */
+export async function updatePendingEdit(
+	localId: number,
+	patch: Partial<PendingEdit>
+): Promise<void> {
+	try {
+		const db = await dbPromise;
+		const existing = (await db.get(pendingEditsStoreName, localId)) as PendingEdit | undefined;
+		if (!existing) return;
+		await db.put(pendingEditsStoreName, { ...existing, ...patch, localId });
+	} catch (e) {
+		console.error('Error updating pending edit:', e);
+	}
+}
+
+/** Removes a queued edit (e.g. after it has been synced or discarded). */
+export async function deletePendingEdit(localId: number): Promise<void> {
+	try {
+		await (await dbPromise).delete(pendingEditsStoreName, localId);
+	} catch (e) {
+		console.error('Error deleting pending edit:', e);
+	}
+}

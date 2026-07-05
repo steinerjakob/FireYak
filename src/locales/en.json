@@ -344,7 +344,47 @@
 		},
 		"offline": {
 			"title": "Offline",
-			"offlineAreas": "Offline areas"
+			"offlineAreas": "Offline areas",
+			"pendingEdits": "Pending changes"
+		}
+	},
+	"pendingEdits": {
+		"title": "Pending changes",
+		"offlineHint": "You're offline. Changes will sync once you're back online.",
+		"noExtraTags": "no further details",
+		"empty": {
+			"title": "Everything is synced",
+			"description": "Edits you make while offline appear here and sync automatically when you're back online."
+		},
+		"status": {
+			"pending": "Pending",
+			"uploading": "Uploading…",
+			"conflict": "Conflict",
+			"error": "Failed"
+		},
+		"actions": {
+			"create": "New water source",
+			"update": "Edit",
+			"delete": "Removal",
+			"retry": "Retry",
+			"discard": "Discard",
+			"syncNow": "Sync now"
+		},
+		"conflict": {
+			"mine": "Your change",
+			"server": "Current on OSM",
+			"loading": "Loading…",
+			"serverMissing": "No longer on OpenStreetMap",
+			"applyMine": "Apply mine anyway",
+			"discard": "Discard"
+		},
+		"discardDialog": {
+			"title": "Discard change?",
+			"message": "This queued change will be dropped and the map will show the OpenStreetMap version again."
+		},
+		"messages": {
+			"queued": "Change saved — it will sync when you're back online.",
+			"synced": "{count} change(s) synced"
 		}
 	}
 }
