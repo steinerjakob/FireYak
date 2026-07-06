@@ -604,6 +604,10 @@ async function confirmDownload(): Promise<void> {
 	width: 100%;
 	height: 45vh;
 	min-height: 260px;
+	/* Clip the capture-rect's 9999px box-shadow scrim to the map — without
+	   this it bleeds over the whole modal body and dims every transparent
+	   area (chips row, estimate, button margins) to a muddy gray. */
+	overflow: hidden;
 }
 
 .picker-map {
