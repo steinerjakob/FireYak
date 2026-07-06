@@ -315,7 +315,8 @@ function onSelectResult(feature: PhotonFeature) {
 	gap: 8px;
 	background: var(--md-sys-background);
 	--background: var(--md-sys-background);
-	--color: var(--md-sys-on-surface);
+	/* Real color property — a --color custom prop has no effect on plain spans */
+	color: var(--md-sys-on-surface);
 	padding: 10px 16px;
 	font-size: 13px;
 	border-radius: 0 0 16px 16px;

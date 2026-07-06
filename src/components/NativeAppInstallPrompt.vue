@@ -154,7 +154,7 @@ h2 {
 	font-size: 14px;
 	line-height: 1.4;
 	margin-bottom: 20px;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 }
 
 .benefit-item ion-icon {
@@ -192,7 +192,7 @@ h2 {
 }
 
 .secondary-action {
-	--color: var(--ion-color-medium);
+	--color: var(--md-sys-on-surface-variant);
 	--border-radius: 12px;
 
 	height: 40px;
@@ -236,7 +236,7 @@ h2 {
 	.dialog-container {
 		--ion-color-background: var(--ion-color-dark);
 
-		border: 1px solid var(--ion-color-medium-shade);
+		border: 1px solid var(--md-sys-outline-variant);
 	}
 }
 </style>

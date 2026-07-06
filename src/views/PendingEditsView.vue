@@ -310,7 +310,7 @@ async function confirmDiscard(edit: PendingEdit): Promise<void> {
 	align-items: center;
 	gap: 8px;
 	padding: 12px 16px;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 	font-size: 0.9rem;
 }
 
@@ -354,7 +354,7 @@ async function confirmDiscard(edit: PendingEdit): Promise<void> {
 .conflict-col h4 {
 	margin: 4px 0;
 	font-size: 0.8rem;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 	text-transform: uppercase;
 	letter-spacing: 0.03em;
 }
@@ -372,7 +372,7 @@ async function confirmDiscard(edit: PendingEdit): Promise<void> {
 }
 
 .muted {
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 	font-size: 0.85rem;
 }
 

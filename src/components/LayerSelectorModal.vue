@@ -179,7 +179,7 @@ ion-modal.layer-selector-modal {
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 	margin-bottom: 4px;
 }
 
@@ -199,6 +199,6 @@ ion-modal.layer-selector-modal {
 
 .subtype-label {
 	font-size: 13px;
-	color: var(--ion-color-medium-shade);
+	color: var(--md-sys-on-surface-variant);
 }
 </style>
