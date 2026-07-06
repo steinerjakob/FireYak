@@ -13,6 +13,47 @@ const OVERPASS_INSTANCES = [
 ];
 
 // ---------------------------------------------------------------------------
+// Client identification (Overpass usage policy)
+// The OSM wiki asks apps to send a User-Agent or Referer that uniquely
+// identifies them. Browsers forbid setting those headers directly, so we use
+// the fetch `referrer` option instead. It must be same-origin with the app,
+// therefore the identification lives in the path: the app hostname plus a
+// random per-install id, so not every user shares one identity (and one
+// rate-limit bucket) at the Overpass servers.
+// ---------------------------------------------------------------------------
+
+const CLIENT_ID_STORAGE_KEY = 'overpassClientId';
+
+let cachedClientReferrer: string | null = null;
+
+/** Random id generated once per install and persisted across sessions. */
+function getClientId(): string {
+	try {
+		let id = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+		if (!id) {
+			id = crypto.randomUUID();
+			localStorage.setItem(CLIENT_ID_STORAGE_KEY, id);
+		}
+		return id;
+	} catch {
+		// localStorage unavailable (private mode etc.) → session-unique fallback
+		return crypto.randomUUID();
+	}
+}
+
+/**
+ * Same-origin referrer URL identifying this app install, e.g.
+ * `https://fireyak.example/overpass-client/2f9c…`. Sent with every Overpass
+ * request via the `referrer` fetch option (see {@link fetchFromInstance}).
+ */
+function getClientReferrer(): string {
+	if (!cachedClientReferrer) {
+		cachedClientReferrer = `${location.origin}/overpass-client/${getClientId()}`;
+	}
+	return cachedClientReferrer;
+}
+
+// ---------------------------------------------------------------------------
 // Timeouts (client-side, in addition to the Overpass [timeout:…] directive)
 // ---------------------------------------------------------------------------
 
@@ -179,6 +220,12 @@ async function fetchFromInstance(
 	const response = await fetch(baseUrl, {
 		method: 'POST',
 		body: new URLSearchParams({ data: query }),
+		// Identify this app install per the Overpass usage policy. `Referer` is a
+		// forbidden header, so the `referrer` option is the only way to set it;
+		// without `unsafe-url` the default policy would strip the identifying
+		// path down to the bare origin on this cross-origin request.
+		referrer: getClientReferrer(),
+		referrerPolicy: 'unsafe-url',
 		signal
 	});
 
