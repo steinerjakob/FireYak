@@ -110,6 +110,6 @@ onUnmounted(() => {
 
 .offline-photos-icon {
 	font-size: 40px;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 }
 </style>

@@ -587,7 +587,7 @@ async function confirmDownload(): Promise<void> {
 
 .empty-icon {
 	font-size: 64px;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 }
 
 .offline-hint {
@@ -595,7 +595,7 @@ async function confirmDownload(): Promise<void> {
 	align-items: center;
 	gap: 8px;
 	padding: 12px 16px;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 	font-size: 0.9rem;
 }
 
@@ -647,14 +647,14 @@ async function confirmDownload(): Promise<void> {
 
 .radius-label {
 	font-size: 0.9rem;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 	margin-right: 4px;
 }
 
 .estimate {
 	padding: 12px 16px;
 	font-size: 0.9rem;
-	color: var(--ion-color-medium);
+	color: var(--md-sys-on-surface-variant);
 }
 
 .estimate-error {
