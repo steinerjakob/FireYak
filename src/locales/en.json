@@ -289,8 +289,10 @@
 			"description": "Download a district so its water sources stay available without a connection."
 		},
 		"status": {
-			"downloading": "Downloading… {done}/{total}",
-			"refreshing": "Refreshing… {done}/{total}",
+			"loadingSources": "Loading water sources… ({done}/{total})",
+			"refreshingSources": "Refreshing water sources… ({done}/{total})",
+			"loadingTiles": "Downloading map tiles… {percent}%",
+			"refreshingTiles": "Checking map tiles… {percent}%",
 			"error": "Download incomplete",
 			"nodeCount": "{count} water sources",
 			"lastRefreshed": "updated {date}"

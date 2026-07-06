@@ -88,9 +88,25 @@ export interface CreateAreaInput {
 	autoRefreshOnWifi: boolean;
 }
 
+/** The two phases of an area download, used only for progress UX. */
+export type DownloadPhase = 'data' | 'tiles';
+
 export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 	const areas = ref<OfflineArea[]>([]);
 	let initialized = false;
+
+	/**
+	 * Transient per-area download phase (not persisted). The data phase is a
+	 * handful of slow Overpass calls with no incremental progress, while the
+	 * tile phase ticks thousands of times — the UI renders them differently
+	 * (indeterminate bar + chunk counter vs. determinate bar + percent).
+	 */
+	const phases = ref<Record<number, DownloadPhase>>({});
+
+	/** Current download phase for the area, or `undefined` when idle. */
+	function phaseOf(id: number | undefined): DownloadPhase | undefined {
+		return id != null ? phases.value[id] : undefined;
+	}
 
 	/** Replaces the reactive record for `id` with a patched copy. */
 	function patchLocal(id: number, patch: Partial<OfflineArea>): void {
@@ -182,6 +198,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 
 		try {
 			// --- Phase 1: water-source data ---
+			phases.value[id] = 'data';
 			await downloadAreaData(
 				{
 					bounds: area.bounds,
@@ -202,6 +219,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 			// --- Phase 2: map tiles + style assets ---
 			// Assets first (small, idempotent) so labels/icons render as soon as the
 			// tiles arrive.
+			phases.value[id] = 'tiles';
 			await downloadStyleAssets(signal);
 
 			const currentArea = areas.value.find((a) => a.id === id) ?? area;
@@ -241,6 +259,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 			}
 			await persist(id, { status: 'error' });
 		} finally {
+			delete phases.value[id];
 			if (controllers.get(id) === controller) {
 				controllers.delete(id);
 			}
@@ -340,6 +359,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 
 	return {
 		areas,
+		phaseOf,
 		init,
 		createArea,
 		retryArea,
