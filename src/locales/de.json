@@ -289,8 +289,10 @@
 			"description": "Lade einen Bereich herunter, damit die Wasserentnahmestellen auch ohne Verbindung verfügbar bleiben."
 		},
 		"status": {
-			"downloading": "Wird heruntergeladen … {done}/{total}",
-			"refreshing": "Wird aktualisiert … {done}/{total}",
+			"loadingSources": "Wasserentnahmestellen werden geladen … ({done}/{total})",
+			"refreshingSources": "Wasserentnahmestellen werden aktualisiert … ({done}/{total})",
+			"loadingTiles": "Kartenkacheln werden geladen … {percent} %",
+			"refreshingTiles": "Kartenkacheln werden geprüft … {percent} %",
 			"error": "Download unvollständig",
 			"nodeCount": "{count} Wasserentnahmestellen",
 			"lastRefreshed": "aktualisiert {date}"

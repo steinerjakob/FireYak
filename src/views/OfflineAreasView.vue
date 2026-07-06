@@ -38,8 +38,13 @@
 					<ion-label>
 						<h2>{{ area.name }}</h2>
 						<p>{{ statusLine(area) }}</p>
+						<!-- The data phase is a few slow Overpass calls without incremental
+						     progress — an indeterminate bar signals activity instead of
+						     appearing stuck. The tile phase ticks often enough for a
+						     determinate bar. -->
 						<ion-progress-bar
 							v-if="area.status === 'downloading' || area.status === 'refreshing'"
+							:type="store.phaseOf(area.id) === 'data' ? 'indeterminate' : 'determinate'"
 							:value="progressValue(area)"
 						></ion-progress-bar>
 					</ion-label>
@@ -235,24 +240,40 @@ function progressValue(area: OfflineArea): number {
 	return area.progress.done / area.progress.total;
 }
 
+/**
+ * Phase-specific progress text: a chunk counter while Overpass data loads
+ * (each chunk is one long-running call) and a percentage during the much
+ * finer-grained tile phase.
+ */
+function downloadDetail(area: OfflineArea, refreshing: boolean): string {
+	if (store.phaseOf(area.id) === 'data') {
+		const total = countChunks(area.bounds);
+		// While chunk i is in flight, lastCompletedChunk is i-1 → 1-based i+1.
+		const current = Math.min(area.lastCompletedChunk + 2, total);
+		return t(
+			refreshing ? 'offlineAreas.status.refreshingSources' : 'offlineAreas.status.loadingSources',
+			{
+				done: current,
+				total
+			}
+		);
+	}
+	return t(
+		refreshing ? 'offlineAreas.status.refreshingTiles' : 'offlineAreas.status.loadingTiles',
+		{
+			percent: Math.round(progressValue(area) * 100)
+		}
+	);
+}
+
 function statusLine(area: OfflineArea): string {
 	const parts: string[] = [];
 	switch (area.status) {
 		case 'downloading':
-			parts.push(
-				t('offlineAreas.status.downloading', {
-					done: area.progress.done,
-					total: area.progress.total
-				})
-			);
+			parts.push(downloadDetail(area, false));
 			break;
 		case 'refreshing':
-			parts.push(
-				t('offlineAreas.status.refreshing', {
-					done: area.progress.done,
-					total: area.progress.total
-				})
-			);
+			parts.push(downloadDetail(area, true));
 			break;
 		case 'error':
 			parts.push(t('offlineAreas.status.error'));
