@@ -98,9 +98,10 @@
 		<div v-if="!isOnline" class="offline-banner">
 			{{ $t('network.offline') }}
 		</div>
-		<!-- Marker loading indicator -->
-		<div v-if="isLoadingMarkers" class="marker-loading-indicator">
-			<ion-spinner name="crescent" color="none"></ion-spinner>
+		<!-- Marker fetch indicator — visible for background refreshes too, so the
+		     user sees activity while Overpass data loads for the current view -->
+		<div v-if="isFetchingMarkers" class="marker-loading-indicator">
+			<ion-spinner name="crescent" color="primary"></ion-spinner>
 		</div>
 		<ion-fab class="location-fab" vertical="bottom" horizontal="end" slot="fixed">
 			<ion-fab-button color="light" @click="showUserLocation" title="Location">
@@ -136,7 +137,7 @@ import {
 	getMarkersForView,
 	getNearbyMarkers,
 	markerIconUrls,
-	isLoadingMarkers,
+	isFetchingMarkers,
 	markerFetchFailed
 } from '@/mapHandler/markerHandler';
 import { useNetworkStatus } from '@/composable/networkStatus';
@@ -1434,10 +1435,16 @@ ion-fab {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 24px;
-	height: 24px;
+	width: 28px;
+	height: 28px;
 	border-radius: 50%;
+	background: var(--md-sys-surface-container);
 	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.marker-loading-indicator ion-spinner {
+	width: 20px;
+	height: 20px;
 }
 
 .fab-vertical-top {

@@ -40,6 +40,12 @@ const MAX_COOLDOWN_SECONDS = 3600;
 
 let areaQueryController: AbortController | null = null;
 
+// The area query currently in flight. Aborting a superseded request does NOT
+// refund its server-side rate-limit slot, so byte-identical queries (map load
+// + style reload + moveend often ask for the same bounds within a second)
+// share the in-flight promise instead of abort-and-resend.
+let inflightAreaQuery: { query: string; promise: Promise<OverPassElement[] | null> } | null = null;
+
 // ---------------------------------------------------------------------------
 // Last-area-query failure flag
 // Tracks whether the most recent call to fetchMarkerData ended in a genuine
@@ -91,8 +97,12 @@ const MAX_AREA_SPAN_DEGREES = 0.5;
  * Clamps the requested bounds to at most {@link MAX_AREA_SPAN_DEGREES} on each
  * axis, keeping the same center. Huge desktop viewports would otherwise ask the
  * server for an area so large it overruns the `[timeout:15]` directive.
+ *
+ * Exported so callers that track which area was actually fetched (freshness
+ * stamps, stale-node reconciliation) can apply the exact same clamping instead
+ * of assuming their requested bounds were fetched in full.
  */
-function clampBounds(mapBounds: GeoBounds): GeoBounds {
+export function clampBounds(mapBounds: GeoBounds): GeoBounds {
 	const clampAxis = (low: number, high: number): { low: number; high: number } => {
 		const span = high - low;
 		if (span <= MAX_AREA_SPAN_DEGREES) {
@@ -188,7 +198,8 @@ async function fetchFromInstance(
  * Runs a query against the instance pool, trying each interpreter in order.
  *
  * - Instances currently on a 429 cool-down are skipped; if every instance is
- *   cooled down they are all tried anyway (best effort).
+ *   cooled down the query fails immediately instead of burning more
+ *   rate-limit budget.
  * - Each attempt gets its own {@link PER_ATTEMPT_TIMEOUT_MS} timeout, combined
  *   with `outerSignal` via `AbortSignal.any`.
  * - If `outerSignal` aborts (the request was superseded, or an owner-level
@@ -199,8 +210,13 @@ async function fetchFromInstance(
  * @throws the last encountered error when every attempted instance fails.
  */
 async function fetchFromPool(query: string, outerSignal: AbortSignal): Promise<OverPassElement[]> {
-	const available = OVERPASS_INSTANCES.filter((url) => !isCooledDown(url));
-	const instances = available.length > 0 ? available : OVERPASS_INSTANCES;
+	const instances = OVERPASS_INSTANCES.filter((url) => !isCooledDown(url));
+	if (instances.length === 0) {
+		// Every instance recently answered 429. Hitting them again would only
+		// burn more rate-limit budget and extend the cool-downs — fail fast and
+		// let the cache/freshness layers serve what they have.
+		throw new Error('All Overpass instances are rate-limited (429 cool-down)');
+	}
 
 	let lastError: unknown = new Error('No Overpass instances available');
 	for (const baseUrl of instances) {
@@ -229,7 +245,10 @@ async function fetchFromPool(query: string, outerSignal: AbortSignal): Promise<O
 /**
  * Fetches marker data from the Overpass API for the given map bounds.
  *
- * - Automatically **aborts** any previous in-flight area query so only the
+ * - **Reuses** an identical in-flight area query (same bounds → same promise)
+ *   instead of re-sending it — aborting doesn't refund the server-side
+ *   rate-limit slot, so re-sending identical queries invites 429s.
+ * - Otherwise **aborts** any previous in-flight area query so only the
  *   latest request completes (prevents "too many requests" errors during
  *   rapid map panning).
  * - Runs against the ordered {@link OVERPASS_INSTANCES} pool, moving to the
@@ -245,7 +264,15 @@ async function fetchFromPool(query: string, outerSignal: AbortSignal): Promise<O
  *          response" and avoid deleting cached markers.
  */
 export async function fetchMarkerData(mapBounds: GeoBounds): Promise<OverPassElement[] | null> {
-	// Cancel any previous in-flight area query
+	const query = buildAreaQuery(mapBounds);
+
+	// Identical query already in flight → share its result instead of
+	// aborting it and re-sending the same request.
+	if (inflightAreaQuery && inflightAreaQuery.query === query) {
+		return inflightAreaQuery.promise;
+	}
+
+	// Cancel any previous (different) in-flight area query
 	if (areaQueryController) {
 		areaQueryController.abort();
 	}
@@ -253,26 +280,33 @@ export async function fetchMarkerData(mapBounds: GeoBounds): Promise<OverPassEle
 	const controller = new AbortController();
 	areaQueryController = controller;
 
-	try {
-		const query = buildAreaQuery(mapBounds);
-		const result = await fetchFromPool(query, controller.signal);
-		lastAreaQueryFailed = false;
-		return result;
-	} catch (error) {
-		// Aborted (superseded by a newer call) → not a genuine failure
-		if (controller.signal.aborted) {
+	const promise = (async (): Promise<OverPassElement[] | null> => {
+		try {
+			const result = await fetchFromPool(query, controller.signal);
 			lastAreaQueryFailed = false;
+			return result;
+		} catch (error) {
+			// Aborted (superseded by a newer call) → not a genuine failure
+			if (controller.signal.aborted) {
+				lastAreaQueryFailed = false;
+				return null;
+			}
+			console.error('Overpass area query failed:', error);
+			lastAreaQueryFailed = true;
 			return null;
+		} finally {
+			// Only clear the module references if they are still ours. A newer
+			// (different-bounds) call replaces both together, so the controller
+			// identity also tells us whether the inflight entry is this call's.
+			if (areaQueryController === controller) {
+				areaQueryController = null;
+				inflightAreaQuery = null;
+			}
 		}
-		console.error('Overpass area query failed:', error);
-		lastAreaQueryFailed = true;
-		return null;
-	} finally {
-		// Only clear the module reference if it is still ours
-		if (areaQueryController === controller) {
-			areaQueryController = null;
-		}
-	}
+	})();
+
+	inflightAreaQuery = { query, promise };
+	return promise;
 }
 
 /**

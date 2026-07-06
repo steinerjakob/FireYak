@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 
 import iconFirestation from '../assets/markers/firestation.png';
@@ -9,7 +9,12 @@ import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
-import { fetchMarkerData, OverPassElement, wasLastAreaQueryFailure } from './overPassApi';
+import {
+	clampBounds,
+	fetchMarkerData,
+	OverPassElement,
+	wasLastAreaQueryFailure
+} from './overPassApi';
 import {
 	getMapNodesForView,
 	getNearbyMapNodes,
@@ -160,10 +165,20 @@ export async function reconcileDeletedNodes(
 }
 
 async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]> {
-	// Pad the query bbox so small subsequent pans stay inside the fetched area.
-	// (overPassApi clamps oversized bounds afterwards — padding first is fine.)
-	const queryBounds = padBounds(mapBounds, BBOX_PADDING_RATIO);
-	const mapElements = await fetchMarkerData(queryBounds);
+	// Pad the query bbox so small subsequent pans stay inside the fetched area,
+	// then apply the same span clamp as the actual query. Freshness stamps and
+	// stale-node reconciliation below must only ever cover the area that was
+	// truly fetched — the unclamped padded bounds would mark never-fetched
+	// tiles fresh and hard-delete cached nodes outside the fetched area.
+	const queryBounds = clampBounds(padBounds(mapBounds, BBOX_PADDING_RATIO));
+
+	activeAreaFetches.value++;
+	let mapElements: OverPassElement[] | null;
+	try {
+		mapElements = await fetchMarkerData(queryBounds);
+	} finally {
+		activeAreaFetches.value--;
+	}
 
 	// null means the request was aborted or failed — skip cache operations
 	// to avoid falsely deleting cached markers.
@@ -184,8 +199,23 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 	return mapElements;
 }
 
-/** Reactive flag – `true` while markers are being fetched from the Overpass API for an uncached area. */
-export const isLoadingMarkers = ref(false);
+/** Count of in-flight Overpass area fetches (foreground and background). */
+const activeAreaFetches = ref(0);
+
+/**
+ * Reactive flag – `true` while any marker fetch (blocking foreground load of an
+ * uncached area **or** silent background refresh) is running against the
+ * Overpass API, so the UI can show activity.
+ */
+export const isFetchingMarkers = computed(() => activeAreaFetches.value > 0);
+
+/**
+ * `true` while a background cache refresh is in flight. Prevents rapid pans
+ * from stacking abort-and-resend cycles — an aborted request still consumed a
+ * server-side rate-limit slot. Areas skipped meanwhile stay stale-but-served
+ * and are picked up by the freshness check on a later movement.
+ */
+let backgroundRefreshInFlight = false;
 
 /**
  * Reactive flag – `true` when the most recent **uncached-area** fetch
@@ -202,26 +232,27 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 		let mapElements: OverPassElement[] = await getMapNodesForView(mapBounds);
 		// if nothing is in the cache wait for the api call
 		if (!mapElements.length) {
-			isLoadingMarkers.value = true;
-			try {
-				mapElements = await updateNodeCache(mapBounds);
-				// updateNodeCache returns [] on both abort and genuine failure.
-				// wasLastAreaQueryFailure() distinguishes them.
-				markerFetchFailed.value = wasLastAreaQueryFailure();
-			} finally {
-				isLoadingMarkers.value = false;
-			}
+			mapElements = await updateNodeCache(mapBounds);
+			// updateNodeCache returns [] on both abort and genuine failure.
+			// wasLastAreaQueryFailure() distinguishes them.
+			markerFetchFailed.value = wasLastAreaQueryFailure();
 		} else {
-			// Cache hit. Skip the background refresh entirely when the whole
-			// (padded) view was already fetched within the freshness TTL —
+			// Cache hit. Skip the background refresh entirely when the area a
+			// fetch would actually cover (padded then clamped, matching
+			// updateNodeCache) was already fetched within the freshness TTL —
 			// avoids redundant Overpass load and rate-limiting on small pans.
-			const tileKeys = coveringTileKeys(padBounds(mapBounds, BBOX_PADDING_RATIO));
-			if (!areTilesFresh(tileKeys)) {
+			const tileKeys = coveringTileKeys(clampBounds(padBounds(mapBounds, BBOX_PADDING_RATIO)));
+			if (!areTilesFresh(tileKeys) && !backgroundRefreshInFlight) {
 				// Fire-and-forget background cache refresh — silently ignore
 				// abort errors (superseded by a newer request) and network failures.
 				// Background failures while cached data is already on screen are
 				// intentionally not surfaced (markerFetchFailed stays unchanged).
-				updateNodeCache(mapBounds).catch(() => {});
+				backgroundRefreshInFlight = true;
+				updateNodeCache(mapBounds)
+					.catch(() => {})
+					.finally(() => {
+						backgroundRefreshInFlight = false;
+					});
 			}
 		}
 		// Apply category filters — call inside the function so Pinia is active.
