@@ -412,7 +412,9 @@ export function usePumpCalculation() {
 
 		const neededBTubes = Math.ceil(distance / pumpStore.tubeLength);
 		const lastElevation = elevations[elevations.length - 1];
-		const elevation = lastElevation.elevation - prevElevation;
+		// Round to whole meters: DEM elevations carry decimals whose float
+		// noise would otherwise leak into the display.
+		const elevation = Math.round(lastElevation.elevation - prevElevation);
 		const pressure = lastElevation.pressure;
 
 		const title = t('pumpCalculation.fireObject');
@@ -486,7 +488,9 @@ export function usePumpCalculation() {
 			elevationData,
 			pumpCount: pumpPositions.length + 1,
 			realDistance,
-			elevation: elevationData[elevationData.length - 1].elevation - elevationData[0].elevation,
+			elevation: Math.round(
+				elevationData[elevationData.length - 1].elevation - elevationData[0].elevation
+			),
 			suctionPoint,
 			targetPoint,
 			wayPoints,
