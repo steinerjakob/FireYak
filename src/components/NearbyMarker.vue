@@ -48,13 +48,18 @@ const getDistanceText = (distance: number) => {
 };
 
 const formattedList = computed(() => {
-	return list.value.map((nearbyMarker) => ({
-		id: nearbyMarker.element.id,
-		title: getTitle(nearbyMarker.element),
-		icon: nearbyMarker.icon,
-		distance: nearbyMarker.distance,
-		distanceText: getDistanceText(nearbyMarker.distance)
-	}));
+	return list.value.map((nearbyMarker) => {
+		// Prefer the routed distance along the road network: that is the length
+		// the hoses actually have to cover (and what the B-tube count is for).
+		const displayDistance = nearbyMarker.routedDistance ?? nearbyMarker.distance;
+		return {
+			id: nearbyMarker.element.id,
+			title: getTitle(nearbyMarker.element),
+			icon: nearbyMarker.icon,
+			distance: nearbyMarker.distance,
+			distanceText: getDistanceText(displayDistance)
+		};
+	});
 });
 
 const selectedMarkerId = computed(() => route.params.markerId || null);

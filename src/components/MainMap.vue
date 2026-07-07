@@ -172,6 +172,7 @@ import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds } from '@/types/geo';
+import { getRoutedPath } from '@/mapHandler/nearbyRouting';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
 import { nightFlavor } from '@/map/nightFlavor';
 import { satelliteFlavor } from '@/map/satelliteFlavor';
@@ -598,11 +599,8 @@ function fitMapToLayer() {
 const selectedPathCoords = ref<[number, number][]>([]);
 const selectedPathVisible = ref(false);
 
-function updateSelectedPath(from: GeoPoint, to: GeoPoint) {
-	selectedPathCoords.value = [
-		[from.lng, from.lat],
-		[to.lng, to.lat]
-	];
+function updateSelectedPath(points: GeoPoint[]) {
+	selectedPathCoords.value = points.map((p) => [p.lng, p.lat] as [number, number]);
 	selectedPathVisible.value = true;
 
 	if (rootMap && mapReady) {
@@ -711,11 +709,21 @@ watch(markerFetchFailed, (failed) => {
 	}
 });
 
+// Guards against stale async results: the function is fired from a watcher
+// without await, and only the newest selection may draw its path.
+let pathRequestSeq = 0;
+
 const showPathToSelectedMarker = async () => {
 	if (nearbyWaterSource.isActive.value && selectedMarker) {
+		const requestId = ++pathRequestSeq;
 		const currentLocation = await getCurrentLocation();
 		const markerLngLat = selectedMarker.getLngLat();
-		updateSelectedPath(currentLocation, { lat: markerLngLat.lat, lng: markerLngLat.lng });
+		const target: GeoPoint = { lat: markerLngLat.lat, lng: markerLngLat.lng };
+		// Prefer the routed path along the road network; fall back to the straight line.
+		const routed = await getRoutedPath(currentLocation, target);
+		if (requestId !== pathRequestSeq) return;
+		const points = routed && routed.length >= 2 ? routed : [currentLocation, target];
+		updateSelectedPath(points);
 		fitMapToLayer();
 	}
 };

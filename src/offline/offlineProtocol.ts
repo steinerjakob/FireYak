@@ -94,6 +94,46 @@ async function toResponse(
 }
 
 /**
+ * Cache-first tile fetch shared by the `offline://` protocol handler and the
+ * obstacle-geometry decoder. Returns the tile bytes, or `null` when offline and
+ * uncached (callers decide how to render/skip the gap). Throws for an unknown
+ * source, and rethrows if the fetch was aborted.
+ *
+ * Tiles write through to the store only when browsed inside a downloaded area so
+ * panning there offline works even for zooms the bulk download hasn't reached
+ * yet — otherwise the store would grow into an unbounded browse cache.
+ */
+export async function fetchTileCacheFirst(
+	source: string,
+	z: number,
+	x: number,
+	y: number,
+	signal?: AbortSignal
+): Promise<ArrayBuffer | null> {
+	const cached = await tileStore.get(source, z, x, y);
+	if (cached) return cached.arrayBuffer();
+
+	const build = NETWORK_URL[source];
+	if (!build) throw new Error(`Unknown offline source: ${source}`);
+
+	try {
+		const resp = await fetch(build(z, x, y), { signal });
+		if (!resp.ok) throw new Error(`Tile ${resp.status}`);
+		const buf = await resp.arrayBuffer();
+		// Warm-cache tiles browsed inside a downloaded area so panning there
+		// offline works even for zooms the bulk download hasn't reached yet.
+		if (await isInsideDownloadedArea(z, x, y)) {
+			await tileStore.put(source, z, x, y, new Blob([buf]));
+		}
+		return buf;
+	} catch (err) {
+		if (signal?.aborted) throw err;
+		// Offline and not cached → no data (protocol renders a gap rather than erroring).
+		return null;
+	}
+}
+
+/**
  * Registers the `offline://` protocol (MapLibre v5 async signature). URL scheme:
  *   - `offline://{source}/{z}/{x}/{y}`   → vector/raster/dem tiles
  *   - `offline://assets/{...path}`       → glyphs & sprites (path resolved
@@ -123,27 +163,9 @@ export function registerOfflineProtocol(): void {
 			const x = +xs;
 			const y = +ys;
 
-			const cached = await tileStore.get(source, z, x, y);
-			if (cached) return { data: await cached.arrayBuffer() };
-
-			const build = NETWORK_URL[source];
-			if (!build) throw new Error(`Unknown offline source: ${source}`);
-
-			try {
-				const resp = await fetch(build(z, x, y), { signal: abort.signal });
-				if (!resp.ok) throw new Error(`Tile ${resp.status}`);
-				const buf = await resp.arrayBuffer();
-				// Warm-cache tiles browsed inside a downloaded area so panning there
-				// offline works even for zooms the bulk download hasn't reached yet.
-				if (await isInsideDownloadedArea(z, x, y)) {
-					await tileStore.put(source, z, x, y, new Blob([buf]));
-				}
-				return { data: buf };
-			} catch (err) {
-				if (abort.signal.aborted) throw err;
-				// Offline and not cached → empty tile renders a gap rather than erroring.
-				return { data: new ArrayBuffer(0) };
-			}
+			const buf = await fetchTileCacheFirst(source, z, x, y, abort.signal);
+			// Offline and not cached → empty tile renders a gap rather than erroring.
+			return { data: buf ?? new ArrayBuffer(0) };
 		}
 	);
 }
