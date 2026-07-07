@@ -22,41 +22,29 @@
 		outline: 1px solid var(--md-sys-outline);
 	}
 
-	ion-card ion-card-title,
-	ion-card ion-card-subtitle {
-		--color: var(--md-sys-on-surface);
-	}
-
 	ion-card img {
 		border-bottom-right-radius: 12px;
 		border-bottom-left-radius: 12px;
 	}
 
 	ion-card ion-card-title {
-		font-family: var(--md-sys-headline-small-font-family-name);
-		font-style: var(--md-sys-headline-small-font-family-style);
-		font-weight: var(--md-sys-headline-small-font-weight);
-		font-size: var(--md-sys-headline-small-font-size);
-		line-height: var(--md-sys-headline-small-line-height);
-		letter-spacing: var(--md-sys-headline-small-letter-spacing);
+		--color: var(--md-sys-on-surface);
+
+		font: var(--md-sys-title-large);
+		letter-spacing: var(--md-sys-title-large-letter-spacing);
 	}
 
 	ion-card ion-card-subtitle {
+		--color: var(--md-sys-on-surface-variant);
+
 		margin-top: 0;
-		font-family: var(--md-sys-label-large-font-family-name);
-		font-style: var(--md-sys-label-large-font-family-style);
-		font-weight: var(--md-sys-label-large-font-weight);
-		font-size: var(--md-sys-label-large-font-size);
-		line-height: var(--md-sys-label-large-line-height);
-		letter-spacing: var(--md-sys-label-large-letter-spacing);
+		font: var(--md-sys-body-medium);
+		letter-spacing: var(--md-sys-body-medium-letter-spacing);
+		text-transform: none;
 	}
 
 	ion-card-content {
-		font-family: var(--md-sys-body-medium-font-family-name);
-		font-style: var(--md-sys-body-medium-font-family-style);
-		font-weight: var(--md-sys-body-medium-font-weight);
-		font-size: var(--md-sys-body-medium-font-size);
-		line-height: var(--md-sys-body-medium-line-height);
+		font: var(--md-sys-body-medium);
 		letter-spacing: var(--md-sys-body-medium-letter-spacing);
 	}
 }
