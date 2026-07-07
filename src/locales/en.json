@@ -346,7 +346,11 @@
 		},
 		"map": {
 			"title": "Map",
-			"showZoomButtons": "Show zoom buttons"
+			"showZoomButtons": "Show zoom buttons",
+			"clampToRoads": {
+				"label": "Keep hose route on roads",
+				"description": "When off, routes may cut through gardens and open ground (buildings are always avoided)"
+			}
 		},
 		"offline": {
 			"title": "Offline",

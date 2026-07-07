@@ -305,7 +305,9 @@ async function sortElementsByDistance(
 
 	let ranking: NearbyDistanceResult[];
 	try {
-		ranking = await computeNearbyDistances(latLng, points, straightDistances);
+		ranking = await computeNearbyDistances(latLng, points, straightDistances, {
+			clampToRoads: useSettingsStore().clampHosesToRoads
+		});
 	} catch (e) {
 		// computeNearbyDistances fails open internally; this is a last-resort guard.
 		console.warn('Road-aware ranking failed, using straight-line order:', e);

@@ -736,16 +736,28 @@ watch(markerFetchFailed, (failed) => {
 let pathRequestSeq = 0;
 
 const showPathToSelectedMarker = async () => {
-	if (nearbyWaterSource.isActive.value && selectedMarker) {
-		const requestId = ++pathRequestSeq;
-		const currentLocation = await getCurrentLocation();
-		const markerLngLat = selectedMarker.getLngLat();
-		const target: GeoPoint = { lat: markerLngLat.lat, lng: markerLngLat.lng };
-		// Prefer the routed path along the road network; fall back to the straight line.
-		const routed = await getRoutedPath(currentLocation, target);
-		if (requestId !== pathRequestSeq) return;
-		const points = routed && routed.length >= 2 ? routed : [currentLocation, target];
-		updateSelectedPath(points);
+	if (!selectedMarker) return;
+	const inNearbyMode = nearbyWaterSource.isActive.value;
+	const requestId = ++pathRequestSeq;
+	// Outside the nearby view the map-center fallback would draw a confusing
+	// line out of the screen center, so a real user location is required there.
+	const currentLocation = inNearbyMode ? await getCurrentLocation() : currentUserLocation.value;
+	if (!currentLocation) {
+		hideSelectedPath();
+		return;
+	}
+	const markerLngLat = selectedMarker.getLngLat();
+	const target: GeoPoint = { lat: markerLngLat.lat, lng: markerLngLat.lng };
+	// Prefer the routed path; fall back to the straight line.
+	const routed = await getRoutedPath(currentLocation, target, {
+		clampToRoads: settingsStore.clampHosesToRoads
+	});
+	if (requestId !== pathRequestSeq) return;
+	const points = routed && routed.length >= 2 ? routed : [currentLocation, target];
+	updateSelectedPath(points);
+	// Only the nearby view refits the camera to the path; a plain marker tap
+	// keeps its usual fly-to/centering behavior and just shows the line.
+	if (inNearbyMode) {
 		fitMapToLayer();
 	}
 };
@@ -779,7 +791,6 @@ watch(
 
 			showPathToSelectedMarker();
 			if (!nearbyWaterSource.isActive.value) {
-				hideSelectedPath();
 				if (isFirstWatch && rootMap) {
 					rootMap.flyTo({ center: [lng, lat], zoom: DISABLE_CLUSTERING_ZOOM });
 				} else {
