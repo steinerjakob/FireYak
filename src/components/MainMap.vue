@@ -610,12 +610,54 @@ function formatPathDistance(meters: number): string {
 	return `${distance} · ~${tubes} B-${t('pumpCalculation.pump.tubes')}`;
 }
 
-function selectedPathFeature(): GeoJSON.Feature {
-	return {
-		type: 'Feature',
-		geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
-		properties: { distanceText: selectedPathDistanceText.value }
-	};
+/** Point halfway along the polyline (by length) — anchors the distance label. */
+function pathMidpoint(coords: [number, number][]): [number, number] {
+	let total = 0;
+	const segment: number[] = [];
+	for (let i = 0; i < coords.length - 1; i++) {
+		const len = distanceTo(
+			{ lng: coords[i][0], lat: coords[i][1] },
+			{ lng: coords[i + 1][0], lat: coords[i + 1][1] }
+		);
+		segment.push(len);
+		total += len;
+	}
+	let remaining = total / 2;
+	for (let i = 0; i < segment.length; i++) {
+		if (remaining <= segment[i]) {
+			const f = segment[i] === 0 ? 0 : remaining / segment[i];
+			return [
+				coords[i][0] + (coords[i + 1][0] - coords[i][0]) * f,
+				coords[i][1] + (coords[i + 1][1] - coords[i][1]) * f
+			];
+		}
+		remaining -= segment[i];
+	}
+	return coords[coords.length - 1];
+}
+
+/**
+ * The path line plus a midpoint anchor for the label. The label sits on a
+ * point symbol (not line-center placement): line-center labels are dropped
+ * whenever the text doesn't fit along the rendered line, so short or sharply
+ * bent paths would intermittently lose their distance text.
+ */
+function selectedPathFeatures(): GeoJSON.FeatureCollection {
+	const features: GeoJSON.Feature[] = [
+		{
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
+			properties: {}
+		}
+	];
+	if (selectedPathCoords.value.length >= 2) {
+		features.push({
+			type: 'Feature',
+			geometry: { type: 'Point', coordinates: pathMidpoint(selectedPathCoords.value) },
+			properties: { distanceText: selectedPathDistanceText.value }
+		});
+	}
+	return { type: 'FeatureCollection', features };
 }
 
 function setSelectedPathVisibility(visible: boolean) {
@@ -640,7 +682,7 @@ function updateSelectedPath(points: GeoPoint[]) {
 	if (rootMap && mapReady) {
 		const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
 		if (source) {
-			source.setData(selectedPathFeature());
+			source.setData(selectedPathFeatures());
 		}
 		setSelectedPathVisibility(true);
 	}
@@ -659,7 +701,7 @@ function restoreSelectedPath() {
 
 	const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
 	if (source) {
-		source.setData(selectedPathFeature());
+		source.setData(selectedPathFeatures());
 	}
 	setSelectedPathVisibility(true);
 }
@@ -1072,11 +1114,8 @@ function addMapLayers(map: maplibregl.Map) {
 	// Selected path line source and layer
 	map.addSource(SELECTED_PATH_SOURCE, {
 		type: 'geojson',
-		data: {
-			type: 'Feature',
-			geometry: { type: 'LineString', coordinates: [] },
-			properties: {}
-		}
+		// Holds the path LineString plus a midpoint Point anchoring the label.
+		data: { type: 'FeatureCollection', features: [] }
 	});
 
 	map.addLayer({
@@ -1095,9 +1134,12 @@ function addMapLayers(map: maplibregl.Map) {
 		id: SELECTED_PATH_LABEL_LAYER,
 		type: 'symbol',
 		source: SELECTED_PATH_SOURCE,
+		// Anchored to the midpoint Point feature: a point symbol always renders,
+		// while 'line-center' placement drops the label whenever the text doesn't
+		// fit along the rendered line (short or sharply bent paths).
+		filter: ['==', ['geometry-type'], 'Point'],
 		layout: {
 			visibility: 'none',
-			'symbol-placement': 'line-center',
 			'text-field': ['get', 'distanceText'],
 			'text-font': ['Noto Sans Medium'],
 			'text-size': 13,
