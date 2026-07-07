@@ -1,4 +1,4 @@
-import { GeoPoint } from '@/types/geo';
+import { GeoPoint, distanceTo } from '@/types/geo';
 import { ELEVATION_RASTER } from '@/helper/elevationData';
 
 function toRadians(deg: number): number {
@@ -113,6 +113,44 @@ export function pointsEveryMetersBetween(
 	}
 
 	return { distance: totalKm, points };
+}
+
+/**
+ * Resamples a polyline to points every `stepMeters` along it (plus the exact
+ * endpoints). Unlike {@link distanceBetweenMultiplePoints} it never duplicates
+ * the junction points between segments, so the result is safe to feed into
+ * the elevation/pressure walk. Segments here are short (routed paths), so
+ * plain linear interpolation is sufficient.
+ */
+export function resamplePolyline(
+	path: GeoPoint[],
+	stepMeters = ELEVATION_RASTER
+): { distanceM: number; points: GeoPoint[] } {
+	if (path.length === 0) return { distanceM: 0, points: [] };
+
+	const points: GeoPoint[] = [{ lat: path[0].lat, lng: path[0].lng }];
+	let walked = 0;
+	let nextAt = stepMeters;
+	for (let i = 0; i < path.length - 1; i++) {
+		const segLen = distanceTo(path[i], path[i + 1]);
+		if (segLen === 0) continue;
+		while (nextAt <= walked + segLen) {
+			const f = (nextAt - walked) / segLen;
+			points.push({
+				lat: path[i].lat + (path[i + 1].lat - path[i].lat) * f,
+				lng: path[i].lng + (path[i + 1].lng - path[i].lng) * f
+			});
+			nextAt += stepMeters;
+		}
+		walked += segLen;
+	}
+
+	const end = path[path.length - 1];
+	if (distanceTo(points[points.length - 1], end) > 0.01) {
+		points.push({ lat: end.lat, lng: end.lng });
+	}
+
+	return { distanceM: walked, points };
 }
 
 export function distanceBetweenMultiplePoints(wayPoints: GeoPoint[]) {
