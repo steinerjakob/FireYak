@@ -29,7 +29,8 @@ function calculatePumpPosition(
 	elevationPoints: ElevationPoint[],
 	pressureLost: number,
 	inputPressure: number,
-	outputPressure: number
+	outputPressure: number,
+	targetPressure: number
 ): { pumps: PumpPosition[]; realDistance: number } {
 	const pumps: PumpPosition[] = [];
 	const pumpStore = usePumpCalculationStore();
@@ -79,7 +80,12 @@ function calculatePumpPosition(
 		elevationPoints[i].pressure = pressure;
 		elevationPoints[i].distance = realDistance;
 
-		if (pressure <= inputPressure) {
+		// Every booster pump needs `inputPressure` (min. 1.5 bar); the fire
+		// object itself needs the nozzle pressure (Strahlrohrdruck, ~5 bar),
+		// so the floor is higher at the very last point.
+		const isLastPoint = i === elevationPoints.length - 1;
+		const pressureFloor = isLastPoint ? Math.max(targetPressure, inputPressure) : inputPressure;
+		if (pressure <= pressureFloor) {
 			// Find the last point since the previous pump where the line still
 			// had enough pressure to feed a pump.
 			let placementIndex = i - 1;
@@ -126,8 +132,10 @@ function calculatePumpPosition(
 			realDistance = pumpPoint.distance ?? 0;
 			elevationOld = pumpPoint.elevation;
 
-			// reset pressure to output after placing pump
-			pressure = outputPressure;
+			// A booster pump adds its output on top of the incoming pressure
+			// (doctrine: p_a = p + p_e) — only the very first pump at the
+			// suction point starts from plain outputPressure.
+			pressure = outputPressure + inputPressure;
 		}
 	}
 
@@ -164,7 +172,8 @@ export function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]
 		elevationPoints,
 		pumpCalculationStore.pressureLost / 100,
 		pumpCalculationStore.inputPressure,
-		pumpCalculationStore.outputPressure
+		pumpCalculationStore.outputPressure,
+		pumpCalculationStore.targetPressure
 	);
 	return { pumpPositions, realDistance };
 }

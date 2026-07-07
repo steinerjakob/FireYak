@@ -43,10 +43,24 @@ const outputPressureChanged = (event: CustomEvent) => {
 	pumpCalculationStore.outputPressure = Number(value);
 };
 
+const targetPressureChanged = (event: CustomEvent) => {
+	pumpCalculationStore.targetPressure = Number(event.detail.value);
+};
+
 const tubeCount = computed(() => {
 	return Math.ceil(
 		(pumpCalculation.calculationResult.value?.realDistance || 0) / pumpCalculationStore.tubeLength
 	);
+});
+
+// Reserve material per doctrine: 1 spare B-hose per 100 m of line,
+// 1 spare pump per 4 pumps in use.
+const reserveTubes = computed(() => {
+	return Math.ceil((pumpCalculation.calculationResult.value?.realDistance || 0) / 100);
+});
+
+const reservePumps = computed(() => {
+	return Math.ceil((pumpCalculation.calculationResult.value?.pumpCount || 0) / 4);
 });
 
 const selectPumpMarker = (pumpPosition: PumpPosition) => {
@@ -149,19 +163,19 @@ const targetMarkerInfo = () => {
 			</ion-button>
 		</ion-item>
 		<ion-item>
+			<!-- Friction loss per 100 m B-hose by flow rate (HLFS Tab. 2) -->
 			<ion-select
 				:label="t('pumpCalculation.pump.flowRate')"
 				placeholder="Make a Selection"
 				:value="pumpCalculationStore.pressureLost.toString()"
 				@ionChange="flowRateChanged"
 			>
-				<ion-select-option value="0.1">200 l/min</ion-select-option>
-				<ion-select-option value="0.2">400 l/min</ion-select-option>
-				<ion-select-option value="0.7">600 l/min</ion-select-option>
-				<ion-select-option value="1.1">800 l/min</ion-select-option>
-				<ion-select-option value="1.7">1000 l/min</ion-select-option>
-				<ion-select-option value="2.5">1200 l/min</ion-select-option>
-				<ion-select-option value="4.5">1600l/min</ion-select-option>
+				<ion-select-option value="0.3">400 l/min</ion-select-option>
+				<ion-select-option value="0.6">600 l/min</ion-select-option>
+				<ion-select-option value="1">800 l/min</ion-select-option>
+				<ion-select-option value="1.4">1000 l/min</ion-select-option>
+				<ion-select-option value="2">1200 l/min</ion-select-option>
+				<ion-select-option value="4">1600 l/min</ion-select-option>
 			</ion-select>
 		</ion-item>
 		<ion-item>
@@ -178,6 +192,14 @@ const targetMarkerInfo = () => {
 				type="number"
 				:value="pumpCalculationStore.outputPressure"
 				@ionChange="outputPressureChanged"
+			></ion-input>
+		</ion-item>
+		<ion-item>
+			<ion-input
+				:label="t('pumpCalculation.pump.targetPressure')"
+				type="number"
+				:value="pumpCalculationStore.targetPressure"
+				@ionChange="targetPressureChanged"
 			></ion-input>
 		</ion-item>
 		<ion-button
@@ -221,6 +243,13 @@ const targetMarkerInfo = () => {
 						<span class="result-label">{{ t('pumpCalculation.pump.elevationDifference') }}:</span>
 						<span class="result-value"
 							>~{{ pumpCalculation.calculationResult.value.elevation }}m</span
+						>
+					</div>
+					<div class="result-row">
+						<span class="result-label">{{ t('pumpCalculation.pump.reserve') }}:</span>
+						<span class="result-value"
+							>+{{ reserveTubes }} B-{{ t('pumpCalculation.pump.tubes') }} · +{{ reservePumps }}
+							{{ t('pumpCalculation.pump.title') }}</span
 						>
 					</div>
 				</div>
