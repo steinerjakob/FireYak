@@ -30,9 +30,7 @@ const calculationAllowed = computed(() => {
 });
 
 const flowRateChanged = (event: CustomEvent) => {
-	const value = event.detail.value;
-	console.log(value);
-	pumpCalculationStore.pressureLost = Number(value);
+	pumpCalculationStore.pressureLost = Number(event.detail.value);
 };
 
 const inputPressureChanged = (event: CustomEvent) => {
@@ -46,9 +44,9 @@ const outputPressureChanged = (event: CustomEvent) => {
 };
 
 const tubeCount = computed(() => {
-	return (
+	return Math.ceil(
 		(pumpCalculation.calculationResult.value?.realDistance || 0) / pumpCalculationStore.tubeLength
-	).toFixed(0);
+	);
 });
 
 const selectPumpMarker = (pumpPosition: PumpPosition) => {
@@ -84,11 +82,11 @@ const targetMarkerInfo = () => {
 
 	const lastPump =
 		pumpCalculationResult.pumpPositions[pumpCalculationResult.pumpPositions.length - 1];
-	const prevDistance = lastPump?.distanceFromStart || 0;
+	const prevDistance = lastPump?.distanceFromStart ?? 0;
 
 	const distance = pumpCalculationResult.realDistance - prevDistance;
 
-	const neededBTubes = Math.round(distance / pumpCalculationStore.tubeLength);
+	const neededBTubes = Math.ceil(distance / pumpCalculationStore.tubeLength);
 	const lastElevation =
 		pumpCalculationResult.elevationData[pumpCalculationResult.elevationData.length - 1];
 	const pressure = lastElevation.pressure || 0;

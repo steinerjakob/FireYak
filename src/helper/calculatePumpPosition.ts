@@ -3,17 +3,6 @@ import maplibregl from 'maplibre-gl';
 import markerPump from '@/assets/markers/markerpump.png';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 
-const flowRateAndPressureLostTable: { flowRate: number; pressureLost: number }[] = [
-	{ flowRate: 0, pressureLost: 0 },
-	{ flowRate: 200, pressureLost: 0.1 },
-	{ flowRate: 400, pressureLost: 0.2 },
-	{ flowRate: 600, pressureLost: 0.7 },
-	{ flowRate: 800, pressureLost: 1.1 },
-	{ flowRate: 1000, pressureLost: 1.7 },
-	{ flowRate: 1200, pressureLost: 2.5 },
-	{ flowRate: 1600, pressureLost: 4.5 }
-];
-
 export type PumpPosition = {
 	lat: number;
 	lon: number;
@@ -35,14 +24,15 @@ function createPumpMarkerElement(): HTMLImageElement {
 	return el;
 }
 
-async function calculatePumpPosition(
+function calculatePumpPosition(
 	t: any,
 	elevationPoints: ElevationPoint[],
 	pressureLost: number,
 	inputPressure: number,
 	outputPressure: number
-): Promise<{ pumps: PumpPosition[]; realDistance: number }> {
+): { pumps: PumpPosition[]; realDistance: number } {
 	const pumps: PumpPosition[] = [];
+	const pumpStore = usePumpCalculationStore();
 
 	const toRad = (deg: number) => (deg * Math.PI) / 180;
 	const haversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -59,6 +49,10 @@ async function calculatePumpPosition(
 	const startElevation = elevationPoints[0].elevation;
 	let elevationOld = startElevation;
 	let pressure = outputPressure;
+	// Index of the point the last pump was placed on — the backtracking search
+	// below must never go back to it, or a single segment that eats the whole
+	// pressure budget (cliff-steep terrain) would loop forever.
+	let lastPumpIndex = 0;
 
 	elevationPoints[0].pressure = pressure;
 
@@ -86,20 +80,21 @@ async function calculatePumpPosition(
 		elevationPoints[i].distance = realDistance;
 
 		if (pressure <= inputPressure) {
-			const pumpStore = usePumpCalculationStore();
-
-			// Find the last point where pressure was above inputPressure
-			let pumpPlacementIndex = i - 1;
+			// Find the last point since the previous pump where the line still
+			// had enough pressure to feed a pump.
+			let placementIndex = i - 1;
 			while (
-				pumpPlacementIndex >= 0 &&
-				elevationPoints[pumpPlacementIndex].pressure! < inputPressure
+				placementIndex > lastPumpIndex &&
+				elevationPoints[placementIndex].pressure! < inputPressure
 			) {
-				pumpPlacementIndex--;
+				placementIndex--;
 			}
-
-			// If no suitable point found (shouldn't happen if start pressure is high enough), default to current point
-			const pumpPoint =
-				pumpPlacementIndex >= 0 ? elevationPoints[pumpPlacementIndex] : elevationPoints[i];
+			if (placementIndex <= lastPumpIndex) {
+				// No valid point since the previous pump (one segment consumed the
+				// whole budget) — place at the current point so the loop advances.
+				placementIndex = i;
+			}
+			const pumpPoint = elevationPoints[placementIndex];
 
 			const prevPump = pumps[pumps.length - 1];
 			const marker = new maplibregl.Marker({
@@ -107,8 +102,8 @@ async function calculatePumpPosition(
 				anchor: 'bottom'
 			}).setLngLat([pumpPoint.latLng.lng, pumpPoint.latLng.lat]);
 
-			const distanceFromPrev = Math.round(pumpPoint.distance! - (prevPump?.distanceFromStart || 0));
-			const neededBTubes = Math.round(distanceFromPrev / pumpStore.tubeLength);
+			const distanceFromPrev = Math.round(pumpPoint.distance! - (prevPump?.distanceFromStart ?? 0));
+			const neededBTubes = Math.ceil(distanceFromPrev / pumpStore.tubeLength);
 
 			const pumpInfo: PumpPosition = {
 				lat: pumpPoint.latLng.lat,
@@ -118,7 +113,7 @@ async function calculatePumpPosition(
 				distanceFromPrev,
 				pressureAtTrigger: Math.floor(pumpPoint.pressure! * 100) / 100, // Use the pressure at the chosen pump point
 				riseFromStart: Math.round(pumpPoint.elevation - startElevation),
-				riseFromPrev: Math.round(pumpPoint.elevation - (prevPump?.elevation || startElevation)),
+				riseFromPrev: Math.round(pumpPoint.elevation - (prevPump?.elevation ?? startElevation)),
 				neededBTubes,
 				marker
 			};
@@ -126,8 +121,9 @@ async function calculatePumpPosition(
 			pumps.push(pumpInfo);
 
 			// Reset the loop index, realDistance, and elevationOld to the state of the pumpPoint
-			i = pumpPlacementIndex;
-			realDistance = pumpPoint.distance!;
+			lastPumpIndex = placementIndex;
+			i = placementIndex;
+			realDistance = pumpPoint.distance ?? 0;
 			elevationOld = pumpPoint.elevation;
 
 			// reset pressure to output after placing pump
@@ -161,9 +157,9 @@ function provideMarkerPopup(t: any, pump: PumpPosition): maplibregl.Popup {
 	return popup;
 }
 
-export async function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]) {
+export function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]) {
 	const pumpCalculationStore = usePumpCalculationStore();
-	const { pumps: pumpPositions, realDistance } = await calculatePumpPosition(
+	const { pumps: pumpPositions, realDistance } = calculatePumpPosition(
 		t,
 		elevationPoints,
 		pumpCalculationStore.pressureLost / 100,
