@@ -145,6 +145,7 @@ function calculatePumpPosition(
 
 function provideMarkerPopup(t: any, pump: PumpPosition): maplibregl.Popup {
 	const popup = new maplibregl.Popup({ maxWidth: '400px', offset: [0, -48] });
+	const pumpStore = usePumpCalculationStore();
 
 	const inpuPressure = t('pumpCalculation.pump.inputPressure');
 	const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
@@ -152,7 +153,7 @@ function provideMarkerPopup(t: any, pump: PumpPosition): maplibregl.Popup {
 
 	const title = t('pumpCalculation.pump.title');
 	const tubes = t('pumpCalculation.pump.tubes');
-	const snippet = `B-${tubes}: ~${pump.neededBTubes}<br>${distanceFromStart}: ~${pump.distanceFromPrev}m<br>${riseFromStart}: ${pump.riseFromPrev}m`;
+	const snippet = `${pumpStore.hoseName}-${tubes}: ~${pump.neededBTubes}<br>${distanceFromStart}: ~${pump.distanceFromPrev}m<br>${riseFromStart}: ${pump.riseFromPrev}m`;
 	const subDescription = `${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}`;
 
 	popup.setHTML(`

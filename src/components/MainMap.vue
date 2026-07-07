@@ -608,7 +608,7 @@ const pumpCalculationStore = usePumpCalculationStore();
 function formatPathDistance(meters: number): string {
 	const distance = meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
 	const tubes = Math.ceil(meters / pumpCalculationStore.tubeLength);
-	return `${distance} · ~${tubes} B-${t('pumpCalculation.pump.tubes')}`;
+	return `${distance} · ~${tubes} ${pumpCalculationStore.hoseName}-${t('pumpCalculation.pump.tubes')}`;
 }
 
 /** Point halfway along the polyline (by length) — anchors the distance label. */

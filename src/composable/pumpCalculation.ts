@@ -418,7 +418,7 @@ export function usePumpCalculation() {
 		const title = t('pumpCalculation.fireObject');
 		const tubes = t('pumpCalculation.pump.tubes');
 
-		const snippet = `B-${tubes}: ~${neededBTubes}<br>${distanceFromStart}: ~${distance.toFixed(0)}m<br>${riseFromStart}: ${elevation}m`;
+		const snippet = `${pumpStore.hoseName}-${tubes}: ~${neededBTubes}<br>${distanceFromStart}: ~${distance.toFixed(0)}m<br>${riseFromStart}: ${elevation}m`;
 		const subDescription = `${inpuPressure}: ${pressure?.toFixed(0)}`;
 
 		const popup = new maplibregl.Popup({ maxWidth: '400px', offset: [0, -48] });
@@ -466,7 +466,7 @@ export function usePumpCalculation() {
 			const tubes = Math.ceil(segmentDistance / pumpStore.tubeLength);
 			segmentLabels.push({
 				point: pointAlongPath(path, (boundaries[i] + boundaries[i + 1]) / 2),
-				label: `~${tubes} B-${tubesLabel}`
+				label: `~${tubes} ${pumpStore.hoseName}-${tubesLabel}`
 			});
 		}
 		setPumpLineGeometry(path);

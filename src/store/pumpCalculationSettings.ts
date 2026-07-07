@@ -8,7 +8,9 @@ const STORAGE_KEYS = {
 	INPUT_PRESSURE: 'pumpCalc_inputPressure',
 	OUTPUT_PRESSURE: 'pumpCalc_outputPressure',
 	PRESSURE_LOST: 'pumpCalc_pressureLost',
-	TARGET_PRESSURE: 'pumpCalc_targetPressure'
+	TARGET_PRESSURE: 'pumpCalc_targetPressure',
+	TUBE_DIAMETER: 'pumpCalc_tubeDiameter',
+	HOSE_NAME: 'pumpCalc_hoseName'
 };
 
 export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
@@ -22,6 +24,10 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 	// Mehrzweckstrahlrohr) — the last stretch must end with this, not just
 	// the pump input pressure.
 	const targetPressure = ref(5); // bar
+	// Hose type: European B-hose by default (75 mm). The diameter is
+	// informational for now — friction loss is set via the flow-rate value.
+	const tubeDiameter = ref(75); // mm
+	const hoseName = ref('B'); // short designation used in all "B-hoses" texts
 
 	const suctionPoint = ref<maplibregl.Marker | null>(null);
 	const targetPoint = ref<maplibregl.Marker | null>(null);
@@ -34,13 +40,17 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 				inputPressureResult,
 				outputPressureResult,
 				pressureLostResult,
-				targetPressureResult
+				targetPressureResult,
+				tubeDiameterResult,
+				hoseNameResult
 			] = await Promise.all([
 				Preferences.get({ key: STORAGE_KEYS.TUBE_LENGTH }),
 				Preferences.get({ key: STORAGE_KEYS.INPUT_PRESSURE }),
 				Preferences.get({ key: STORAGE_KEYS.OUTPUT_PRESSURE }),
 				Preferences.get({ key: STORAGE_KEYS.PRESSURE_LOST }),
-				Preferences.get({ key: STORAGE_KEYS.TARGET_PRESSURE })
+				Preferences.get({ key: STORAGE_KEYS.TARGET_PRESSURE }),
+				Preferences.get({ key: STORAGE_KEYS.TUBE_DIAMETER }),
+				Preferences.get({ key: STORAGE_KEYS.HOSE_NAME })
 			]);
 
 			if (tubeLengthResult.value) {
@@ -57,6 +67,12 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 			}
 			if (targetPressureResult.value) {
 				targetPressure.value = parseFloat(targetPressureResult.value);
+			}
+			if (tubeDiameterResult.value) {
+				tubeDiameter.value = parseFloat(tubeDiameterResult.value);
+			}
+			if (hoseNameResult.value) {
+				hoseName.value = hoseNameResult.value;
 			}
 		} catch (error) {
 			console.error('Failed to load settings from preferences:', error);
@@ -80,7 +96,12 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 				Preferences.set({
 					key: STORAGE_KEYS.TARGET_PRESSURE,
 					value: targetPressure.value.toString()
-				})
+				}),
+				Preferences.set({
+					key: STORAGE_KEYS.TUBE_DIAMETER,
+					value: tubeDiameter.value.toString()
+				}),
+				Preferences.set({ key: STORAGE_KEYS.HOSE_NAME, value: hoseName.value })
 			]);
 		} catch (error) {
 			console.error('Failed to save settings to preferences:', error);
@@ -88,9 +109,20 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 	};
 
 	// Watch for changes and save automatically
-	watch([tubeLength, inputPressure, outputPressure, pressureLost, targetPressure], () => {
-		saveSettings();
-	});
+	watch(
+		[
+			tubeLength,
+			inputPressure,
+			outputPressure,
+			pressureLost,
+			targetPressure,
+			tubeDiameter,
+			hoseName
+		],
+		() => {
+			saveSettings();
+		}
+	);
 
 	// Load settings when store is created
 	loadSettings();
@@ -102,6 +134,8 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 		outputPressure,
 		pressureLost,
 		targetPressure,
+		tubeDiameter,
+		hoseName,
 		suctionPoint,
 		targetPoint,
 		// Methods

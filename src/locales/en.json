@@ -354,6 +354,12 @@
 				"description": "When off, routes may cut through gardens and open ground (buildings are always avoided)"
 			}
 		},
+		"pumpCalculation": {
+			"title": "Pump calculation",
+			"hoseLength": "Hose length (m)",
+			"hoseDiameter": "Hose diameter (mm)",
+			"hoseName": "Hose designation"
+		},
 		"offline": {
 			"title": "Offline",
 			"offlineAreas": "Offline areas",

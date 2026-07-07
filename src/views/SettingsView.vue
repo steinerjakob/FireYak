@@ -59,6 +59,41 @@
 					></ion-toggle>
 				</ion-item>
 
+				<!-- Pump calculation Section -->
+				<ion-list-header>
+					<ion-label>{{ $t('settings.pumpCalculation.title') }}</ion-label>
+				</ion-list-header>
+
+				<ion-item>
+					<ion-input
+						:label="$t('settings.pumpCalculation.hoseLength')"
+						type="number"
+						inputmode="decimal"
+						:value="pumpCalculationStore.tubeLength"
+						@ion-change="onHoseLengthChange($event)"
+					></ion-input>
+				</ion-item>
+
+				<ion-item>
+					<ion-input
+						:label="$t('settings.pumpCalculation.hoseDiameter')"
+						type="number"
+						inputmode="decimal"
+						:value="pumpCalculationStore.tubeDiameter"
+						@ion-change="onHoseDiameterChange($event)"
+					></ion-input>
+				</ion-item>
+
+				<ion-item>
+					<ion-input
+						:label="$t('settings.pumpCalculation.hoseName')"
+						type="text"
+						:maxlength="8"
+						:value="pumpCalculationStore.hoseName"
+						@ion-change="onHoseNameChange($event)"
+					></ion-input>
+				</ion-item>
+
 				<!-- Offline Section -->
 				<ion-list-header>
 					<ion-label>{{ $t('settings.offline.title') }}</ion-label>
@@ -137,8 +172,10 @@ import {
 	IonButton,
 	IonIcon,
 	IonBadge,
+	IonInput,
 	SegmentCustomEvent,
-	ToggleCustomEvent
+	ToggleCustomEvent,
+	InputCustomEvent
 } from '@ionic/vue';
 import {
 	logInOutline,
@@ -148,6 +185,7 @@ import {
 	cloudUploadOutline
 } from 'ionicons/icons';
 import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
@@ -171,6 +209,30 @@ const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 
 const onClampToRoadsChange = (event: ToggleCustomEvent) => {
 	saveClampHosesToRoads(event.detail.checked);
+};
+
+// Hose settings write straight into the pump store — it persists itself.
+const pumpCalculationStore = usePumpCalculationStore();
+
+const onHoseLengthChange = (event: InputCustomEvent) => {
+	const value = Number(event.detail.value);
+	if (Number.isFinite(value) && value > 0) {
+		pumpCalculationStore.tubeLength = value;
+	}
+};
+
+const onHoseDiameterChange = (event: InputCustomEvent) => {
+	const value = Number(event.detail.value);
+	if (Number.isFinite(value) && value > 0) {
+		pumpCalculationStore.tubeDiameter = value;
+	}
+};
+
+const onHoseNameChange = (event: InputCustomEvent) => {
+	const value = (event.detail.value ?? '').trim();
+	if (value) {
+		pumpCalculationStore.hoseName = value;
+	}
 };
 
 const OSM_ACCOUNT_URL = 'https://www.openstreetmap.org/account/edit';

@@ -354,6 +354,12 @@
 				"description": "Wenn deaktiviert, darf die Route durch Gärten und offenes Gelände führen (Gebäude werden immer umgangen)"
 			}
 		},
+		"pumpCalculation": {
+			"title": "Pumpenberechnung",
+			"hoseLength": "Schlauchlänge (m)",
+			"hoseDiameter": "Schlauchdurchmesser (mm)",
+			"hoseName": "Schlauchbezeichnung"
+		},
 		"offline": {
 			"title": "Offline",
 			"offlineAreas": "Offline-Bereiche",
