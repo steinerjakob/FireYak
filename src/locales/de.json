@@ -346,7 +346,11 @@
 		},
 		"map": {
 			"title": "Karte",
-			"showZoomButtons": "Zoom-Buttons anzeigen"
+			"showZoomButtons": "Zoom-Buttons anzeigen",
+			"clampToRoads": {
+				"label": "Schlauchweg an Straßen ausrichten",
+				"description": "Wenn deaktiviert, darf die Route durch Gärten und offenes Gelände führen (Gebäude werden immer umgangen)"
+			}
 		},
 		"offline": {
 			"title": "Offline",

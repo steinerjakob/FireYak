@@ -10,6 +10,7 @@ const THEME_KEY = 'theme';
 const SHOW_ZOOM_BUTTONS_KEY = 'show_zoom_buttons';
 const MAP_LAYER_KEY = 'map_layer';
 const TERRAIN_3D_KEY = 'terrain_3d';
+const CLAMP_HOSES_TO_ROADS_KEY = 'clamp_hoses_to_roads';
 const OSM_AUTH_KEY = 'osm_token';
 const MARKER_FILTERS_KEY = 'marker_filters';
 
@@ -26,6 +27,7 @@ export function useSettings() {
 			showZoomButtonsResult,
 			mapLayerResult,
 			terrain3dResult,
+			clampHosesToRoadsResult,
 			osmAuthKey,
 			markerFiltersResult
 		] = await Promise.all([
@@ -33,6 +35,7 @@ export function useSettings() {
 			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
 			Preferences.get({ key: MAP_LAYER_KEY }),
 			Preferences.get({ key: TERRAIN_3D_KEY }),
+			Preferences.get({ key: CLAMP_HOSES_TO_ROADS_KEY }),
 			Preferences.get({ key: OSM_AUTH_KEY }),
 			Preferences.get({ key: MARKER_FILTERS_KEY })
 		]);
@@ -51,6 +54,10 @@ export function useSettings() {
 
 		if (terrain3dResult.value) {
 			settingsStore.setTerrain3d(terrain3dResult.value === 'true');
+		}
+
+		if (clampHosesToRoadsResult.value) {
+			settingsStore.setClampHosesToRoads(clampHosesToRoadsResult.value === 'true');
 		}
 
 		if (osmAuthKey.value) {
@@ -116,6 +123,18 @@ export function useSettings() {
 	};
 
 	/**
+	 * Saves whether hose routes must stick to the road network (see
+	 * `clampHosesToRoads` in the settings store).
+	 */
+	const saveClampHosesToRoads = async (enabled: boolean) => {
+		settingsStore.setClampHosesToRoads(enabled);
+		await Preferences.set({
+			key: CLAMP_HOSES_TO_ROADS_KEY,
+			value: String(enabled)
+		});
+	};
+
+	/**
 	 * Persists the OSM OAuth token and mirrors it into the settings store.
 	 */
 	const saveOsmAuthToken = async (token: string) => {
@@ -160,6 +179,7 @@ export function useSettings() {
 		saveShowZoomButtons,
 		saveMapLayer,
 		saveTerrain3d,
+		saveClampHosesToRoads,
 		saveOsmAuthToken,
 		removeOsmAuthToken,
 		getOsmAuthToken,

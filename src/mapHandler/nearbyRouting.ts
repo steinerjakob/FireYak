@@ -2,14 +2,23 @@ import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 import { ObstacleData } from '@/types/obstacles';
 import { getObstaclesForBounds } from '@/mapHandler/obstacleGeometry';
 import { buildRoadGraph, routeFromOrigin, routePath, RoadGraph } from '@/mapHandler/roadRouting';
+import {
+	buildTerrainGrid,
+	gridRoutePath,
+	solveTerrain,
+	TerrainGrid
+} from '@/mapHandler/gridRouting';
 import { effectiveDistanceMeters } from '@/helper/weightedDistance';
 
 /**
  * Road-aware ranking for the nearby water sources list. Ranks by (in order of
- * preference per marker): routed distance along the road network → weighted
- * straight-line heuristic (buildings penalized, roads rewarded) → plain
- * haversine. Fails open: any error anywhere yields the haversine order, the
- * list must never break because of this feature.
+ * preference per marker): routed distance → weighted straight-line heuristic
+ * (buildings penalized, roads rewarded) → plain haversine. Two routers back
+ * the routed distance, chosen by the `clampToRoads` option: strict
+ * road-network routing (graph) or terrain routing that may cross gardens/open
+ * ground while avoiding buildings (grid). Fails open: any error anywhere
+ * yields the haversine order, the list must never break because of this
+ * feature.
  */
 
 /** Only markers within this straight-line distance get the routed treatment. */
@@ -28,10 +37,26 @@ interface RoutingContext {
 	bounds: GeoBounds;
 	obstacles: ObstacleData;
 	graph: RoadGraph;
+	/** Lazily built terrain grid; `null` = build failed (window too large). */
+	terrain?: TerrainGrid | null;
 	builtAt: number;
 }
 
 let context: RoutingContext | null = null;
+
+/** Router selection for the routed distance/path. */
+export interface RoutingOptions {
+	/** True = stick to the road network; false = terrain routing (gardens allowed). */
+	clampToRoads: boolean;
+}
+
+/** Lazily builds (once) and returns the context's terrain grid, if feasible. */
+function terrainFor(ctx: RoutingContext): TerrainGrid | null {
+	if (ctx.terrain === undefined) {
+		ctx.terrain = buildTerrainGrid(ctx.obstacles, ctx.bounds);
+	}
+	return ctx.terrain;
+}
 
 export interface NearbyDistanceResult {
 	/** Distance along the road network in meters, when routable. */
@@ -110,7 +135,8 @@ export function invalidateRoutingContext(): void {
 export async function computeNearbyDistances(
 	origin: GeoPoint,
 	targets: GeoPoint[],
-	straightDistances: number[]
+	straightDistances: number[],
+	options: RoutingOptions = { clampToRoads: false }
 ): Promise<NearbyDistanceResult[]> {
 	const results: NearbyDistanceResult[] = straightDistances.map((d) => ({
 		routedDistance: null,
@@ -129,20 +155,34 @@ export async function computeNearbyDistances(
 	try {
 		const candidatePoints = candidates.map((i) => targets[i]);
 		const bounds = boundsAround([origin, ...candidatePoints], BOUNDS_MARGIN_M);
-		const { graph, obstacles } = await getContext(bounds);
+		const ctx = await getContext(bounds);
+		const { graph, obstacles } = ctx;
+
+		// Terrain routing (gardens allowed) unless clamped to roads; falls back
+		// to the graph when the grid can't be built for this window.
+		const terrainSolve = options.clampToRoads
+			? null
+			: (() => {
+					const terrain = terrainFor(ctx);
+					return terrain ? solveTerrain(terrain, origin) : null;
+				})();
 
 		// Price the point↔road legs with the building-aware heuristic so a snap
 		// candidate across a building block never beats one along open ground.
 		const legCost = (a: GeoPoint, b: GeoPoint) => effectiveDistanceMeters(a, b, obstacles);
-		const routed = routeFromOrigin(graph, origin, candidatePoints, legCost);
+		const routed = terrainSolve
+			? candidatePoints.map((p) => terrainSolve.distanceTo(p))
+			: routeFromOrigin(graph, origin, candidatePoints, legCost);
 		candidates.forEach((targetIndex, i) => {
 			const route = routed[i];
 			if (route !== null) {
 				results[targetIndex] = {
-					// Geometric length for display/B-tubes; priced cost for ranking.
 					routedDistance: route.meters,
-					// A route can never beat the straight line; guard against snap artifacts.
-					sortDistance: Math.max(route.cost, straightDistances[targetIndex])
+					// Rank by the geometric length too — the list must never look
+					// unsorted against the displayed meters. The priced cost only
+					// picks the best route per marker inside the routers. (Guard:
+					// a route can never beat the straight line.)
+					sortDistance: Math.max(route.meters, straightDistances[targetIndex])
 				};
 			} else {
 				// Off-network marker: weighted straight-line heuristic instead.
@@ -165,12 +205,20 @@ export async function computeNearbyDistances(
  */
 export async function getRoutedPath(
 	origin: GeoPoint,
-	target: GeoPoint
+	target: GeoPoint,
+	options: RoutingOptions = { clampToRoads: false }
 ): Promise<GeoPoint[] | null> {
 	if (distanceTo(origin, target) > ROUTING_MAX_STRAIGHT_M * 2) return null;
 	try {
 		const bounds = boundsAround([origin, target], BOUNDS_MARGIN_M);
-		const { graph, obstacles } = await getContext(bounds);
+		const ctx = await getContext(bounds);
+		const { graph, obstacles } = ctx;
+		if (!options.clampToRoads) {
+			const terrain = terrainFor(ctx);
+			const terrainPath = terrain ? gridRoutePath(terrain, origin, target) : null;
+			if (terrainPath) return terrainPath;
+			// Grid unavailable/unreached → try the road graph before giving up.
+		}
 		const legCost = (a: GeoPoint, b: GeoPoint) => effectiveDistanceMeters(a, b, obstacles);
 		return routePath(graph, origin, target, legCost);
 	} catch (e) {

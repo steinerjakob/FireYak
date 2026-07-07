@@ -47,6 +47,18 @@
 					></ion-toggle>
 				</ion-item>
 
+				<ion-item>
+					<ion-label>
+						<h2>{{ $t('settings.map.clampToRoads.label') }}</h2>
+						<p>{{ $t('settings.map.clampToRoads.description') }}</p>
+					</ion-label>
+					<ion-toggle
+						slot="end"
+						:checked="clampHosesToRoads"
+						@ion-change="onClampToRoadsChange($event)"
+					></ion-toggle>
+				</ion-item>
+
 				<!-- Offline Section -->
 				<ion-list-header>
 					<ion-label>{{ $t('settings.offline.title') }}</ion-label>
@@ -143,8 +155,8 @@ import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
 
 const settingsStore = useSettingsStore();
-const { saveTheme, saveShowZoomButtons } = useSettings();
-const { theme, showZoomButtons } = storeToRefs(settingsStore);
+const { saveTheme, saveShowZoomButtons, saveClampHosesToRoads } = useSettings();
+const { theme, showZoomButtons, clampHosesToRoads } = storeToRefs(settingsStore);
 const osmAuthStore = useOsmAuthStore();
 const pendingEditsStore = usePendingEditsStore();
 const { pendingCount } = storeToRefs(pendingEditsStore);
@@ -155,6 +167,10 @@ const onThemeChange = (event: SegmentCustomEvent) => {
 
 const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 	saveShowZoomButtons(event.detail.checked);
+};
+
+const onClampToRoadsChange = (event: ToggleCustomEvent) => {
+	saveClampHosesToRoads(event.detail.checked);
 };
 
 const OSM_ACCOUNT_URL = 'https://www.openstreetmap.org/account/edit';

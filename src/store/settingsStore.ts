@@ -44,6 +44,9 @@ export const useSettingsStore = defineStore('settings', {
 		showZoomButtons: true,
 		mapLayer: 'standard' as MapLayerSetting,
 		terrain3d: false,
+		// When true, hose routes stick to the road network; when false (default)
+		// they may cut through gardens/open ground (buildings always avoided).
+		clampHosesToRoads: false,
 		osmAuthToken: '',
 		markerFilters: { ...DEFAULT_MARKER_FILTERS } as MarkerFilters,
 		_darkModeListener: null as ((e: MediaQueryListEvent) => void) | null
@@ -62,6 +65,9 @@ export const useSettingsStore = defineStore('settings', {
 		},
 		setTerrain3d(enabled: boolean) {
 			this.terrain3d = enabled;
+		},
+		setClampHosesToRoads(enabled: boolean) {
+			this.clampHosesToRoads = enabled;
 		},
 		setOsmAuthToken(token: string) {
 			this.osmAuthToken = token;
