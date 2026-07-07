@@ -1,4 +1,7 @@
-/* Common Buttons: https://m3.material.io/components/buttons/specs */
+/* Common Buttons: https://m3.material.io/components/buttons/specs
+   Size mapping (MD3 expressive scale):
+   default = small (40px), .button-small = extra-small (32px),
+   .button-large = medium (56px) */
 :root[mode='md'] {
 	button {
 		color: inherit !important;
@@ -19,22 +22,22 @@
 		--color-activated: var(--ion-color-contrast, var(--md-sys-on-primary));
 		--box-shadow: none;
 		--border-width: 1px;
-		--border-radius: 28px;
+		--border-radius: 20px;
 		--ripple-color: var(--md-sys-surface-container-highest);
 		--transition: border-radius var(--md-sys-expressive-default-spring-duration)
 			var(--md-sys-expressive-default-spring);
-		--padding-start: 24px;
-		--padding-end: 24px;
+		--padding-start: 16px;
+		--padding-end: 16px;
 
 		font: var(--md-sys-label-large);
 		letter-spacing: var(--md-sys-label-large-letter-spacing);
-		height: 56px;
+		min-height: 40px;
 		text-transform: none;
 
 		&.button-full,
 		&.md-square,
 		&[shape='square'] {
-			--border-radius: var(--md-sys-corner-large);
+			--border-radius: var(--md-sys-corner-medium);
 
 			&::part(native) {
 				border-radius: var(--border-radius);
@@ -42,13 +45,20 @@
 		}
 
 		&.ion-activated {
-			--border-radius: var(--md-sys-corner-medium);
+			--border-radius: var(--md-sys-corner-small);
+		}
+
+		&.button-has-icon-only {
+			--padding-start: 8px;
+			--padding-end: 8px;
+
+			min-width: 40px;
 		}
 
 		ion-icon {
 			color: inherit !important;
-			width: 24px;
-			height: 24px;
+			width: 20px;
+			height: 20px;
 
 			&[slot='start'] {
 				margin-right: 8px;
@@ -57,18 +67,23 @@
 			&[slot='end'] {
 				margin-left: 8px;
 			}
+
+			&[slot='icon-only'] {
+				width: 24px;
+				height: 24px;
+			}
 		}
 	}
 
 	ion-button.button-small {
-		height: 40px;
-		font: var(--md-sys-label-small) !important;
-		letter-spacing: var(--md-sys-label-small-letter-spacing) !important;
+		min-height: 32px;
+		font: var(--md-sys-label-large) !important;
+		letter-spacing: var(--md-sys-label-large-letter-spacing) !important;
 
 		--border-width: 1px;
-		--border-radius: 20px;
-		--padding-start: 16px;
-		--padding-end: 16px;
+		--border-radius: 16px;
+		--padding-start: 12px;
+		--padding-end: 12px;
 
 		&.button-full,
 		&.md-square,
@@ -80,42 +95,61 @@
 			--border-radius: var(--md-sys-corner-small);
 		}
 
+		&.button-has-icon-only {
+			--padding-start: 6px;
+			--padding-end: 6px;
+
+			min-width: 32px;
+		}
+
 		ion-icon {
 			width: 20px;
 			height: 20px;
+
+			&[slot='icon-only'] {
+				width: 20px;
+				height: 20px;
+			}
 		}
 	}
 
 	ion-button.button-large {
-		height: 96px;
-		font: var(--md-sys-title-large);
-		letter-spacing: var(--md-sys-title-large-letter-spacing);
+		min-height: 56px;
+		font: var(--md-sys-title-medium);
+		letter-spacing: var(--md-sys-title-medium-letter-spacing);
 
-		--border-width: 2px;
-		--border-radius: 48px;
-		--padding-start: 48px;
-		--padding-end: 48px;
+		--border-width: 1px;
+		--border-radius: 28px;
+		--padding-start: 24px;
+		--padding-end: 24px;
 
 		&.button-full,
 		&.md-square,
 		&[shape='square'] {
-			--border-radius: var(--md-sys-corner-extra-large);
-		}
-
-		&.ion-activated {
 			--border-radius: var(--md-sys-corner-large);
 		}
 
+		&.ion-activated {
+			--border-radius: var(--md-sys-corner-medium);
+		}
+
+		&.button-has-icon-only {
+			--padding-start: 16px;
+			--padding-end: 16px;
+
+			min-width: 56px;
+		}
+
 		ion-icon {
-			width: 32px;
-			height: 32px;
+			width: 24px;
+			height: 24px;
 
 			&[slot='start'] {
-				margin-right: 12px;
+				margin-right: 8px;
 			}
 
 			&[slot='end'] {
-				margin-left: 12px;
+				margin-left: 8px;
 			}
 		}
 	}
@@ -156,12 +190,6 @@
 		--box-shadow: var(--md-sys-level2);
 	}
 
-	ion-button ion-icon,
-	ion-button.md-elevated ion-icon {
-		font-size: 18px;
-		color: var(--md-sys-primary);
-	}
-
 	ion-button.md-outlined,
 	ion-button[fill='outline'] {
 		--background: var(--md-sys-surface);
@@ -189,5 +217,7 @@
 		--color-focused: var(--md-sys-primary);
 		--color-activated: var(--md-sys-primary);
 		--box-shadow: var(--md-sys-level0);
+		--padding-start: 12px;
+		--padding-end: 12px;
 	}
 }
