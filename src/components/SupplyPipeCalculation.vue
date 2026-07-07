@@ -85,7 +85,7 @@ const pumpPositions = computed(() => {
 const pumpPositionInfo = (pump: PumpPosition) => {
 	const inpuPressure = t('pumpCalculation.pump.inputPressure');
 	const tubes = t('pumpCalculation.pump.tubes');
-	return `B-${tubes}: ~${pump.neededBTubes}; ${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}`;
+	return `${pumpCalculationStore.hoseName}-${tubes}: ~${pump.neededBTubes}; ${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}`;
 };
 
 const targetMarkerInfo = () => {
@@ -107,7 +107,7 @@ const targetMarkerInfo = () => {
 
 	const inpuPressure = t('pumpCalculation.pump.inputPressure');
 	const tubes = t('pumpCalculation.pump.tubes');
-	return `B-${tubes}: ~${neededBTubes}; ${inpuPressure}: ${pressure.toFixed(2)}`;
+	return `${pumpCalculationStore.hoseName}-${tubes}: ~${neededBTubes}; ${inpuPressure}: ${pressure.toFixed(2)}`;
 };
 </script>
 
@@ -224,7 +224,9 @@ const targetMarkerInfo = () => {
 			<ion-label>
 				<div class="calculation-results">
 					<div class="result-row">
-						<span class="result-label">B-{{ t('pumpCalculation.pump.tubes') }}:</span>
+						<span class="result-label"
+							>{{ pumpCalculationStore.hoseName }}-{{ t('pumpCalculation.pump.tubes') }}:</span
+						>
 						<span class="result-value">~{{ tubeCount }}</span>
 					</div>
 					<div class="result-row">
@@ -248,8 +250,10 @@ const targetMarkerInfo = () => {
 					<div class="result-row">
 						<span class="result-label">{{ t('pumpCalculation.pump.reserve') }}:</span>
 						<span class="result-value"
-							>+{{ reserveTubes }} B-{{ t('pumpCalculation.pump.tubes') }} · +{{ reservePumps }}
-							{{ t('pumpCalculation.pump.title') }}</span
+							>+{{ reserveTubes }} {{ pumpCalculationStore.hoseName }}-{{
+								t('pumpCalculation.pump.tubes')
+							}}
+							· +{{ reservePumps }} {{ t('pumpCalculation.pump.title') }}</span
 						>
 					</div>
 				</div>

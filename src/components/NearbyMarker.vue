@@ -34,7 +34,7 @@ const getTitle = (markerData: OverPassElement) => {
 const getBTubes = (distance: number) => {
 	const tubes = t('pumpCalculation.pump.tubes');
 	const neededBTubes = Math.ceil(distance / pumpCalculationStore.tubeLength);
-	return `~${neededBTubes} B-${tubes}`;
+	return `~${neededBTubes} ${pumpCalculationStore.hoseName}-${tubes}`;
 };
 
 const getDistanceText = (distance: number) => {
