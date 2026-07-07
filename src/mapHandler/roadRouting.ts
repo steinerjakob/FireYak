@@ -13,10 +13,20 @@ import { RoadLine } from '@/types/obstacles';
  *   per-tile quantization. Node merging is therefore tolerance-based.
  * - Crossing lines without a shared vertex (bridges/tunnels) are NOT connected;
  *   only shared/nearby vertices join.
+ * - The network is fragmented: besides one dominant street component there are
+ *   hundreds of tiny disconnected fragments (courtyard paths, driveways,
+ *   clipped stubs). Snapping to the single nearest edge therefore often lands
+ *   on an unreachable island. Points snap to the nearest edge of EACH nearby
+ *   component instead, and the cheapest reachable total wins.
+ * - The straight "leg" between a point and its snap position can cross
+ *   buildings; callers can supply a `legCost` function (e.g. the
+ *   building-weighted heuristic) so such legs are priced realistically.
  */
 
 /** Max distance from a point to the road network for routing to apply. */
 export const MAX_SNAP_M = 100;
+/** Max distinct components considered per snapped point. */
+const MAX_SNAP_COMPONENTS = 8;
 /** Vertex-merge tolerance; also joins tile-boundary duplicates (~0.3 m quantization at z15). */
 const NODE_MERGE_TOLERANCE_M = 2;
 /** Cell size of the edge spatial index used for snapping. */
@@ -26,6 +36,9 @@ const SNAP_GRID_CELL_M = 75;
 const M_PER_DEG_LAT = 110540;
 /** Meters per degree of longitude at the equator; scaled by cos(latitude). */
 const M_PER_DEG_LNG_EQUATOR = 111320;
+
+/** Straight-line leg cost used when the caller doesn't supply one. */
+export type LegCostFn = (from: GeoPoint, to: GeoPoint) => number;
 
 interface GraphEdge {
 	/** Node indexes of the endpoints. */
@@ -41,14 +54,16 @@ export interface RoadGraph {
 	/** Per-node list of (neighbour node, edge index) pairs. */
 	adjacency: { node: number; edge: number }[][];
 	edges: GraphEdge[];
+	/** Connected-component id per node (fragmented networks are the norm). */
+	nodeComponent: Int32Array;
 	/** Spatial index: snap-grid cell key → edge indexes touching the cell. */
 	edgeIndex: Map<string, number[]>;
 	/** Meters per degree of longitude at the graph's mean latitude. */
 	mPerDegLng: number;
 }
 
-/** Where a query point attaches to the graph. */
-interface SnapResult {
+/** Where a query point attaches to one component of the graph. */
+interface SnapCandidate {
 	edge: number;
 	/** Position along the edge from endpoint `a`, 0..1. */
 	t: number;
@@ -56,6 +71,10 @@ interface SnapResult {
 	position: GeoPoint;
 	/** Straight distance from the query point to `position` in meters. */
 	distance: number;
+	/** Component the edge belongs to. */
+	component: number;
+	/** Leg cost from the query point to `position` (set by the router). */
+	legCost: number;
 }
 
 function toRadians(deg: number): number {
@@ -70,7 +89,8 @@ function cellKey(cx: number, cy: number): string {
  * Builds an undirected road graph from decoded road centerlines. Consecutive
  * polyline vertices become edges; vertices closer than
  * {@link NODE_MERGE_TOLERANCE_M} are merged into one node (this joins both
- * in-tile intersections and tile-boundary continuations).
+ * in-tile intersections and tile-boundary continuations). Connected components
+ * are labelled so snapping can offer one candidate per nearby component.
  */
 export function buildRoadGraph(roads: RoadLine[]): RoadGraph {
 	// Local meter frame anchored at the mean latitude of the input.
@@ -169,16 +189,36 @@ export function buildRoadGraph(roads: RoadLine[]): RoadGraph {
 		}
 	}
 
-	return { nodes, adjacency, edges, edgeIndex, mPerDegLng };
+	// Label connected components (union-find with path halving).
+	const parent = new Int32Array(nodes.length);
+	for (let i = 0; i < parent.length; i++) parent[i] = i;
+	const find = (i: number): number => {
+		while (parent[i] !== i) {
+			parent[i] = parent[parent[i]];
+			i = parent[i];
+		}
+		return i;
+	};
+	for (const edge of edges) {
+		const ra = find(edge.a);
+		const rb = find(edge.b);
+		if (ra !== rb) parent[ra] = rb;
+	}
+	const nodeComponent = new Int32Array(nodes.length);
+	for (let i = 0; i < nodes.length; i++) nodeComponent[i] = find(i);
+
+	return { nodes, adjacency, edges, nodeComponent, edgeIndex, mPerDegLng };
 }
 
 /**
- * Projects `point` onto the nearest edge within {@link MAX_SNAP_M}, using the
- * spatial index so the search only touches nearby cells. Returns `null` when
- * the road network is too far away.
+ * Projects `point` onto the nearest edge of EACH connected component within
+ * {@link MAX_SNAP_M} (up to {@link MAX_SNAP_COMPONENTS}, nearest components
+ * first). Multiple candidates are essential: the nearest edge is frequently an
+ * unreachable island fragment while the real street network passes a few
+ * meters farther away. Returns an empty array when no road is in range.
  */
-function snapToGraph(graph: RoadGraph, point: GeoPoint): SnapResult | null {
-	if (graph.edges.length === 0) return null;
+function snapCandidates(graph: RoadGraph, point: GeoPoint): SnapCandidate[] {
+	if (graph.edges.length === 0) return [];
 
 	const px = point.lng * graph.mPerDegLng;
 	const py = point.lat * M_PER_DEG_LAT;
@@ -186,7 +226,7 @@ function snapToGraph(graph: RoadGraph, point: GeoPoint): SnapResult | null {
 	const ccx = Math.floor(px / SNAP_GRID_CELL_M);
 	const ccy = Math.floor(py / SNAP_GRID_CELL_M);
 
-	let best: SnapResult | null = null;
+	const bestPerComponent = new Map<number, SnapCandidate>();
 	const seen = new Set<number>();
 
 	for (let cx = ccx - cellRadius; cx <= ccx + cellRadius; cx++) {
@@ -213,19 +253,26 @@ function snapToGraph(graph: RoadGraph, point: GeoPoint): SnapResult | null {
 				const qx = ax + t * dx;
 				const qy = ay + t * dy;
 				const dist = Math.hypot(px - qx, py - qy);
-				if (dist <= MAX_SNAP_M && (!best || dist < best.distance)) {
-					best = {
+				if (dist > MAX_SNAP_M) continue;
+				const component = graph.nodeComponent[edge.a];
+				const current = bestPerComponent.get(component);
+				if (!current || dist < current.distance) {
+					bestPerComponent.set(component, {
 						edge: edgeIdx,
 						t,
 						position: { lng: qx / graph.mPerDegLng, lat: qy / M_PER_DEG_LAT },
-						distance: dist
-					};
+						distance: dist,
+						component,
+						legCost: dist
+					});
 				}
 			}
 		}
 	}
 
-	return best;
+	return [...bestPerComponent.values()]
+		.sort((a, b) => a.distance - b.distance)
+		.slice(0, MAX_SNAP_COMPONENTS);
 }
 
 /** Minimal binary min-heap over (distance, node) pairs with lazy deletion. */
@@ -278,30 +325,53 @@ class MinHeap {
 	}
 }
 
-interface DijkstraResult {
-	/** Shortest graph distance from the snapped origin to each node (Infinity = unreachable). */
+interface OriginSolve {
+	candidates: SnapCandidate[];
+	/** Cheapest cost from the origin POINT (leg included) to each node; Infinity = unreachable. */
 	dist: Float64Array;
-	/** Predecessor node index for path reconstruction (-1 = seed/unreached). */
+	/** Predecessor node for path reconstruction (-1 = seeded directly from a snap). */
 	prev: Int32Array;
+	/** Index into `candidates` of the snap that ultimately fed each node. */
+	seed: Int32Array;
 }
 
 /**
- * Single-source Dijkstra from a snapped origin: both endpoints of the snapped
- * edge are seeded with their along-edge offsets, so distances are measured from
- * the snap point itself.
+ * Multi-seeded Dijkstra from the origin point: every snap candidate seeds the
+ * endpoints of its edge with `legCost + along-edge offset`, so `dist[]`
+ * already includes the approach leg and the cheapest reachable component wins
+ * naturally.
  */
-function dijkstraFromSnap(graph: RoadGraph, origin: SnapResult): DijkstraResult {
+function solveFromOrigin(
+	graph: RoadGraph,
+	origin: GeoPoint,
+	legCost: LegCostFn
+): OriginSolve | null {
+	const candidates = snapCandidates(graph, origin);
+	if (candidates.length === 0) return null;
+
 	const n = graph.nodes.length;
 	const dist = new Float64Array(n).fill(Infinity);
 	const prev = new Int32Array(n).fill(-1);
+	const seed = new Int32Array(n).fill(-1);
 	const done = new Uint8Array(n);
 	const heap = new MinHeap();
 
-	const edge = graph.edges[origin.edge];
-	dist[edge.a] = origin.t * edge.length;
-	dist[edge.b] = (1 - origin.t) * edge.length;
-	heap.push(dist[edge.a], edge.a);
-	heap.push(dist[edge.b], edge.b);
+	candidates.forEach((candidate, ci) => {
+		candidate.legCost = legCost(origin, candidate.position);
+		const edge = graph.edges[candidate.edge];
+		const costA = candidate.legCost + candidate.t * edge.length;
+		const costB = candidate.legCost + (1 - candidate.t) * edge.length;
+		if (costA < dist[edge.a]) {
+			dist[edge.a] = costA;
+			seed[edge.a] = ci;
+			heap.push(costA, edge.a);
+		}
+		if (costB < dist[edge.b]) {
+			dist[edge.b] = costB;
+			seed[edge.b] = ci;
+			heap.push(costB, edge.b);
+		}
+	});
 
 	for (;;) {
 		const top = heap.pop();
@@ -315,107 +385,145 @@ function dijkstraFromSnap(graph: RoadGraph, origin: SnapResult): DijkstraResult 
 			if (candidate < dist[v]) {
 				dist[v] = candidate;
 				prev[v] = u;
+				seed[v] = seed[u];
 				heap.push(candidate, v);
 			}
 		}
 	}
 
-	return { dist, prev };
+	return { candidates, dist, prev, seed };
+}
+
+interface Arrival {
+	/** Total cost origin point → target point (both legs included). */
+	cost: number;
+	/** Geometric length in meters of the same route (legs at face value). */
+	meters: number;
+	target: SnapCandidate;
+	/** Node the route enters the target edge from, or -1 for the direct same-edge run. */
+	entry: number;
+	/** Origin candidate of the direct same-edge run (set only when entry === -1). */
+	directFrom: SnapCandidate | null;
+}
+
+/** Routed result: `cost` ranks (legs priced by `legCost`), `meters` is the geometric length. */
+export interface RouteResult {
+	cost: number;
+	meters: number;
 }
 
 /**
- * Graph distance from a solved origin to a snapped target, handling the
- * degenerate case where both snap points lie on the same edge (direct
- * along-edge run, no node detour).
+ * Cheapest arrival at `target` given a solved origin: evaluates every target
+ * snap candidate via both edge endpoints, plus the direct along-edge run when
+ * an origin candidate sits on the same edge.
  */
-function graphDistanceToSnap(
+function bestArrival(
 	graph: RoadGraph,
-	origin: SnapResult,
-	solved: DijkstraResult,
-	target: SnapResult
-): number {
-	const edge = graph.edges[target.edge];
-	let best = Math.min(
-		solved.dist[edge.a] + target.t * edge.length,
-		solved.dist[edge.b] + (1 - target.t) * edge.length
-	);
-	if (target.edge === origin.edge) {
-		best = Math.min(best, Math.abs(target.t - origin.t) * edge.length);
+	solve: OriginSolve,
+	target: GeoPoint,
+	legCost: LegCostFn
+): Arrival | null {
+	let best: Arrival | null = null;
+
+	for (const tc of snapCandidates(graph, target)) {
+		tc.legCost = legCost(target, tc.position);
+		const edge = graph.edges[tc.edge];
+		const viaA = solve.dist[edge.a] + tc.t * edge.length;
+		const viaB = solve.dist[edge.b] + (1 - tc.t) * edge.length;
+		const via = Math.min(viaA, viaB);
+		if (Number.isFinite(via)) {
+			const cost = via + tc.legCost;
+			if (!best || cost < best.cost) {
+				const entry = viaA <= viaB ? edge.a : edge.b;
+				// dist[] carries the origin leg at its priced cost; swap both legs
+				// for their geometric distances to get the real path length.
+				const oc = solve.candidates[solve.seed[entry]];
+				const meters = via - oc.legCost + oc.distance + tc.distance;
+				best = { cost, meters, target: tc, entry, directFrom: null };
+			}
+		}
+		// Direct along-edge run when an origin candidate sits on the same edge
+		// (no node detour — matters on short isolated fragments).
+		for (const oc of solve.candidates) {
+			if (oc.edge !== tc.edge) continue;
+			const along = Math.abs(tc.t - oc.t) * edge.length;
+			const cost = oc.legCost + along + tc.legCost;
+			if (!best || cost < best.cost) {
+				best = {
+					cost,
+					meters: oc.distance + along + tc.distance,
+					target: tc,
+					entry: -1,
+					directFrom: oc
+				};
+			}
+		}
 	}
+
 	return best;
 }
 
 /**
- * Routed distances (meters) from `origin` to each target along the road
- * network: straight leg to the snapped origin + shortest graph path + straight
- * leg from the target's snap point. ONE Dijkstra traversal serves all targets.
- * `null` per target when it can't snap within {@link MAX_SNAP_M} or its
- * component is unreachable; all `null` when the origin can't snap.
+ * Routed results from `origin` to each target along the road network,
+ * including both approach legs. `cost` (legs priced by `legCost`) is the
+ * ranking key; `meters` is the geometric length for display. ONE Dijkstra
+ * traversal serves all targets. `null` per target when it can't snap within
+ * {@link MAX_SNAP_M} of a reachable component; all `null` when the origin
+ * can't snap at all.
  */
 export function routeFromOrigin(
 	graph: RoadGraph,
 	origin: GeoPoint,
-	targets: GeoPoint[]
-): (number | null)[] {
-	const snappedOrigin = snapToGraph(graph, origin);
-	if (!snappedOrigin) return targets.map(() => null);
-
-	const solved = dijkstraFromSnap(graph, snappedOrigin);
-	const originLeg = distanceTo(origin, snappedOrigin.position);
+	targets: GeoPoint[],
+	legCost: LegCostFn = distanceTo
+): (RouteResult | null)[] {
+	const solve = solveFromOrigin(graph, origin, legCost);
+	if (!solve) return targets.map(() => null);
 
 	return targets.map((target) => {
-		const snappedTarget = snapToGraph(graph, target);
-		if (!snappedTarget) return null;
-		const graphDist = graphDistanceToSnap(graph, snappedOrigin, solved, snappedTarget);
-		if (!Number.isFinite(graphDist)) return null;
-		return originLeg + graphDist + distanceTo(snappedTarget.position, target);
+		const arrival = bestArrival(graph, solve, target, legCost);
+		return arrival ? { cost: arrival.cost, meters: arrival.meters } : null;
 	});
 }
 
 /**
  * Full display polyline for the route `origin` → `target`: origin, origin snap
  * point, node chain along the shortest path, target snap point, target.
- * Returns `null` when either end can't snap or no path exists.
+ * Returns `null` when either end can't snap to a mutually reachable component.
  */
-export function routePath(graph: RoadGraph, origin: GeoPoint, target: GeoPoint): GeoPoint[] | null {
-	const snappedOrigin = snapToGraph(graph, origin);
-	const snappedTarget = snapToGraph(graph, target);
-	if (!snappedOrigin || !snappedTarget) return null;
+export function routePath(
+	graph: RoadGraph,
+	origin: GeoPoint,
+	target: GeoPoint,
+	legCost: LegCostFn = distanceTo
+): GeoPoint[] | null {
+	const solve = solveFromOrigin(graph, origin, legCost);
+	if (!solve) return null;
+	const arrival = bestArrival(graph, solve, target, legCost);
+	if (!arrival) return null;
 
-	const originEdge = graph.edges[snappedOrigin.edge];
-	const targetEdge = graph.edges[snappedTarget.edge];
-	const solved = dijkstraFromSnap(graph, snappedOrigin);
-
-	const viaA = solved.dist[targetEdge.a] + snappedTarget.t * targetEdge.length;
-	const viaB = solved.dist[targetEdge.b] + (1 - snappedTarget.t) * targetEdge.length;
-	const bestViaNodes = Math.min(viaA, viaB);
-	const sameEdge = snappedTarget.edge === snappedOrigin.edge;
-	const alongEdge = sameEdge
-		? Math.abs(snappedTarget.t - snappedOrigin.t) * originEdge.length
-		: Infinity;
-
-	if (!Number.isFinite(Math.min(bestViaNodes, alongEdge))) return null;
-
-	const path: GeoPoint[] = [origin, snappedOrigin.position];
-
-	if (alongEdge <= bestViaNodes) {
-		// Both snap points on the same edge: run straight along it.
-		path.push(snappedTarget.position, target);
-		return path;
+	if (arrival.entry === -1 && arrival.directFrom) {
+		// Same-edge run: straight along the shared edge segment.
+		return [origin, arrival.directFrom.position, arrival.target.position, target];
 	}
 
-	// Reconstruct the node chain backwards from the target's entry endpoint to
-	// the seeded origin endpoint (prev = -1 marks a seed).
-	const entry = viaA <= viaB ? targetEdge.a : targetEdge.b;
+	// Node chain backwards from the entry endpoint to the seeded origin snap
+	// (prev = -1 marks a seed node; seed[] names the snap that fed it).
 	const chain: number[] = [];
-	for (let node = entry; node !== -1; node = solved.prev[node]) {
+	let node = arrival.entry;
+	for (;;) {
 		chain.push(node);
+		const p = solve.prev[node];
+		if (p === -1) break;
+		node = p;
 	}
 	chain.reverse();
-	for (const node of chain) {
-		path.push({ lng: graph.nodes[node][0], lat: graph.nodes[node][1] });
-	}
+	const originCandidate = solve.candidates[solve.seed[chain[0]]];
 
-	path.push(snappedTarget.position, target);
+	const path: GeoPoint[] = [origin, originCandidate.position];
+	for (const nodeIdx of chain) {
+		path.push({ lng: graph.nodes[nodeIdx][0], lat: graph.nodes[nodeIdx][1] });
+	}
+	path.push(arrival.target.position, target);
 	return path;
 }

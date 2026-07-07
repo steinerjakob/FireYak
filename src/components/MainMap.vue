@@ -173,6 +173,7 @@ import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
 import { nightFlavor } from '@/map/nightFlavor';
 import { satelliteFlavor } from '@/map/satelliteFlavor';
@@ -601,9 +602,12 @@ const selectedPathCoords = ref<[number, number][]>([]);
 const selectedPathVisible = ref(false);
 // Length of the displayed path (routed or straight), rendered as a label on the line.
 const selectedPathDistanceText = ref('');
+const pumpCalculationStore = usePumpCalculationStore();
 
 function formatPathDistance(meters: number): string {
-	return meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
+	const distance = meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
+	const tubes = Math.round(meters / pumpCalculationStore.tubeLength);
+	return `${distance} · ~${tubes} B-${t('pumpCalculation.pump.tubes')}`;
 }
 
 function selectedPathFeature(): GeoJSON.Feature {
