@@ -131,14 +131,18 @@ export async function computeNearbyDistances(
 		const bounds = boundsAround([origin, ...candidatePoints], BOUNDS_MARGIN_M);
 		const { graph, obstacles } = await getContext(bounds);
 
-		const routed = routeFromOrigin(graph, origin, candidatePoints);
+		// Price the point↔road legs with the building-aware heuristic so a snap
+		// candidate across a building block never beats one along open ground.
+		const legCost = (a: GeoPoint, b: GeoPoint) => effectiveDistanceMeters(a, b, obstacles);
+		const routed = routeFromOrigin(graph, origin, candidatePoints, legCost);
 		candidates.forEach((targetIndex, i) => {
-			const routedDistance = routed[i];
-			if (routedDistance !== null) {
+			const route = routed[i];
+			if (route !== null) {
 				results[targetIndex] = {
-					routedDistance,
+					// Geometric length for display/B-tubes; priced cost for ranking.
+					routedDistance: route.meters,
 					// A route can never beat the straight line; guard against snap artifacts.
-					sortDistance: Math.max(routedDistance, straightDistances[targetIndex])
+					sortDistance: Math.max(route.cost, straightDistances[targetIndex])
 				};
 			} else {
 				// Off-network marker: weighted straight-line heuristic instead.
@@ -166,8 +170,9 @@ export async function getRoutedPath(
 	if (distanceTo(origin, target) > ROUTING_MAX_STRAIGHT_M * 2) return null;
 	try {
 		const bounds = boundsAround([origin, target], BOUNDS_MARGIN_M);
-		const { graph } = await getContext(bounds);
-		return routePath(graph, origin, target);
+		const { graph, obstacles } = await getContext(bounds);
+		const legCost = (a: GeoPoint, b: GeoPoint) => effectiveDistanceMeters(a, b, obstacles);
+		return routePath(graph, origin, target, legCost);
 	} catch (e) {
 		console.warn('Routed path failed, falling back to straight line:', e);
 		return null;
