@@ -25,6 +25,7 @@ import {
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
+import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
 import { lngLatToTile, tileKey } from '@/helper/tileMath';
 
 // Map icon keys to URLs for use in MapLibre image loading
@@ -281,29 +282,50 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 }
 
 /**
- * Sorts a list of map markers by their distance from a specified geographic location.
+ * Sorts a list of map markers by their road-aware distance from a specified
+ * geographic location. Nearby markers are ranked by the routed distance along
+ * the road network when routable, falling back to a building/road-weighted
+ * straight-line heuristic and finally to the plain haversine distance (see
+ * `src/mapHandler/nearbyRouting.ts`), so a hydrant down the same road ranks
+ * above a geometrically closer one across a building block.
  *
  * @param elements
  * @param {GeoPoint} latLng - The reference geographic location used to calculate distances from each marker.
- * @return {Promise<NearbyMarker[]>} A promise that resolves to an array of objects, each containing a marker and its distance from the specified location, sorted in ascending order by distance.
+ * @return {Promise<NearbyMarker[]>} A promise that resolves to an array of objects, each containing a marker and its distances from the specified location, sorted in ascending ranking order.
  */
 async function sortElementsByDistance(
 	elements: OverPassElement[],
 	latLng: GeoPoint
 ): Promise<NearbyMarker[]> {
-	const markersWithDistance: NearbyMarker[] = elements.map((element) => {
-		const elementPoint: GeoPoint = {
-			lat: (element?.lat || element.center?.lat) as number,
-			lng: (element.lon || element.center?.lon) as number
-		};
-		return {
-			element,
-			distance: distanceTo(latLng, elementPoint),
-			icon: getIconUrlForNode(element)
-		};
-	});
+	const points: GeoPoint[] = elements.map((element) => ({
+		lat: (element?.lat || element.center?.lat) as number,
+		lng: (element.lon || element.center?.lon) as number
+	}));
+	const straightDistances = points.map((point) => distanceTo(latLng, point));
 
-	return markersWithDistance.sort((a, b) => a.distance - b.distance);
+	let ranking: NearbyDistanceResult[];
+	try {
+		ranking = await computeNearbyDistances(latLng, points, straightDistances);
+	} catch (e) {
+		// computeNearbyDistances fails open internally; this is a last-resort guard.
+		console.warn('Road-aware ranking failed, using straight-line order:', e);
+		ranking = straightDistances.map((distance) => ({
+			routedDistance: null,
+			sortDistance: distance
+		}));
+	}
+
+	const markersWithDistance: NearbyMarker[] = elements.map((element, i) => ({
+		element,
+		distance: straightDistances[i],
+		routedDistance: ranking[i].routedDistance,
+		sortDistance: ranking[i].sortDistance,
+		icon: getIconUrlForNode(element)
+	}));
+
+	return markersWithDistance.sort(
+		(a, b) => a.sortDistance - b.sortDistance || a.distance - b.distance
+	);
 }
 
 /**
