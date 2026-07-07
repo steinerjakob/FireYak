@@ -30,7 +30,8 @@ function calculatePumpPosition(
 	pressureLost: number,
 	inputPressure: number,
 	outputPressure: number,
-	targetPressure: number
+	targetPressure: number,
+	sourcePressure: number | null
 ): { pumps: PumpPosition[]; realDistance: number } {
 	const pumps: PumpPosition[] = [];
 	const pumpStore = usePumpCalculationStore();
@@ -49,11 +50,16 @@ function calculatePumpPosition(
 	let realDistance = 0;
 	const startElevation = elevationPoints[0].elevation;
 	let elevationOld = startElevation;
-	let pressure = outputPressure;
+	// A pressurized hydrant feeds the line directly with its own pressure;
+	// otherwise a pump at the water source provides `outputPressure`.
+	const hasSourcePump = sourcePressure === null;
+	let pressure = sourcePressure ?? outputPressure;
 	// Index of the point the last pump was placed on — the backtracking search
 	// below must never go back to it, or a single segment that eats the whole
-	// pressure budget (cliff-steep terrain) would loop forever.
-	let lastPumpIndex = 0;
+	// pressure budget (cliff-steep terrain) would loop forever. With a
+	// hydrant-fed line there is no pump at index 0 yet, so placing one right
+	// at the source is allowed.
+	let lastPumpIndex = hasSourcePump ? 0 : -1;
 
 	elevationPoints[0].pressure = pressure;
 
@@ -166,7 +172,11 @@ function provideMarkerPopup(t: any, pump: PumpPosition): maplibregl.Popup {
 	return popup;
 }
 
-export function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]) {
+export function getPumpLocationMarkers(
+	t: any,
+	elevationPoints: ElevationPoint[],
+	sourcePressure: number | null = null
+) {
 	const pumpCalculationStore = usePumpCalculationStore();
 	const { pumps: pumpPositions, realDistance } = calculatePumpPosition(
 		t,
@@ -174,7 +184,8 @@ export function getPumpLocationMarkers(t: any, elevationPoints: ElevationPoint[]
 		pumpCalculationStore.pressureLost / 100,
 		pumpCalculationStore.inputPressure,
 		pumpCalculationStore.outputPressure,
-		pumpCalculationStore.targetPressure
+		pumpCalculationStore.targetPressure,
+		sourcePressure
 	);
 	return { pumpPositions, realDistance };
 }

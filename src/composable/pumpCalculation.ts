@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
+import { getMapNodeById } from '@/mapHandler/databaseHandler';
 import { alertController } from '@ionic/vue';
 import { GeoPoint, distanceTo } from '@/types/geo';
 
@@ -35,6 +36,8 @@ export interface CalculationResult {
 	pumpPositions: PumpPosition[];
 	/** True when elevation was ignored (offline flat-terrain fallback) for this result. */
 	elevationIgnored: boolean;
+	/** Hydrant pressure (bar) feeding the line, or `null` = pump at the source. */
+	sourcePressure: number | null;
 }
 
 const calculationResult = ref<CalculationResult | null>(null);
@@ -354,16 +357,33 @@ const setWayPoint = (latlng?: GeoPoint) => {
 	updatePolyline();
 };
 
+/**
+ * Pressure (bar) the water source itself provides — set when the suction
+ * point is a pressurized hydrant. `null` = unpressurized source, a pump at
+ * the source is assumed (its output pressure starts the line).
+ */
+let sourcePressure: number | null = null;
+
+/** Numeric `fire_hydrant:pressure` in bar, or `null` ("suction", 0, absent). */
+function parseHydrantPressure(tags: Record<string, string> | undefined): number | null {
+	const raw = tags?.['fire_hydrant:pressure'];
+	if (!raw) return null;
+	const value = parseFloat(raw);
+	return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export function usePumpCalculation() {
 	const route = useRoute();
 	const { t } = useI18n();
 
 	const isActive = computed(() => route.path.includes('supplypipe'));
 
-	const setSuctionPoint = (latlng?: GeoPoint) => {
+	const setSuctionPoint = (latlng?: GeoPoint, pressure: number | null = null) => {
 		const point =
 			latlng || (rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
 		if (!point || !rootMap) return;
+
+		sourcePressure = pressure;
 
 		if (!suctionPoint) {
 			const { iconUrl, size, anchor } = getMarkerConfig('suctionPoint');
@@ -373,24 +393,67 @@ export function usePumpCalculation() {
 				draggable: true
 			});
 			suctionPoint.setLngLat([point.lng, point.lat]).addTo(rootMap);
+			suctionPoint.on('dragend', () => {
+				// Dragged away from the hydrant → its pressure no longer applies.
+				sourcePressure = null;
+				updatePolyline();
+			});
 		} else {
 			suctionPoint.setLngLat([point.lng, point.lat]);
 		}
 
-		suctionPoint.on('dragend', () => {
-			updatePolyline();
-		});
-
+		const pressureLine =
+			pressure !== null
+				? `<div>${t('pumpCalculation.sourcePressureUsed', { pressure })}</div>`
+				: '';
 		const popup = new maplibregl.Popup({ offset: [0, -48] });
 		popup.setHTML(`
 		<div class="pump-popup">
 			<b>${t('pumpCalculation.suctionPoint')}</b>
+			${pressureLine}
 		</div>
 	`);
 		suctionPoint.setPopup(popup);
 
 		suctionPointSet.value = true;
 		updatePolyline();
+	};
+
+	/**
+	 * Offers a tapped water-source marker as the suction point. A numeric
+	 * `fire_hydrant:pressure` tag becomes the line's starting pressure (no
+	 * pump at the source); otherwise a source pump is still assumed.
+	 */
+	const useMarkerAsWaterSource = async (markerId: number, coords: GeoPoint) => {
+		const node = await getMapNodeById(markerId);
+		const emergency = node?.tags?.emergency;
+		const isWaterSource =
+			emergency === 'fire_hydrant' ||
+			emergency === 'suction_point' ||
+			emergency === 'water_tank' ||
+			emergency === 'fire_water_pond';
+		if (!node || !isWaterSource) return;
+
+		const pressure = parseHydrantPressure(node.tags);
+		const point =
+			node.lat !== undefined && node.lon !== undefined ? { lat: node.lat, lng: node.lon } : coords;
+
+		const alert = await alertController.create({
+			header: t('pumpCalculation.useAsSource.title'),
+			message:
+				pressure !== null
+					? t('pumpCalculation.sourcePressureUsed', { pressure })
+					: t('pumpCalculation.sourcePumpRequired'),
+			buttons: [
+				{ text: t('pumpCalculation.useAsSource.cancel'), role: 'cancel' },
+				{ text: t('pumpCalculation.useAsSource.confirm'), role: 'confirm' }
+			]
+		});
+		await alert.present();
+		const { role } = await alert.onDidDismiss();
+		if (role === 'confirm') {
+			setSuctionPoint(point, pressure);
+		}
 	};
 
 	const updateTargetMarker = (
@@ -455,7 +518,11 @@ export function usePumpCalculation() {
 		const path = routedPathPoints ?? markerChain();
 		const { points } = resamplePolyline(path);
 		const { points: elevationData, elevationIgnored } = await getElevationDataForPoints(points);
-		const { realDistance, pumpPositions } = getPumpLocationMarkers(t, elevationData);
+		const { realDistance, pumpPositions } = getPumpLocationMarkers(
+			t,
+			elevationData,
+			sourcePressure
+		);
 		updateTargetMarker(pumpPositions, realDistance, elevationData);
 
 		// One hose-count label per stretch: suction → pump 1 → … → fire object.
@@ -486,7 +553,8 @@ export function usePumpCalculation() {
 		calculationResult.value = {
 			pumpPositions,
 			elevationData,
-			pumpCount: pumpPositions.length + 1,
+			// The source pump only exists when the line isn't hydrant-fed.
+			pumpCount: pumpPositions.length + (sourcePressure === null ? 1 : 0),
 			realDistance,
 			elevation: Math.round(
 				elevationData[elevationData.length - 1].elevation - elevationData[0].elevation
@@ -494,7 +562,8 @@ export function usePumpCalculation() {
 			suctionPoint,
 			targetPoint,
 			wayPoints,
-			elevationIgnored
+			elevationIgnored,
+			sourcePressure
 		};
 	};
 
@@ -517,6 +586,7 @@ export function usePumpCalculation() {
 			routingPromise = null;
 			routingToken++; // invalidate any in-flight routing
 			segmentLabels = [];
+			sourcePressure = null;
 
 			// Clear polyline + labels
 			if (rootMap) {
@@ -581,6 +651,7 @@ export function usePumpCalculation() {
 		setSuctionPoint,
 		setTargetPoint,
 		setWayPoint,
+		useMarkerAsWaterSource,
 		suctionPointSet,
 		firePointSet,
 		calculatePumpRequirements,

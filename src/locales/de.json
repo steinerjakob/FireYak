@@ -158,6 +158,13 @@
 		"setPosition": "Set",
 		"updatePosition": "Update",
 		"elevationIgnored": "Höhenunterschied ignoriert (offline)",
+		"useAsSource": {
+			"title": "Als Entnahmestelle verwenden?",
+			"confirm": "Verwenden",
+			"cancel": "Abbrechen"
+		},
+		"sourcePressureUsed": "Hydrantendruck: {pressure} bar",
+		"sourcePumpRequired": "An der Entnahmestelle ist eine Pumpe erforderlich",
 		"pump": {
 			"title": "Tragkraftspritze",
 			"inputPressure": "Eingangsdruck (bar)",
