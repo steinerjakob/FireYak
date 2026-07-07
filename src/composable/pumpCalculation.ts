@@ -16,6 +16,7 @@ import { GeoPoint, distanceTo } from '@/types/geo';
 
 const PUMP_LINE_SOURCE = 'pump-line';
 const PUMP_LINE_LAYER = 'pump-line-layer';
+const PUMP_LINE_LABEL_LAYER = 'pump-line-label-layer';
 
 let rootMap: maplibregl.Map | null = null;
 let suctionPoint: maplibregl.Marker | null = null;
@@ -44,11 +45,8 @@ function setMap(map: maplibregl.Map) {
 	if (!map.getSource(PUMP_LINE_SOURCE)) {
 		map.addSource(PUMP_LINE_SOURCE, {
 			type: 'geojson',
-			data: {
-				type: 'Feature',
-				geometry: { type: 'LineString', coordinates: [] },
-				properties: {}
-			}
+			// Holds the hose line plus one labeled midpoint per pump-to-pump segment.
+			data: { type: 'FeatureCollection', features: [] }
 		});
 		map.addLayer({
 			id: PUMP_LINE_LAYER,
@@ -57,6 +55,28 @@ function setMap(map: maplibregl.Map) {
 			paint: {
 				'line-color': '#3388ff',
 				'line-width': 3
+			}
+		});
+		// Hose-count label per segment, anchored to point symbols like the
+		// nearby-marker path label (line-center placement drops labels on
+		// short/bent lines).
+		map.addLayer({
+			id: PUMP_LINE_LABEL_LAYER,
+			type: 'symbol',
+			source: PUMP_LINE_SOURCE,
+			filter: ['==', ['geometry-type'], 'Point'],
+			layout: {
+				'text-field': ['get', 'label'],
+				'text-font': ['Noto Sans Medium'],
+				'text-size': 13,
+				'text-offset': [0, -0.9],
+				'text-allow-overlap': true,
+				'text-ignore-placement': true
+			},
+			paint: {
+				'text-color': '#3388ff',
+				'text-halo-color': '#ffffff',
+				'text-halo-width': 2
 			}
 		});
 	}
@@ -115,15 +135,49 @@ let routedPathPoints: GeoPoint[] | null = null;
 let routingPromise: Promise<void> | null = null;
 let routingToken = 0;
 
+/** Per-segment hose-count labels (between suction point, pumps and target). */
+let segmentLabels: { point: GeoPoint; label: string }[] = [];
+
+/** Point `targetDist` meters along the polyline (clamped to its end). */
+function pointAlongPath(path: GeoPoint[], targetDist: number): GeoPoint {
+	let walked = 0;
+	for (let i = 0; i < path.length - 1; i++) {
+		const segLen = distanceTo(path[i], path[i + 1]);
+		if (segLen > 0 && walked + segLen >= targetDist) {
+			const f = (targetDist - walked) / segLen;
+			return {
+				lat: path[i].lat + (path[i + 1].lat - path[i].lat) * f,
+				lng: path[i].lng + (path[i + 1].lng - path[i].lng) * f
+			};
+		}
+		walked += segLen;
+	}
+	return path[path.length - 1];
+}
+
+function pumpLineFeatures(points: GeoPoint[]): GeoJSON.FeatureCollection {
+	const features: GeoJSON.Feature[] = [
+		{
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates: points.map((p) => [p.lng, p.lat]) },
+			properties: {}
+		}
+	];
+	for (const { point, label } of segmentLabels) {
+		features.push({
+			type: 'Feature',
+			geometry: { type: 'Point', coordinates: [point.lng, point.lat] },
+			properties: { label }
+		});
+	}
+	return { type: 'FeatureCollection', features };
+}
+
 function setPumpLineGeometry(points: GeoPoint[]) {
 	if (!rootMap) return;
 	const source = rootMap.getSource(PUMP_LINE_SOURCE) as maplibregl.GeoJSONSource;
 	if (source) {
-		source.setData({
-			type: 'Feature',
-			geometry: { type: 'LineString', coordinates: points.map((p) => [p.lng, p.lat]) },
-			properties: {}
-		});
+		source.setData(pumpLineFeatures(points));
 	}
 }
 
@@ -163,8 +217,10 @@ const updatePolyline = () => {
 	const chain = markerChain();
 
 	// Draw the straight chain immediately (responsive while dragging), then
-	// swap in the routed geometry once it resolves.
+	// swap in the routed geometry once it resolves. Moving markers invalidates
+	// the calculated segment labels.
 	routedPathPoints = null;
+	segmentLabels = [];
 	setPumpLineGeometry(chain);
 	routingPromise = updateRoutedPolyline(chain).catch((e) => {
 		console.warn('Pump line routing failed, keeping straight line:', e);
@@ -400,6 +456,21 @@ export function usePumpCalculation() {
 		const { realDistance, pumpPositions } = await getPumpLocationMarkers(t, elevationData);
 		updateTargetMarker(pumpPositions, realDistance, elevationData);
 
+		// One hose-count label per stretch: suction → pump 1 → … → fire object.
+		const tubesLabel = t('pumpCalculation.pump.tubes');
+		const boundaries = [0, ...pumpPositions.map((p) => p.distanceFromStart), realDistance];
+		segmentLabels = [];
+		for (let i = 0; i < boundaries.length - 1; i++) {
+			const segmentDistance = boundaries[i + 1] - boundaries[i];
+			if (segmentDistance < 1) continue;
+			const tubes = Math.ceil(segmentDistance / pumpStore.tubeLength);
+			segmentLabels.push({
+				point: pointAlongPath(path, (boundaries[i] + boundaries[i + 1]) / 2),
+				label: `~${tubes} B-${tubesLabel}`
+			});
+		}
+		setPumpLineGeometry(path);
+
 		// Remove old pump markers
 		pumpMarkers.forEach((m) => m.remove());
 		pumpMarkers.length = 0;
@@ -441,16 +512,13 @@ export function usePumpCalculation() {
 			routedPathPoints = null;
 			routingPromise = null;
 			routingToken++; // invalidate any in-flight routing
+			segmentLabels = [];
 
-			// Clear polyline
+			// Clear polyline + labels
 			if (rootMap) {
 				const source = rootMap.getSource(PUMP_LINE_SOURCE) as maplibregl.GeoJSONSource;
 				if (source) {
-					source.setData({
-						type: 'Feature',
-						geometry: { type: 'LineString', coordinates: [] },
-						properties: {}
-					});
+					source.setData({ type: 'FeatureCollection', features: [] });
 				}
 			}
 
