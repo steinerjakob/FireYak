@@ -12,22 +12,40 @@ import { RouteResult } from '@/mapHandler/roadRouting';
 
 /** Grid resolution; 8 m ≈ alley width, keeps a 3 km window under the cell cap. */
 export const GRID_CELL_M = 8;
-/** Cost multiplier for cells on a road. */
-export const GRID_ROAD_FACTOR = 0.75;
+/**
+ * Cost multiplier for cells on a road. Kept close to 1: every extra meter of
+ * detour is an extra meter of hose, so roads only break ties — they must not
+ * justify e.g. a 30% longer loop over a garden shortcut.
+ */
+export const GRID_ROAD_FACTOR = 0.9;
 /** Cost multiplier for open ground (gardens, fields, squares). */
 export const GRID_OPEN_FACTOR = 1.0;
 /** Cost multiplier inside buildings: effectively avoided, never disconnecting. */
 export const GRID_BUILDING_FACTOR = 30;
+/**
+ * Cost multiplier for building-fringe cells (footprint touches the cell but
+ * its center is outside). Passable at a squeeze-past-the-wall price: without
+ * this class an 8 m raster dilates every house by ~half a cell per side, which
+ * seals the garden gaps between neighbouring houses and forces long road loops.
+ */
+export const GRID_BUILDING_FRINGE_FACTOR = 4;
 /** Hard cap on grid size; larger windows fall back to graph routing. */
 const MAX_GRID_CELLS = 250_000;
 
 const M_PER_DEG_LAT = 110540;
 const M_PER_DEG_LNG_EQUATOR = 111320;
 
-// Cell classes: 0 = open (index into CLASS_FACTOR), 1 = road, 2 = building.
+// Cell classes (index into CLASS_FACTOR):
+// 0 = open, 1 = road, 2 = building core, 3 = building fringe.
 const CLASS_ROAD = 1;
 const CLASS_BUILDING = 2;
-const CLASS_FACTOR = [GRID_OPEN_FACTOR, GRID_ROAD_FACTOR, GRID_BUILDING_FACTOR];
+const CLASS_FRINGE = 3;
+const CLASS_FACTOR = [
+	GRID_OPEN_FACTOR,
+	GRID_ROAD_FACTOR,
+	GRID_BUILDING_FACTOR,
+	GRID_BUILDING_FRINGE_FACTOR
+];
 
 export interface TerrainGrid {
 	west: number;
@@ -35,7 +53,7 @@ export interface TerrainGrid {
 	mPerDegLng: number;
 	cols: number;
 	rows: number;
-	/** Cell class per cell (row-major): 0 open, 1 road, 2 building. */
+	/** Cell class per cell (row-major): 0 open, 1 road, 2 building core, 3 fringe. */
 	cells: Uint8Array;
 	/** Source footprints, kept for exact checks during path smoothing. */
 	buildings: BuildingPolygon[];
@@ -93,9 +111,10 @@ export function buildTerrainGrid(obstacles: ObstacleData, bounds: GeoBounds): Te
 	const centerLng = (col: number) => grid.west + ((col + 0.5) * GRID_CELL_M) / mPerDegLng;
 	const centerLat = (row: number) => grid.south + ((row + 0.5) * GRID_CELL_M) / M_PER_DEG_LAT;
 
-	// Buildings: a cell counts as building when its center OR any corner lies
-	// inside the footprint — center-only testing under-marks cells that a
-	// polygon partially covers, letting paths clip real building corners.
+	// Buildings: center inside the footprint → core (heavily avoided); only a
+	// corner inside → fringe (passable at a squeeze price). Marking everything a
+	// footprint touches as core would dilate houses by ~half a cell per side and
+	// seal the garden gaps between them.
 	const halfLng = GRID_CELL_M / 2 / mPerDegLng;
 	const halfLat = GRID_CELL_M / 2 / M_PER_DEG_LAT;
 	for (const building of obstacles.buildings) {
@@ -106,16 +125,19 @@ export function buildTerrainGrid(obstacles: ObstacleData, bounds: GeoBounds): Te
 		const r1 = Math.min(rows - 1, rowOf(north));
 		for (let r = r0; r <= r1; r++) {
 			for (let c = c0; c <= c1; c++) {
+				const idx = r * cols + c;
+				if (grid.cells[idx] === CLASS_BUILDING) continue;
 				const lng = centerLng(c);
 				const lat = centerLat(r);
-				if (
-					pointInBuilding(lng, lat, building) ||
+				if (pointInBuilding(lng, lat, building)) {
+					grid.cells[idx] = CLASS_BUILDING;
+				} else if (
 					pointInBuilding(lng - halfLng, lat - halfLat, building) ||
 					pointInBuilding(lng + halfLng, lat - halfLat, building) ||
 					pointInBuilding(lng - halfLng, lat + halfLat, building) ||
 					pointInBuilding(lng + halfLng, lat + halfLat, building)
 				) {
-					grid.cells[r * cols + c] = CLASS_BUILDING;
+					grid.cells[idx] = CLASS_FRINGE;
 				}
 			}
 		}
