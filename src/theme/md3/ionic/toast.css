@@ -3,11 +3,11 @@
 	ion-toast {
 		--background: var(--md-sys-inverse-surface);
 		--color: var(--md-sys-inverse-on-surface);
-		--button-color: var(--md-sys-inverse-on-surface);
+		--button-color: var(--md-sys-inverse-primary);
 		--border-radius: var(--md-sys-corner-extra-small);
 		--box-shadow: var(--md-sys-level3);
 
-		font: var(--md-sys-body-large);
+		font: var(--md-sys-body-medium);
 		letter-spacing: var(--md-sys-body-medium-letter-spacing);
 
 		&::part(button) {
