@@ -162,10 +162,12 @@
 			"title": "Pump",
 			"inputPressure": "Input Pressure (bar)",
 			"outputPressure": "Output Pressure (bar)",
+			"targetPressure": "Pressure at fire object (bar)",
 			"flowRate": "Flow Rate (l/min)",
 			"distanceFromStart": "Distance",
 			"elevationDifference": "Elevation",
-			"tubes": "hoses"
+			"tubes": "hoses",
+			"reserve": "Reserve"
 		}
 	},
 	"nearbyMarker": {

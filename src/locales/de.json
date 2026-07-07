@@ -162,10 +162,12 @@
 			"title": "Tragkraftspritze",
 			"inputPressure": "Eingangsdruck (bar)",
 			"outputPressure": "Ausgangsdruck (bar)",
+			"targetPressure": "Druck am Brandobjekt (bar)",
 			"flowRate": "Durchfluss (l/min)",
 			"distanceFromStart": "Entfernung",
 			"elevationDifference": "Steigung",
-			"tubes": "Schläuche"
+			"tubes": "Schläuche",
+			"reserve": "Reserve"
 		}
 	},
 	"nearbyMarker": {
