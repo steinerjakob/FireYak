@@ -171,7 +171,7 @@ import { type MapLayerSetting, useSettingsStore } from '@/store/settingsStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
-import { GeoPoint, GeoBounds } from '@/types/geo';
+import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
 import { nightFlavor } from '@/map/nightFlavor';
@@ -184,6 +184,7 @@ const CLUSTER_RADIUS = 50;
 const MARKER_SOURCE_ID = 'markers';
 const SELECTED_PATH_SOURCE = 'selected-path';
 const SELECTED_PATH_LAYER = 'selected-path-layer';
+const SELECTED_PATH_LABEL_LAYER = 'selected-path-label-layer';
 const MAP_VIEW_STORAGE_KEY = 'mapView';
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_MAX_MOVEMENT_PX = 10;
@@ -598,31 +599,54 @@ function fitMapToLayer() {
 // Selected path state
 const selectedPathCoords = ref<[number, number][]>([]);
 const selectedPathVisible = ref(false);
+// Length of the displayed path (routed or straight), rendered as a label on the line.
+const selectedPathDistanceText = ref('');
+
+function formatPathDistance(meters: number): string {
+	return meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
+}
+
+function selectedPathFeature(): GeoJSON.Feature {
+	return {
+		type: 'Feature',
+		geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
+		properties: { distanceText: selectedPathDistanceText.value }
+	};
+}
+
+function setSelectedPathVisibility(visible: boolean) {
+	if (!rootMap) return;
+	const visibility = visible ? 'visible' : 'none';
+	for (const layer of [SELECTED_PATH_LAYER, SELECTED_PATH_LABEL_LAYER]) {
+		if (rootMap.getLayer(layer)) {
+			rootMap.setLayoutProperty(layer, 'visibility', visibility);
+		}
+	}
+}
 
 function updateSelectedPath(points: GeoPoint[]) {
 	selectedPathCoords.value = points.map((p) => [p.lng, p.lat] as [number, number]);
+	let pathLengthM = 0;
+	for (let i = 0; i < points.length - 1; i++) {
+		pathLengthM += distanceTo(points[i], points[i + 1]);
+	}
+	selectedPathDistanceText.value = formatPathDistance(pathLengthM);
 	selectedPathVisible.value = true;
 
 	if (rootMap && mapReady) {
 		const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
 		if (source) {
-			source.setData({
-				type: 'Feature',
-				geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
-				properties: {}
-			});
+			source.setData(selectedPathFeature());
 		}
-		if (rootMap.getLayer(SELECTED_PATH_LAYER)) {
-			rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'visible');
-		}
+		setSelectedPathVisibility(true);
 	}
 }
 
 function hideSelectedPath() {
 	selectedPathVisible.value = false;
 	selectedPathCoords.value = [];
-	if (rootMap && mapReady && rootMap.getLayer(SELECTED_PATH_LAYER)) {
-		rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'none');
+	if (rootMap && mapReady) {
+		setSelectedPathVisibility(false);
 	}
 }
 
@@ -631,15 +655,9 @@ function restoreSelectedPath() {
 
 	const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
 	if (source) {
-		source.setData({
-			type: 'Feature',
-			geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
-			properties: {}
-		});
+		source.setData(selectedPathFeature());
 	}
-	if (rootMap.getLayer(SELECTED_PATH_LAYER)) {
-		rootMap.setLayoutProperty(SELECTED_PATH_LAYER, 'visibility', 'visible');
-	}
+	setSelectedPathVisibility(true);
 }
 
 function restoreDomMarkers() {
@@ -1054,6 +1072,29 @@ function addMapLayers(map: maplibregl.Map) {
 		paint: {
 			'line-color': '#3388ff',
 			'line-width': 3
+		}
+	});
+
+	// Distance label rendered along the selected path line.
+	map.addLayer({
+		id: SELECTED_PATH_LABEL_LAYER,
+		type: 'symbol',
+		source: SELECTED_PATH_SOURCE,
+		layout: {
+			visibility: 'none',
+			'symbol-placement': 'line-center',
+			'text-field': ['get', 'distanceText'],
+			'text-font': ['Noto Sans Medium'],
+			'text-size': 13,
+			'text-offset': [0, -0.9],
+			// The single label must always render, even over other symbols.
+			'text-allow-overlap': true,
+			'text-ignore-placement': true
+		},
+		paint: {
+			'text-color': '#3388ff',
+			'text-halo-color': '#ffffff',
+			'text-halo-width': 2
 		}
 	});
 
