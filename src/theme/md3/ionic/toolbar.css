@@ -19,22 +19,23 @@
 		padding: 0 16px;
 	}
 
-	/* Typography within toolbar */
+	/* Typography within toolbar — headings render as the top app bar
+	   title styles, not the free-standing document heading scale */
 	ion-toolbar h1 {
-		font: var(--md-sys-display-small);
-		letter-spacing: var(--md-sys-display-small-letter-spacing);
-		margin: 0;
-	}
-
-	ion-toolbar h2 {
 		font: var(--md-sys-title-large);
 		letter-spacing: var(--md-sys-title-large-letter-spacing);
 		margin: 0;
 	}
 
-	ion-toolbar h3 {
+	ion-toolbar h2 {
 		font: var(--md-sys-title-medium);
 		letter-spacing: var(--md-sys-title-medium-letter-spacing);
+		margin: 0;
+	}
+
+	ion-toolbar h3 {
+		font: var(--md-sys-title-small);
+		letter-spacing: var(--md-sys-title-small-letter-spacing);
 		margin: 0;
 	}
 
@@ -112,9 +113,10 @@
 		--background: var(--md-sys-surface);
 	}
 
+	/* Large top app bar headline is headline-medium per spec */
 	ion-header[collapse='condense'] ion-toolbar ion-title.title-large {
-		font: var(--md-sys-display-small);
-		letter-spacing: var(--md-sys-display-small-letter-spacing);
+		font: var(--md-sys-headline-medium);
+		letter-spacing: var(--md-sys-headline-medium-letter-spacing);
 		padding-bottom: 8px;
 	}
 

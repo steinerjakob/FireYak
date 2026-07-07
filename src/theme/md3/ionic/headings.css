@@ -1,29 +1,34 @@
-/* Headings */
+/* Headings mapped to the MD3 headline/title scale.
+   The display scale (57/45/36px) is reserved for hero text and is
+   deliberately not used for document headings. */
 :root[mode='md'] {
 	h1 {
-		font-family: var(--md-sys-display-large-font-family-name);
-		font-style: var(--md-sys-display-large-font-family-style);
-		font-weight: var(--md-sys-display-large-font-weight);
-		font-size: var(--md-sys-display-large-font-size);
-		line-height: var(--md-sys-display-large-line-height);
-		letter-spacing: var(--md-sys-display-large-letter-spacing);
+		font: var(--md-sys-headline-large);
+		letter-spacing: var(--md-sys-headline-large-letter-spacing);
 	}
 
 	h2 {
-		font-family: var(--md-sys-display-medium-font-family-name);
-		font-style: var(--md-sys-display-medium-font-family-style);
-		font-weight: var(--md-sys-display-medium-font-weight);
-		font-size: var(--md-sys-display-medium-font-size);
-		line-height: var(--md-sys-display-medium-line-height);
-		letter-spacing: var(--md-sys-display-medium-letter-spacing);
+		font: var(--md-sys-headline-medium);
+		letter-spacing: var(--md-sys-headline-medium-letter-spacing);
 	}
 
 	h3 {
-		font-family: var(--md-sys-display-small-font-family-name);
-		font-style: var(--md-sys-display-small-font-family-style);
-		font-weight: var(--md-sys-display-small-font-weight);
-		font-size: var(--md-sys-display-small-font-size);
-		line-height: var(--md-sys-display-small-line-height);
-		letter-spacing: var(--md-sys-display-small-letter-spacing);
+		font: var(--md-sys-headline-small);
+		letter-spacing: var(--md-sys-headline-small-letter-spacing);
+	}
+
+	h4 {
+		font: var(--md-sys-title-large);
+		letter-spacing: var(--md-sys-title-large-letter-spacing);
+	}
+
+	h5 {
+		font: var(--md-sys-title-medium);
+		letter-spacing: var(--md-sys-title-medium-letter-spacing);
+	}
+
+	h6 {
+		font: var(--md-sys-title-small);
+		letter-spacing: var(--md-sys-title-small-letter-spacing);
 	}
 }
