@@ -1,5 +1,6 @@
 import { GeoPoint } from '@/types/geo';
 import { useNetworkStatus } from '@/composable/networkStatus';
+import { getDemElevations } from '@/helper/demElevation';
 
 const MAX_ELEVATION_POINTS_PER_REQUEST = 100;
 export const ELEVATION_RASTER = 20; // in meters should be the tube length eg B = 20m
@@ -23,13 +24,20 @@ function flatElevations(points: GeoPoint[]): ElevationPoint[] {
 }
 
 /**
- * Fetches elevation data for the given points from Open-Meteo. Skips the
- * network call entirely when offline, and falls back to a flat-terrain
- * estimate (elevation 0 everywhere) if the fetch fails mid-flight (e.g. the
- * connection drops between batches) — the caller can still complete the
- * calculation, it just shouldn't trust the elevation numbers.
+ * Elevation data for the given points, tried in order:
+ *   1. Terrain DEM tiles (terrarium raster, cache-first) — same data online
+ *      and offline, so this is the primary source.
+ *   2. Open-Meteo API — safety net where DEM tiles can't be fetched.
+ *   3. Flat-terrain estimate (elevation 0 everywhere) — the caller can still
+ *      complete the calculation, it just shouldn't trust the elevation
+ *      numbers (`elevationIgnored`).
  */
 export async function getElevationDataForPoints(points: GeoPoint[]): Promise<ElevationResult> {
+	const demPoints = await getDemElevations(points);
+	if (demPoints) {
+		return { points: demPoints, elevationIgnored: false };
+	}
+
 	const { isOnline } = useNetworkStatus();
 	if (!isOnline.value) {
 		return { points: flatElevations(points), elevationIgnored: true };
