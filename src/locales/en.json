@@ -158,6 +158,13 @@
 		"setPosition": "Set",
 		"updatePosition": "Update",
 		"elevationIgnored": "Elevation ignored (offline)",
+		"useAsSource": {
+			"title": "Use as water source?",
+			"confirm": "Use",
+			"cancel": "Cancel"
+		},
+		"sourcePressureUsed": "Hydrant pressure: {pressure} bar",
+		"sourcePumpRequired": "A pump is required at the water source",
 		"pump": {
 			"title": "Pump",
 			"inputPressure": "Input Pressure (bar)",

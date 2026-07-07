@@ -11,7 +11,7 @@ import {
 	IonSelect,
 	IonSelectOption
 } from '@ionic/vue';
-import { calculator, cloudOfflineOutline, locate } from 'ionicons/icons';
+import { calculator, cloudOfflineOutline, locate, water } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
@@ -226,6 +226,24 @@ const targetMarkerInfo = () => {
 				{{ t('pumpCalculation.elevationIgnored') }}
 			</ion-chip>
 		</ion-item>
+		<ion-item lines="none">
+			<ion-chip
+				v-if="pumpCalculation.calculationResult.value.sourcePressure !== null"
+				color="success"
+				class="source-chip"
+			>
+				<ion-icon :icon="water"></ion-icon>
+				{{
+					t('pumpCalculation.sourcePressureUsed', {
+						pressure: pumpCalculation.calculationResult.value.sourcePressure
+					})
+				}}
+			</ion-chip>
+			<ion-chip v-else color="primary" class="source-chip">
+				<ion-icon :icon="water"></ion-icon>
+				{{ t('pumpCalculation.sourcePumpRequired') }}
+			</ion-chip>
+		</ion-item>
 		<ion-item>
 			<ion-label>
 				<div class="calculation-results">
@@ -331,8 +349,13 @@ ion-item {
 	text-align: right;
 }
 
-.elevation-ignored-chip {
+.elevation-ignored-chip,
+.source-chip {
 	font-weight: 600;
+}
+
+.source-chip ion-icon {
+	margin-inline-end: 4px;
 }
 
 .elevation-ignored-chip ion-icon {

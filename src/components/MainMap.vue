@@ -1259,8 +1259,18 @@ function setupMapEventListeners(map: maplibregl.Map) {
 				return;
 			}
 
-			// Do not navigate away while supply pipe calculation is active
+			// While the supply pipe calculation is active, tapping a water
+			// source offers it as the suction point (hydrant pressure and all)
+			// instead of navigating to the marker.
 			if (route.path.includes('supplypipe')) {
+				const tappedId = feature.properties?.id;
+				if (tappedId) {
+					const coords = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
+					pumpCalculation.useMarkerAsWaterSource(Number(tappedId), {
+						lat: coords[1],
+						lng: coords[0]
+					});
+				}
 				return;
 			}
 
