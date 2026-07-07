@@ -7,6 +7,77 @@
 	input {
 		-webkit-tap-highlight-color: transparent;
 	}
+
+	/* Ionic Color Palette mapped to brand values for iOS compatibility */
+	--ion-color-primary: var(--md-sys-primary);
+	--ion-color-primary-rgb: var(--md-sys-primary-rgb);
+	--ion-color-primary-contrast: var(--md-sys-on-primary);
+	--ion-color-primary-contrast-rgb: var(--md-sys-on-primary-rgb);
+	--ion-color-primary-shade: color-mix(in srgb, var(--md-sys-primary), black 10%);
+	--ion-color-primary-tint: color-mix(in srgb, var(--md-sys-primary), white 10%);
+
+	--ion-color-secondary: var(--md-sys-secondary);
+	--ion-color-secondary-rgb: var(--md-sys-secondary-rgb);
+	--ion-color-secondary-contrast: var(--md-sys-on-secondary);
+	--ion-color-secondary-contrast-rgb: var(--md-sys-on-secondary-rgb);
+	--ion-color-secondary-shade: color-mix(in srgb, var(--md-sys-secondary), black 10%);
+	--ion-color-secondary-tint: color-mix(in srgb, var(--md-sys-secondary), white 10%);
+
+	--ion-color-tertiary: var(--md-sys-tertiary);
+	--ion-color-tertiary-rgb: var(--md-sys-tertiary-rgb);
+	--ion-color-tertiary-contrast: var(--md-sys-on-tertiary);
+	--ion-color-tertiary-contrast-rgb: var(--md-sys-on-tertiary-rgb);
+	--ion-color-tertiary-shade: color-mix(in srgb, var(--md-sys-tertiary), black 10%);
+	--ion-color-tertiary-tint: color-mix(in srgb, var(--md-sys-tertiary), white 10%);
+
+	--ion-color-success: var(--md-custom-success-color);
+	--ion-color-success-rgb: var(--md-custom-success-color-rgb);
+	--ion-color-success-contrast: var(--md-custom-success-on-color);
+	--ion-color-success-contrast-rgb: var(--md-custom-success-on-color-rgb);
+	--ion-color-success-shade: color-mix(in srgb, var(--md-custom-success-color), black 10%);
+	--ion-color-success-tint: color-mix(in srgb, var(--md-custom-success-color), white 10%);
+
+	--ion-color-warning: var(--md-custom-warning-color);
+	--ion-color-warning-rgb: var(--md-custom-warning-color-rgb);
+	--ion-color-warning-contrast: var(--md-custom-warning-on-color);
+	--ion-color-warning-contrast-rgb: var(--md-custom-warning-on-color-rgb);
+	--ion-color-warning-shade: color-mix(in srgb, var(--md-custom-warning-color), black 10%);
+	--ion-color-warning-tint: color-mix(in srgb, var(--md-custom-warning-color), white 10%);
+
+	--ion-color-danger: var(--md-sys-error);
+	--ion-color-danger-rgb: var(--md-sys-error-rgb);
+	--ion-color-danger-contrast: var(--md-sys-on-error);
+	--ion-color-danger-contrast-rgb: var(--md-sys-on-error-rgb);
+	--ion-color-danger-shade: color-mix(in srgb, var(--md-sys-error), black 10%);
+	--ion-color-danger-tint: color-mix(in srgb, var(--md-sys-error), white 10%);
+
+	--ion-color-light: var(--md-sys-surface-container-lowest);
+	--ion-color-light-rgb: var(--md-sys-surface-container-lowest-rgb);
+	--ion-color-light-contrast: var(--md-sys-on-surface);
+	--ion-color-light-contrast-rgb: var(--md-sys-on-surface-rgb);
+	--ion-color-light-shade: color-mix(in srgb, var(--md-sys-surface-container-lowest), black 10%);
+	--ion-color-light-tint: color-mix(in srgb, var(--md-sys-surface-container-lowest), white 10%);
+
+	--ion-color-medium: var(--md-sys-surface-container);
+	--ion-color-medium-rgb: var(--md-sys-surface-container-rgb);
+	--ion-color-medium-contrast: var(--md-sys-on-surface);
+	--ion-color-medium-contrast-rgb: var(--md-sys-on-surface-rgb);
+	--ion-color-medium-shade: color-mix(in srgb, var(--md-sys-surface-container), black 10%);
+	--ion-color-medium-tint: color-mix(in srgb, var(--md-sys-surface-container), white 10%);
+
+	--ion-color-dark: var(--md-sys-surface-container-highest);
+	--ion-color-dark-rgb: var(--md-sys-surface-container-highest-rgb);
+	--ion-color-dark-contrast: var(--md-sys-on-surface);
+	--ion-color-dark-contrast-rgb: var(--md-sys-on-surface-rgb);
+	--ion-color-dark-shade: color-mix(in srgb, var(--md-sys-surface-container-highest), black 10%);
+	--ion-color-dark-tint: color-mix(in srgb, var(--md-sys-surface-container-highest), white 10%);
+
+	/* iOS theme background & text fallbacks */
+	--ion-background-color: var(--md-sys-background);
+	--ion-background-color-rgb: var(--md-sys-background-rgb);
+	--ion-text-color: var(--md-sys-on-background);
+	--ion-text-color-rgb: var(--md-sys-on-background-rgb);
+	--ion-border-color: var(--md-sys-outline-variant);
 }
 
 :root.prefers-light,
@@ -18,3 +89,4 @@
 :root.ion-palette-dark {
 	color-scheme: dark;
 }
+
