@@ -405,12 +405,12 @@ export function usePumpCalculation() {
 		const riseFromStart = t('pumpCalculation.pump.elevationDifference');
 
 		const lastPump = pumpPositions[pumpPositions.length - 1];
-		const prevDistance = lastPump?.distanceFromStart || 0;
-		const prevElevation = lastPump?.elevation || elevations[0].elevation;
+		const prevDistance = lastPump?.distanceFromStart ?? 0;
+		const prevElevation = lastPump?.elevation ?? elevations[0].elevation;
 
 		const distance = realDistance - prevDistance;
 
-		const neededBTubes = Math.round(distance / pumpStore.tubeLength);
+		const neededBTubes = Math.ceil(distance / pumpStore.tubeLength);
 		const lastElevation = elevations[elevations.length - 1];
 		const elevation = lastElevation.elevation - prevElevation;
 		const pressure = lastElevation.pressure;
@@ -453,7 +453,7 @@ export function usePumpCalculation() {
 		const path = routedPathPoints ?? markerChain();
 		const { points } = resamplePolyline(path);
 		const { points: elevationData, elevationIgnored } = await getElevationDataForPoints(points);
-		const { realDistance, pumpPositions } = await getPumpLocationMarkers(t, elevationData);
+		const { realDistance, pumpPositions } = getPumpLocationMarkers(t, elevationData);
 		updateTargetMarker(pumpPositions, realDistance, elevationData);
 
 		// One hose-count label per stretch: suction → pump 1 → … → fire object.
