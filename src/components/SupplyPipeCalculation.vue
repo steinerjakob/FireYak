@@ -181,7 +181,9 @@ const targetMarkerInfo = () => {
 		<ion-item>
 			<ion-input
 				:label="t('pumpCalculation.pump.inputPressure')"
+				label-placement="stacked"
 				type="number"
+				inputmode="decimal"
 				:value="pumpCalculationStore.inputPressure"
 				@ionChange="inputPressureChanged"
 			></ion-input>
@@ -189,7 +191,9 @@ const targetMarkerInfo = () => {
 		<ion-item>
 			<ion-input
 				:label="t('pumpCalculation.pump.outputPressure')"
+				label-placement="stacked"
 				type="number"
+				inputmode="decimal"
 				:value="pumpCalculationStore.outputPressure"
 				@ionChange="outputPressureChanged"
 			></ion-input>
@@ -197,7 +201,9 @@ const targetMarkerInfo = () => {
 		<ion-item>
 			<ion-input
 				:label="t('pumpCalculation.pump.targetPressure')"
+				label-placement="stacked"
 				type="number"
+				inputmode="decimal"
 				:value="pumpCalculationStore.targetPressure"
 				@ionChange="targetPressureChanged"
 			></ion-input>

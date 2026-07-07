@@ -67,6 +67,7 @@
 				<ion-item>
 					<ion-input
 						:label="$t('settings.pumpCalculation.hoseLength')"
+						label-placement="stacked"
 						type="number"
 						inputmode="decimal"
 						:value="pumpCalculationStore.tubeLength"
@@ -77,6 +78,7 @@
 				<ion-item>
 					<ion-input
 						:label="$t('settings.pumpCalculation.hoseDiameter')"
+						label-placement="stacked"
 						type="number"
 						inputmode="decimal"
 						:value="pumpCalculationStore.tubeDiameter"
@@ -87,6 +89,7 @@
 				<ion-item>
 					<ion-input
 						:label="$t('settings.pumpCalculation.hoseName')"
+						label-placement="stacked"
 						type="text"
 						:maxlength="8"
 						:value="pumpCalculationStore.hoseName"
