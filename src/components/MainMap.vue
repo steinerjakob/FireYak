@@ -575,7 +575,8 @@ function fitMapToLayer() {
 	} else if (selectedPathVisible.value && selectedPathCoords.value.length >= 2) {
 		const bounds = new maplibregl.LngLatBounds();
 		selectedPathCoords.value.forEach((coord) => bounds.extend(coord as [number, number]));
-		rootMap.fitBounds(bounds, { padding });
+		// maxZoom keeps very short paths from zooming in to house-number level.
+		rootMap.fitBounds(bounds, { padding, maxZoom: 17 });
 	} else {
 		// Center on the ghost marker (editing) or the selected marker
 		const marker = markerEditStore.isActive ? ghostMarker : selectedMarker;

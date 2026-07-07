@@ -119,13 +119,13 @@ ion-label p {
 	display: block;
 }
 
-.md ion-item.selected {
+/* Selected entry: highlight on every platform (items use <img>, not ion-icon,
+   so tinting the icon alone would leave iOS without any visible highlight). */
+ion-item.selected {
 	--background: rgba(var(--ion-color-primary-rgb), 0.14);
+	border-left: 3px solid var(--ion-color-primary);
 }
-.md ion-item.selected ion-icon {
-	color: var(--ion-color-primary);
-}
-.ios ion-item.selected ion-icon {
+ion-item.selected h3 {
 	color: var(--ion-color-primary);
 }
 </style>

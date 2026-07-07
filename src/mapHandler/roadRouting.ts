@@ -29,6 +29,8 @@ export const MAX_SNAP_M = 100;
 const MAX_SNAP_COMPONENTS = 8;
 /** Vertex-merge tolerance; also joins tile-boundary duplicates (~0.3 m quantization at z15). */
 const NODE_MERGE_TOLERANCE_M = 2;
+/** Endpoint-to-foreign-edge tolerance for reconnecting simplified T-junctions. */
+const T_JUNCTION_TOLERANCE_M = 6;
 /** Cell size of the edge spatial index used for snapping. */
 const SNAP_GRID_CELL_M = 75;
 
@@ -189,7 +191,66 @@ export function buildRoadGraph(roads: RoadLine[]): RoadGraph {
 		}
 	}
 
-	// Label connected components (union-find with path halving).
+	// T-junction repair: tile simplification drops collinear vertices from long
+	// straight roads, so a side street's endpoint often lies MID-SEGMENT on the
+	// through road with no shared vertex — the whole side network would
+	// disconnect and routes loop around the periphery. For every line endpoint
+	// (degree ≤ 1 after dedup) that projects onto a foreign edge within
+	// tolerance, add connector edges to that edge's endpoints. The dropped
+	// segment is straight, so endpoint distances equal the along-road distances.
+	const endpointCount = nodes.length; // snapshot before connectors add none anyway
+	for (let node = 0; node < endpointCount; node++) {
+		if (adjacency[node].length > 1) continue;
+		const [lng, lat] = nodes[node];
+		const px = lng * mPerDegLng;
+		const py = lat * M_PER_DEG_LAT;
+		const incident = new Set(adjacency[node].map((n) => n.edge));
+		const [ccx, ccy] = snapCell(lng, lat);
+		let bestEdge = -1;
+		let bestDist = T_JUNCTION_TOLERANCE_M;
+		for (let cx = ccx - 1; cx <= ccx + 1; cx++) {
+			for (let cy = ccy - 1; cy <= ccy + 1; cy++) {
+				for (const edgeIdx of edgeIndex.get(cellKey(cx, cy)) ?? []) {
+					if (incident.has(edgeIdx)) continue;
+					const edge = edges[edgeIdx];
+					if (edge.a === node || edge.b === node) continue;
+					const na = nodes[edge.a];
+					const nb = nodes[edge.b];
+					const ax = na[0] * mPerDegLng;
+					const ay = na[1] * M_PER_DEG_LAT;
+					const dx = nb[0] * mPerDegLng - ax;
+					const dy = nb[1] * M_PER_DEG_LAT - ay;
+					const lengthSq = dx * dx + dy * dy;
+					const t =
+						lengthSq === 0
+							? 0
+							: Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq));
+					const dist = Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+					if (dist < bestDist) {
+						bestDist = dist;
+						bestEdge = edgeIdx;
+					}
+				}
+			}
+		}
+		if (bestEdge === -1) continue;
+		const edge = edges[bestEdge];
+		for (const other of [edge.a, edge.b]) {
+			const length = distanceTo(
+				{ lat: nodes[node][1], lng: nodes[node][0] },
+				{ lat: nodes[other][1], lng: nodes[other][0] }
+			);
+			if (length <= 0) continue;
+			const edgeIdx = edges.length;
+			edges.push({ a: node, b: other, length });
+			adjacency[node].push({ node: other, edge: edgeIdx });
+			adjacency[other].push({ node, edge: edgeIdx });
+			indexEdge(edgeIdx, nodes[node], nodes[other]);
+		}
+	}
+
+	// Label connected components (union-find with path halving) — after the
+	// T-junction repair so reconnected streets share a component.
 	const parent = new Int32Array(nodes.length);
 	for (let i = 0; i < parent.length; i++) parent[i] = i;
 	const find = (i: number): number => {
