@@ -4,11 +4,13 @@ import maplibregl from 'maplibre-gl';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
-import { distanceBetweenMultiplePoints } from '@/helper/distanceCalculation';
+import { resamplePolyline } from '@/helper/distanceCalculation';
 import { ElevationPoint, getElevationDataForPoints } from '@/helper/elevationData';
 import { getPumpLocationMarkers, PumpPosition } from '@/helper/calculatePumpPosition';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import { useSettingsStore } from '@/store/settingsStore';
+import { getRoutedPath } from '@/mapHandler/nearbyRouting';
 import { alertController } from '@ionic/vue';
 import { GeoPoint, distanceTo } from '@/types/geo';
 
@@ -98,25 +100,75 @@ const sortWaypoints = (): void => {
 	wayPoints.splice(0, wayPoints.length, ...sortedWaypoints);
 };
 
+/** Marker chain suction point → waypoints → fire object as GeoPoints. */
+function markerChain(): GeoPoint[] {
+	return [suctionPoint!, ...wayPoints, targetPoint!].map(getMarkerLngLat);
+}
+
+/**
+ * The hose line geometry as last drawn: the routed path when routing
+ * succeeded, otherwise `null` (straight marker chain shown). The calculation
+ * uses this so distances/pump positions match the displayed line.
+ */
+let routedPathPoints: GeoPoint[] | null = null;
+/** Resolves when the latest routing attempt has been drawn (or superseded). */
+let routingPromise: Promise<void> | null = null;
+let routingToken = 0;
+
+function setPumpLineGeometry(points: GeoPoint[]) {
+	if (!rootMap) return;
+	const source = rootMap.getSource(PUMP_LINE_SOURCE) as maplibregl.GeoJSONSource;
+	if (source) {
+		source.setData({
+			type: 'Feature',
+			geometry: { type: 'LineString', coordinates: points.map((p) => [p.lng, p.lat]) },
+			properties: {}
+		});
+	}
+}
+
+/**
+ * Routes each leg of the marker chain like the nearby-marker path does
+ * (terrain or road routing per the clamp-to-roads setting), falling back to
+ * the straight segment for unroutable/too-long legs. Legs run sequentially so
+ * they reuse the cached routing context instead of racing to rebuild it.
+ */
+async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
+	const token = ++routingToken;
+	const settingsStore = useSettingsStore();
+	const legs: (GeoPoint[] | null)[] = [];
+	for (let i = 0; i < chain.length - 1; i++) {
+		legs.push(
+			await getRoutedPath(chain[i], chain[i + 1], {
+				clampToRoads: settingsStore.clampHosesToRoads
+			})
+		);
+	}
+	if (token !== routingToken) return; // markers moved meanwhile — superseded
+
+	const path: GeoPoint[] = [chain[0]];
+	legs.forEach((leg, i) => {
+		const points = leg ?? [chain[i], chain[i + 1]];
+		path.push(...points.slice(1));
+	});
+	routedPathPoints = path;
+	setPumpLineGeometry(path);
+}
+
 const updatePolyline = () => {
 	if (!suctionPoint || !targetPoint || !rootMap) {
 		return;
 	}
 	sortWaypoints();
-	const allPoints = [suctionPoint, ...wayPoints, targetPoint];
-	const coordinates = allPoints.map((m) => {
-		const lngLat = m.getLngLat();
-		return [lngLat.lng, lngLat.lat];
-	});
+	const chain = markerChain();
 
-	const source = rootMap.getSource(PUMP_LINE_SOURCE) as maplibregl.GeoJSONSource;
-	if (source) {
-		source.setData({
-			type: 'Feature',
-			geometry: { type: 'LineString', coordinates },
-			properties: {}
-		});
-	}
+	// Draw the straight chain immediately (responsive while dragging), then
+	// swap in the routed geometry once it resolves.
+	routedPathPoints = null;
+	setPumpLineGeometry(chain);
+	routingPromise = updateRoutedPolyline(chain).catch((e) => {
+		console.warn('Pump line routing failed, keeping straight line:', e);
+	});
 };
 
 function createMarkerElement(iconUrl: string, size: [number, number]): HTMLImageElement {
@@ -148,6 +200,8 @@ function getPolylineBounds(): maplibregl.LngLatBounds | null {
 	const bounds = new maplibregl.LngLatBounds();
 	const allPoints = [suctionPoint, ...wayPoints, targetPoint, ...pumpMarkers];
 	allPoints.forEach((m) => bounds.extend(m.getLngLat()));
+	// The routed line can bulge beyond the marker bounding box.
+	routedPathPoints?.forEach((p) => bounds.extend([p.lng, p.lat]));
 	return bounds;
 }
 
@@ -337,11 +391,11 @@ export function usePumpCalculation() {
 		if (!suctionPoint || !targetPoint) {
 			return;
 		}
-		const pointsToCalculate = [suctionPoint, ...wayPoints, targetPoint].map((point) =>
-			getMarkerLngLat(point)
-		);
-		const { distance, points } = distanceBetweenMultiplePoints(pointsToCalculate);
-		console.log('Full Distance', distance);
+		// Wait for the routed line so the calculation runs along the same
+		// geometry the map shows; without a routed path use the marker chain.
+		if (routingPromise) await routingPromise;
+		const path = routedPathPoints ?? markerChain();
+		const { points } = resamplePolyline(path);
 		const { points: elevationData, elevationIgnored } = await getElevationDataForPoints(points);
 		const { realDistance, pumpPositions } = await getPumpLocationMarkers(t, elevationData);
 		updateTargetMarker(pumpPositions, realDistance, elevationData);
@@ -384,6 +438,9 @@ export function usePumpCalculation() {
 			wayPoints.length = 0;
 			pumpMarkers.forEach((m) => m.remove());
 			pumpMarkers.length = 0;
+			routedPathPoints = null;
+			routingPromise = null;
+			routingToken++; // invalidate any in-flight routing
 
 			// Clear polyline
 			if (rootMap) {
