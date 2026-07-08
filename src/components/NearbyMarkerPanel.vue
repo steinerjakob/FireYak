@@ -75,10 +75,12 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 	overflow-y: auto;
 }
 
-@media (max-width: 767px) {
-	.nearby-source::part(content) {
-		border-radius: 8px 8px 0 0;
-		box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
-	}
+/* MD3 bottom sheet spec: 28px top corners on a solid surface. ios mode is
+   intentionally left alone here so @rdlabo/ionic-theme-ios26's own
+   modal-sheet rule (30px radius + glass background on this same
+   ::part(content) element) applies instead of being overridden. */
+:root[mode='md'] .nearby-source::part(content) {
+	border-radius: 28px 28px 0 0;
+	box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.1);
 }
 </style>

@@ -58,19 +58,22 @@
 	--ion-color-light-shade: color-mix(in srgb, var(--md-sys-surface-container-lowest), black 10%);
 	--ion-color-light-tint: color-mix(in srgb, var(--md-sys-surface-container-lowest), white 10%);
 
-	--ion-color-medium: var(--md-sys-surface-container);
-	--ion-color-medium-rgb: var(--md-sys-surface-container-rgb);
-	--ion-color-medium-contrast: var(--md-sys-on-surface);
-	--ion-color-medium-contrast-rgb: var(--md-sys-on-surface-rgb);
-	--ion-color-medium-shade: color-mix(in srgb, var(--md-sys-surface-container), black 10%);
-	--ion-color-medium-tint: color-mix(in srgb, var(--md-sys-surface-container), white 10%);
+	/* "medium" is a foreground role (muted text/icons) — needs a mid-tone,
+	   not a surface tone, to stay readable on surfaces */
+	--ion-color-medium: var(--md-sys-outline);
+	--ion-color-medium-rgb: var(--md-sys-outline-rgb);
+	--ion-color-medium-contrast: var(--md-sys-surface);
+	--ion-color-medium-contrast-rgb: var(--md-sys-surface-rgb);
+	--ion-color-medium-shade: color-mix(in srgb, var(--md-sys-outline), black 10%);
+	--ion-color-medium-tint: color-mix(in srgb, var(--md-sys-outline), white 10%);
 
-	--ion-color-dark: var(--md-sys-surface-container-highest);
-	--ion-color-dark-rgb: var(--md-sys-surface-container-highest-rgb);
-	--ion-color-dark-contrast: var(--md-sys-on-surface);
-	--ion-color-dark-contrast-rgb: var(--md-sys-on-surface-rgb);
-	--ion-color-dark-shade: color-mix(in srgb, var(--md-sys-surface-container-highest), black 10%);
-	--ion-color-dark-tint: color-mix(in srgb, var(--md-sys-surface-container-highest), white 10%);
+	/* "dark" flips to a light tone in dark palettes — MD3 inverse-surface */
+	--ion-color-dark: var(--md-sys-inverse-surface);
+	--ion-color-dark-rgb: var(--md-sys-inverse-surface-rgb);
+	--ion-color-dark-contrast: var(--md-sys-inverse-on-surface);
+	--ion-color-dark-contrast-rgb: var(--md-sys-inverse-on-surface-rgb);
+	--ion-color-dark-shade: color-mix(in srgb, var(--md-sys-inverse-surface), black 10%);
+	--ion-color-dark-tint: color-mix(in srgb, var(--md-sys-inverse-surface), white 10%);
 
 	/* iOS theme background & text fallbacks */
 	--ion-background-color: var(--md-sys-background);
@@ -78,6 +81,10 @@
 	--ion-text-color: var(--md-sys-on-background);
 	--ion-text-color-rgb: var(--md-sys-on-background-rgb);
 	--ion-border-color: var(--md-sys-outline-variant);
+
+	/* No opaque toolbar/tab-bar/item fallbacks here: ios mode gets its
+	   surfaces from @rdlabo/ionic-theme-ios26 (liquid glass needs
+	   translucency); md mode gets them from md3/ionic/_colorings.css. */
 }
 
 :root.prefers-light,

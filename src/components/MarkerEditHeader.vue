@@ -27,8 +27,10 @@ const closePanel = () => {
 </script>
 
 <template>
-	<ion-header class="ion-no-border">
-		<ion-toolbar>
+	<!-- ios26-disabled: keep a plain sheet toolbar; the iOS 26 floating
+	     button pills are page-header chrome and look broken inside sheets -->
+	<ion-header class="ion-no-border ios26-disabled">
+		<ion-toolbar class="ios26-disabled">
 			<ion-buttons slot="start">
 				<ion-button
 					v-if="markerEditStore.isEditing"
@@ -54,7 +56,7 @@ const closePanel = () => {
 
 <style scoped>
 ion-header {
-	border-bottom: 1px solid var(--ion-color-light-shade);
+	border-bottom: 1px solid var(--md-sys-outline-variant);
 	--ion-safe-area-top: 0;
 	--ion-safe-area-bottom: 0;
 	--ion-safe-area-left: 0;

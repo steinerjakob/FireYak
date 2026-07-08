@@ -212,7 +212,7 @@
 		"placeholder": "Adresse suchen...",
 		"noResults": "Keine Ergebnisse gefunden",
 		"error": "Suche fehlgeschlagen",
-		"offlineHint": "Adresssuche ist offline nicht verfügbar."
+		"offlineHint": "Offline – Adresssuche nicht verfügbar, gespeicherte Wasserentnahmestellen werden angezeigt."
 	},
 	"markerEdit": {
 		"title": {
@@ -283,8 +283,7 @@
 	},
 	"network": {
 		"fetchFailed": "Wasserentnahmestellen konnten vorübergehend nicht geladen werden",
-		"retry": "Erneut versuchen",
-		"offline": "Offline – gespeicherte Wasserentnahmestellen werden angezeigt"
+		"retry": "Erneut versuchen"
 	},
 	"common": {
 		"cancel": "Abbrechen",

@@ -1,6 +1,6 @@
 <template>
 	<ion-page>
-		<ion-header>
+		<ion-header :translucent="true">
 			<ion-toolbar>
 				<ion-buttons slot="start">
 					<ion-back-button default-href="/settings"></ion-back-button>
@@ -14,7 +14,7 @@
 			</ion-toolbar>
 		</ion-header>
 
-		<ion-content>
+		<ion-content :fullscreen="true">
 			<!-- Offline hint: syncing needs a connection -->
 			<div v-if="!isOnline && edits.length" class="offline-hint">
 				<ion-icon :icon="cloudOfflineOutline"></ion-icon>

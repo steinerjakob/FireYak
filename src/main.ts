@@ -29,8 +29,17 @@ import '@ionic/vue/css/display.css';
 /* @import '@ionic/vue/css/palettes/dark.class.css'; */
 import '@ionic/vue/css/palettes/dark.class.css';
 
+/* iOS 26 (Liquid Glass) theme for ios mode; class-based dark variant matches
+   the dark.class.css palette toggling above. Imported before our theme files
+   so the MD3 brand tokens win where both define the same variable. */
+import '@rdlabo/ionic-theme-ios26/dist/css/default-variables.css';
+import '@rdlabo/ionic-theme-ios26/dist/css/ionic-theme-ios26.css';
+import '@rdlabo/ionic-theme-ios26/dist/css/ionic-theme-ios26-dark-class.css';
+import '@rdlabo/ionic-theme-ios26/dist/css/md-remove-ios-class-effect.css';
+
 import '@/theme/variables.scss';
 import '@/theme/md3/theme.css';
+import '@/theme/ios26-fixes.css';
 
 // Components
 import App from './App.vue';

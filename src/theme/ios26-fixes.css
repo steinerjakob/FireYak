@@ -1,0 +1,13 @@
+/* App-side adjustments on top of @rdlabo/ionic-theme-ios26 */
+
+/* The iOS 26 theme turns every fab into neutral white glass, discarding
+   color="…" while the icon keeps its contrast color (white) — invisible.
+   Keep the primary action prominent with primary-tinted glass instead
+   (the theme's blur/border/shadow from ::part(native) still apply). */
+:root[mode='ios'] ion-fab ion-fab-button[color='primary']::part(native) {
+	background: rgba(var(--ion-color-primary-rgb), 0.85);
+}
+
+:root[mode='ios'] ion-fab ion-fab-button[color='primary'] {
+	--color: var(--ion-color-primary-contrast);
+}

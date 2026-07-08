@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import {
-	IonModal,
+	IonPopover,
 	IonList,
 	IonItem,
 	IonLabel,
 	IonRadioGroup,
 	IonRadio,
-	IonToggle,
-	IonTitle
+	IonToggle
 } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import { type MapLayerSetting, type MarkerFilters, useSettingsStore } from '@/store/settingsStore';
@@ -18,6 +17,7 @@ import { markerIconUrls } from '@/mapHandler/markerHandler';
 
 const props = defineProps<{
 	isOpen: boolean;
+	event?: Event;
 }>();
 
 const emit = defineEmits<{
@@ -81,13 +81,22 @@ const hydrantSubtypes: Array<{ icon: string; labelKey: string }> = [
 </script>
 
 <template>
-	<ion-modal
+	<!-- Anchored dropdown, not a centered dialog: this is a quick layer/filter
+	     menu next to the FAB that triggered it, matching MD3 menu conventions
+	     and picking up the ios26 theme's native popover glass automatically -->
+	<ion-popover
 		:is-open="isOpen"
+		:event="event"
+		side="bottom"
+		alignment="start"
+		:dismiss-on-select="false"
 		@didDismiss="emit('update:isOpen', false)"
-		class="layer-selector-modal"
+		class="layer-selector-popover"
 	>
 		<div class="layer-selector-wrapper">
-			<ion-title class="layer-selector-title">{{ t('map.layers.title') }}</ion-title>
+			<!-- Plain headings: ion-title is absolutely positioned in ios mode and
+			     collapses to nothing outside a toolbar -->
+			<div class="layer-selector-title">{{ t('map.layers.title') }}</div>
 			<ion-list lines="none">
 				<ion-radio-group :value="selectedLayer" @ionChange="onLayerChange($event.detail.value)">
 					<ion-item>
@@ -104,7 +113,7 @@ const hydrantSubtypes: Array<{ icon: string; labelKey: string }> = [
 				</ion-item>
 			</ion-list>
 
-			<ion-title class="layer-selector-title section-title">{{ t('map.filters.title') }}</ion-title>
+			<div class="layer-selector-title section-title">{{ t('map.filters.title') }}</div>
 			<ion-list lines="none">
 				<template v-for="cat in filterCategories" :key="cat.key">
 					<ion-item>
@@ -129,16 +138,34 @@ const hydrantSubtypes: Array<{ icon: string; labelKey: string }> = [
 				</template>
 			</ion-list>
 		</div>
-	</ion-modal>
+	</ion-popover>
 </template>
 
 <style>
-ion-modal.layer-selector-modal {
-	--width: fit-content;
-	--min-width: 250px;
-	--height: fit-content;
-	--border-radius: 16px;
+ion-popover.layer-selector-popover {
+	--width: min(300px, 92vw);
+	--max-height: min(560px, 80vh);
 	--box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* ion-item/ion-list paint their own opaque background by default, which
+   sits on top of the popover's surface (glass in ios, surface-container in
+   md) and breaks it into a checkerboard of solid rows. Let the popover's
+   own background show through everywhere instead — this is the same
+   transparent-item treatment the ios26 theme applies to ion-select-popover,
+   just extended to our custom list content. */
+ion-popover.layer-selector-popover ion-list,
+ion-popover.layer-selector-popover ion-item {
+	--background: transparent;
+	--ion-item-background: transparent;
+}
+
+/* MD3 menu spec: surface-container elevation, small corner radius.
+   (src/theme/md3/ionic/popover.css sets --background/--color/--box-shadow
+   for ion-popover generally.) Ionic's md popover hardcodes .popover-content
+   border-radius rather than reading a CSS var, so target the shadow part. */
+:root[mode='md'] ion-popover.layer-selector-popover::part(content) {
+	border-radius: 12px;
 }
 </style>
 
@@ -149,7 +176,11 @@ ion-modal.layer-selector-modal {
 
 .layer-selector-title {
 	margin: 8px 16px 4px;
+	padding: 0 4px;
+	font-size: 16px;
 	font-weight: 600;
+	line-height: 24px;
+	color: var(--md-sys-on-surface);
 }
 
 .section-title {
