@@ -1,4 +1,5 @@
 import { GeoBounds } from '@/types/geo';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 
 // ---------------------------------------------------------------------------
 // Overpass API instance pool
@@ -44,13 +45,24 @@ function getClientId(): string {
 /**
  * Same-origin referrer URL identifying this app install, e.g.
  * `https://fireyak.example/overpass-client/2f9c…`. Sent with every Overpass
- * request via the `referrer` fetch option (see {@link fetchFromInstance}).
+ * request via the `referrer` fetch option (see {@link requestViaFetch}).
  */
 function getClientReferrer(): string {
 	if (!cachedClientReferrer) {
 		cachedClientReferrer = `${location.origin}/overpass-client/${getClientId()}`;
 	}
 	return cachedClientReferrer;
+}
+
+/**
+ * User-Agent identifying this app install for the **native** transport, e.g.
+ * `FireYak/2f9c… (at.jst.fireyak)`. Unlike browsers, the native HTTP layer lets
+ * us set `User-Agent` directly — the canonical identifier the Overpass usage
+ * policy asks for — so the native path sends this instead of relying on a
+ * same-origin referrer.
+ */
+function getClientUserAgent(): string {
+	return `FireYak/${getClientId()} (at.jst.fireyak)`;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +255,99 @@ function applyCooldown(baseUrl: string, retryAfter: string | null): void {
 }
 
 /**
+ * Transport-agnostic view of an Overpass HTTP response. Both the browser
+ * `fetch` transport and the native {@link CapacitorHttp} transport normalise to
+ * this shape so {@link fetchFromInstance} can handle cool-downs and parsing
+ * identically regardless of how the bytes arrived.
+ */
+interface OverpassHttpResponse {
+	status: number;
+	statusText: string;
+	ok: boolean;
+	/** Raw `Retry-After` header value (seconds or HTTP-date), or `null`. */
+	retryAfter: string | null;
+	/** Parses the response body as JSON (may resolve synchronously). */
+	json: () => unknown | Promise<unknown>;
+}
+
+/** Case-insensitive header lookup (native header casing is inconsistent). */
+function getHeader(headers: Record<string, string>, name: string): string | null {
+	const target = name.toLowerCase();
+	for (const key of Object.keys(headers)) {
+		if (key.toLowerCase() === target) return headers[key];
+	}
+	return null;
+}
+
+/**
+ * Browser transport. Uses `fetch` with the `referrer` option to identify the
+ * app install per the Overpass usage policy: `Referer` is a forbidden header,
+ * so the `referrer` option is the only way to set it, and without `unsafe-url`
+ * the default policy would strip the identifying path down to the bare origin
+ * on this cross-origin request. Supports abort via `signal`.
+ */
+async function requestViaFetch(
+	baseUrl: string,
+	query: string,
+	signal: AbortSignal
+): Promise<OverpassHttpResponse> {
+	// POST the query (rather than encoding it into the URL) so that the special
+	// characters used by Overpass QL (`=`, `;`, `[`, `]`, `,`) can never be
+	// mangled by URL encoding, which was a source of flaky responses.
+	const response = await fetch(baseUrl, {
+		method: 'POST',
+		body: new URLSearchParams({ data: query }),
+		referrer: getClientReferrer(),
+		referrerPolicy: 'unsafe-url',
+		signal
+	});
+	return {
+		status: response.status,
+		statusText: response.statusText,
+		ok: response.ok,
+		retryAfter: response.headers.get('Retry-After'),
+		json: () => response.json()
+	};
+}
+
+/**
+ * Native transport (iOS/Android). Routes through {@link CapacitorHttp} so the
+ * request runs on the platform's native networking stack instead of the WebView
+ * — sidestepping the browser's CORS and forbidden-header restrictions, which
+ * lets us send a proper `User-Agent` (the canonical Overpass identifier).
+ *
+ * CapacitorHttp has no `AbortSignal` support, so the per-attempt timeout is
+ * enforced with `readTimeout`/`connectTimeout` instead. In-flight supersession
+ * can't cancel the request, but that only wastes a completed response — it
+ * never refunds a rate-limit slot, so there is nothing to save by aborting.
+ */
+async function requestViaCapacitor(baseUrl: string, query: string): Promise<OverpassHttpResponse> {
+	const response = await CapacitorHttp.post({
+		url: baseUrl,
+		headers: {
+			'Content-Type': 'application/x-www-form-urlencoded',
+			// Native has no forbidden-header restriction — send the canonical
+			// Overpass identifier directly.
+			'User-Agent': getClientUserAgent(),
+			Referer: getClientReferrer()
+		},
+		// Object body + form content-type → native serialises to `data=<query>`.
+		data: { data: query },
+		readTimeout: PER_ATTEMPT_TIMEOUT_MS,
+		connectTimeout: PER_ATTEMPT_TIMEOUT_MS
+	});
+	return {
+		status: response.status,
+		statusText: '',
+		ok: response.status >= 200 && response.status < 300,
+		retryAfter: getHeader(response.headers, 'Retry-After'),
+		// CapacitorHttp auto-parses JSON responses to an object; only a string
+		// body (unexpected content-type) still needs parsing.
+		json: () => (typeof response.data === 'string' ? JSON.parse(response.data) : response.data)
+	};
+}
+
+/**
  * Attempts to fetch from a single Overpass instance.
  * Throws on any failure (network, HTTP error, abort, timeout). A 429 response
  * additionally parks the instance on a cool-down before throwing.
@@ -252,23 +357,18 @@ async function fetchFromInstance(
 	query: string,
 	signal: AbortSignal
 ): Promise<OverPassElement[]> {
-	// POST the query (rather than encoding it into the URL) so that the special
-	// characters used by Overpass QL (`=`, `;`, `[`, `]`, `,`) can never be
-	// mangled by URL encoding, which was a source of flaky responses.
-	const response = await fetch(baseUrl, {
-		method: 'POST',
-		body: new URLSearchParams({ data: query }),
-		// Identify this app install per the Overpass usage policy. `Referer` is a
-		// forbidden header, so the `referrer` option is the only way to set it;
-		// without `unsafe-url` the default policy would strip the identifying
-		// path down to the bare origin on this cross-origin request.
-		referrer: getClientReferrer(),
-		referrerPolicy: 'unsafe-url',
-		signal
-	});
+	// Fail fast if this query was already superseded before we even sent it
+	// (the native transport can't be aborted once in flight).
+	if (signal.aborted) {
+		throw new DOMException('Aborted', 'AbortError');
+	}
+
+	const response = Capacitor.isNativePlatform()
+		? await requestViaCapacitor(baseUrl, query)
+		: await requestViaFetch(baseUrl, query, signal);
 
 	if (response.status === 429) {
-		applyCooldown(baseUrl, response.headers.get('Retry-After'));
+		applyCooldown(baseUrl, response.retryAfter);
 	} else if (response.status >= 500) {
 		// 5xx (typically 504/500) means the instance is overloaded — park it
 		// briefly so the next pan doesn't hit it first again.
@@ -279,7 +379,7 @@ async function fetchFromInstance(
 		throw new Error(`Overpass ${response.status} ${response.statusText} from ${baseUrl}`);
 	}
 
-	const data = await response.json();
+	const data = (await response.json()) as { remark?: unknown; elements?: OverPassElement[] };
 
 	// Overpass can answer HTTP 200 with a partial element list plus a `remark`
 	// like "runtime error: Query timed out…" when it hits its own timeout or
