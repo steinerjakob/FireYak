@@ -99,10 +99,6 @@ const SERVER_ERROR_COOLDOWN_MS = 45_000;
 /** Upper bound for an accepted Retry-After value (guards against garbage). */
 const MAX_COOLDOWN_SECONDS = 3600;
 
-// Last instance that answered successfully. Tried first on the next query so
-// the primary (overpass-api.de) doesn't absorb 100% of traffic and 429 first.
-let lastGoodInstance: string | null = null;
-
 // ---------------------------------------------------------------------------
 // Module-level AbortController for area queries
 // Ensures only the most recent area request is in-flight at any time.
@@ -389,12 +385,14 @@ async function fetchFromInstance(
 		throw new Error(`Overpass runtime error from ${baseUrl}: ${data.remark}`);
 	}
 
-	lastGoodInstance = baseUrl;
 	return (data?.elements as OverPassElement[]) ?? [];
 }
 
 /**
- * Runs a query against the instance pool, trying each interpreter in order.
+ * Runs a query against the instance pool, trying each interpreter in the
+ * **declared order** — so the primary (`overpass-api.de`, by far the most
+ * reliable interpreter) is always tried first, and the others serve only as
+ * fallbacks when it is cooled down or fails.
  *
  * - Instances currently on a 429 cool-down are skipped; if every instance is
  *   cooled down the query fails immediately instead of burning more
@@ -409,13 +407,9 @@ async function fetchFromInstance(
  * @throws the last encountered error when every attempted instance fails.
  */
 async function fetchFromPool(query: string, outerSignal: AbortSignal): Promise<OverPassElement[]> {
-	const available = OVERPASS_INSTANCES.filter((url) => !isCooledDown(url));
-	// Try the last instance that succeeded first, so traffic (and the first 429)
-	// doesn't always land on the primary. The rest keep their declared order.
-	const instances =
-		lastGoodInstance && available.includes(lastGoodInstance)
-			? [lastGoodInstance, ...available.filter((url) => url !== lastGoodInstance)]
-			: available;
+	// Declared order preserved → the primary (overpass-api.de) leads; skip only
+	// instances parked on a 429 cool-down.
+	const instances = OVERPASS_INSTANCES.filter((url) => !isCooledDown(url));
 	if (instances.length === 0) {
 		// Every instance recently answered 429. Hitting them again would only
 		// burn more rate-limit budget and extend the cool-downs — fail fast and

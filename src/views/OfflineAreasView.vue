@@ -38,13 +38,12 @@
 					<ion-label>
 						<h2>{{ area.name }}</h2>
 						<p>{{ statusLine(area) }}</p>
-						<!-- The data phase is a few slow Overpass calls without incremental
-						     progress — an indeterminate bar signals activity instead of
-						     appearing stuck. The tile phase ticks often enough for a
-						     determinate bar. -->
+						<!-- Water-source (Overpass) data and tiles download in parallel and
+						     both count toward one determinate bar; the status line notes
+						     while the water-source fetch is still pending. -->
 						<ion-progress-bar
 							v-if="area.status === 'downloading' || area.status === 'refreshing'"
-							:type="store.phaseOf(area.id) === 'data' ? 'indeterminate' : 'determinate'"
+							type="determinate"
 							:value="progressValue(area)"
 						></ion-progress-bar>
 					</ion-label>
@@ -244,29 +243,35 @@ function progressValue(area: OfflineArea): number {
 }
 
 /**
- * Phase-specific progress text: a chunk counter while Overpass data loads
- * (each chunk is one long-running call) and a percentage during the much
- * finer-grained tile phase.
+ * Progress text for an in-flight download. Water-source (Overpass) data and
+ * tiles run in parallel, so this shows the overall tile-inclusive percentage
+ * and, while the water-source fetch is still pending, a chunk counter for it
+ * (each chunk is one long-running Overpass call).
  */
 function downloadDetail(area: OfflineArea, refreshing: boolean): string {
-	if (store.phaseOf(area.id) === 'data') {
-		const total = countChunks(area.bounds);
+	const parts: string[] = [];
+
+	// Water-source fetch is still running while not every chunk is completed.
+	const chunkTotal = countChunks(area.bounds);
+	const chunksDone = area.lastCompletedChunk + 1;
+	if (chunksDone < chunkTotal) {
 		// While chunk i is in flight, lastCompletedChunk is i-1 → 1-based i+1.
-		const current = Math.min(area.lastCompletedChunk + 2, total);
-		return t(
-			refreshing ? 'offlineAreas.status.refreshingSources' : 'offlineAreas.status.loadingSources',
-			{
-				done: current,
-				total
-			}
+		const current = Math.min(chunksDone + 1, chunkTotal);
+		parts.push(
+			t(
+				refreshing ? 'offlineAreas.status.refreshingSources' : 'offlineAreas.status.loadingSources',
+				{ done: current, total: chunkTotal }
+			)
 		);
 	}
-	return t(
-		refreshing ? 'offlineAreas.status.refreshingTiles' : 'offlineAreas.status.loadingTiles',
-		{
+
+	parts.push(
+		t(refreshing ? 'offlineAreas.status.refreshingTiles' : 'offlineAreas.status.loadingTiles', {
 			percent: Math.round(progressValue(area) * 100)
-		}
+		})
 	);
+
+	return parts.join(' · ');
 }
 
 function statusLine(area: OfflineArea): string {

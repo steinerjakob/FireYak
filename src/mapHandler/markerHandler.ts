@@ -197,8 +197,21 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 	if (mapElements.length < 2000) {
 		await reconcileDeletedNodes(queryBounds, mapElements);
 	}
+
+	// Signal that the cache changed so the map re-renders with the freshly
+	// fetched markers. Crucial for the silent background refresh path: its caller
+	// already returned the (stale) cached features, so without this bump the new
+	// data wouldn't appear until the next pan.
+	markerCacheVersion.value++;
 	return mapElements;
 }
+
+/**
+ * Reactive counter bumped whenever a fetch stores fresh marker data into the
+ * cache. The map watches it and re-renders the current view, so background
+ * refreshes surface on-screen immediately instead of only after the next pan.
+ */
+export const markerCacheVersion = ref(0);
 
 /** Count of in-flight Overpass area fetches (foreground and background). */
 const activeAreaFetches = ref(0);

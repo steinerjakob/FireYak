@@ -144,7 +144,8 @@ import {
 	getNearbyMarkers,
 	markerIconUrls,
 	isFetchingMarkers,
-	markerFetchFailed
+	markerFetchFailed,
+	markerCacheVersion
 } from '@/mapHandler/markerHandler';
 import { useNetworkStatus } from '@/composable/networkStatus';
 import { useRoute, useRouter } from 'vue-router';
@@ -538,6 +539,13 @@ async function handleMapMovement() {
 		source.setData(geojson);
 	}
 }
+
+// A background cache refresh finished storing fresh markers — re-render the
+// current view from cache so they appear without waiting for the next pan.
+// (Cache is now marked fresh, so this re-render won't trigger another fetch.)
+watch(markerCacheVersion, () => {
+	void handleMapMovement();
+});
 
 //http://localhost:5173/#/?lat=48.1292912&lng=15.2728629&zoom=15&external=true
 
