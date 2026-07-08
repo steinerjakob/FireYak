@@ -57,10 +57,17 @@ function getClientReferrer(): string {
 // Timeouts (client-side, in addition to the Overpass [timeout:…] directive)
 // ---------------------------------------------------------------------------
 
+// The server-side Overpass `[timeout:…]` directive is kept SHORTER than the
+// client per-attempt timeout so the server always finishes (or fails cleanly)
+// before the client aborts. Aborting mid-execution doesn't stop the server or
+// refund the rate-limit slot, so a too-short client timeout would make us
+// consume two instances' resources for one query — a fast way to earn 429s.
+/** Server-side `[timeout:N]` (seconds) embedded in every query. */
+const SERVER_TIMEOUT_SECONDS = 15;
 /** Client-side timeout applied to each individual instance attempt. */
-const PER_ATTEMPT_TIMEOUT_MS = 12_000;
+const PER_ATTEMPT_TIMEOUT_MS = 18_000;
 /** Overall client-side timeout for a single-node query (spans all attempts). */
-const NODE_QUERY_TIMEOUT_MS = 15_000;
+const NODE_QUERY_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Rate-limit cool-downs
@@ -71,8 +78,18 @@ const NODE_QUERY_TIMEOUT_MS = 15_000;
 const instanceCooldowns = new Map<string, number>();
 /** Fallback cool-down when the server does not send a usable Retry-After. */
 const DEFAULT_COOLDOWN_MS = 5 * 60_000;
+/**
+ * Shorter park applied on a 5xx (500/504 usually mean the instance is
+ * overloaded). Kept below the 429 cool-down so a briefly-struggling instance is
+ * skipped on the next pan but comes back into rotation quickly.
+ */
+const SERVER_ERROR_COOLDOWN_MS = 45_000;
 /** Upper bound for an accepted Retry-After value (guards against garbage). */
 const MAX_COOLDOWN_SECONDS = 3600;
+
+// Last instance that answered successfully. Tried first on the next query so
+// the primary (overpass-api.de) doesn't absorb 100% of traffic and 429 first.
+let lastGoodInstance: string | null = null;
 
 // ---------------------------------------------------------------------------
 // Module-level AbortController for area queries
@@ -135,23 +152,41 @@ export interface OverPassElement {
 const MAX_AREA_SPAN_DEGREES = 0.5;
 
 /**
+ * Grid (in degrees) the clamped bounds are snapped outward to. Panning produces
+ * a slightly different bbox every frame; snapping to a coarse grid makes small
+ * pans and the load/style-reload/moveend burst resolve to the *same* query
+ * string, so the in-flight dedup ({@link fetchMarkerData}) and the caller's
+ * tile-freshness cache hit far more often.
+ */
+const SNAP_GRID_DEGREES = 0.05;
+
+/**
  * Clamps the requested bounds to at most {@link MAX_AREA_SPAN_DEGREES} on each
- * axis, keeping the same center. Huge desktop viewports would otherwise ask the
- * server for an area so large it overruns the `[timeout:15]` directive.
+ * axis (keeping the same center), then snaps the result **outward** to the
+ * {@link SNAP_GRID_DEGREES} grid so nearby viewports yield an identical bbox.
+ * Huge desktop viewports would otherwise ask the server for an area so large it
+ * overruns the server timeout directive; the outward snap can grow a span by up
+ * to one grid cell per side beyond the clamp, which is negligible.
  *
  * Exported so callers that track which area was actually fetched (freshness
- * stamps, stale-node reconciliation) can apply the exact same clamping instead
- * of assuming their requested bounds were fetched in full.
+ * stamps, stale-node reconciliation) can apply the exact same clamp+snap
+ * instead of assuming their requested bounds were fetched in full.
  */
 export function clampBounds(mapBounds: GeoBounds): GeoBounds {
 	const clampAxis = (low: number, high: number): { low: number; high: number } => {
-		const span = high - low;
-		if (span <= MAX_AREA_SPAN_DEGREES) {
-			return { low, high };
+		let clampedLow = low;
+		let clampedHigh = high;
+		if (high - low > MAX_AREA_SPAN_DEGREES) {
+			const center = (low + high) / 2;
+			const half = MAX_AREA_SPAN_DEGREES / 2;
+			clampedLow = center - half;
+			clampedHigh = center + half;
 		}
-		const center = (low + high) / 2;
-		const half = MAX_AREA_SPAN_DEGREES / 2;
-		return { low: center - half, high: center + half };
+		// Snap outward: floor the low edge, ceil the high edge to grid lines.
+		return {
+			low: Math.floor(clampedLow / SNAP_GRID_DEGREES) * SNAP_GRID_DEGREES,
+			high: Math.ceil(clampedHigh / SNAP_GRID_DEGREES) * SNAP_GRID_DEGREES
+		};
 	};
 
 	const lat = clampAxis(mapBounds.south, mapBounds.north);
@@ -161,21 +196,17 @@ export function clampBounds(mapBounds: GeoBounds): GeoBounds {
 
 function buildAreaQuery(mapBounds: GeoBounds): string {
 	const bounds = clampBounds(mapBounds);
-	const osmDataKeys = [
-		'node[emergency=fire_hydrant]',
-		'way[amenity=fire_station]',
-		'node[emergency=water_tank]',
-		'node[emergency=suction_point]',
-		'node[emergency=fire_water_pond]'
-	];
 	const boundString = `(${bounds.south},${bounds.west},${bounds.north},${bounds.east})`;
 
-	let query = '[out:json][timeout:15];(';
-	for (const key of osmDataKeys) {
-		query += key + boundString + ';';
-	}
-	query += ');out qt center 2000 tags;';
-	return query;
+	// A single regex node filter does one bbox scan server-side instead of four
+	// separate `node[emergency=…]` scans — cheaper and less likely to time out
+	// on large bboxes.
+	const statements = [
+		`node[emergency~"^(fire_hydrant|water_tank|suction_point|fire_water_pond)$"]${boundString};`,
+		`way[amenity=fire_station]${boundString};`
+	];
+
+	return `[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];(${statements.join('')});out qt center 2000 tags;`;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +227,14 @@ function isCooledDown(baseUrl: string): boolean {
 function applyCooldown(baseUrl: string, retryAfter: string | null): void {
 	let cooldownMs = DEFAULT_COOLDOWN_MS;
 	if (retryAfter) {
-		const seconds = Number(retryAfter);
+		// Retry-After is either delta-seconds or an HTTP-date.
+		let seconds = Number(retryAfter);
+		if (!Number.isFinite(seconds)) {
+			const dateMs = Date.parse(retryAfter);
+			if (!Number.isNaN(dateMs)) {
+				seconds = (dateMs - Date.now()) / 1000;
+			}
+		}
 		if (Number.isFinite(seconds) && seconds > 0 && seconds <= MAX_COOLDOWN_SECONDS) {
 			cooldownMs = seconds * 1000;
 		}
@@ -231,6 +269,10 @@ async function fetchFromInstance(
 
 	if (response.status === 429) {
 		applyCooldown(baseUrl, response.headers.get('Retry-After'));
+	} else if (response.status >= 500) {
+		// 5xx (typically 504/500) means the instance is overloaded — park it
+		// briefly so the next pan doesn't hit it first again.
+		instanceCooldowns.set(baseUrl, Date.now() + SERVER_ERROR_COOLDOWN_MS);
 	}
 
 	if (!response.ok) {
@@ -238,6 +280,16 @@ async function fetchFromInstance(
 	}
 
 	const data = await response.json();
+
+	// Overpass can answer HTTP 200 with a partial element list plus a `remark`
+	// like "runtime error: Query timed out…" when it hits its own timeout or
+	// memory limit. Treat that as a failure so the pool tries another instance
+	// instead of silently accepting truncated data.
+	if (typeof data?.remark === 'string' && data.remark.includes('runtime error')) {
+		throw new Error(`Overpass runtime error from ${baseUrl}: ${data.remark}`);
+	}
+
+	lastGoodInstance = baseUrl;
 	return (data?.elements as OverPassElement[]) ?? [];
 }
 
@@ -257,7 +309,13 @@ async function fetchFromInstance(
  * @throws the last encountered error when every attempted instance fails.
  */
 async function fetchFromPool(query: string, outerSignal: AbortSignal): Promise<OverPassElement[]> {
-	const instances = OVERPASS_INSTANCES.filter((url) => !isCooledDown(url));
+	const available = OVERPASS_INSTANCES.filter((url) => !isCooledDown(url));
+	// Try the last instance that succeeded first, so traffic (and the first 429)
+	// doesn't always land on the primary. The rest keep their declared order.
+	const instances =
+		lastGoodInstance && available.includes(lastGoodInstance)
+			? [lastGoodInstance, ...available.filter((url) => url !== lastGoodInstance)]
+			: available;
 	if (instances.length === 0) {
 		// Every instance recently answered 429. Hitting them again would only
 		// burn more rate-limit budget and extend the cool-downs — fail fast and
@@ -302,7 +360,8 @@ async function fetchFromPool(query: string, outerSignal: AbortSignal): Promise<O
  *   next interpreter on any transient failure and skipping instances that are
  *   on a 429 cool-down.
  * - Applies a per-attempt client-side timeout of {@link PER_ATTEMPT_TIMEOUT_MS}
- *   ms in addition to the server-side `[timeout:15]` directive.
+ *   ms, deliberately longer than the server-side `[timeout:10]` directive so the
+ *   server bails before the client does.
  *
  * @returns The fetched elements on success (may be an empty array for areas
  *          with no data), or **`null`** when the request was aborted
@@ -386,7 +445,7 @@ export async function fetchAreaRaw(
  * total failure it returns `null`.
  */
 export async function fetchNodeById(nodeId: number): Promise<OverPassElement | null> {
-	const query = `[out:json][timeout:15];(node(${nodeId});way(${nodeId}););out center tags;`;
+	const query = `[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];(node(${nodeId});way(${nodeId}););out center tags;`;
 
 	const outerSignal = AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS);
 

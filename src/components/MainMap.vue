@@ -185,7 +185,7 @@ import { nightFlavor } from '@/map/nightFlavor';
 import { satelliteFlavor } from '@/map/satelliteFlavor';
 
 const MAP_ELEMENT_ID = 'map';
-const MOVE_DEBOUNCE_MS = 200;
+const MOVE_DEBOUNCE_MS = 300;
 const DISABLE_CLUSTERING_ZOOM = 14;
 const CLUSTER_RADIUS = 50;
 const MARKER_SOURCE_ID = 'markers';
@@ -193,6 +193,13 @@ const SELECTED_PATH_SOURCE = 'selected-path';
 const SELECTED_PATH_LAYER = 'selected-path-layer';
 const SELECTED_PATH_LABEL_LAYER = 'selected-path-label-layer';
 const MAP_VIEW_STORAGE_KEY = 'mapView';
+// Fallback center used only until the device location resolves on a fresh
+// install (no saved view yet). Kept at a low zoom so handleMapMovement's
+// `zoom <= 9` guard skips the Overpass fetch for this placeholder view — this
+// avoids the wasted Overpass call (and rate-limit contention) that used to
+// fire for the default region before jumping to the user's real location.
+const FALLBACK_CENTER: [number, number] = [15.274102, 48.135314];
+const FALLBACK_ZOOM = 3;
 const LONG_PRESS_MS = 500;
 const LONG_PRESS_MAX_MOVEMENT_PX = 10;
 const USER_ACCURACY_SOURCE = 'user-accuracy';
@@ -901,45 +908,73 @@ function updateAccuracyCircle() {
 	}
 }
 
+/** True when location permission is already granted (never prompts). */
+async function hasLocationPermission(): Promise<boolean> {
+	try {
+		const status = await Geolocation.checkPermissions();
+		return status.location === 'granted' || status.coarseLocation === 'granted';
+	} catch {
+		// Permissions API unsupported (some web browsers) → treat as not granted.
+		return false;
+	}
+}
+
+/**
+ * Fetches the current fix, updates the location marker, and starts watching it.
+ *
+ * @param promptIfNeeded When `true` (default, the location-FAB path) requests
+ *   permission if not yet granted. When `false` (silent startup path) it only
+ *   proceeds if permission is already granted, so app launch never triggers an
+ *   uninvited permission prompt. Returns `null` when permission is unavailable.
+ */
+async function acquireCurrentLocation(promptIfNeeded = true): Promise<GeoPoint | null> {
+	if (Capacitor.isNativePlatform()) {
+		// Check if we have permission
+		const permission = await Geolocation.checkPermissions();
+
+		if (permission.location !== 'granted') {
+			if (!promptIfNeeded) return null;
+			const requestResult = await Geolocation.requestPermissions();
+			if (requestResult.location !== 'granted') {
+				console.warn('Location permission not granted');
+				return null;
+			}
+		}
+	} else if (!promptIfNeeded && !(await hasLocationPermission())) {
+		// Web silent path: only proceed on an existing grant so page load never
+		// pops the browser's geolocation prompt.
+		return null;
+	}
+
+	// Get current position
+	const position = await Geolocation.getCurrentPosition({
+		enableHighAccuracy: true,
+		timeout: 10000,
+		maximumAge: 0
+	});
+
+	const point: GeoPoint = {
+		lat: position.coords.latitude,
+		lng: position.coords.longitude
+	};
+	currentUserLocation.value = point;
+	currentUserAccuracy.value = position.coords.accuracy ?? null;
+
+	// Update or create location marker
+	updateLocationMarker(point);
+
+	startWatchingLocation();
+
+	return point;
+}
+
 async function showUserLocation() {
 	try {
 		if (!watchId.value) {
 			waitingForLocation.value = true;
-
-			// request permission only on native platforms
-			if (Capacitor.isNativePlatform()) {
-				// Check if we have permission
-				const permission = await Geolocation.checkPermissions();
-
-				if (permission.location !== 'granted') {
-					const requestResult = await Geolocation.requestPermissions();
-					if (requestResult.location !== 'granted') {
-						console.warn('Location permission not granted');
-						return;
-					}
-				}
-			}
-
-			// Get current position
-			const position = await Geolocation.getCurrentPosition({
-				enableHighAccuracy: true,
-				timeout: 10000,
-				maximumAge: 0
-			});
-
+			const point = await acquireCurrentLocation();
 			waitingForLocation.value = false;
-
-			const point: GeoPoint = {
-				lat: position.coords.latitude,
-				lng: position.coords.longitude
-			};
-			currentUserLocation.value = point;
-			currentUserAccuracy.value = position.coords.accuracy ?? null;
-
-			// Update or create location marker
-			updateLocationMarker(point);
-
-			startWatchingLocation();
+			if (!point) return;
 		}
 
 		// Fly to user location
@@ -954,6 +989,37 @@ async function showUserLocation() {
 		console.error('Error getting location:', error);
 		waitingForLocation.value = false;
 	}
+}
+
+/**
+ * Startup location handling. If permission is already granted, silently
+ * activate the user location (dot + tracking) without prompting. On a fresh
+ * install (no saved view — map sits at the low-zoom placeholder so no Overpass
+ * fetch fires) jump straight to the resolved location.
+ *
+ * When the location is unavailable (permission not granted, denied, or timed
+ * out) nothing happens: the map stays at the low-zoom placeholder (fresh
+ * install) or the restored saved view (returning user). We deliberately do NOT
+ * zoom into the hardcoded default region — the user can zoom in themselves.
+ *
+ * @param recenterOnFreshInstall When `false` (a deep link / external location
+ *   is driving the camera) the location is still activated but the camera is
+ *   left alone.
+ */
+async function activateLocationOnStartup(recenterOnFreshInstall: boolean) {
+	let point: GeoPoint | null = null;
+	try {
+		point = await acquireCurrentLocation(false);
+	} catch (error) {
+		console.warn('Could not determine initial device location:', error);
+	}
+
+	if (!point || !recenterOnFreshInstall || !rootMap) return;
+	// A marker deep-link or a user interaction during the (up to 10s) async
+	// geolocation wait takes precedence — don't yank the camera away from it.
+	if (markerStore.selectedMarker || rootMap.getZoom() > FALLBACK_ZOOM) return;
+
+	rootMap.jumpTo({ center: [point.lng, point.lat], zoom: DISABLE_CLUSTERING_ZOOM });
 }
 
 function updateLocationMarker(point: GeoPoint) {
@@ -1354,8 +1420,8 @@ async function initMap() {
 	rootMap = new maplibregl.Map({
 		container: MAP_ELEMENT_ID,
 		style: getProtomapsStyle(),
-		center: savedView?.center || [15.274102, 48.135314],
-		zoom: savedView?.zoom || 13,
+		center: savedView?.center || FALLBACK_CENTER,
+		zoom: savedView?.zoom ?? FALLBACK_ZOOM,
 		maxZoom: 19,
 		dragRotate: true,
 		touchZoomRotate: true,
@@ -1390,6 +1456,17 @@ async function initMap() {
 		rootMap.on('moveend', updateResetViewVisibility);
 
 		watchExternalLocationQuery();
+
+		// Activate the user location on startup when permission is already
+		// granted. Recenter to it only on a fresh install (no saved view) that
+		// isn't being driven to a specific marker or external location — so the
+		// startup jump never fights that camera move. A returning user keeps
+		// their restored view; if location is unavailable the map stays at the
+		// low-zoom placeholder (no fetch, no jump to the hardcoded default).
+		const hasExternalLocation =
+			route.query.external === 'true' && route.query.lat && route.query.lng;
+		const recenterOnFreshInstall = !savedView && !hasExternalLocation && !route.params.markerId;
+		activateLocationOnStartup(recenterOnFreshInstall);
 	});
 }
 
