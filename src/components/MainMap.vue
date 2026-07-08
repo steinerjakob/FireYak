@@ -20,12 +20,18 @@
 				<ion-icon :icon="informationCircle"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
-		<ion-fab class="layers-fab" vertical="top" horizontal="start" slot="fixed">
+		<ion-fab
+			class="layers-fab"
+			:class="{ 'layers-fab-offline': !isOnline }"
+			vertical="top"
+			horizontal="start"
+			slot="fixed"
+		>
 			<ion-fab-button
 				class="md-small"
 				color="light"
 				size="small"
-				@click="openLayerSelector"
+				@click="openLayerSelector($event)"
 				:title="$t('about.openInfo')"
 			>
 				<ion-icon :icon="layers"></ion-icon>
@@ -94,10 +100,6 @@
 				<ion-icon :icon="analyticsOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
-		<!-- Offline banner -->
-		<div v-if="!isOnline" class="offline-banner">
-			{{ $t('network.offline') }}
-		</div>
 		<!-- Marker fetch indicator — visible for background refreshes too, so the
 		     user sees activity while Overpass data loads for the current view -->
 		<div v-if="isFetchingMarkers" class="marker-loading-indicator">
@@ -123,7 +125,11 @@
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
-		<LayerSelectorModal :is-open="layerModalOpen" @update:is-open="layerModalOpen = $event" />
+		<LayerSelectorModal
+			:is-open="layerModalOpen"
+			:event="layerSelectorEvent"
+			@update:is-open="layerModalOpen = $event"
+		/>
 	</div>
 </template>
 <script lang="ts" setup>
@@ -211,6 +217,7 @@ const { isOnline } = useNetworkStatus();
 
 const isSatellite = ref(false);
 const layerModalOpen = ref(false);
+const layerSelectorEvent = ref<Event | undefined>(undefined);
 
 let rootMap: maplibregl.Map | null = null;
 let mapReady = false;
@@ -461,7 +468,8 @@ function resetView() {
 	rootMap.easeTo({ pitch: 0, bearing: 0, duration: 300 });
 }
 
-function openLayerSelector() {
+function openLayerSelector(event: Event) {
+	layerSelectorEvent.value = event;
 	layerModalOpen.value = true;
 }
 
@@ -1526,24 +1534,6 @@ ion-fab {
 	z-index: 1000;
 }
 
-.offline-banner {
-	position: absolute;
-	/* Below the search bar (~48 px) + safe area, above other controls */
-	top: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 56px);
-	left: 50%;
-	transform: translateX(-50%);
-	z-index: 1000;
-	background: var(--md-sys-surface-container);
-	color: var(--md-sys-on-surface);
-	border-radius: var(--md-sys-corner-medium, 12px);
-	padding: 6px 16px;
-	font-size: 13px;
-	line-height: 1.4;
-	white-space: nowrap;
-	pointer-events: none;
-	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-
 .marker-loading-indicator {
 	position: absolute;
 	bottom: calc(var(--ion-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + 8px);
@@ -1593,6 +1583,14 @@ ion-fab {
 
 .layers-fab {
 	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px));
+	transition: margin-top 0.2s ease;
+}
+
+/* AddressSearchBar's offline hint attaches below the search bar and can
+   wrap to two lines — push the layers FAB further down so it doesn't sit
+   under it. */
+.layers-fab-offline {
+	margin-top: calc(var(--ion-safe-area-top, 0) + (40px + 16px) + 64px);
 }
 
 :deep(.maplibregl-ctrl-bottom-left),

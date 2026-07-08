@@ -1,6 +1,8 @@
 <template>
 	<ion-page>
-		<ion-content :fullscreen="true">
+		<!-- ios26-disabled: the map is edge-to-edge; the iOS 26 theme would add
+		     60px+safe-area bottom padding to fullscreen content for floating UI -->
+		<ion-content :fullscreen="true" class="ios26-disabled">
 			<MainMap></MainMap>
 			<MarkerInfoPanel></MarkerInfoPanel>
 			<MarkerEditPanel></MarkerEditPanel>

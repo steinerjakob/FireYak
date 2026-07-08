@@ -150,33 +150,33 @@
 		var(--md-sys-surface) 20%
 	);
 
-	--ion-color-medium: var(--md-sys-surface-container);
-	--ion-color-medium-rgb: var(--md-sys-surface-container-rgb);
-	--ion-color-medium-contrast: var(--md-sys-on-surface);
-	--ion-color-medium-contrast-rgb: var(--md-sys-on-surface-rgb);
+	/* Ionic "medium" is a foreground role (muted text/icons), so it needs a
+	   mid-tone color that stays readable on surfaces — not a surface tone. */
+	--ion-color-medium: var(--md-sys-outline);
+	--ion-color-medium-rgb: var(--md-sys-outline-rgb);
+	--ion-color-medium-contrast: var(--md-sys-surface);
+	--ion-color-medium-contrast-rgb: var(--md-sys-surface-rgb);
 	--ion-color-medium-shade: color-mix(
 		in srgb,
-		var(--md-sys-surface-container),
+		var(--md-sys-outline),
 		var(--md-sys-inverse-surface) 20%
 	);
-	--ion-color-medium-tint: color-mix(
-		in srgb,
-		var(--md-sys-surface-container),
-		var(--md-sys-surface) 20%
-	);
+	--ion-color-medium-tint: color-mix(in srgb, var(--md-sys-outline), var(--md-sys-surface) 20%);
 
-	--ion-color-dark: var(--md-sys-surface-container-highest);
-	--ion-color-dark-rgb: var(--md-sys-surface-container-highest-rgb);
-	--ion-color-dark-contrast: var(--md-sys-on-surface);
-	--ion-color-dark-contrast-rgb: var(--md-sys-on-surface-rgb);
+	/* Ionic "dark" flips to a light tone in dark palettes (high contrast vs.
+	   background) — exactly the semantics of MD3 inverse-surface. */
+	--ion-color-dark: var(--md-sys-inverse-surface);
+	--ion-color-dark-rgb: var(--md-sys-inverse-surface-rgb);
+	--ion-color-dark-contrast: var(--md-sys-inverse-on-surface);
+	--ion-color-dark-contrast-rgb: var(--md-sys-inverse-on-surface-rgb);
 	--ion-color-dark-shade: color-mix(
 		in srgb,
-		var(--md-sys-surface-container-highest),
-		var(--md-sys-inverse-surface) 20%
+		var(--md-sys-inverse-surface),
+		var(--md-sys-shadow) 20%
 	);
 	--ion-color-dark-tint: color-mix(
 		in srgb,
-		var(--md-sys-surface-container-highest),
+		var(--md-sys-inverse-surface),
 		var(--md-sys-surface) 20%
 	);
 }

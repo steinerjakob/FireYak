@@ -164,7 +164,7 @@ h2 {
 
 .benefit-item span {
 	font-size: 13px;
-	color: var(--ion-color-dark);
+	color: var(--md-sys-on-surface);
 	line-height: 1.3;
 }
 
@@ -234,7 +234,7 @@ h2 {
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
 	.dialog-container {
-		--ion-color-background: var(--ion-color-dark);
+		--ion-color-background: var(--md-sys-surface-container);
 
 		border: 1px solid var(--md-sys-outline-variant);
 	}

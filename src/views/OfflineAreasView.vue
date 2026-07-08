@@ -1,6 +1,6 @@
 <template>
 	<ion-page>
-		<ion-header>
+		<ion-header :translucent="true">
 			<ion-toolbar>
 				<ion-buttons slot="start">
 					<ion-back-button default-href="/settings"></ion-back-button>
@@ -14,7 +14,7 @@
 			</ion-toolbar>
 		</ion-header>
 
-		<ion-content>
+		<ion-content :fullscreen="true">
 			<!-- Offline hint: downloads need a connection -->
 			<div v-if="!isOnline" class="offline-hint">
 				<ion-icon :icon="cloudOfflineOutline"></ion-icon>
@@ -64,7 +64,9 @@
 			<ion-header>
 				<ion-toolbar>
 					<ion-buttons slot="start">
-						<ion-button @click="addModalOpen = false">{{ $t('common.cancel') }}</ion-button>
+						<ion-button @click="addModalOpen = false" :title="$t('common.cancel')">
+							<ion-icon slot="icon-only" :icon="close"></ion-icon>
+						</ion-button>
 					</ion-buttons>
 					<ion-title>{{ $t('offlineAreas.add.title') }}</ion-title>
 				</ion-toolbar>
@@ -177,6 +179,7 @@ import {
 } from '@ionic/vue';
 import {
 	add,
+	close,
 	ellipsisVertical,
 	mapOutline,
 	locationOutline,

@@ -212,7 +212,7 @@
 		"placeholder": "Search address...",
 		"noResults": "No results found",
 		"error": "Search failed",
-		"offlineHint": "Address search is unavailable offline."
+		"offlineHint": "Offline — address search unavailable, showing cached water sources."
 	},
 	"markerEdit": {
 		"title": {
@@ -283,8 +283,7 @@
 	},
 	"network": {
 		"fetchFailed": "Water source data temporarily unavailable",
-		"retry": "Retry",
-		"offline": "Offline — showing cached water sources"
+		"retry": "Retry"
 	},
 	"common": {
 		"cancel": "Cancel",

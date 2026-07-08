@@ -1,6 +1,6 @@
 <template>
 	<ion-page>
-		<ion-header>
+		<ion-header :translucent="true">
 			<ion-toolbar>
 				<ion-buttons slot="start">
 					<ion-back-button default-href="/"></ion-back-button>
@@ -9,7 +9,7 @@
 			</ion-toolbar>
 		</ion-header>
 
-		<ion-content>
+		<ion-content :fullscreen="true">
 			<div class="about-container">
 				<div class="logo-section">
 					<img src="/android-chrome-192x192.png" alt="FireYak Logo" class="app-logo" />

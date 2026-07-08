@@ -1,6 +1,6 @@
 <template>
 	<ion-page>
-		<ion-header>
+		<ion-header :translucent="true">
 			<ion-toolbar>
 				<ion-buttons slot="start">
 					<ion-back-button default-href="/"></ion-back-button>
@@ -8,7 +8,7 @@
 				<ion-title>{{ $t('settings.title') }}</ion-title>
 			</ion-toolbar>
 		</ion-header>
-		<ion-content>
+		<ion-content :fullscreen="true">
 			<ion-list>
 				<!-- Appearance Section -->
 				<ion-list-header>
@@ -17,6 +17,7 @@
 
 				<ion-item>
 					<ion-segment
+						ref="themeSegment"
 						:value="theme"
 						@ion-change="onThemeChange($event)"
 						style="padding-left: 8px; padding-right: 8px"
@@ -194,6 +195,34 @@ import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
 import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
+import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { registerSegmentEffect } from '@rdlabo/ionic-theme-ios26';
+
+// Liquid-glass knob animation for the theme segment (iOS 26 theme, ios mode
+// only — Ionic reflects the active mode on the <html> element).
+const themeSegment = ref<InstanceType<typeof IonSegment> | null>(null);
+let segmentEffect: ReturnType<typeof registerSegmentEffect>;
+
+onMounted(async () => {
+	if (document.documentElement.getAttribute('mode') !== 'ios') {
+		return;
+	}
+	const el = themeSegment.value?.$el as HTMLElement | undefined;
+	if (!el) {
+		return;
+	}
+	// registerSegmentEffect silently no-ops unless the element already carries
+	// its "ios" mode class, which Stencil only applies on its first async
+	// render after mount — wait for it (bounded, ~1s worst case).
+	for (let i = 0; i < 60 && !el.classList.contains('ios'); i++) {
+		await new Promise((resolve) => requestAnimationFrame(resolve));
+	}
+	segmentEffect = registerSegmentEffect(el);
+});
+
+onBeforeUnmount(() => {
+	segmentEffect?.destroy();
+});
 
 const settingsStore = useSettingsStore();
 const { saveTheme, saveShowZoomButtons, saveClampHosesToRoads } = useSettings();

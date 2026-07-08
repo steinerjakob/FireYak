@@ -2,7 +2,7 @@
 	<div class="search-container">
 		<div
 			class="search-bar-row"
-			:class="{ 'has-results': showSearchResults && searchResults.length > 0, mobile: isMobile }"
+			:class="{ 'has-attached-panel': hasAttachedPanel, mobile: isMobile }"
 		>
 			<!-- Info button - mobile only, integrated into search bar -->
 			<button
@@ -13,6 +13,8 @@
 			>
 				<ion-icon :icon="informationCircle" class="search-icon-btn"></ion-icon>
 			</button>
+			<!-- ios26-disabled: the row itself carries the pill/glass style, so the
+			     iOS 26 theme must not draw its own inner glass pill on the input -->
 			<ion-searchbar
 				:value="searchQuery"
 				:placeholder="$t('addressSearch.placeholder')"
@@ -23,7 +25,7 @@
 				@ionClear="onSearchClear"
 				@ionFocus="onSearchFocus"
 				@ionBlur="onSearchBlur"
-				class="search-bar"
+				class="search-bar ios26-disabled"
 				:class="{ 'search-bar-mobile': isMobile }"
 			></ion-searchbar>
 			<!-- Loading indicator inside the bar area -->
@@ -77,7 +79,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { IonIcon, IonSearchbar, IonSpinner } from '@ionic/vue';
 import { cloudOfflineOutline, informationCircle, settings as settingsIcon } from 'ionicons/icons';
 import { type PhotonFeature, usePhotonSearch } from '@/composable/photonSearch';
@@ -111,6 +113,13 @@ const {
 } = usePhotonSearch();
 
 const showSearchResults = ref(false);
+
+// Whichever panel is currently attached below the bar (results dropdown or
+// the offline hint) needs the bar's bottom corners flattened so the two
+// read as one continuous sheet instead of two stacked pills.
+const hasAttachedPanel = computed(
+	() => (showSearchResults.value && searchResults.value.length > 0) || !isOnline.value
+);
 
 const debouncedSearch = debounce((text: string) => {
 	if (!text || text.trim().length < 2) {
@@ -185,7 +194,8 @@ function onSelectResult(feature: PhotonFeature) {
 	background: var(--md-sys-surface-container-lowest);
 	--background: var(--md-sys-surface-container-lowest);
 	--color: var(--md-sys-on-surface);
-	border-radius: var(--md-sys-corner-medium);
+	/* One pill around the whole bar (buttons + input), MD3 search bar style */
+	border-radius: 28px;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	padding: 0 16px;
 	position: relative;
@@ -195,8 +205,19 @@ function onSelectResult(feature: PhotonFeature) {
 	}
 }
 
-.search-bar-row.has-results {
-	border-radius: var(--md-sys-corner-medium) var(--md-sys-corner-medium) 0 0;
+/* ios mode: the pill is liquid glass (same recipe as the ios26 theme's
+   glass-background mixin, driven by its --ios26-* variables) */
+html[mode='ios'] .search-bar-row {
+	background: rgba(var(--ios26-glass-background-rgb), 0.72);
+	backdrop-filter: blur(2px) saturate(360%);
+	box-shadow:
+		inset 0 0 8px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.2),
+		0 0 10px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.82);
+	border: 0.5px solid rgba(var(--ios26-glass-border-color-rgb), 0.8);
+}
+
+.search-bar-row.has-attached-panel {
+	border-radius: 24px 24px 0 0;
 }
 
 .search-bar {
@@ -263,15 +284,28 @@ function onSelectResult(feature: PhotonFeature) {
 }
 
 .search-results {
-	background: var(--md-sys-background);
-	--background: var(--md-sys-background);
+	/* Same surface as the bar so the open state reads as one element */
+	background: var(--md-sys-surface-container-lowest);
+	--background: var(--md-sys-surface-container-lowest);
 	--color: var(--md-sys-on-surface);
 	--box-shadow: var(--md-sys-level2);
-	border-radius: 0 0 16px 16px;
+	border-radius: 0 0 24px 24px;
 	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 	overflow: hidden;
 	max-height: 260px;
 	overflow-y: auto;
+	border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* ios mode: results continue the bar's liquid glass */
+html[mode='ios'] .search-results,
+html[mode='ios'] .search-offline-hint {
+	background: rgba(var(--ios26-glass-background-rgb), 0.72);
+	backdrop-filter: blur(2px) saturate(360%);
+	box-shadow:
+		inset 0 0 8px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.2),
+		0 0 10px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.82);
+	border: 0.5px solid rgba(var(--ios26-glass-border-color-rgb), 0.8);
 	border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
@@ -311,16 +345,24 @@ function onSelectResult(feature: PhotonFeature) {
 
 .search-offline-hint {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 8px;
-	background: var(--md-sys-background);
-	--background: var(--md-sys-background);
+	background: var(--md-sys-surface-container-lowest);
+	--background: var(--md-sys-surface-container-lowest);
 	/* Real color property — a --color custom prop has no effect on plain spans */
 	color: var(--md-sys-on-surface);
 	padding: 10px 16px;
 	font-size: 13px;
-	border-radius: 0 0 16px 16px;
+	border-radius: 0 0 24px 24px;
 	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 	border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.search-offline-hint ion-icon {
+	/* ion-icon sizes off font-size (1em); without this it inherits the
+	   hint's small 13px text size instead of reading as an icon */
+	font-size: 20px;
+	flex-shrink: 0;
+	margin-top: 1px;
 }
 </style>
