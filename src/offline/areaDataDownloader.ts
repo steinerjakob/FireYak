@@ -10,7 +10,7 @@ import { reconcileDeletedNodes } from '@/mapHandler/markerHandler';
 /**
  * Chunk edge length in degrees. Kept under the 0.5°/axis clamp that
  * `buildAreaQuery` applies, so no chunk is ever silently shrunk, and small
- * enough to stay well inside Overpass' `[timeout:15]` and 2000-element limit.
+ * enough to stay well inside Overpass' server timeout and 2000-element limit.
  */
 const CHUNK_STEP_DEGREES = 0.25;
 /** Extra attempts per chunk after the first try fails (2 → up to 3 tries). */
