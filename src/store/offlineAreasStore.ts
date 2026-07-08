@@ -88,25 +88,9 @@ export interface CreateAreaInput {
 	autoRefreshOnWifi: boolean;
 }
 
-/** The two phases of an area download, used only for progress UX. */
-export type DownloadPhase = 'data' | 'tiles';
-
 export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 	const areas = ref<OfflineArea[]>([]);
 	let initialized = false;
-
-	/**
-	 * Transient per-area download phase (not persisted). The data phase is a
-	 * handful of slow Overpass calls with no incremental progress, while the
-	 * tile phase ticks thousands of times — the UI renders them differently
-	 * (indeterminate bar + chunk counter vs. determinate bar + percent).
-	 */
-	const phases = ref<Record<number, DownloadPhase>>({});
-
-	/** Current download phase for the area, or `undefined` when idle. */
-	function phaseOf(id: number | undefined): DownloadPhase | undefined {
-		return id != null ? phases.value[id] : undefined;
-	}
 
 	/** Replaces the reactive record for `id` with a patched copy. */
 	function patchLocal(id: number, patch: Partial<OfflineArea>): void {
@@ -116,10 +100,26 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 		}
 	}
 
+	/**
+	 * Per-area chain that serialises IndexedDB writes. `updateOfflineArea` is a
+	 * non-atomic read-modify-write, so the parallel data and tile phases (which
+	 * both persist progress) would otherwise interleave and clobber each other's
+	 * fields. Chaining keeps every write applied on top of the previous one.
+	 */
+	const persistChains = new Map<number, Promise<void>>();
+
 	/** Persists a patch to IndexedDB and mirrors it into reactive state. */
 	async function persist(id: number, patch: Partial<OfflineArea>): Promise<void> {
+		// Reactive mirror is synchronous and always reflects the latest patch.
 		patchLocal(id, patch);
-		await updateOfflineArea(id, patch);
+		const prev = persistChains.get(id) ?? Promise.resolve();
+		// updateOfflineArea swallows its own errors, so the chain never rejects.
+		const next = prev.then(() => updateOfflineArea(id, patch));
+		persistChains.set(id, next);
+		void next.finally(() => {
+			if (persistChains.get(id) === next) persistChains.delete(id);
+		});
+		await next;
 	}
 
 	/**
@@ -159,12 +159,13 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 		controllers.set(id, controller);
 		const signal = controller.signal;
 
-		// Unified progress: data chunks first, then tiles. `total` covers both so a
-		// single progress bar spans the whole download.
+		// Unified progress: Overpass data chunks + tiles run in parallel and both
+		// count toward one bar. `total` covers both; `dataDone`/`tilesProcessed`
+		// are the live per-source tallies summed into the persisted `done`.
 		const dataTotal = countChunks(area.bounds);
 		const combinedTotal = dataTotal + totalTilesFor(area);
 		const startChunk = refresh ? -1 : area.lastCompletedChunk;
-		const dataDoneAtStart = Math.max(startChunk + 1, 0);
+		let dataDone = Math.max(startChunk + 1, 0);
 
 		// Tile-phase resume state. Reset on refresh (re-verify every tile — cheap,
 		// has() hits skip re-download); carried over on retry.
@@ -183,7 +184,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 			if (!force && now - lastFlush < 300) return;
 			lastFlush = now;
 			await persist(id, {
-				progress: { done: dataDoneAtStart + tilesProcessed, total: combinedTotal },
+				progress: { done: dataDone + tilesProcessed, total: combinedTotal },
 				tileCount: tilesProcessed,
 				sizeBytes,
 				tileResume: { ...tileResume }
@@ -193,33 +194,32 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 		await persist(id, {
 			status: refresh ? 'refreshing' : 'downloading',
 			lastCompletedChunk: startChunk,
-			progress: { done: dataDoneAtStart + tilesProcessed, total: combinedTotal }
+			progress: { done: dataDone + tilesProcessed, total: combinedTotal }
 		});
 
-		try {
-			// --- Phase 1: water-source data ---
-			phases.value[id] = 'data';
-			await downloadAreaData(
-				{
-					bounds: area.bounds,
-					lastCompletedChunk: startChunk,
-					baseNodeCount: area.nodeCount,
-					refresh,
-					onProgress: (progress) =>
-						persist(id, {
-							lastCompletedChunk: progress.lastCompletedChunk,
-							// Offset by tiles already done so the bar never goes backwards.
-							progress: { done: progress.done + tilesProcessed, total: combinedTotal },
-							nodeCount: progress.nodeCount
-						})
-				},
-				signal
-			);
+		// Overpass data and tiles download concurrently: the Overpass timeout/retry
+		// handling overlaps with productive tile downloading instead of blocking it.
+		const dataTask = downloadAreaData(
+			{
+				bounds: area.bounds,
+				lastCompletedChunk: startChunk,
+				baseNodeCount: area.nodeCount,
+				refresh,
+				onProgress: (progress) => {
+					dataDone = progress.done;
+					return persist(id, {
+						lastCompletedChunk: progress.lastCompletedChunk,
+						progress: { done: dataDone + tilesProcessed, total: combinedTotal },
+						nodeCount: progress.nodeCount
+					});
+				}
+			},
+			signal
+		);
 
-			// --- Phase 2: map tiles + style assets ---
+		const tileTask = (async () => {
 			// Assets first (small, idempotent) so labels/icons render as soon as the
 			// tiles arrive.
-			phases.value[id] = 'tiles';
 			await downloadStyleAssets(signal);
 
 			const currentArea = areas.value.find((a) => a.id === id) ?? area;
@@ -241,6 +241,12 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 				});
 				await flushTileProgress(true);
 			}
+		})();
+
+		try {
+			// Fail fast: the first task to reject stops the wait; the catch then
+			// aborts the sibling so it doesn't keep running after a failure/cancel.
+			await Promise.all([dataTask, tileTask]);
 
 			await persist(id, {
 				status: 'ready',
@@ -250,16 +256,25 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 				progress: { done: combinedTotal, total: combinedTotal }
 			});
 		} catch (error) {
-			// Both a user cancel (aborted signal) and a genuine failure leave the
-			// area `error`/incomplete: its persisted `lastCompletedChunk` is the
-			// resume point, and the UI offers "Resume download". removeArea's abort
-			// is a no-op here since the record is deleted concurrently.
-			if (!controller.signal.aborted) {
+			// Capture the cancel/failure distinction BEFORE aborting the sibling
+			// (our own abort below would otherwise make `signal.aborted` always
+			// true). A user cancel already has the signal aborted; a genuine task
+			// failure does not.
+			const userCancelled = signal.aborted;
+			// Cancel the still-running sibling and let both tasks unwind before we
+			// record the outcome, so no late progress write revives the area after
+			// we mark it `error`.
+			controller.abort();
+			await Promise.allSettled([dataTask, tileTask]);
+			// Both a user cancel and a genuine failure leave the area
+			// `error`/incomplete: its persisted `lastCompletedChunk` is the resume
+			// point, and the UI offers "Resume download". removeArea's abort is a
+			// no-op here since the record is deleted concurrently.
+			if (!userCancelled) {
 				console.error('Offline area download failed:', error);
 			}
 			await persist(id, { status: 'error' });
 		} finally {
-			delete phases.value[id];
 			if (controllers.get(id) === controller) {
 				controllers.delete(id);
 			}
@@ -359,7 +374,6 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 
 	return {
 		areas,
-		phaseOf,
 		init,
 		createArea,
 		retryArea,
