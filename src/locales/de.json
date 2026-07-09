@@ -355,6 +355,10 @@
 		"map": {
 			"title": "Karte",
 			"showZoomButtons": "Zoom-Buttons anzeigen",
+			"showPathToMarker": {
+				"label": "Linie zum ausgewählten Marker anzeigen",
+				"description": "Zeichnet eine Linie mit der Entfernung vom eigenen Standort zur ausgewählten Wasserentnahmestelle"
+			},
 			"clampToRoads": {
 				"label": "Schlauchweg an Straßen ausrichten",
 				"description": "Wenn deaktiviert, darf die Route durch Gärten und offenes Gelände führen (Gebäude werden immer umgangen)"

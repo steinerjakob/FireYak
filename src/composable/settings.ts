@@ -11,6 +11,7 @@ const SHOW_ZOOM_BUTTONS_KEY = 'show_zoom_buttons';
 const MAP_LAYER_KEY = 'map_layer';
 const TERRAIN_3D_KEY = 'terrain_3d';
 const CLAMP_HOSES_TO_ROADS_KEY = 'clamp_hoses_to_roads';
+const SHOW_PATH_TO_MARKER_KEY = 'show_path_to_marker';
 const OSM_AUTH_KEY = 'osm_token';
 const MARKER_FILTERS_KEY = 'marker_filters';
 
@@ -28,6 +29,7 @@ export function useSettings() {
 			mapLayerResult,
 			terrain3dResult,
 			clampHosesToRoadsResult,
+			showPathToMarkerResult,
 			osmAuthKey,
 			markerFiltersResult
 		] = await Promise.all([
@@ -36,6 +38,7 @@ export function useSettings() {
 			Preferences.get({ key: MAP_LAYER_KEY }),
 			Preferences.get({ key: TERRAIN_3D_KEY }),
 			Preferences.get({ key: CLAMP_HOSES_TO_ROADS_KEY }),
+			Preferences.get({ key: SHOW_PATH_TO_MARKER_KEY }),
 			Preferences.get({ key: OSM_AUTH_KEY }),
 			Preferences.get({ key: MARKER_FILTERS_KEY })
 		]);
@@ -58,6 +61,10 @@ export function useSettings() {
 
 		if (clampHosesToRoadsResult.value) {
 			settingsStore.setClampHosesToRoads(clampHosesToRoadsResult.value === 'true');
+		}
+
+		if (showPathToMarkerResult.value) {
+			settingsStore.setShowPathToMarker(showPathToMarkerResult.value === 'true');
 		}
 
 		if (osmAuthKey.value) {
@@ -135,6 +142,18 @@ export function useSettings() {
 	};
 
 	/**
+	 * Saves whether the line from the user position to the selected marker is
+	 * drawn on the map (see `showPathToMarker` in the settings store).
+	 */
+	const saveShowPathToMarker = async (enabled: boolean) => {
+		settingsStore.setShowPathToMarker(enabled);
+		await Preferences.set({
+			key: SHOW_PATH_TO_MARKER_KEY,
+			value: String(enabled)
+		});
+	};
+
+	/**
 	 * Persists the OSM OAuth token and mirrors it into the settings store.
 	 */
 	const saveOsmAuthToken = async (token: string) => {
@@ -180,6 +199,7 @@ export function useSettings() {
 		saveMapLayer,
 		saveTerrain3d,
 		saveClampHosesToRoads,
+		saveShowPathToMarker,
 		saveOsmAuthToken,
 		removeOsmAuthToken,
 		getOsmAuthToken,
