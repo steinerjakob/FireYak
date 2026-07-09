@@ -355,6 +355,10 @@
 		"map": {
 			"title": "Map",
 			"showZoomButtons": "Show zoom buttons",
+			"showPathToMarker": {
+				"label": "Show line to selected marker",
+				"description": "Draws a line with the distance from your position to the selected water source"
+			},
 			"clampToRoads": {
 				"label": "Keep hose route on roads",
 				"description": "When off, routes may cut through gardens and open ground (buildings are always avoided)"

@@ -50,6 +50,18 @@
 
 				<ion-item>
 					<ion-label>
+						<h2>{{ $t('settings.map.showPathToMarker.label') }}</h2>
+						<p>{{ $t('settings.map.showPathToMarker.description') }}</p>
+					</ion-label>
+					<ion-toggle
+						slot="end"
+						:checked="showPathToMarker"
+						@ion-change="onShowPathToMarkerChange($event)"
+					></ion-toggle>
+				</ion-item>
+
+				<ion-item>
+					<ion-label>
 						<h2>{{ $t('settings.map.clampToRoads.label') }}</h2>
 						<p>{{ $t('settings.map.clampToRoads.description') }}</p>
 					</ion-label>
@@ -225,8 +237,9 @@ onBeforeUnmount(() => {
 });
 
 const settingsStore = useSettingsStore();
-const { saveTheme, saveShowZoomButtons, saveClampHosesToRoads } = useSettings();
-const { theme, showZoomButtons, clampHosesToRoads } = storeToRefs(settingsStore);
+const { saveTheme, saveShowZoomButtons, saveClampHosesToRoads, saveShowPathToMarker } =
+	useSettings();
+const { theme, showZoomButtons, clampHosesToRoads, showPathToMarker } = storeToRefs(settingsStore);
 const osmAuthStore = useOsmAuthStore();
 const pendingEditsStore = usePendingEditsStore();
 const { pendingCount } = storeToRefs(pendingEditsStore);
@@ -241,6 +254,10 @@ const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 
 const onClampToRoadsChange = (event: ToggleCustomEvent) => {
 	saveClampHosesToRoads(event.detail.checked);
+};
+
+const onShowPathToMarkerChange = (event: ToggleCustomEvent) => {
+	saveShowPathToMarker(event.detail.checked);
 };
 
 // Hose settings write straight into the pump store — it persists itself.

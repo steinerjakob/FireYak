@@ -47,6 +47,9 @@ export const useSettingsStore = defineStore('settings', {
 		// When true, hose routes stick to the road network; when false (default)
 		// they may cut through gardens/open ground (buildings always avoided).
 		clampHosesToRoads: false,
+		// When true, a line from the user position to the selected marker is
+		// drawn on the map.
+		showPathToMarker: true,
 		osmAuthToken: '',
 		markerFilters: { ...DEFAULT_MARKER_FILTERS } as MarkerFilters,
 		_darkModeListener: null as ((e: MediaQueryListEvent) => void) | null
@@ -68,6 +71,9 @@ export const useSettingsStore = defineStore('settings', {
 		},
 		setClampHosesToRoads(enabled: boolean) {
 			this.clampHosesToRoads = enabled;
+		},
+		setShowPathToMarker(enabled: boolean) {
+			this.showPathToMarker = enabled;
 		},
 		setOsmAuthToken(token: string) {
 			this.osmAuthToken = token;

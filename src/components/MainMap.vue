@@ -578,24 +578,66 @@ watch(
 	}
 );
 
+const FIT_DEFAULT_PADDING = 16;
+// Extra clearance for the floating UI so fitted geometry (path endpoints, the
+// user dot, markers) isn't hidden under it: the address search bar spans the
+// top of the screen, and FAB columns sit along the left and right edges.
+const FIT_SEARCH_BAR_CLEARANCE = 56;
+const FIT_FAB_CLEARANCE = 72;
+// Smallest map strip (per axis) the padding may shrink the viewport to.
+const FIT_MIN_VISIBLE_PX = 80;
+
+function getFitPadding() {
+	const visibleMapView = defaultStore.visibleMapView;
+	const padding = {
+		top: visibleMapView.top + FIT_SEARCH_BAR_CLEARANCE + FIT_DEFAULT_PADDING,
+		left: visibleMapView.x + FIT_FAB_CLEARANCE,
+		bottom: visibleMapView.yMax - visibleMapView.y + FIT_DEFAULT_PADDING,
+		right: FIT_FAB_CLEARANCE
+	};
+
+	// fitBounds throws when the padding exceeds the canvas (e.g. the sheet is
+	// dragged to a high breakpoint on a small screen) — scale the padding down
+	// so a usable map strip always remains.
+	const container = rootMap?.getContainer();
+	if (container) {
+		const maxVertical = container.clientHeight - FIT_MIN_VISIBLE_PX;
+		const vertical = padding.top + padding.bottom;
+		if (vertical > maxVertical && vertical > 0) {
+			const scale = Math.max(0, maxVertical) / vertical;
+			padding.top *= scale;
+			padding.bottom *= scale;
+		}
+		const maxHorizontal = container.clientWidth - FIT_MIN_VISIBLE_PX;
+		const horizontal = padding.left + padding.right;
+		if (horizontal > maxHorizontal && horizontal > 0) {
+			const scale = Math.max(0, maxHorizontal) / horizontal;
+			padding.left *= scale;
+			padding.right *= scale;
+		}
+	}
+
+	return padding;
+}
+
 function fitMapToLayer() {
 	if (!rootMap) return;
 
-	const visibleMapView = defaultStore.visibleMapView;
-	const defaultPadding = 16;
-	const padding = {
-		top: visibleMapView.top + defaultPadding,
-		left: defaultPadding + visibleMapView.x,
-		bottom: visibleMapView.yMax - visibleMapView.y,
-		right: defaultPadding
-	};
+	const padding = getFitPadding();
 
 	if (pumpCalculation.isActive.value && pumpCalculation.hasPolyline()) {
 		const bounds = pumpCalculation.getPolylineBounds();
 		if (bounds) {
 			rootMap.fitBounds(bounds, { padding });
 		}
-	} else if (selectedPathVisible.value && selectedPathCoords.value.length >= 2) {
+	} else if (
+		// Only the nearby view frames the whole path; a selected map marker
+		// stays marker-centered (see the else branch) so dragging its sheet
+		// doesn't yank the camera out to fit the line.
+		nearbyWaterSource.isActive.value &&
+		selectedPathVisible.value &&
+		selectedPathCoords.value.length >= 2
+	) {
 		const bounds = new maplibregl.LngLatBounds();
 		selectedPathCoords.value.forEach((coord) => bounds.extend(coord as [number, number]));
 		// maxZoom keeps very short paths from zooming in to house-number level.
@@ -797,6 +839,10 @@ watch(markerFetchFailed, (failed) => {
 	}
 });
 
+// Beyond this direct (as-the-crow-flies) distance the path to a selected map
+// marker is not drawn at all.
+const MAX_PATH_DIRECT_DISTANCE_M = 2500;
+
 // Guards against stale async results: the function is fired from a watcher
 // without await, and only the newest selection may draw its path.
 let pathRequestSeq = 0;
@@ -804,6 +850,12 @@ let pathRequestSeq = 0;
 const showPathToSelectedMarker = async () => {
 	if (!selectedMarker) return;
 	const inNearbyMode = nearbyWaterSource.isActive.value;
+	// The user can turn the marker line off; the nearby view always shows it
+	// since the routed path is the point of that view.
+	if (!inNearbyMode && !settingsStore.showPathToMarker) {
+		hideSelectedPath();
+		return;
+	}
 	const requestId = ++pathRequestSeq;
 	// Outside the nearby view the map-center fallback would draw a confusing
 	// line out of the screen center, so a real user location is required there.
@@ -814,6 +866,13 @@ const showPathToSelectedMarker = async () => {
 	}
 	const markerLngLat = selectedMarker.getLngLat();
 	const target: GeoPoint = { lat: markerLngLat.lat, lng: markerLngLat.lng };
+	// A marker far from the user would draw a long, useless line across the
+	// map (and cost a routing request) — skip it. The nearby view is exempt:
+	// its results are distance-ordered and the line is its core feature.
+	if (!inNearbyMode && distanceTo(currentLocation, target) > MAX_PATH_DIRECT_DISTANCE_M) {
+		hideSelectedPath();
+		return;
+	}
 	// Prefer the routed path; fall back to the straight line.
 	const routed = await getRoutedPath(currentLocation, target, {
 		clampToRoads: settingsStore.clampHosesToRoads
@@ -827,6 +886,15 @@ const showPathToSelectedMarker = async () => {
 		fitMapToLayer();
 	}
 };
+
+// Toggling the setting while a marker is selected redraws or hides the
+// line immediately (the function no-ops when nothing is selected).
+watch(
+	() => settingsStore.showPathToMarker,
+	() => {
+		void showPathToSelectedMarker();
+	}
+);
 
 let isFirstWatch = true;
 // Watch store's selectedMarker and update map display
