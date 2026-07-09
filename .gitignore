@@ -24,3 +24,10 @@ pnpm-debug.log*
 
 # Local SSH keys (e.g. GitHub Actions deploy keys) — never commit
 id_rsa*
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+
+# Claude Code local state (project skills stay shared)
+.claude/*
+!.claude/skills/
