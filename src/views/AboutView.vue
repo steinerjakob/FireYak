@@ -42,21 +42,20 @@
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
-						<template v-if="!isNativeIos">
-							<p>{{ $t('about.buyMeCoffeeDescription') }}</p>
+						<p>{{ $t('about.supportOnKofiDescription') }}</p>
 
-							<a
-								href="https://www.buymeacoffee.com/steinerjakob"
-								target="_blank"
-								class="coffee-link"
-							>
-								<img
-									src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
-									alt="Buy Me A Coffee"
-									class="coffee-button-img"
-								/>
-							</a>
-						</template>
+						<a href="https://ko-fi.com/jakobsteiner" target="_blank" class="kofi-link">
+							<img
+								src="/assets/kofi/support_me_on_kofi_dark.png"
+								alt="Support me on Ko-fi"
+								class="kofi-button-img kofi-button-light-theme"
+							/>
+							<img
+								src="/assets/kofi/support_me_on_kofi_beige.png"
+								alt="Support me on Ko-fi"
+								class="kofi-button-img kofi-button-dark-theme"
+							/>
+						</a>
 
 						<ion-list>
 							<ion-item>
@@ -133,7 +132,7 @@ import {
 	IonBackButton
 } from '@ionic/vue';
 import { logoGithub, heart, star, bug, code, documentText, map, sparkles } from 'ionicons/icons';
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { App } from '@capacitor/app';
 import { AppInfo } from '@capacitor/app/dist/esm/definitions';
 import { Capacitor } from '@capacitor/core';
@@ -143,10 +142,6 @@ import { useWhatsNew } from '@/composable/whatsNew';
 const { openHistory } = useWhatsNew();
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
-
-const isNativeIos = computed<boolean>(() => {
-	return Capacitor.getPlatform() === 'ios';
-});
 
 onMounted(async () => {
 	if (Capacitor.isNativePlatform()) {
@@ -198,21 +193,34 @@ ion-list {
 	margin-bottom: 0;
 }
 
-.coffee-link {
+.kofi-link {
 	display: block;
 	margin-top: 16px;
 	text-align: center;
 }
 
-.coffee-button-img {
-	height: 60px;
+.kofi-button-img {
+	height: 48px;
 	width: auto;
 	max-width: 100%;
 	transition: transform 0.2s;
 }
 
-.coffee-button-img:hover {
+.kofi-button-img:hover {
 	transform: scale(1.05);
+}
+
+/* dark button on light surfaces, beige button on dark surfaces */
+.kofi-button-dark-theme {
+	display: none;
+}
+
+html.ion-palette-dark .kofi-button-light-theme {
+	display: none;
+}
+
+html.ion-palette-dark .kofi-button-dark-theme {
+	display: inline;
 }
 
 .rate-app-description {

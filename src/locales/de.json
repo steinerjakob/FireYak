@@ -129,8 +129,7 @@
 		"dataSource": "Datenquelle",
 		"dataSourceDescription": "Alle Wasserentnahmestellen werden von OpenStreetMap Mitwirkenden bereitgestellt.",
 		"version": "Version",
-		"buyMeCoffee": "Spendiere mir einen Kaffee",
-		"buyMeCoffeeDescription": "Wenn Sie diese App nützlich finden und ihre Entwicklung unterstützen möchten, können Sie mir einen Kaffee spendieren! Ihre Unterstützung hält das Projekt am Leben und ermöglicht neue Funktionen.",
+		"supportOnKofiDescription": "Wenn Sie diese App nützlich finden und ihre Entwicklung unterstützen möchten, können Sie mich auf Ko-fi unterstützen! Ihre Unterstützung hält das Projekt am Leben und ermöglicht neue Funktionen.",
 		"addHydrantsTitle": "Wie man Hydranten zu OpenStreetMap hinzufügt",
 		"addHydrantsDescription": "Wenn Sie fehlende Hydranten oder Wasserentnahmestellen ergänzen möchten, folgen Sie bitte der Anleitung im FireYak‑README auf GitHub. Dort wird die Nutzung des OpenStreetMap‑Editors erklärt und auf die offiziellen OSM‑Tagging‑Richtlinien verwiesen.",
 		"addHydrantsOpenReadme": "README Anleitung öffnen",
@@ -423,6 +422,7 @@
 			"improvement": "Verbesserungen",
 			"fix": "Fehlerbehebungen"
 		},
-		"aboutLink": "Neuigkeiten"
+		"aboutLink": "Neuigkeiten",
+		"support": "Projekt unterstützen"
 	}
 }

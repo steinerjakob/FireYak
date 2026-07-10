@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { IonModal, IonButton, IonIcon } from '@ionic/vue';
-import { sparkles, trendingUp, bug } from 'ionicons/icons';
+import { sparkles, trendingUp, bug, heart } from 'ionicons/icons';
+import { Capacitor } from '@capacitor/core';
 import { useI18n } from 'vue-i18n';
 import {
 	useWhatsNew,
@@ -21,6 +22,9 @@ const GROUPS: { type: WhatsNewEntryType; icon: string }[] = [
 ];
 
 const latestVersion = computed(() => visibleReleases.value[0]?.version ?? '');
+
+/* App Store rules: no external donation links on native iOS (same guard as AboutView) */
+const isNativeIos = computed<boolean>(() => Capacitor.getPlatform() === 'ios');
 
 const entryText = (entry: WhatsNewEntry): string => {
 	return locale.value.startsWith('de') ? entry.de : entry.en;
@@ -69,6 +73,16 @@ const groupedEntries = (release: WhatsNewRelease) => {
 			</div>
 
 			<div class="whats-new-actions">
+				<ion-button
+					v-if="!isNativeIos"
+					expand="block"
+					fill="outline"
+					href="https://ko-fi.com/jakobsteiner"
+					target="_blank"
+				>
+					<ion-icon :icon="heart" slot="start"></ion-icon>
+					{{ t('whatsNew.support') }}
+				</ion-button>
 				<ion-button expand="block" @click="dismiss">{{ t('whatsNew.dismiss') }}</ion-button>
 			</div>
 		</div>
@@ -196,5 +210,9 @@ html[mode='ios'] .whats-new-modal::part(content) {
 .whats-new-actions {
 	padding: 16px 24px 24px;
 	flex-shrink: 0;
+}
+
+.whats-new-actions ion-button + ion-button {
+	margin-top: 8px;
 }
 </style>

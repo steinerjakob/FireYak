@@ -181,6 +181,12 @@ If you find FireYak useful, please consider supporting it:
        alt="Buy Me A Coffee"
        style="height: 60px !important;width: 217px !important;">
 </a>
+<a href="https://ko-fi.com/jakobsteiner" target="_blank">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/assets/kofi/support_me_on_kofi_beige.png">
+    <img src="public/assets/kofi/support_me_on_kofi_dark.png" alt="Support me on Ko-fi" height="60">
+  </picture>
+</a>
 
 You can also:
 
