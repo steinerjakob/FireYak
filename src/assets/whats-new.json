@@ -58,6 +58,11 @@
 				},
 				{
 					"type": "improvement",
+					"en": "On iOS, the app shines in the new frosted liquid-glass design.",
+					"de": "Auf iOS erstrahlt die App im neuen Liquid-Glass-Design mit Milchglas-Effekt."
+				},
+				{
+					"type": "improvement",
 					"en": "Water sources load faster and more reliably, with clear notices when you are offline.",
 					"de": "Wasserquellen laden schneller und zuverlässiger, mit klaren Hinweisen im Offline-Betrieb."
 				}
