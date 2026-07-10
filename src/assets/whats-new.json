@@ -2,13 +2,13 @@
 	"unreleased": [
 		{
 			"type": "feature",
-			"en": "See what's new after every update — a quick summary now pops up right in the app.",
-			"de": "Neuerungen nach jedem Update im Blick – eine kurze Übersicht erscheint jetzt direkt in der App."
+			"en": "After every update, a quick summary of what's new pops up right in the app.",
+			"de": "Nach jedem Update erscheint eine kurze Übersicht der Neuerungen direkt in der App."
 		},
 		{
 			"type": "improvement",
-			"en": "The line to the selected water source can be turned off in the settings and is hidden for distant sources.",
-			"de": "Die Linie zur gewählten Wasserquelle lässt sich in den Einstellungen abschalten und wird bei weit entfernten Quellen ausgeblendet."
+			"en": "The line to the selected water source can be disabled in the settings and is hidden for distant sources.",
+			"de": "Die Linie zur Wasserquelle lässt sich in den Einstellungen abschalten und wird bei entfernten Quellen ausgeblendet."
 		}
 	],
 	"releases": [
@@ -23,8 +23,8 @@
 				},
 				{
 					"type": "feature",
-					"en": "Edits made without signal are saved and uploaded automatically once you are back online.",
-					"de": "Änderungen ohne Empfang werden gespeichert und automatisch hochgeladen, sobald wieder Verbindung besteht."
+					"en": "Edits made without signal are uploaded automatically once you are back online.",
+					"de": "Änderungen ohne Empfang werden automatisch hochgeladen, sobald wieder Verbindung besteht."
 				},
 				{
 					"type": "feature",
@@ -33,18 +33,13 @@
 				},
 				{
 					"type": "feature",
-					"en": "The supply line follows actual roads and terrain and shows the number of hoses between pumps.",
-					"de": "Die Förderleitung folgt dem tatsächlichen Straßenverlauf und Gelände und zeigt die Anzahl der Schläuche zwischen den Pumpen."
+					"en": "The supply line follows roads and terrain and shows the number of hoses between pumps.",
+					"de": "Die Förderleitung folgt Straßen und Gelände und zeigt die Schlauchanzahl zwischen den Pumpen."
 				},
 				{
 					"type": "feature",
-					"en": "Nearby water sources are ranked by actual route distance instead of straight-line distance.",
-					"de": "Wasserquellen in der Nähe werden nach tatsächlicher Wegstrecke statt Luftlinie gereiht."
-				},
-				{
-					"type": "feature",
-					"en": "Filter water source types on the map, check the new marker legend, or long-press to add a marker.",
-					"de": "Wasserquellen-Typen auf der Karte filtern, die neue Marker-Legende ansehen oder Marker durch langes Drücken hinzufügen."
+					"en": "Nearby water sources are ranked by route distance instead of straight-line distance.",
+					"de": "Wasserquellen in der Nähe werden nach Wegstrecke statt Luftlinie gereiht."
 				},
 				{
 					"type": "improvement",
