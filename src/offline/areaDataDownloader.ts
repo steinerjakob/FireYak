@@ -40,7 +40,6 @@ export function* chunkBounds(bounds: GeoBounds, step = CHUNK_STEP_DEGREES): Gene
 /** Number of chunks an area's bounds decompose into (for progress totals). */
 export function countChunks(bounds: GeoBounds): number {
 	let count = 0;
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	for (const _ of chunkBounds(bounds)) count++;
 	return count;
 }

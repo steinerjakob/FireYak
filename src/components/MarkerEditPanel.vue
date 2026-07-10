@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { IonContent, IonCard, IonModal } from '@ionic/vue';
 import MarkerEdit from '@/components/MarkerEdit.vue';
 import MarkerEditHeader from '@/components/MarkerEditHeader.vue';

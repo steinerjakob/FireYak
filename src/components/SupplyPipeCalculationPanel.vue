@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { IonContent, IonCard, IonModal, IonIcon } from '@ionic/vue';
-import { useScreenOrientation } from '@/composable/screenOrientation';
 import SupplyPipeCalculationHeader from '@/components/SupplyPipeCalculationHeader.vue';
 import { usePumpCalculation } from '@/composable/pumpCalculation';
 import { locateOutline } from 'ionicons/icons';

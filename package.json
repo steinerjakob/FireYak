@@ -8,7 +8,7 @@
 		"build:native": "cross-env BUILD_TARGET=native npm run build",
 		"buildAndSync": "npm run build:native && npx cap sync",
 		"preview": "vite preview",
-		"lint": "eslint . --fix --ignore-path .gitignore",
+		"lint": "eslint . --fix",
 		"generate:assets": "npx @capacitor/assets generate --iconBackgroundColor '#45b1fd' --iconBackgroundColorDark '#45b1fd' --splashBackgroundColor '#45b1fd' --splashBackgroundColorDark '#45b1fd'",
 		"prepare": "husky"
 	},

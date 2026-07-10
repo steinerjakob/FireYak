@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/* eslint-disable @typescript-eslint/no-unused-vars -- the pug template below isn't parsed by
+   vue-eslint-parser, so its references to these vars look unused. Pre-existing, unused
+   component (superseded by UpdateToast.vue); left as-is. */
 import { useRegisterSW } from 'virtual:pwa-register/vue';
 
 const { offlineReady, needRefresh, updateServiceWorker } = useRegisterSW();

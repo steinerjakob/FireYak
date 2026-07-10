@@ -287,7 +287,7 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 				}
 			});
 		}
-	} catch (e) {
+	} catch {
 		// ignore error for now
 	}
 

@@ -1,5 +1,5 @@
 import { ScreenOrientation, ScreenOrientationResult } from '@capacitor/screen-orientation';
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 
 const orientation = ref<ScreenOrientationResult>();
 

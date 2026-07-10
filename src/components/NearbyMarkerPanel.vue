@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { IonContent, IonCard, IonModal } from '@ionic/vue';
-import { useScreenOrientation } from '@/composable/screenOrientation';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import NearbyMarker from '@/components/NearbyMarker.vue';
 import NearbyMarkerHeader from '@/components/NearbyMarkerHeader.vue';
