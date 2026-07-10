@@ -99,7 +99,7 @@ html[mode='ios'] .whats-new-modal::part(content) {
 	/* frosted variant (matches the popover override in theme/ios26-fixes.css):
 	   stock glass alpha, but stronger blur than the theme's 2px for readability */
 	background: rgba(var(--ios26-glass-background-rgb), 0.72);
-	backdrop-filter: blur(8px) saturate(220%);
+	backdrop-filter: blur(4px) saturate(220%);
 	box-shadow:
 		inset 0 0 8px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.2),
 		0 0 10px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.82);

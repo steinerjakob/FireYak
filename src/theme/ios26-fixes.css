@@ -17,5 +17,5 @@
    near-clear 2px blur. Keep the stock glass alpha, frost with more blur. */
 :root[mode='ios'] ion-popover:not(.ios26-disabled)::part(content) {
 	background: rgba(var(--ios26-glass-background-rgb), 0.72);
-	backdrop-filter: blur(8px) saturate(220%);
+	backdrop-filter: blur(4px) saturate(220%);
 }
