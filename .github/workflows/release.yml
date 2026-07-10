@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: 'release'
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # prepare: the single source of every version bump + changelog. Computes the
+  # next semver, bumps package.json / android / whats-new, writes CHANGELOG.md,
+  # makes ONE commit + annotated tag, and creates the GitHub Release. The three
+  # platform jobs then check out that exact tag and are read-only.
+  # ---------------------------------------------------------------------------
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Compute Semantic Version
+        id: semver
+        uses: paulhatch/semantic-version@a8f8f59fd7f0625188492e945240f12d7ad2dca3 # v5.4.0
+        with:
+          tag_prefix: 'v'
+          version_format: '${major}.${minor}.${patch}'
+          bump_each_commit: false
+          major_pattern: 'BREAKING CHANGE'
+          minor_pattern: 'feat'
+
+      - name: Bump Versions
+        env:
+          VERSION: ${{ steps.semver.outputs.version }}
+        run: |
+          npm version "$VERSION" --no-git-tag-version
+          CUR=$(grep -oP 'versionCode\s+\K[0-9]+' android/app/build.gradle)
+          CODE=$((CUR + 1))
+          sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VERSION}\"/" android/app/build.gradle
+          sed -i -E "s/versionCode [0-9]+/versionCode ${CODE}/" android/app/build.gradle
+          echo "Bumped to versionName=$VERSION versionCode=$CODE"
+
+      - name: Update CHANGELOG
+        env:
+          VERSION: ${{ steps.semver.outputs.version }}
+        run: npx git-cliff@2 --output CHANGELOG.md --tag "v${VERSION}"
+
+      - name: Stamp What's New
+        env:
+          VERSION: ${{ steps.semver.outputs.version }}
+          VERSION_TYPE: ${{ steps.semver.outputs.version_type }}
+        run: |
+          ARGS=(--version "$VERSION" --date "$(date -u +%Y-%m-%d)")
+          if [ "$VERSION_TYPE" = "major" ] || [ "$VERSION_TYPE" = "minor" ]; then
+            ARGS+=(--require-entries)
+          fi
+          node scripts/stamp-whats-new.mjs "${ARGS[@]}"
+
+      - name: Commit, Tag and Push
+        env:
+          VERSION: ${{ steps.semver.outputs.version }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add package.json package-lock.json android/app/build.gradle CHANGELOG.md src/assets/whats-new.json
+          git commit -m "chore: release v${VERSION} [skip ci]"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push --follow-tags \
+            "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:main"
+
+      - name: Generate Release Notes
+        id: notes
+        env:
+          VERSION: ${{ steps.semver.outputs.version }}
+        run: |
+          {
+            echo 'body<<CLIFF_EOF'
+            npx git-cliff@2 --latest --strip all
+            echo 'CLIFF_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
+        with:
+          tag_name: v${{ steps.semver.outputs.version }}
+          name: Release v${{ steps.semver.outputs.version }}
+          body: ${{ steps.notes.outputs.body }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # --- Fan-out: each reusable workflow checks out tag v<version> ---
+  web:
+    needs: prepare
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/main.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  android:
+    needs: prepare
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  ios:
+    needs: prepare
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}

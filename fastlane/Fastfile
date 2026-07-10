@@ -28,24 +28,14 @@ def get_package_version_without_prerelease
 end
 
 platform :android do
-  desc "Runs all the tests"
-  lane :test do
-    gradle(task: "test")
-  end
-
-  desc "Submit a new Beta Build to Crashlytics Beta"
-  lane :beta do
-    gradle(task: "clean assembleRelease")
-    crashlytics
-
-    # sh "your_script.sh"
-    # You can also use other beta testing services here
-  end
-
-  desc "Deploy a new version to the Google Play"
-  lane :deploy do
-    gradle(task: "clean assembleRelease")
-    upload_to_play_store
+  desc "Upload a pre-built, signed AAB to the Play Store internal testing track"
+  lane :internal do |options|
+    upload_to_play_store(
+      track: "internal",
+      aab: options[:aab],
+      skip_upload_screenshots: true,
+      skip_upload_images: true
+    )
   end
 end
 
