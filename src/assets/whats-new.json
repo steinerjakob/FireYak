@@ -7,8 +7,8 @@
 		},
 		{
 			"type": "improvement",
-			"en": "The line to the selected water source can be turned off in the settings and skips far-away sources.",
-			"de": "Die Linie zur gewählten Wasserquelle lässt sich in den Einstellungen abschalten und entfällt bei weit entfernten Quellen."
+			"en": "The line to the selected water source can be turned off in the settings and is hidden for distant sources.",
+			"de": "Die Linie zur gewählten Wasserquelle lässt sich in den Einstellungen abschalten und wird bei weit entfernten Quellen ausgeblendet."
 		}
 	],
 	"releases": [
@@ -29,12 +29,12 @@
 				{
 					"type": "feature",
 					"en": "Relay pump calculation follows fire-service doctrine, with configurable hose length and diameter.",
-					"de": "Die Löschwasserförderung folgt der Feuerwehr-Richtlinie, mit einstellbarer Schlauchlänge und -durchmesser."
+					"de": "Die Löschwasserförderung folgt der Feuerwehr-Richtlinie; Schlauchlänge und -durchmesser sind einstellbar."
 				},
 				{
 					"type": "feature",
-					"en": "The supply line is routed along real roads and terrain and shows hose counts between pumps.",
-					"de": "Die Förderleitung verläuft entlang echter Straßen und des Geländes und zeigt Schlauchzahlen zwischen den Pumpen."
+					"en": "The supply line follows actual roads and terrain and shows the number of hoses between pumps.",
+					"de": "Die Förderleitung folgt dem tatsächlichen Straßenverlauf und Gelände und zeigt die Anzahl der Schläuche zwischen den Pumpen."
 				},
 				{
 					"type": "feature",
@@ -44,7 +44,7 @@
 				{
 					"type": "feature",
 					"en": "Filter water source types on the map, check the new marker legend, or long-press to add a marker.",
-					"de": "Wasserquellen-Typen auf der Karte filtern, neue Marker-Legende ansehen oder Marker per langem Drücken hinzufügen."
+					"de": "Wasserquellen-Typen auf der Karte filtern, die neue Marker-Legende ansehen oder Marker durch langes Drücken hinzufügen."
 				},
 				{
 					"type": "improvement",
