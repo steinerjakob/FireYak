@@ -192,6 +192,9 @@ jobs:
 
       - name: Deploy to Google Play (internal)
         run: |
+          # supply auto-detects .apk files in the cwd and refuses apk+aab;
+          # the signed apk is already on the GitHub release at this point
+          rm -f aligned.apk fireyak-v*.apk
           bundle install
           bundle exec fastlane android internal aab:"$(pwd)/artifacts/aab/app-release.aab"
 
