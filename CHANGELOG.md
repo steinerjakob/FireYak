@@ -1,6 +1,13 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.15.1] - 2026-07-10
+
+### Chore
+
+- *(funding)* Update donation links to Ko-fi and adjust UI elements accordingly
+- *(funding)* Add Ko-fi username to funding config
+- *(workflows)* Add Ruby setup for caching and simplify dependency management
 ## [2.15.0] - 2026-07-10
 
 ### Bug Fixes
