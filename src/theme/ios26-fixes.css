@@ -13,9 +13,9 @@
 }
 
 /* Popups (popovers like the layer selector, and card modals that opt into
-   the glass recipe) are hard to read over the busy map at the theme's 0.72
-   glass alpha. Frost them harder: more opaque background, stronger blur. */
+   the glass recipe) are hard to read over the busy map with the theme's
+   near-clear 2px blur. Keep the stock glass alpha, frost with more blur. */
 :root[mode='ios'] ion-popover:not(.ios26-disabled)::part(content) {
-	background: rgba(var(--ios26-glass-background-rgb), 0.76);
-	backdrop-filter: blur(12px) saturate(220%);
+	background: rgba(var(--ios26-glass-background-rgb), 0.72);
+	backdrop-filter: blur(8px) saturate(220%);
 }
