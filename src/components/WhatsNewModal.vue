@@ -83,10 +83,33 @@ const groupedEntries = (release: WhatsNewRelease) => {
 	--border-radius: 20px;
 	--box-shadow: 0 10px 40px rgb(0 0 0 / 20%);
 	--backdrop-opacity: 0.4;
+	--background: var(--md-sys-surface-container);
 }
 
+/* ios mode: the ios26 theme only glasses sheet modals and popovers, so this
+   centered card modal applies the same liquid-glass recipe itself (popover
+   variant, driven by the theme's --ios26-* variables, like AddressSearchBar) */
+html[mode='ios'] .whats-new-modal {
+	--background: transparent;
+	--box-shadow: none;
+	--backdrop-opacity: 0.2;
+}
+
+html[mode='ios'] .whats-new-modal::part(content) {
+	background: rgba(var(--ios26-glass-background-rgb), 0.72);
+	backdrop-filter: blur(2px) saturate(360%);
+	box-shadow:
+		inset 0 0 8px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.2),
+		0 0 10px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.82);
+	border-top: 0.5px solid rgba(var(--ios26-glass-border-color-rgb), 1);
+	border-right: 0.5px solid rgba(var(--ios26-glass-border-color-rgb), 0.8);
+	border-bottom: 0.5px solid rgba(var(--ios26-glass-border-color-rgb), 1);
+	border-left: 0.5px solid rgba(var(--ios26-glass-border-color-rgb), 0.6);
+}
+
+/* keep the container transparent so the modal surface (glass on ios, MD3
+   surface-container on md) shows through */
 .whats-new-container {
-	background: var(--md-sys-surface-container);
 	color: var(--md-sys-on-surface);
 	display: flex;
 	flex-direction: column;
