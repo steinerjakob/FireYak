@@ -52,12 +52,6 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1.316.0
-        with:
-          ruby-version: '3.3'
-          bundler-cache: true
-
       - name: Install SSH key
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}
@@ -75,4 +69,5 @@ jobs:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
         run: |
           echo "$AUTHKEY_FILE" | base64 -d > authkey.json
+          bundle install
           bundle exec fastlane ios beta
