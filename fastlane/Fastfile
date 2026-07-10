@@ -33,6 +33,7 @@ platform :android do
     upload_to_play_store(
       track: "internal",
       aab: options[:aab],
+      skip_upload_apk: true,
       skip_upload_screenshots: true,
       skip_upload_images: true
     )
