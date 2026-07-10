@@ -414,5 +414,15 @@
 			"queued": "Änderung gespeichert – sie wird synchronisiert, sobald du wieder online bist.",
 			"synced": "{count} Änderung(en) synchronisiert"
 		}
+	},
+	"whatsNew": {
+		"title": "Neu in v{version}",
+		"dismiss": "Verstanden",
+		"groups": {
+			"feature": "Neue Funktionen",
+			"improvement": "Verbesserungen",
+			"fix": "Fehlerbehebungen"
+		},
+		"aboutLink": "Neuigkeiten"
 	}
 }

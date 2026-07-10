@@ -1,0 +1,67 @@
+{
+	"unreleased": [
+		{
+			"type": "feature",
+			"en": "See what's new after every update — a quick summary now pops up right in the app.",
+			"de": "Neuerungen nach jedem Update im Blick – eine kurze Übersicht erscheint jetzt direkt in der App."
+		},
+		{
+			"type": "improvement",
+			"en": "The line to the selected water source can be turned off in the settings and skips far-away sources.",
+			"de": "Die Linie zur gewählten Wasserquelle lässt sich in den Einstellungen abschalten und entfällt bei weit entfernten Quellen."
+		}
+	],
+	"releases": [
+		{
+			"version": "2.14.0",
+			"date": "2026-07-08",
+			"entries": [
+				{
+					"type": "feature",
+					"en": "Download map areas and use maps and water sources completely offline.",
+					"de": "Kartenbereiche herunterladen und Karten samt Wasserquellen komplett offline nutzen."
+				},
+				{
+					"type": "feature",
+					"en": "Edits made without signal are saved and uploaded automatically once you are back online.",
+					"de": "Änderungen ohne Empfang werden gespeichert und automatisch hochgeladen, sobald wieder Verbindung besteht."
+				},
+				{
+					"type": "feature",
+					"en": "Relay pump calculation follows fire-service doctrine, with configurable hose length and diameter.",
+					"de": "Die Löschwasserförderung folgt der Feuerwehr-Richtlinie, mit einstellbarer Schlauchlänge und -durchmesser."
+				},
+				{
+					"type": "feature",
+					"en": "The supply line is routed along real roads and terrain and shows hose counts between pumps.",
+					"de": "Die Förderleitung verläuft entlang echter Straßen und des Geländes und zeigt Schlauchzahlen zwischen den Pumpen."
+				},
+				{
+					"type": "feature",
+					"en": "Nearby water sources are ranked by actual route distance instead of straight-line distance.",
+					"de": "Wasserquellen in der Nähe werden nach tatsächlicher Wegstrecke statt Luftlinie gereiht."
+				},
+				{
+					"type": "feature",
+					"en": "Filter water source types on the map, check the new marker legend, or long-press to add a marker.",
+					"de": "Wasserquellen-Typen auf der Karte filtern, neue Marker-Legende ansehen oder Marker per langem Drücken hinzufügen."
+				},
+				{
+					"type": "improvement",
+					"en": "A tapped hydrant can be used directly as the water source for the pump calculation.",
+					"de": "Ein angetippter Hydrant kann direkt als Wasserquelle für die Pumpenberechnung übernommen werden."
+				},
+				{
+					"type": "improvement",
+					"en": "Refreshed look and feel following Material Design 3.",
+					"de": "Aufgefrischtes Erscheinungsbild nach Material Design 3."
+				},
+				{
+					"type": "improvement",
+					"en": "Water sources load faster and more reliably, with clear notices when you are offline.",
+					"de": "Wasserquellen laden schneller und zuverlässiger, mit klaren Hinweisen im Offline-Betrieb."
+				}
+			]
+		}
+	]
+}

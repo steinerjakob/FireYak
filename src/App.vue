@@ -3,6 +3,7 @@
 		<ion-router-outlet />
 		<UpdateToast></UpdateToast>
 		<NativeAppInstallPrompt />
+		<WhatsNewModal />
 	</ion-app>
 </template>
 
@@ -11,8 +12,10 @@ import { onMounted } from 'vue';
 import { IonApp, IonRouterOutlet } from '@ionic/vue';
 import UpdateToast from '@/components/UpdateToast.vue';
 import NativeAppInstallPrompt from '@/components/NativeAppInstallPrompt.vue';
+import WhatsNewModal from '@/components/WhatsNewModal.vue';
 import { useSettings } from '@/composable/settings';
 import { useInAppReview } from '@/composable/inAppReview';
+import { useWhatsNew } from '@/composable/whatsNew';
 import { pruneStaleMapNodes } from '@/mapHandler/databaseHandler';
 import { useOfflineAreasStore } from '@/store/offlineAreasStore';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
@@ -27,6 +30,7 @@ const CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 // Track active usage days and auto-prompt for review (one-shot)
 const { recordActiveDay, tryAutoPrompt } = useInAppReview();
+const { checkForUpdate } = useWhatsNew();
 
 // Offline areas: load records and run the Wi-Fi auto-refresh check on startup,
 // and re-check whenever connectivity is regained.
@@ -51,7 +55,13 @@ onMounted(async () => {
 	// Fire-and-forget: hydrate the pending-edits queue and attempt a sync.
 	pendingEditsStore.init();
 
+	// What's New wins: if it's showing this session, skip the review prompt so
+	// a user reading release notes doesn't immediately get a rating dialog.
+	const showingWhatsNew = await checkForUpdate();
+
 	await recordActiveDay();
-	await tryAutoPrompt();
+	if (!showingWhatsNew) {
+		await tryAutoPrompt();
+	}
 });
 </script>

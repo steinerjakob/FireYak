@@ -18,6 +18,10 @@
 						{{ $t('about.version') }} {{ appInfo?.version }}
 						<template v-if="appInfo?.build"> ({{ appInfo.build }}) </template>
 					</p>
+					<ion-button fill="clear" size="small" @click="openHistory">
+						<ion-icon :icon="sparkles" slot="start"></ion-icon>
+						{{ $t('whatsNew.aboutLink') }}
+					</ion-button>
 				</div>
 
 				<ion-card>
@@ -128,12 +132,15 @@ import {
 	IonButtons,
 	IonBackButton
 } from '@ionic/vue';
-import { logoGithub, heart, star, bug, code, documentText, map } from 'ionicons/icons';
+import { logoGithub, heart, star, bug, code, documentText, map, sparkles } from 'ionicons/icons';
 import { computed, onMounted, ref } from 'vue';
 import { App } from '@capacitor/app';
 import { AppInfo } from '@capacitor/app/dist/esm/definitions';
 import { Capacitor } from '@capacitor/core';
 import { version } from '@/../package.json';
+import { useWhatsNew } from '@/composable/whatsNew';
+
+const { openHistory } = useWhatsNew();
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
 

@@ -414,5 +414,15 @@
 			"queued": "Change saved — it will sync when you're back online.",
 			"synced": "{count} change(s) synced"
 		}
+	},
+	"whatsNew": {
+		"title": "What's new in v{version}",
+		"dismiss": "Got it",
+		"groups": {
+			"feature": "Features",
+			"improvement": "Improvements",
+			"fix": "Fixes"
+		},
+		"aboutLink": "What's new"
 	}
 }
