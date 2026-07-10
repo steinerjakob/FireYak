@@ -96,8 +96,10 @@ html[mode='ios'] .whats-new-modal {
 }
 
 html[mode='ios'] .whats-new-modal::part(content) {
-	background: rgba(var(--ios26-glass-background-rgb), 0.72);
-	backdrop-filter: blur(2px) saturate(360%);
+	/* frosted variant (matches the popover override in theme/ios26-fixes.css):
+	   more opaque + stronger blur than the theme's 0.72 glass for readability */
+	background: rgba(var(--ios26-glass-background-rgb), 0.82);
+	backdrop-filter: blur(12px) saturate(220%);
 	box-shadow:
 		inset 0 0 8px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.2),
 		0 0 10px 0 rgba(var(--ios26-glass-box-shadow-color-rgb), 0.82);
