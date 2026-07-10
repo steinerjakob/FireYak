@@ -1,11 +1,44 @@
 # Changelog
 
 All notable changes to FireYak.
-## [unreleased]
+## [2.15.0] - 2026-07-10
+
+### Bug Fixes
+
+- *(theme)* Reduce popup frost blur to 4px for improved balance
+- *(theme)* Popup frost via blur only, back to stock glass alpha
+- *(theme)* Soften popup frost alpha to 0.76
+- *(theme)* Frost ios glass popups for readability
+- *(whats-new)* Apply ios26 liquid-glass style to the popup
+- *(lint)* Migrate eslint config to v10 flat config, clean dead imports
 
 ### Features
 
+- *(whats-new)* Show feature overview on first launch
+- *(app)* Show What's New popup after updates
 - *(map)* Marker path line toggle, distance cap, and UI-aware fit padding
+
+### Build
+
+- Fix vulnerabilities
+
+### Chore
+
+- *(workflows)* Update GitHub Actions to latest versions across workflows
+- *(whats-new)* Refine wording in release notes for clarity
+- *(whats-new)* Mention the ios liquid-glass design in 2.14.0 notes
+- *(whats-new)* Polish German wording of release notes
+- Share project verify skill, ignore local build/agent artifacts
+
+### Ci
+
+- Harden pipelines and add unified release workflow
+
+### Docs
+
+- Refresh AGENTS.md to current architecture and pipelines
+- Add feature and pipeline plans
+- Add issue/PR templates and What's New maintenance rule
 ## [2.14.0] - 2026-07-08
 
 ### Bug Fixes
@@ -105,12 +138,40 @@ All notable changes to FireYak.
 ### Bug Fixes
 
 - Apply theme color to search action buttons
+## [2.11.0] - 2026-03-28
+
+### Bug Fixes
+
 - Load PROTOMAPS_API_KEY from environment variables
 - Adjust popup position
 - Adjust clustering settings
+
+### Features
+
+- Add address search bar with photon geocoder (#71)
+- Add mapterhorn 3d terrain source (#70)
+- Support for editing AWWA Class
+- Add chips with preselected values
+
+### Build
+
+- Bump packages
+- Remove capacitor/assets package
+## [2.10.3] - 2026-03-22
+
+### Bug Fixes
+
 - Supply pipe polyline not showing after layer change (#69)
 - Allow clearing any input during edit
+## [2.10.2] - 2026-03-20
+
+### Bug Fixes
+
 - Watersource was not available for fire_hydrants
+## [2.10.1] - 2026-03-20
+
+### Bug Fixes
+
 - Fix/missing or wrong implemented tags for fire_hydrant nodes (#65)
 
 * fix: fire_hydratn:pressure wrong values provided
@@ -118,24 +179,261 @@ All notable changes to FireYak.
 * support setting survey date
 
 * support pillar:type
+## [2.10.0] - 2026-03-13
+
+### Features
+
+- Move to maplibre-gl with protomaps
+## [2.9.2] - 2026-03-10
+
+### Bug Fixes
+
 - Improve URL parsing and routing logic in appUrlOpen listener
+## [2.9.1] - 2026-03-10
+
+### Bug Fixes
+
 - Browser background theme color
 - Reconcile deleted nodes from cache when fetching fresh marker data
+
+### Build
+
+- Bump husky and re-enable git hooks
+
+### Ci
+
+- Remove unuse upload metadata lanes
+
+### Docs
+
+- Update app name
+- Update store listings for Android and iOS
+## [2.9.0] - 2026-03-06
+
+### Bug Fixes
+
 - Move version commit after deployment in Android workflow and simplify git operations
+
+### Features
+
+- Add comprehensive SEO, metadata, and sitemap configuration
+
+### Chore
+
+- Update eslint configuration
+- Enable pre commit hooks
+- Reformat with prettier
+
+### Docs
+
+- Expand AGENTS.md with comprehensive technical reference and architecture details
+- Restructure README with in-app editing features and improved organization
+- Update app download links and badges in README
+## [2.8.1] - 2026-03-03
+
+### Bug Fixes
+
 - Commit version changes before fetching/rebasing in CI workflows
 - Re-enable deep link handling for app URL opens
 - Exclude land.html from service worker caching and navigation fallback
+## [2.8.0] - 2026-03-03
+
+### Bug Fixes
+
 - Remove extra ampersand in CARTO attribution text
+
+### Features
+
+- Add "Manage Account" button in settings to open OSM profile page
+- Ensure activity state readiness before accessing Preferences in OAuth flow
+- Prevent native deep-link from interfering with OAuth InAppBrowser flow
+- Switch web OAuth flow from redirect to popup mode with BroadcastChannel
+- Implement native OAuth2 PKCE flow with in-app browser for mobile platforms
+- Disable service workers for native builds using selfDestroying mode (#58)
+- Enhance map attribution with GitHub support link
+- Update dark mode styling to consider satellite map layer selection
+- Add map layer selector with satellite and standard options
+
+### Other
+
+- Improve OSM auth flow and cleanup
+- Replace direct Preferences usage with centralized settings management
+- Migrate OAuth flow to @capacitor/inappbrowser with improved handling
+- Centralize OAuth logic in reusable service
+- Remove OSM hydrant guide card from About page
+
+### Chore
+
+- Replace @capgo/inappbrowser with @capacitor/inappbrowser in dependencies
+- IOS location permission descriptions with FireYak-specific context
+
+### Ci
+
+- Remove push trigger from GitHub Pages deployment workflow
+
+### Docs
+
+- Remove detailed OSM editing guide from README.md
+## [2.7.0] - 2026-02-28
+
+### Features
+
+- Support for add/edit/delete markers
+## [2.6.0] - 2026-02-26
+
+### Features
+
+- Add ios applink support
+## [2.5.0] - 2026-02-26
+## [2.4.3] - 2026-02-26
+
+### Features
+
+- Add apple-app-site-association file for iOS universal links
+## [2.4.2] - 2026-02-26
+
+### Bug Fixes
+
 - Ensure SystemBars style logic runs only on native platforms
+
+### Chore
+
+- Downgrade vue-router to 4.6.4 in package.json
+## [2.4.1] - 2026-02-26
+
+### Other
+
+- Replace `Capacitor.getPlatform()` calls with `isNativeIos` computed property
+## [2.4.0] - 2026-02-26
+
+### Features
+
+- Add iOS-specific UI restrictions and conditional rendering
+
+### Chore
+
+- Adjust build steps
+## [2.3.0] - 2026-02-26
+
+### Features
+
+- Migrate ios to capacitor 8
+- Migrate ios to capacitor 8
+- Add ios safe area support
+- Add ios spm support
+- Feature/migrate-to-capacitor-8 (#53)
+
+* feat: migrate to capacitor 8
+
+* style: adjust padding in theme selection segment for better alignment
+
+* refactor: migrate ESLint configuration to flat config format
+
+- Remove `.eslintrc.json` and replace it with `eslint.config.mjs` using the new flat config format.
+- Update `package.json` dependencies to reflect changes in ESLint configuration.
+
+### Other
+
+- Update MarkerEditHeader icon and button behavior
+
+### Build
+
+- Xtool.sh setup
+
+### Chore
+
+- Add version and category type
+## [2.2.1] - 2026-02-24
+
+### Bug Fixes
+
 - Restrict marker editing to fire hydrants with emergency tags
+## [2.2.0] - 2026-02-24
+
+### Bug Fixes
+
 - Invalid json format
+
+### Other
+
+- Comment out unused tag description fields in MarkerEdit component
+- Simplify and consolidate MD3 theme styles
+## [2.1.3] - 2026-02-24
+## [2.1.2] - 2026-02-21
+
+### Bug Fixes
+
 - Update DE locale for hydrant pressure descriptions
+
+### Features
+
+- Improve authentication and UX for marker editing
+- Improve OSM authentication and UX for marker editing
+- Update assetlinks.json for additional app linking
+- Update OSM authentication configuration
+- Add marker editing feature
+
+### Other
+
+- Consolidate spacing overrides and enhance MD3 component styling
+- Adjust OSM authentication and add redirect handling
+
+### Style
+
+- Refine padding and fullscreen behavior in About and Settings views
+## [2.1.1] - 2026-02-02
+
+### Bug Fixes
+
 - Initialize theme system on app startup
+## [2.1.0] - 2026-02-01
+
+### Bug Fixes
+
 - Theme switching did not work properly
+
+### Features
+
+- Add guard to prevent invalid pressure inputs
+- Remove webkit highlight color from buttons
+- Add settings page
+- Add zoom buttons to map
+
+### Build
+
+- Add AGENTS.md file
+
+### Ci
+
+- Improve versioning
+- Generate apk to provide it on github
+## [2.0.2] - 2025-12-04
+
+### Bug Fixes
+
 - Use custom location marker first to find the nearest source
 - Desktop card scroll behaviour
 - Desktop card scroll behaviour
 - Element center on landscape screens
+
+### Chore
+
+- Cache osm tiles with service worker
+## [2.0.1] - 2025-12-03
+
+### Features
+
+- Set a fallback path if opened via url listener
+- Improve mobile screen detection
+
+### Ci
+
+- Update permissions
+- Configure semantic versionings
+## [2.0.0] - 2025-12-03
+
+### Bug Fixes
+
 - Location request in web
 - Adjust marker info modal breakpoints and scroll behavior
 - Improve pump placement logic (#42)
@@ -158,50 +456,6 @@ All notable changes to FireYak.
 
 ### Features
 
-- Add address search bar with photon geocoder (#71)
-- Add mapterhorn 3d terrain source (#70)
-- Support for editing AWWA Class
-- Add chips with preselected values
-- Move to maplibre-gl with protomaps
-- Add comprehensive SEO, metadata, and sitemap configuration
-- Add "Manage Account" button in settings to open OSM profile page
-- Ensure activity state readiness before accessing Preferences in OAuth flow
-- Prevent native deep-link from interfering with OAuth InAppBrowser flow
-- Switch web OAuth flow from redirect to popup mode with BroadcastChannel
-- Implement native OAuth2 PKCE flow with in-app browser for mobile platforms
-- Disable service workers for native builds using selfDestroying mode (#58)
-- Enhance map attribution with GitHub support link
-- Update dark mode styling to consider satellite map layer selection
-- Add map layer selector with satellite and standard options
-- Support for add/edit/delete markers
-- Add ios applink support
-- Add apple-app-site-association file for iOS universal links
-- Add iOS-specific UI restrictions and conditional rendering
-- Migrate ios to capacitor 8
-- Migrate ios to capacitor 8
-- Add ios safe area support
-- Add ios spm support
-- Feature/migrate-to-capacitor-8 (#53)
-
-* feat: migrate to capacitor 8
-
-* style: adjust padding in theme selection segment for better alignment
-
-* refactor: migrate ESLint configuration to flat config format
-
-- Remove `.eslintrc.json` and replace it with `eslint.config.mjs` using the new flat config format.
-- Update `package.json` dependencies to reflect changes in ESLint configuration.
-- Improve authentication and UX for marker editing
-- Improve OSM authentication and UX for marker editing
-- Update assetlinks.json for additional app linking
-- Update OSM authentication configuration
-- Add marker editing feature
-- Add guard to prevent invalid pressure inputs
-- Remove webkit highlight color from buttons
-- Add settings page
-- Add zoom buttons to map
-- Set a fallback path if opened via url listener
-- Improve mobile screen detection
 - Prevent duplicate map instances in MainMap component
 - Support geo url scheme on android (#40)
 - Update android design to md3
@@ -351,17 +605,6 @@ All notable changes to FireYak.
 
 ### Other
 
-- Improve OSM auth flow and cleanup
-- Replace direct Preferences usage with centralized settings management
-- Migrate OAuth flow to @capacitor/inappbrowser with improved handling
-- Centralize OAuth logic in reusable service
-- Remove OSM hydrant guide card from About page
-- Replace `Capacitor.getPlatform()` calls with `isNativeIos` computed property
-- Update MarkerEditHeader icon and button behavior
-- Comment out unused tag description fields in MarkerEdit component
-- Simplify and consolidate MD3 theme styles
-- Consolidate spacing overrides and enhance MD3 component styling
-- Adjust OSM authentication and add redirect handling
 - Extract pump calculation logic into composable
 - Remove unused router logic and simplify MarkerInfo usage
 - Replace dynamic imports with direct references for HomeView in router setup
@@ -386,25 +629,8 @@ All notable changes to FireYak.
 - Updated favicon
 - Disable vite pwa for now
 
-### Build
-
-- Bump packages
-- Remove capacitor/assets package
-- Bump husky and re-enable git hooks
-- Xtool.sh setup
-- Add AGENTS.md file
-
 ### Chore
 
-- Update eslint configuration
-- Enable pre commit hooks
-- Reformat with prettier
-- Replace @capgo/inappbrowser with @capacitor/inappbrowser in dependencies
-- IOS location permission descriptions with FireYak-specific context
-- Downgrade vue-router to 4.6.4 in package.json
-- Adjust build steps
-- Add version and category type
-- Cache osm tiles with service worker
 - Use full screen of app
 - Disable Prettier rule in ESLint config
 - Adjust initial breakpoint in MarkerInfoPanel modal to 0.25
@@ -431,24 +657,12 @@ All notable changes to FireYak.
 
 ### Ci
 
-- Remove unuse upload metadata lanes
-- Remove push trigger from GitHub Pages deployment workflow
-- Improve versioning
-- Generate apk to provide it on github
-- Update permissions
-- Configure semantic versionings
 - Autogenerate version
 - Add PAT_TOKEN to GitHub Actions checkout step
 - Create main.yml (#31)
 
 ### Docs
 
-- Update app name
-- Update store listings for Android and iOS
-- Expand AGENTS.md with comprehensive technical reference and architecture details
-- Restructure README with in-app editing features and improved organization
-- Update app download links and badges in README
-- Remove detailed OSM editing guide from README.md
 - Update README.md
 - Improved readme and added logo
 - Improved readme and added logo
@@ -456,5 +670,4 @@ All notable changes to FireYak.
 
 ### Style
 
-- Refine padding and fullscreen behavior in About and Settings views
 - Update About button color to light in MainMap FAB

@@ -1,17 +1,22 @@
 {
-	"unreleased": [
-		{
-			"type": "feature",
-			"en": "After every update, a quick summary of what's new pops up right in the app.",
-			"de": "Nach jedem Update erscheint eine kurze Übersicht der Neuerungen direkt in der App."
-		},
-		{
-			"type": "improvement",
-			"en": "The line to the selected water source can be disabled in the settings and is hidden for distant sources.",
-			"de": "Die Linie zur Wasserquelle lässt sich in den Einstellungen abschalten und wird bei entfernten Quellen ausgeblendet."
-		}
-	],
+	"unreleased": [],
 	"releases": [
+		{
+			"version": "2.15.0",
+			"date": "2026-07-10",
+			"entries": [
+				{
+					"type": "feature",
+					"en": "After every update, a quick summary of what's new pops up right in the app.",
+					"de": "Nach jedem Update erscheint eine kurze Übersicht der Neuerungen direkt in der App."
+				},
+				{
+					"type": "improvement",
+					"en": "The line to the selected water source can be disabled in the settings and is hidden for distant sources.",
+					"de": "Die Linie zur Wasserquelle lässt sich in den Einstellungen abschalten und wird bei entfernten Quellen ausgeblendet."
+				}
+			]
+		},
 		{
 			"version": "2.14.0",
 			"date": "2026-07-08",
