@@ -52,7 +52,9 @@ export function useWhatsNew() {
 	 * and, if any releases were skipped, prepares the modal with their
 	 * entries (newest first). Call once on startup.
 	 *
-	 * - no stored version → first install: store current, don't show.
+	 * - no stored version → never shown before: show the newest release with
+	 *   entries as a feature overview (covers fresh installs and the first
+	 *   update to a version that ships this feature).
 	 * - stored < current → show entries for releases in (stored, current].
 	 * - stored >= current → rollback/dev build: store current, don't show.
 	 * - nothing to show (skipped releases had no entries) → still store current.
@@ -63,7 +65,18 @@ export function useWhatsNew() {
 	const checkForUpdate = async (): Promise<boolean> => {
 		const { value: storedVersion } = await Preferences.get({ key: LAST_SEEN_VERSION_KEY });
 
-		if (!storedVersion || compareVersions(storedVersion, currentVersion) >= 0) {
+		if (!storedVersion) {
+			const newest = sortNewestFirst(releases).find((release) => release.entries.length > 0);
+			if (!newest) {
+				await Preferences.set({ key: LAST_SEEN_VERSION_KEY, value: currentVersion });
+				return false;
+			}
+			visibleReleases.value = [newest];
+			isOpen.value = true;
+			return true;
+		}
+
+		if (compareVersions(storedVersion, currentVersion) >= 0) {
 			await Preferences.set({ key: LAST_SEEN_VERSION_KEY, value: currentVersion });
 			return false;
 		}

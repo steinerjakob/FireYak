@@ -58,7 +58,9 @@ Mirrors the existing `useInAppReview` pattern (hooked in `App.vue`):
 - Persist `lastSeenVersion` via `@capacitor/preferences` (same storage as
   `composable/settings.ts`; localStorage-backed on web).
 - On startup:
-  - no stored version → **first install**: store current, don't show;
+  - no stored version → never shown before (fresh install, or first update to
+    a version shipping this feature): show the newest entry-bearing release as
+    a **feature overview**;
   - stored < current → show modal with entries in `(stored, current]`,
     store current on dismiss;
   - stored ≥ current (rollback / dev build) → store current, don't show;
