@@ -1,0 +1,7 @@
+# Blank issues stay enabled so questions/discussions have somewhere to go.
+# If you enable GitHub Discussions later, set this to false and add:
+#   contact_links:
+#     - name: ❓ Question / discussion
+#       url: https://github.com/steinerjakob/FireYak/discussions
+#       about: Ask questions or discuss ideas that aren't a bug or feature request.
+blank_issues_enabled: true

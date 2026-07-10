@@ -183,7 +183,34 @@ npm run generate:assets
 - **Material Design 3 Theming**: Custom MD3 CSS overrides for all Ionic components live in `src/theme/md3/`.
 - **Conventional Commits**: Enforced via Commitlint + Husky pre-commit hooks.
 
-## 6. Important Notes for AI Agents
+## 6. What's New Maintenance (REQUIRED)
+
+Every **user-facing change** MUST add an entry to the `unreleased` array in
+`src/assets/whats-new.json` — these entries become the in-app "What's New"
+popup shown to users after an update.
+
+```json
+{ "type": "feature", "en": "Water tanks can now be added directly on the map.",
+  "de": "Wassertanks können jetzt direkt auf der Karte hinzugefügt werden." }
+```
+
+Rules:
+
+- **User-facing means**: new features, visible improvements, and bug fixes a
+  user would notice. Refactors, CI/build changes, docs, and dependency bumps
+  get **no** entry.
+- `type` is one of `feature`, `improvement`, `fix`.
+- **Both languages are mandatory.** Write native-quality German, not a literal
+  translation. Use the same tone as `src/locales/de.json`.
+- Write from the user's perspective in plain language — what they can now do
+  or what stopped being broken. No code identifiers, file names, or technical
+  jargon ("Overpass API", "IndexedDB"). One sentence, ≤ ~120 characters.
+- Append to `unreleased` only. **Never edit the `releases` array** — the
+  release pipeline stamps `unreleased` into it with version and date.
+- If a change amends a feature that already has an `unreleased` entry, update
+  that entry instead of adding a second one.
+
+## 7. Important Notes for AI Agents
 
 - **No test suite exists.** There are no unit or integration tests.
 - **OSM OAuth2 uses PKCE flow** — see `osmAuthStore.ts` for the implementation.

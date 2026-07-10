@@ -1,0 +1,57 @@
+name: 🐛 Bug report
+description: Something in FireYak doesn't work as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I tap on a hydrant marker while offline, the app …
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the map
+        2. Enable offline mode
+        3. Tap …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - Android app
+        - iOS app
+        - Web (browser)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown at the bottom of the About page.
+      placeholder: e.g. 2.14.0
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: e.g. Pixel 8 / Android 15, iPhone 14 / iOS 18, Firefox 140 / Ubuntu
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots, logs, or additional context
+      description: Offline mode active? Which map region? Attach screenshots if possible.

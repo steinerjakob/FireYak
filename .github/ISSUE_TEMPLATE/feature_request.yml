@@ -1,0 +1,39 @@
+name: ✨ Feature request
+description: Suggest an improvement or new capability for FireYak
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation (ideally from fire-service practice) where FireYak falls short today.
+      placeholder: During night operations it is hard to …
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What should FireYak do? Sketches and screenshots welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use today, or other ways this could be solved.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Relevant platform(s)
+      multiple: true
+      options:
+        - All platforms
+        - Android app
+        - iOS app
+        - Web (browser)
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Related OSM tags, links, or references (e.g. relevant fire-service doctrine).
