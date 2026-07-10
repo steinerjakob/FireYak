@@ -185,10 +185,14 @@ jobs:
           PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
         run: printf '%s' "$PLAY_STORE_JSON_KEY" > play-credentials.json
 
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1.316.0
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
       - name: Deploy to Google Play (internal)
-        run: |
-          bundle install
-          bundle exec fastlane android internal aab:"$(pwd)/artifacts/aab/app-release.aab"
+        run: bundle exec fastlane android internal aab:"$(pwd)/artifacts/aab/app-release.aab"
 
       - name: Commit Version Bump
         if: ${{ inputs.version == '' }}
