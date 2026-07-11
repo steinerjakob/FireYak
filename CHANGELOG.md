@@ -1,6 +1,14 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.15.2] - 2026-07-11
+
+### Bug Fixes
+
+- *(ui)* Conditionally hide close button in SupplyPipeCalculationHeader
+- *(workflows)* Remove signed apks from cwd before Play upload
+- *(fastlane)* Skip apk upload so signed apks in workdir don't conflict with aab
+- *(workflows)* Drop bundler deployment mode to fix platform lockfile error
 ## [2.15.1] - 2026-07-10
 
 ### Chore
