@@ -34,7 +34,7 @@ const closeSupplyPipe = () => {
 			</ion-buttons>
 
 			<ion-title>{{ getTitle() }}</ion-title>
-			<ion-buttons slot="start">
+			<ion-buttons slot="start" v-show="!pumpCalculation.calculationResult.value">
 				<ion-button @click="closeSupplyPipe" :title="t('pumpCalculation.buttons.close')">
 					<ion-icon :icon="close" />
 				</ion-button>
