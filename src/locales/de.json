@@ -164,9 +164,14 @@
 		},
 		"sourcePressureUsed": "Hydrantendruck: {pressure} bar",
 		"sourcePumpRequired": "An der Entnahmestelle ist eine Pumpe erforderlich",
+		"chart": {
+			"title": "Höhenprofil"
+		},
 		"pump": {
 			"title": "Tragkraftspritze",
+			"numbered": "Tragkraftspritze {n}",
 			"inputPressure": "Eingangsdruck (bar)",
+			"inputPressureShort": "Eingangsdruck",
 			"outputPressure": "Ausgangsdruck (bar)",
 			"targetPressure": "Druck am Brandobjekt (bar)",
 			"flowRate": "Durchfluss (l/min)",
