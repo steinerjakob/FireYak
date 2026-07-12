@@ -25,7 +25,6 @@ function createPumpMarkerElement(): HTMLImageElement {
 }
 
 function calculatePumpPosition(
-	t: any,
 	elevationPoints: ElevationPoint[],
 	pressureLost: number,
 	inputPressure: number,
@@ -129,7 +128,6 @@ function calculatePumpPosition(
 				neededBTubes,
 				marker
 			};
-			marker.setPopup(provideMarkerPopup(t, pumpInfo));
 			pumps.push(pumpInfo);
 
 			// Reset the loop index, realDistance, and elevationOld to the state of the pumpPoint
@@ -149,37 +147,12 @@ function calculatePumpPosition(
 	return { pumps, realDistance };
 }
 
-function provideMarkerPopup(t: any, pump: PumpPosition): maplibregl.Popup {
-	const popup = new maplibregl.Popup({ maxWidth: '400px', offset: [0, -48] });
-	const pumpStore = usePumpCalculationStore();
-
-	const inpuPressure = t('pumpCalculation.pump.inputPressure');
-	const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
-	const riseFromStart = t('pumpCalculation.pump.elevationDifference');
-
-	const title = t('pumpCalculation.pump.title');
-	const tubes = t('pumpCalculation.pump.tubes');
-	const snippet = `${pumpStore.hoseName}-${tubes}: ~${pump.neededBTubes}<br>${distanceFromStart}: ~${pump.distanceFromPrev}m<br>${riseFromStart}: ${pump.riseFromPrev}m`;
-	const subDescription = `${inpuPressure}: ${pump.pressureAtTrigger.toFixed(2)}`;
-
-	popup.setHTML(`
-		<div class="pump-popup">
-			<b>${title}</b>
-			<div>${snippet}</div>
-			<div>${subDescription}</div>
-		</div>
-	`);
-	return popup;
-}
-
 export function getPumpLocationMarkers(
-	t: any,
 	elevationPoints: ElevationPoint[],
 	sourcePressure: number | null = null
 ) {
 	const pumpCalculationStore = usePumpCalculationStore();
 	const { pumps: pumpPositions, realDistance } = calculatePumpPosition(
-		t,
 		elevationPoints,
 		pumpCalculationStore.pressureLost / 100,
 		pumpCalculationStore.inputPressure,
