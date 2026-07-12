@@ -114,6 +114,11 @@ action.
 
 - Section header `offlineAreas.detail.downloadSettings`; toggle labels reuse the add-modal keys
   `offlineAreas.add.includeSatellite` / `.includeTerrain` / `.autoRefresh` (+ its hint).
+- **Satellite is not user-downloadable** (decided 2026-07-12): Esri's terms don't permit
+  offline storage of World Imagery tiles, so the satellite toggle is removed from the add
+  modal and shown in the detail view only when `area.includeSatellite` is already true —
+  a removal-only escape hatch for legacy areas. The `includeSatellite` plumbing
+  (store/tileStore) stays.
 - **Terrain hint**: new key `offlineAreas.add.includeTerrainHint` ("Needed for the offline pump
   calculation — terrain tiles provide the elevation data.") rendered as the note line under the
   terrain toggle (same `<h3>`/`<p class="wrap-note">` label pattern as the existing auto-refresh

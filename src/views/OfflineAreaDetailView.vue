@@ -58,12 +58,13 @@
 					<ion-list-header>
 						<ion-label>{{ $t('offlineAreas.detail.downloadSettings') }}</ion-label>
 					</ion-list-header>
-					<ion-item :key="`satellite-${settingsVersion}`">
+					<!-- Removal-only escape hatch for legacy areas: satellite bulk download
+					     is no longer offered (Esri's terms don't permit offline storage of
+					     World Imagery tiles), but areas that already hold satellite tiles
+					     can still free them. -->
+					<ion-item v-if="area.includeSatellite" :key="`satellite-${settingsVersion}`">
 						<ion-label>
 							<h3>{{ $t('offlineAreas.add.includeSatellite') }}</h3>
-							<p v-if="!area.includeSatellite" class="wrap-note">
-								{{ additionalDownloadLine('satellite') }}
-							</p>
 						</ion-label>
 						<ion-toggle
 							slot="end"
