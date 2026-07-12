@@ -276,7 +276,31 @@ async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
 	setPumpLineGeometry(path);
 }
 
-const updatePolyline = () => {
+/**
+ * Bound to the latest `calculatePumpRequirements` closure (it needs the
+ * component-scoped i18n `t` for segment labels) so module-level geometry
+ * handlers can re-run the calculation.
+ */
+let recalculate: (() => Promise<void>) | null = null;
+
+let autoRecalcTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Re-runs the calculation after the line geometry changed while a result is
+ * showing (marker dragged, waypoint added/removed). Debounced so rapid
+ * successive edits collapse into one recalculation; the calculation itself
+ * awaits `routingPromise`, so it always uses the re-routed geometry.
+ */
+function scheduleAutoRecalc() {
+	if (!calculationResult.value || !recalculate) return;
+	if (autoRecalcTimer) clearTimeout(autoRecalcTimer);
+	autoRecalcTimer = setTimeout(() => {
+		autoRecalcTimer = null;
+		recalculate?.();
+	}, 400);
+}
+
+const updatePolyline = (options: { autoRecalc?: boolean } = {}) => {
 	if (!suctionPoint || !targetPoint || !rootMap) {
 		return;
 	}
@@ -292,6 +316,9 @@ const updatePolyline = () => {
 	routingPromise = updateRoutedPolyline(chain).catch((e) => {
 		console.warn('Pump line routing failed, keeping straight line:', e);
 	});
+	if (options.autoRecalc !== false) {
+		scheduleAutoRecalc();
+	}
 };
 
 function createMarkerElement(iconUrl: string, size: [number, number]): HTMLImageElement {
@@ -382,8 +409,9 @@ function restoreMapState(map: maplibregl.Map) {
 	wayPoints.forEach((wp) => wp.addTo(map));
 	// Re-add pump position markers
 	pumpMarkers.forEach((pm) => pm.addTo(map));
-	// Restore polyline data
-	updatePolyline();
+	// Restore polyline data — the geometry didn't change (map style switch),
+	// so don't trigger a recalculation that would drop the user's selection.
+	updatePolyline({ autoRecalc: false });
 }
 
 const setWayPoint = (latlng?: GeoPoint) => {
@@ -599,6 +627,7 @@ export function usePumpCalculation() {
 			sourcePressure
 		};
 	};
+	recalculate = calculatePumpRequirements;
 
 	watch(isActive, (newValue) => {
 		if (!newValue) {
@@ -620,6 +649,11 @@ export function usePumpCalculation() {
 			routingToken++; // invalidate any in-flight routing
 			segmentLabels = [];
 			sourcePressure = null;
+			// A pending auto-recalc firing after teardown would recreate markers.
+			if (autoRecalcTimer) {
+				clearTimeout(autoRecalcTimer);
+				autoRecalcTimer = null;
+			}
 
 			// Clear polyline + labels
 			if (rootMap) {
