@@ -33,7 +33,14 @@
 			</div>
 
 			<ion-list v-else>
-				<ion-item v-for="area in areas" :key="area.id" lines="full">
+				<ion-item
+					v-for="area in areas"
+					:key="area.id"
+					lines="full"
+					button
+					:detail="true"
+					@click="openDetail(area)"
+				>
 					<ion-icon slot="start" :icon="mapOutline"></ion-icon>
 					<ion-label>
 						<h2>{{ area.name }}</h2>
@@ -47,7 +54,7 @@
 							:value="progressValue(area)"
 						></ion-progress-bar>
 					</ion-label>
-					<ion-button slot="end" fill="clear" @click="openActions(area)">
+					<ion-button slot="end" fill="clear" @click.stop="openActions(area)">
 						<ion-icon slot="icon-only" :icon="ellipsisVertical"></ion-icon>
 					</ion-button>
 				</ion-item>
@@ -111,7 +118,10 @@
 						></ion-toggle>
 					</ion-item>
 					<ion-item>
-						<ion-label>{{ $t('offlineAreas.add.includeTerrain') }}</ion-label>
+						<ion-label>
+							<h3>{{ $t('offlineAreas.add.includeTerrain') }}</h3>
+							<p class="wrap-note">{{ $t('offlineAreas.add.includeTerrainHint') }}</p>
+						</ion-label>
 						<ion-toggle
 							slot="end"
 							:checked="includeTerrain"
@@ -173,7 +183,6 @@ import {
 	IonToggle,
 	IonChip,
 	actionSheetController,
-	alertController,
 	toastController
 } from '@ionic/vue';
 import {
@@ -190,6 +199,7 @@ import {
 	closeCircleOutline
 } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { layers as protomapsLayers, namedFlavor } from '@protomaps/basemaps';
@@ -201,30 +211,20 @@ import { useNetworkStatus } from '@/composable/networkStatus';
 import { useOfflineAreasStore, isAreaTooLarge } from '@/store/offlineAreasStore';
 import { countChunks } from '@/offline/areaDataDownloader';
 import {
-	tileCount,
-	PROTOMAPS_MAX_ZOOM,
-	SATELLITE_MAX_ZOOM,
-	TERRAIN_MAX_ZOOM
-} from '@/offline/tileMath';
+	useOfflineAreaActions,
+	estimateSourceBytes,
+	estimateRangeMb
+} from '@/composable/offlineAreaActions';
 import type { OfflineArea } from '@/mapHandler/databaseHandler';
 
 const { t, locale } = useI18n();
-
-function formatCount(value: number): string {
-	return value.toLocaleString(locale.value || 'en');
-}
-
-function formatDate(timestamp: number): string {
-	return new Date(timestamp).toLocaleDateString(locale.value || 'en', {
-		year: 'numeric',
-		month: 'short',
-		day: 'numeric'
-	});
-}
 const { isOnline } = useNetworkStatus();
+const router = useRouter();
 
 const store = useOfflineAreasStore();
 const { areas } = storeToRefs(store);
+const { formatCount, progressValue, statusLine, promptRename, confirmDelete, showOfflineToast } =
+	useOfflineAreaActions();
 
 const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
 /** Inset of the capture rectangle from the map edges (px). Also fitBounds padding. */
@@ -235,70 +235,12 @@ onMounted(() => {
 	store.init();
 });
 
-// --- List rendering helpers ------------------------------------------------
-
-function progressValue(area: OfflineArea): number {
-	if (!area.progress.total) return 0;
-	return area.progress.done / area.progress.total;
-}
-
-/**
- * Progress text for an in-flight download. Water-source (Overpass) data and
- * tiles run in parallel, so this shows the overall tile-inclusive percentage
- * and, while the water-source fetch is still pending, a chunk counter for it
- * (each chunk is one long-running Overpass call).
- */
-function downloadDetail(area: OfflineArea, refreshing: boolean): string {
-	const parts: string[] = [];
-
-	// Water-source fetch is still running while not every chunk is completed.
-	const chunkTotal = countChunks(area.bounds);
-	const chunksDone = area.lastCompletedChunk + 1;
-	if (chunksDone < chunkTotal) {
-		// While chunk i is in flight, lastCompletedChunk is i-1 → 1-based i+1.
-		const current = Math.min(chunksDone + 1, chunkTotal);
-		parts.push(
-			t(
-				refreshing ? 'offlineAreas.status.refreshingSources' : 'offlineAreas.status.loadingSources',
-				{ done: current, total: chunkTotal }
-			)
-		);
-	}
-
-	parts.push(
-		t(refreshing ? 'offlineAreas.status.refreshingTiles' : 'offlineAreas.status.loadingTiles', {
-			percent: Math.round(progressValue(area) * 100)
-		})
-	);
-
-	return parts.join(' · ');
-}
-
-function statusLine(area: OfflineArea): string {
-	const parts: string[] = [];
-	switch (area.status) {
-		case 'downloading':
-			parts.push(downloadDetail(area, false));
-			break;
-		case 'refreshing':
-			parts.push(downloadDetail(area, true));
-			break;
-		case 'error':
-			parts.push(t('offlineAreas.status.error'));
-			break;
-		case 'ready':
-			parts.push(t('offlineAreas.status.nodeCount', { count: formatCount(area.nodeCount) }));
-			if (area.lastRefreshedAt) {
-				parts.push(
-					t('offlineAreas.status.lastRefreshed', { date: formatDate(area.lastRefreshedAt) })
-				);
-			}
-			break;
-	}
-	return parts.join(' · ');
-}
-
 // --- Per-area actions ------------------------------------------------------
+
+function openDetail(area: OfflineArea): void {
+	if (area.id == null) return;
+	router.push(`/settings/offline-areas/${area.id}`);
+}
 
 async function openActions(area: OfflineArea): Promise<void> {
 	if (area.id == null) return;
@@ -350,50 +292,6 @@ async function openActions(area: OfflineArea): Promise<void> {
 	await sheet.present();
 }
 
-async function promptRename(area: OfflineArea): Promise<void> {
-	if (area.id == null) return;
-	const alert = await alertController.create({
-		header: t('offlineAreas.actions.rename'),
-		inputs: [{ name: 'name', type: 'text', value: area.name }],
-		buttons: [
-			{ text: t('common.cancel'), role: 'cancel' },
-			{
-				text: t('common.save'),
-				handler: (data) => {
-					const next = String(data.name ?? '').trim();
-					if (next) store.renameArea(area.id as number, next);
-				}
-			}
-		]
-	});
-	await alert.present();
-}
-
-async function confirmDelete(area: OfflineArea): Promise<void> {
-	if (area.id == null) return;
-	const alert = await alertController.create({
-		header: t('offlineAreas.deleteDialog.title'),
-		message: t('offlineAreas.deleteDialog.message', { name: area.name }),
-		buttons: [
-			{ text: t('common.cancel'), role: 'cancel' },
-			{
-				text: t('offlineAreas.actions.delete'),
-				role: 'destructive',
-				handler: () => store.removeArea(area.id as number)
-			}
-		]
-	});
-	await alert.present();
-}
-
-async function showOfflineToast(): Promise<void> {
-	const toast = await toastController.create({
-		message: t('offlineAreas.offlineHint'),
-		duration: 3000
-	});
-	await toast.present();
-}
-
 // --- Add-area modal + map picker ------------------------------------------
 
 const addModalOpen = ref(false);
@@ -424,34 +322,20 @@ const estimateLine = computed(() => {
 	});
 });
 
-/**
- * Calibration constants for the pre-download size estimate (plan §2.6). Average
- * compressed bytes per tile per source — rough, so the estimate is shown as a
- * ±40% range rather than a fake exact figure.
- */
-const AVG_TILE_BYTES: Record<string, number> = {
-	protomaps: 45_000,
-	satellite: 25_000,
-	terrain: 35_000
-};
-
 /** Estimated total download bytes for the current bounds + toggles. */
 const estimateBytes = computed(() => {
 	const b = selectedBounds.value;
 	if (!b) return 0;
-	let bytes = tileCount(b, 0, PROTOMAPS_MAX_ZOOM) * AVG_TILE_BYTES.protomaps;
-	if (includeSatellite.value)
-		bytes += tileCount(b, 0, SATELLITE_MAX_ZOOM) * AVG_TILE_BYTES.satellite;
-	if (includeTerrain.value) bytes += tileCount(b, 0, TERRAIN_MAX_ZOOM) * AVG_TILE_BYTES.terrain;
+	let bytes = estimateSourceBytes(b, 'protomaps');
+	if (includeSatellite.value) bytes += estimateSourceBytes(b, 'satellite');
+	if (includeTerrain.value) bytes += estimateSourceBytes(b, 'terrain');
 	return bytes;
 });
 
 /** Formats the estimate as a range string, e.g. "30–50 MB". */
 const sizeEstimateLine = computed(() => {
 	if (!selectedBounds.value) return '';
-	const mb = estimateBytes.value / (1024 * 1024);
-	const low = Math.max(1, Math.round(mb * 0.6));
-	const high = Math.max(low, Math.round(mb * 1.4));
+	const { low, high } = estimateRangeMb(estimateBytes.value);
 	return t('offlineAreas.add.sizeEstimate', { low: formatCount(low), high: formatCount(high) });
 });
 

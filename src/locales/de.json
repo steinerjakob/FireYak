@@ -320,6 +320,21 @@
 			"title": "Offline-Bereich löschen?",
 			"message": "„{name}“ wird entfernt. Gespeicherte Wasserentnahmestellen bleiben bis zum Ablauf erhalten."
 		},
+		"detail": {
+			"waterSources": "Wasserentnahmestellen",
+			"mapTiles": "Kartenkacheln",
+			"storage": "Speicherplatz",
+			"created": "Erstellt",
+			"lastRefreshed": "Zuletzt aktualisiert",
+			"neverRefreshed": "Nie",
+			"downloadSettings": "Download-Einstellungen",
+			"additionalDownload": "Zusätzlicher Download: ≈ {low}–{high} MB",
+			"removeTilesDialog": {
+				"title": "Heruntergeladene Kacheln entfernen?",
+				"message": "Die Kacheln für „{label}“ werden von diesem Gerät entfernt. Du kannst sie jederzeit erneut herunterladen.",
+				"remove": "Entfernen"
+			}
+		},
 		"add": {
 			"button": "Bereich hinzufügen",
 			"title": "Neuer Offline-Bereich",
@@ -329,6 +344,7 @@
 			"defaultName": "Mein Bereich",
 			"includeSatellite": "Satellitenbilder einschließen",
 			"includeTerrain": "Gelände einschließen",
+			"includeTerrainHint": "Für die Pumpenberechnung offline erforderlich — Geländekacheln liefern die Höhendaten.",
 			"autoRefresh": "Automatisch über WLAN aktualisieren",
 			"autoRefreshHint": "Automatisch über WLAN aktualisieren, wenn älter als 30 Tage.",
 			"estimate": "Etwa {width} × {height} km · {chunks} Datenblöcke",

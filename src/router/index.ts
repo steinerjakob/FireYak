@@ -48,6 +48,11 @@ const routes = [
 		component: () => import('@/views/OfflineAreasView.vue')
 	},
 	{
+		path: '/settings/offline-areas/:id',
+		name: 'Offline area details',
+		component: () => import('@/views/OfflineAreaDetailView.vue')
+	},
+	{
 		path: '/settings/pending-edits',
 		name: 'Pending edits',
 		component: () => import('@/views/PendingEditsView.vue')
