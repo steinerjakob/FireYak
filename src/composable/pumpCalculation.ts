@@ -10,6 +10,7 @@ import { getPumpLocationMarkers, PumpPosition } from '@/helper/calculatePumpPosi
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useDefaultStore } from '@/store/defaultStore';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
 import { getMapNodeById } from '@/mapHandler/databaseHandler';
 import { alertController } from '@ionic/vue';
@@ -41,6 +42,69 @@ export interface CalculationResult {
 }
 
 const calculationResult = ref<CalculationResult | null>(null);
+
+/**
+ * Entry of the result panel a tapped map marker / list row / chart point
+ * refers to: `'suction'`, `'target'` or `'pump-<index into pumpPositions>'`.
+ */
+export type ResultEntryId = 'suction' | 'target' | `pump-${number}`;
+
+const selectedResultEntry = ref<ResultEntryId | null>(null);
+
+/** CSS class (global, see SupplyPipeCalculation.vue) marking the selected marker. */
+const SELECTED_MARKER_CLASS = 'pump-result-selected-marker';
+
+function resultEntryMarkers(): [ResultEntryId, maplibregl.Marker | null][] {
+	return [
+		['suction', suctionPoint],
+		['target', targetPoint],
+		...pumpMarkers.map((m, i) => [`pump-${i}`, m] as [ResultEntryId, maplibregl.Marker])
+	];
+}
+
+function applyEntryHighlight() {
+	for (const [id, marker] of resultEntryMarkers()) {
+		const el = marker?.getElement();
+		if (!el) continue;
+		const isSelected = id === selectedResultEntry.value;
+		el.classList.toggle(SELECTED_MARKER_CLASS, isSelected);
+		// Lift the selected marker above overlapping neighbors.
+		el.style.zIndex = isSelected ? '2' : '';
+	}
+}
+
+watch(selectedResultEntry, applyEntryHighlight);
+// Leaving the result view (back button / route change) drops the selection.
+watch(calculationResult, (result) => {
+	if (!result) selectedResultEntry.value = null;
+});
+
+/**
+ * Pans the map so the marker sits centered in the map area not covered by the
+ * result sheet (mobile) or the side panel (desktop) — same offset logic as
+ * MainMap's fit-to-marker.
+ */
+function centerOnMarker(marker: maplibregl.Marker) {
+	if (!rootMap) return;
+	const view = useDefaultStore().visibleMapView;
+	const offsetX = view.x / 2;
+	const offsetY = (view.top - (view.yMax - view.y)) / 2;
+	const point = rootMap.project(marker.getLngLat());
+	const adjusted = rootMap.unproject(new maplibregl.Point(point.x - offsetX, point.y - offsetY));
+	rootMap.panTo(adjusted);
+}
+
+/**
+ * Selects a result entry (panel row, chart point and map marker stay in
+ * sync). `center` pans the map to the marker — used when the selection comes
+ * from the panel; taps on the marker itself skip it.
+ */
+function selectResultEntry(id: ResultEntryId | null, options: { center?: boolean } = {}) {
+	selectedResultEntry.value = id;
+	if (!id || !options.center) return;
+	const marker = resultEntryMarkers().find(([entryId]) => entryId === id)?.[1];
+	if (marker) centerOnMarker(marker);
+}
 
 function setMap(map: maplibregl.Map) {
 	rootMap = map;
@@ -281,6 +345,9 @@ const setTargetPoint = (latlng?: GeoPoint) => {
 			draggable: true
 		});
 		targetPoint.setLngLat([point.lng, point.lat]).addTo(rootMap);
+		targetPoint.getElement().addEventListener('click', () => {
+			if (calculationResult.value) selectResultEntry('target');
+		});
 	} else {
 		targetPoint.setLngLat([point.lng, point.lat]);
 	}
@@ -398,6 +465,9 @@ export function usePumpCalculation() {
 				sourcePressure = null;
 				updatePolyline();
 			});
+			suctionPoint.getElement().addEventListener('click', () => {
+				if (calculationResult.value) selectResultEntry('suction');
+			});
 		} else {
 			suctionPoint.setLngLat([point.lng, point.lat]);
 		}
@@ -456,47 +526,6 @@ export function usePumpCalculation() {
 		}
 	};
 
-	const updateTargetMarker = (
-		pumpPositions: PumpPosition[],
-		realDistance: number,
-		elevations: ElevationPoint[]
-	) => {
-		const pumpStore = usePumpCalculationStore();
-
-		const inpuPressure = t('pumpCalculation.pump.inputPressure');
-		const distanceFromStart = t('pumpCalculation.pump.distanceFromStart');
-		const riseFromStart = t('pumpCalculation.pump.elevationDifference');
-
-		const lastPump = pumpPositions[pumpPositions.length - 1];
-		const prevDistance = lastPump?.distanceFromStart ?? 0;
-		const prevElevation = lastPump?.elevation ?? elevations[0].elevation;
-
-		const distance = realDistance - prevDistance;
-
-		const neededBTubes = Math.ceil(distance / pumpStore.tubeLength);
-		const lastElevation = elevations[elevations.length - 1];
-		// Round to whole meters: DEM elevations carry decimals whose float
-		// noise would otherwise leak into the display.
-		const elevation = Math.round(lastElevation.elevation - prevElevation);
-		const pressure = lastElevation.pressure;
-
-		const title = t('pumpCalculation.fireObject');
-		const tubes = t('pumpCalculation.pump.tubes');
-
-		const snippet = `${pumpStore.hoseName}-${tubes}: ~${neededBTubes}<br>${distanceFromStart}: ~${distance.toFixed(0)}m<br>${riseFromStart}: ${elevation}m`;
-		const subDescription = `${inpuPressure}: ${pressure?.toFixed(0)}`;
-
-		const popup = new maplibregl.Popup({ maxWidth: '400px', offset: [0, -48] });
-		popup.setHTML(`
-		<div class="pump-popup">
-			<b>${title}</b>
-			<div>${snippet}</div>
-			<div>${subDescription}</div>
-		</div>
-	`);
-		targetPoint?.setPopup(popup);
-	};
-
 	const calculatePumpRequirements = async () => {
 		const pumpStore = usePumpCalculationStore();
 		if (pumpStore.outputPressure <= pumpStore.inputPressure) {
@@ -518,12 +547,11 @@ export function usePumpCalculation() {
 		const path = routedPathPoints ?? markerChain();
 		const { points } = resamplePolyline(path);
 		const { points: elevationData, elevationIgnored } = await getElevationDataForPoints(points);
-		const { realDistance, pumpPositions } = getPumpLocationMarkers(
-			t,
-			elevationData,
-			sourcePressure
-		);
-		updateTargetMarker(pumpPositions, realDistance, elevationData);
+		const { realDistance, pumpPositions } = getPumpLocationMarkers(elevationData, sourcePressure);
+
+		// The panel lists all marker details now — no popups in the result view
+		// (tapping a marker selects its panel entry instead).
+		suctionPoint.setPopup(null);
 
 		// One hose-count label per stretch: suction → pump 1 → … → fire object.
 		const tubesLabel = t('pumpCalculation.pump.tubes');
@@ -544,11 +572,16 @@ export function usePumpCalculation() {
 		pumpMarkers.forEach((m) => m.remove());
 		pumpMarkers.length = 0;
 
-		// Add new pump markers
-		pumpPositions.forEach(({ marker }) => {
+		// Add new pump markers; tapping one selects its result-panel entry.
+		pumpPositions.forEach(({ marker }, index) => {
 			if (rootMap) marker.addTo(rootMap);
+			marker.getElement().addEventListener('click', () => {
+				selectResultEntry(`pump-${index}`);
+			});
 			pumpMarkers.push(marker);
 		});
+
+		selectedResultEntry.value = null;
 
 		calculationResult.value = {
 			pumpPositions,
@@ -656,6 +689,8 @@ export function usePumpCalculation() {
 		firePointSet,
 		calculatePumpRequirements,
 		calculationResult,
+		selectedResultEntry,
+		selectResultEntry,
 		markerSetAlert
 	};
 }
