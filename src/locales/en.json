@@ -164,9 +164,14 @@
 		},
 		"sourcePressureUsed": "Hydrant pressure: {pressure} bar",
 		"sourcePumpRequired": "A pump is required at the water source",
+		"chart": {
+			"title": "Elevation profile"
+		},
 		"pump": {
 			"title": "Pump",
+			"numbered": "Pump {n}",
 			"inputPressure": "Input Pressure (bar)",
+			"inputPressureShort": "Input pressure",
 			"outputPressure": "Output Pressure (bar)",
 			"targetPressure": "Pressure at fire object (bar)",
 			"flowRate": "Flow Rate (l/min)",
