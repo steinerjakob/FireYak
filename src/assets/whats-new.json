@@ -7,18 +7,13 @@
 		},
 		{
 			"type": "improvement",
-			"en": "Tapping a pump, water source, or fire object on the map highlights its entry in the results list instead of opening a popup — and selecting an entry highlights it on the map.",
-			"de": "Ein Antippen von Pumpe, Wasserquelle oder Brandobjekt auf der Karte hebt den passenden Eintrag in der Ergebnisliste hervor statt ein Popup zu öffnen – und umgekehrt."
-		},
-		{
-			"type": "improvement",
 			"en": "The pump calculation now updates automatically when you drag a marker or add a waypoint.",
 			"de": "Die Pumpenberechnung aktualisiert sich jetzt automatisch, wenn du einen Marker verschiebst oder einen Wegpunkt hinzufügst."
 		},
 		{
 			"type": "fix",
 			"en": "During the pump calculation, a long press on the map now lets you place the fire object, water source, or waypoint on mobile devices.",
-			"de": "Während der Pumpenberechnung lassen sich Brandobjekt, Wasserquelle oder Wegpunkt am Handy jetzt per langem Drücken auf die Karte setzen."
+			"de": "Während der Pumpenberechnung lassen sich Brandobjekt, Wasserquelle oder Wegpunkt jetzt per langem Drücken auf die Karte setzen."
 		}
 	],
 	"releases": [
