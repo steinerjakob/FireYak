@@ -320,6 +320,21 @@
 			"title": "Delete offline area?",
 			"message": "\"{name}\" will be removed. Cached water sources stay until they expire."
 		},
+		"detail": {
+			"waterSources": "Water sources",
+			"mapTiles": "Map tiles",
+			"storage": "Storage",
+			"created": "Created",
+			"lastRefreshed": "Last refreshed",
+			"neverRefreshed": "Never",
+			"downloadSettings": "Download settings",
+			"additionalDownload": "Additional download: ≈ {low}–{high} MB",
+			"removeTilesDialog": {
+				"title": "Remove downloaded tiles?",
+				"message": "The tiles for \"{label}\" will be removed from this device. You can download them again anytime.",
+				"remove": "Remove"
+			}
+		},
 		"add": {
 			"button": "Add area",
 			"title": "New offline area",
@@ -329,6 +344,7 @@
 			"defaultName": "My district",
 			"includeSatellite": "Include satellite imagery",
 			"includeTerrain": "Include terrain",
+			"includeTerrainHint": "Needed for the offline pump calculation — terrain tiles provide the elevation data.",
 			"autoRefresh": "Auto-refresh on Wi-Fi",
 			"autoRefreshHint": "Refresh automatically over Wi-Fi when older than 30 days.",
 			"estimate": "About {width} × {height} km · {chunks} data chunks",
