@@ -2,6 +2,21 @@
 	"unreleased": [
 		{
 			"type": "feature",
+			"en": "Tap a downloaded offline area to see the covered region on a map along with its details.",
+			"de": "Ein heruntergeladener Offline-Bereich zeigt beim Antippen das abgedeckte Gebiet auf einer Karte samt Details."
+		},
+		{
+			"type": "feature",
+			"en": "Terrain and auto-refresh settings of an offline area can be changed after downloading.",
+			"de": "Gelände- und Aktualisierungs-Einstellungen eines Offline-Bereichs lassen sich nachträglich ändern."
+		},
+		{
+			"type": "improvement",
+			"en": "New offline areas include terrain data by default — it powers the offline pump calculation.",
+			"de": "Neue Offline-Bereiche enthalten standardmäßig Geländedaten — sie werden für die Pumpenberechnung offline benötigt."
+		},
+		{
+			"type": "feature",
 			"en": "The pump calculation results now show an elevation profile of the line with every pump marked along it.",
 			"de": "Die Ergebnisse der Pumpenberechnung zeigen jetzt ein Höhenprofil der Leitung mit allen Pumpen entlang der Strecke."
 		},
