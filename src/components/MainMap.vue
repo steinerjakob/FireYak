@@ -1310,16 +1310,30 @@ function addMapLayers(map: maplibregl.Map) {
 }
 
 function setupMapEventListeners(map: maplibregl.Map) {
+	// Opens the supply-pipe marker chooser (fire object / suction point /
+	// waypoint). Reached from desktop right-click AND touch long-press; the
+	// timestamp guard keeps devices that deliver both events for one press
+	// from opening the alert twice.
+	let lastContextActionAt = 0;
+	const openMapContextAction = (lngLat: { lat: number; lng: number }) => {
+		if (!route.path.includes('supplypipe')) return;
+		if (Date.now() - lastContextActionAt < 800) return;
+		lastContextActionAt = Date.now();
+		pumpCalculation.markerSetAlert(lngLat);
+	};
+
 	// -----------------------------------------------------------------------
-	// Touch long-press → add marker at the pressed location (§3.4)
+	// Touch long-press → add marker at the pressed location (§3.4), or — on
+	// the supply-pipe route — open the fire/suction/waypoint chooser (mobile
+	// browsers don't synthesize `contextmenu` from a long-press on the map
+	// canvas, so this is the only touch path to it).
 	// Uses MapLibre touch events so we can read the lngLat directly.
 	// Guards:
 	//   • Only single-finger touch (multi-touch = pinch/zoom → ignore)
 	//   • Not while edit is already active
-	//   • Not on the supply-pipe route (that route uses `contextmenu` for its
-	//     own marker placement; MapLibre also emits `contextmenu` for touch
-	//     long-press on mobile — by skipping the timer here we ensure the two
-	//     handlers never fire simultaneously on that route)
+	//   • On the supply-pipe route only when the press starts on the canvas
+	//     itself — holding a draggable calculation marker must not pop the
+	//     chooser
 	// -----------------------------------------------------------------------
 	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 	let longPressLngLat: maplibregl.LngLat | null = null;
@@ -1337,8 +1351,10 @@ function setupMapEventListeners(map: maplibregl.Map) {
 	map.on('touchstart', (e: maplibregl.MapTouchEvent) => {
 		cancelLongPress(); // clear any previous timer
 		if (markerEditStore.isActive) return;
-		if (route.path.includes('supplypipe')) return;
 		if (e.originalEvent.touches.length !== 1) return;
+
+		const isSupplyPipe = route.path.includes('supplypipe');
+		if (isSupplyPipe && e.originalEvent.target !== map.getCanvas()) return;
 
 		const touch = e.originalEvent.touches[0];
 		longPressStartPixel = { x: touch.clientX, y: touch.clientY };
@@ -1346,10 +1362,12 @@ function setupMapEventListeners(map: maplibregl.Map) {
 
 		longPressTimer = setTimeout(() => {
 			if (longPressLngLat) {
-				markerEditStore.requestStartAdding({
-					lat: longPressLngLat.lat,
-					lng: longPressLngLat.lng
-				});
+				const lngLat = { lat: longPressLngLat.lat, lng: longPressLngLat.lng };
+				if (isSupplyPipe) {
+					openMapContextAction(lngLat);
+				} else {
+					markerEditStore.requestStartAdding(lngLat);
+				}
 			}
 			cancelLongPress();
 		}, LONG_PRESS_MS);
@@ -1454,11 +1472,11 @@ function setupMapEventListeners(map: maplibregl.Map) {
 		router.replace('/');
 	});
 
-	// Context menu
+	// Context menu (desktop right-click) — the touch equivalent is the
+	// long-press handler above; openMapContextAction guards against devices
+	// that deliver both events for one press.
 	map.on('contextmenu', (e) => {
-		if (route.path.includes('supplypipe')) {
-			pumpCalculation.markerSetAlert({ lat: e.lngLat.lat, lng: e.lngLat.lng });
-		}
+		openMapContextAction({ lat: e.lngLat.lat, lng: e.lngLat.lng });
 	});
 
 	// Cursor changes for interactive layers
