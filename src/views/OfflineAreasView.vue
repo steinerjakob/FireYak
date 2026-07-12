@@ -342,7 +342,8 @@ const sizeEstimateLine = computed(() => {
 function openAddModal(): void {
 	name.value = t('offlineAreas.add.defaultName');
 	includeSatellite.value = false;
-	includeTerrain.value = false;
+	// Terrain defaults on: its elevation data powers the offline pump calculation.
+	includeTerrain.value = true;
 	autoRefreshOnWifi.value = false;
 	selectedBounds.value = null;
 	addModalOpen.value = true;
