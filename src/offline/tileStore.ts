@@ -31,6 +31,15 @@ export interface TileStore {
 	addAreaRef(source: string, z: number, x: number, y: number, areaId: number): Promise<void>;
 	/** Removes `areaId` refs; deletes tiles whose ref list becomes empty. */
 	deleteArea(areaId: number): Promise<void>;
+	/**
+	 * Removes `areaId` refs from tiles of one source; deletes tiles whose ref
+	 * list becomes empty. `refsRemoved` counts every tile the ref was removed
+	 * from; `bytesFreed` sums only fully deleted blobs (shared tiles survive).
+	 */
+	deleteAreaSource(
+		areaId: number,
+		source: string
+	): Promise<{ refsRemoved: number; bytesFreed: number }>;
 	/** Total bytes held by all tiles (diagnostics / settings display). */
 	sizeBytes(): Promise<number>;
 	/** Cache-first read of a style asset (glyph range / sprite json/png) by path. */
@@ -119,6 +128,32 @@ const idbTileStore: TileStore = {
 			cursor = await cursor.continue();
 		}
 		await tx.done;
+	},
+
+	async deleteAreaSource(areaId, source) {
+		const db = await tileDbPromise();
+		const prefix = `${source}/`;
+		let refsRemoved = 0;
+		let bytesFreed = 0;
+		const tx = db.transaction('tiles', 'readwrite');
+		const index = tx.store.index('areaIds');
+		let cursor = await index.openCursor(IDBKeyRange.only(areaId));
+		while (cursor) {
+			if (String(cursor.primaryKey).startsWith(prefix)) {
+				const rec = cursor.value as TileRecord;
+				const remaining = rec.areaIds.filter((id) => id !== areaId);
+				refsRemoved++;
+				if (remaining.length === 0) {
+					bytesFreed += rec.size ?? 0;
+					await cursor.delete();
+				} else {
+					await cursor.update({ ...rec, areaIds: remaining });
+				}
+			}
+			cursor = await cursor.continue();
+		}
+		await tx.done;
+		return { refsRemoved, bytesFreed };
 	},
 
 	async sizeBytes() {
@@ -268,6 +303,40 @@ const nativeTileStore: TileStore = {
 				// File may already be gone — index removal is what matters.
 			}
 		}
+	},
+
+	async deleteAreaSource(areaId, source) {
+		const db = await nativeDbPromise();
+		const prefix = `${source}/`;
+		let refsRemoved = 0;
+		let bytesFreed = 0;
+		const index = db.transaction('tileIndex').store.index('areaIds');
+		const toDelete: { key: string; size: number }[] = [];
+		let cursor = await index.openCursor(IDBKeyRange.only(areaId));
+		while (cursor) {
+			const key = cursor.primaryKey as string;
+			if (key.startsWith(prefix)) {
+				const rec = cursor.value as NativeIndexRecord;
+				const remaining = rec.areaIds.filter((id) => id !== areaId);
+				refsRemoved++;
+				if (remaining.length === 0) {
+					toDelete.push({ key, size: rec.size ?? 0 });
+				} else {
+					await db.put('tileIndex', { ...rec, areaIds: remaining }, key);
+				}
+			}
+			cursor = await cursor.continue();
+		}
+		for (const { key, size } of toDelete) {
+			await db.delete('tileIndex', key);
+			bytesFreed += size;
+			try {
+				await Filesystem.deleteFile({ path: `${TILE_DIR}/${key}.bin`, directory: Directory.Data });
+			} catch {
+				// File may already be gone — index removal is what matters.
+			}
+		}
+		return { refsRemoved, bytesFreed };
 	},
 
 	async sizeBytes() {

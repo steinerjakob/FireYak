@@ -326,6 +326,74 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 	}
 
 	/**
+	 * Updates an existing area's download settings. `autoRefreshOnWifi` is
+	 * always just persisted; satellite/terrain changes additionally download the
+	 * newly enabled source or delete the disabled one's tiles, and are ignored
+	 * while a download/refresh is in flight (the tile task iterates a snapshot
+	 * of the enabled sources, so racing it would corrupt refs/progress).
+	 */
+	async function updateAreaSettings(
+		id: number,
+		patch: Partial<Pick<OfflineArea, 'includeSatellite' | 'includeTerrain' | 'autoRefreshOnWifi'>>
+	): Promise<void> {
+		const area = areas.value.find((a) => a.id === id);
+		if (!area || area.id == null) return;
+
+		if (
+			patch.autoRefreshOnWifi !== undefined &&
+			patch.autoRefreshOnWifi !== area.autoRefreshOnWifi
+		) {
+			await persist(id, { autoRefreshOnWifi: patch.autoRefreshOnWifi });
+			// An already-overdue area should refresh right away once opted in.
+			if (patch.autoRefreshOnWifi) void checkAutoRefresh();
+		}
+
+		if (controllers.has(id)) return;
+
+		// Disables run first (they need the current tile refs); enabled flags are
+		// collected and started as one resume download below.
+		const enablePatch: Partial<OfflineArea> = {};
+		let needsDownload = false;
+
+		for (const flag of ['includeSatellite', 'includeTerrain'] as const) {
+			const next = patch[flag];
+			if (next === undefined || next === area[flag]) continue;
+			const source = flag === 'includeSatellite' ? 'satellite' : 'terrain';
+
+			if (next) {
+				enablePatch[flag] = true;
+				needsDownload = true;
+				continue;
+			}
+
+			const { refsRemoved, bytesFreed } = await tileStore.deleteAreaSource(id, source);
+			const current = areas.value.find((a) => a.id === id) ?? area;
+			const tileResume = { ...(current.tileResume ?? {}) };
+			delete tileResume[source];
+			// sizeBytes only ever counted genuinely-new bytes and bytesFreed excludes
+			// tiles shared with overlapping areas, so the counter can drift slightly
+			// across enable/disable cycles — acceptable for a storage display.
+			await persist(id, {
+				[flag]: false,
+				tileResume,
+				tileCount: Math.max(0, current.tileCount - refsRemoved),
+				sizeBytes: Math.max(0, current.sizeBytes - bytesFreed)
+			});
+		}
+
+		if (needsDownload) {
+			await persist(id, enablePatch);
+			// Resume-path download fetches only the new source(s): the data-chunk
+			// loop no-ops for a completed area and tileResume fast-forwards sources
+			// already on disk. Accepted quirks: the success path bumps
+			// lastRefreshedAt even though no Overpass data was refetched, and the
+			// area passes through `downloading`, so coverage gating treats it as
+			// uncovered for the duration.
+			void runDownload(id, false);
+		}
+	}
+
+	/**
 	 * Deletes an area: aborts any running download, removes the record, and
 	 * drops it from reactive state. Cached nodes are intentionally left — once
 	 * the area is gone they are no longer protected and pruning reclaims them.
@@ -380,6 +448,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 		refreshArea,
 		cancelDownload,
 		renameArea,
+		updateAreaSettings,
 		removeArea,
 		checkAutoRefresh,
 		isDownloading
