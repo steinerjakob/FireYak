@@ -110,14 +110,6 @@
 					</ion-item>
 
 					<ion-item>
-						<ion-label>{{ $t('offlineAreas.add.includeSatellite') }}</ion-label>
-						<ion-toggle
-							slot="end"
-							:checked="includeSatellite"
-							@ion-change="includeSatellite = $event.detail.checked"
-						></ion-toggle>
-					</ion-item>
-					<ion-item>
 						<ion-label>
 							<h3>{{ $t('offlineAreas.add.includeTerrain') }}</h3>
 							<p class="wrap-note">{{ $t('offlineAreas.add.includeTerrainHint') }}</p>
@@ -299,6 +291,11 @@ const pickerContainer = ref<HTMLElement | null>(null);
 let pickerMap: maplibregl.Map | null = null;
 
 const name = ref('');
+/**
+ * Not user-toggleable: Esri's terms don't permit offline storage of World
+ * Imagery tiles, so satellite bulk download is hidden. The flag only exists to
+ * satisfy the CreateAreaInput shape and is always false.
+ */
 const includeSatellite = ref(false);
 const includeTerrain = ref(false);
 const autoRefreshOnWifi = ref(false);
@@ -327,7 +324,6 @@ const estimateBytes = computed(() => {
 	const b = selectedBounds.value;
 	if (!b) return 0;
 	let bytes = estimateSourceBytes(b, 'protomaps');
-	if (includeSatellite.value) bytes += estimateSourceBytes(b, 'satellite');
 	if (includeTerrain.value) bytes += estimateSourceBytes(b, 'terrain');
 	return bytes;
 });
