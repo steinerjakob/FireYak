@@ -1,37 +1,42 @@
 {
-	"unreleased": [
-		{
-			"type": "feature",
-			"en": "Tap a downloaded offline area to see the covered region on a map along with its details.",
-			"de": "Ein heruntergeladener Offline-Bereich zeigt beim Antippen das abgedeckte Gebiet auf einer Karte samt Details."
-		},
-		{
-			"type": "feature",
-			"en": "Terrain and auto-refresh settings of an offline area can be changed after downloading.",
-			"de": "Gelände- und Aktualisierungs-Einstellungen eines Offline-Bereichs lassen sich nachträglich ändern."
-		},
-		{
-			"type": "improvement",
-			"en": "New offline areas include terrain data by default — it powers the offline pump calculation.",
-			"de": "Neue Offline-Bereiche enthalten standardmäßig Geländedaten — sie werden für die Pumpenberechnung offline benötigt."
-		},
-		{
-			"type": "feature",
-			"en": "The pump calculation results now show an elevation profile of the line with every pump marked along it.",
-			"de": "Die Ergebnisse der Pumpenberechnung zeigen jetzt ein Höhenprofil der Leitung mit allen Pumpen entlang der Strecke."
-		},
-		{
-			"type": "improvement",
-			"en": "The pump calculation now updates automatically when you drag a marker or add a waypoint.",
-			"de": "Die Pumpenberechnung aktualisiert sich jetzt automatisch, wenn du einen Marker verschiebst oder einen Wegpunkt hinzufügst."
-		},
-		{
-			"type": "fix",
-			"en": "During the pump calculation, a long press on the map now lets you place the fire object, water source, or waypoint on mobile devices.",
-			"de": "Während der Pumpenberechnung lassen sich Brandobjekt, Wasserquelle oder Wegpunkt jetzt per langem Drücken auf die Karte setzen."
-		}
-	],
+	"unreleased": [],
 	"releases": [
+		{
+			"version": "2.16.0",
+			"date": "2026-07-15",
+			"entries": [
+				{
+					"type": "feature",
+					"en": "Tap a downloaded offline area to see the covered region on a map along with its details.",
+					"de": "Ein heruntergeladener Offline-Bereich zeigt beim Antippen das abgedeckte Gebiet auf einer Karte samt Details."
+				},
+				{
+					"type": "feature",
+					"en": "Terrain and auto-refresh settings of an offline area can be changed after downloading.",
+					"de": "Gelände- und Aktualisierungs-Einstellungen eines Offline-Bereichs lassen sich nachträglich ändern."
+				},
+				{
+					"type": "improvement",
+					"en": "New offline areas include terrain data by default — it powers the offline pump calculation.",
+					"de": "Neue Offline-Bereiche enthalten standardmäßig Geländedaten — sie werden für die Pumpenberechnung offline benötigt."
+				},
+				{
+					"type": "feature",
+					"en": "The pump calculation results now show an elevation profile of the line with every pump marked along it.",
+					"de": "Die Ergebnisse der Pumpenberechnung zeigen jetzt ein Höhenprofil der Leitung mit allen Pumpen entlang der Strecke."
+				},
+				{
+					"type": "improvement",
+					"en": "The pump calculation now updates automatically when you drag a marker or add a waypoint.",
+					"de": "Die Pumpenberechnung aktualisiert sich jetzt automatisch, wenn du einen Marker verschiebst oder einen Wegpunkt hinzufügst."
+				},
+				{
+					"type": "fix",
+					"en": "During the pump calculation, a long press on the map now lets you place the fire object, water source, or waypoint on mobile devices.",
+					"de": "Während der Pumpenberechnung lassen sich Brandobjekt, Wasserquelle oder Wegpunkt jetzt per langem Drücken auf die Karte setzen."
+				}
+			]
+		},
 		{
 			"version": "2.15.0",
 			"date": "2026-07-10",
