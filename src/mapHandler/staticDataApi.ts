@@ -33,58 +33,70 @@ export interface DataMetadata {
  */
 let warnedMissingTypeInfo = false;
 
-/** Warns once per session that the extract's `@id` carries no element type. */
+/** Warns once per session that the extract carries no element type. */
 function warnMissingTypeInfoOnce(): void {
 	if (warnedMissingTypeInfo) return;
 	warnedMissingTypeInfo = true;
 	console.warn(
-		'[staticDataApi] water_sources.fgb "@id" is a bare number with no OSM element ' +
-			'type (node/way/relation) — falling back to inferring the type from geometry ' +
-			'(Point → node, else → way). This is transitional: re-run the data pipeline ' +
-			'with --add-unique-id=type_id so "@id" carries the type prefix, then this ' +
-			'fallback stops triggering.'
+		'[staticDataApi] water_sources.fgb carries no OSM element type: no "@type" ' +
+			'property and "@id" is a bare number — falling back to inferring the type ' +
+			'from geometry (Point → node, else → way), which mislabels relations as ways. ' +
+			"The pipeline's export-config.json already sets attributes.type = true, so " +
+			'this means the running image predates that config: rebuild the Docker image ' +
+			'(the config is COPYed to /etc/osmium-export-config.json at build time, not ' +
+			'read at run time) and re-run the pipeline.'
 	);
 }
 
+/** Maps osmium's `@type` attribute value onto an {@link OsmType}. */
+const OSM_TYPE_BY_NAME: Record<string, OsmType> = {
+	node: 'node',
+	way: 'way',
+	relation: 'relation'
+};
+
 /**
- * Resolves a feature's numeric id and OSM element type from its `@id`
- * property, tolerant of both export formats the pipeline can currently
- * produce:
+ * Resolves a feature's numeric id and OSM element type, accepting every shape
+ * the pipeline can produce, most authoritative first:
  *
- * - **Fixed pipeline** (`--add-unique-id=type_id`): `@id` is a string like
- *   `"n123"` / `"w456"` / `"r789"` — the prefix gives the type directly.
- * - **Current, not-yet-fixed pipeline**: `@id` is a bare number with no type
- *   info. Falls back to inferring the type from the geometry (`Point` → node,
- *   anything else → way) and warns once per session. Transitional — remove
- *   once the uploaded extract always carries the typed `@id`.
+ * 1. **`@type` + numeric `@id`** — what `export-config.json`'s
+ *    `attributes.type = true` produces, and the preferred form: the type is
+ *    explicit and `@id` stays a number, so nothing has to be parsed.
+ * 2. **Typed string `@id`** (`"n123"` / `"w456"` / `"r789"`) — what
+ *    `osmium export --add-unique-id=type_id` produces, supported so either
+ *    pipeline configuration works.
+ * 3. **Bare numeric `@id` with no type at all** — infers the type from the
+ *    geometry (`Point` → node, anything else → way) and warns once per session.
+ *    Transitional and lossy: relations are mislabelled as ways. Remove this
+ *    branch once every published extract carries the type.
  *
  * Returns `null` if `@id` is missing or unusable.
  */
 function resolveIdAndType(
 	rawId: unknown,
+	rawType: unknown,
 	geometry: GeoJSON.Geometry | null
 ): { id: number; type: OsmType } | null {
+	// (1) Explicit `@type` alongside the id — preferred.
+	const declaredType = typeof rawType === 'string' ? OSM_TYPE_BY_NAME[rawType] : undefined;
+
+	// (2) Typed string id, e.g. "w456".
 	if (typeof rawId === 'string') {
 		const match = /^([nwr])(\d+)$/.exec(rawId);
 		if (match) {
-			const type: OsmType = match[1] === 'n' ? 'node' : match[1] === 'w' ? 'way' : 'relation';
-			return { id: Number(match[2]), type };
+			const prefixed: OsmType = match[1] === 'n' ? 'node' : match[1] === 'w' ? 'way' : 'relation';
+			return { id: Number(match[2]), type: declaredType ?? prefixed };
 		}
-		// Not the typed format — try treating it as a stringified bare number.
-		const numeric = Number(rawId);
-		if (!Number.isFinite(numeric)) return null;
-		warnMissingTypeInfoOnce();
-		return { id: numeric, type: geometry?.type === 'Point' ? 'node' : 'way' };
 	}
 
-	if (typeof rawId === 'number' && Number.isFinite(rawId)) {
-		// Transitional fallback for the currently-uploaded extract — see the
-		// doc comment above.
-		warnMissingTypeInfoOnce();
-		return { id: rawId, type: geometry?.type === 'Point' ? 'node' : 'way' };
-	}
+	const numericId = typeof rawId === 'number' ? rawId : Number(rawId);
+	if (!Number.isFinite(numericId)) return null;
 
-	return null;
+	if (declaredType) return { id: numericId, type: declaredType };
+
+	// (3) No type information anywhere — infer it, lossily.
+	warnMissingTypeInfoOnce();
+	return { id: numericId, type: geometry?.type === 'Point' ? 'node' : 'way' };
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +159,7 @@ export function toOverPassElement(feature: GeoJSON.Feature): OverPassElement | n
 	if (!geometry) return null;
 
 	const properties = (feature.properties ?? {}) as Record<string, unknown>;
-	const resolved = resolveIdAndType(properties['@id'], geometry);
+	const resolved = resolveIdAndType(properties['@id'], properties['@type'], geometry);
 	if (!resolved) return null;
 
 	const point = representativePoint(geometry);
