@@ -9,8 +9,9 @@ import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
-import { clampBounds, OverPassElement } from './overPassApi';
+import { clampBounds, fetchMarkerData, OverPassElement } from './overPassApi';
 import { fetchWaterSources, getExtractTimestampMs } from '@/mapHandler/staticDataApi';
+import { useNetworkStatus } from '@/composable/networkStatus';
 import {
 	getMapNodesForView,
 	getNearbyMapNodes,
@@ -186,6 +187,89 @@ export async function reconcileDeletedNodes(
  */
 let lastStaticQueryFailed = false;
 
+// --- Opportunistic live refresh (§4.7) -----------------------------------
+// The static extract is rebuilt every couple of days, so it is always somewhat
+// behind OSM. On top of it we ask Overpass for the same viewport in the
+// background: when it answers, the cache picks up edits newer than the extract;
+// when it is rate-limited or down, nothing happens and the user never finds out.
+// This is strictly additive — it can only ever make the map fresher, never
+// break it, which is why every failure path here is silent.
+
+/**
+ * Separate freshness registry from {@link tileFreshness}. The live layer needs
+ * its own TTL because it answers a different question ("has Overpass been asked
+ * about this area recently?") and must not be satisfied by a static read, or
+ * vice versa.
+ */
+const liveFreshness = new Map<string, number>();
+/** Shorter than the static TTL — live data is the whole point of asking. */
+const LIVE_FRESHNESS_TTL_MS = 5 * 60 * 1000;
+
+let liveRefreshInFlight = false;
+
+/** True when every given tile was asked of Overpass within the live TTL. */
+function areTilesLiveFresh(keys: string[]): boolean {
+	const now = Date.now();
+	return keys.every((key) => {
+		const fetchedAt = liveFreshness.get(key);
+		return fetchedAt !== undefined && now - fetchedAt < LIVE_FRESHNESS_TTL_MS;
+	});
+}
+
+/**
+ * Asks Overpass for `mapBounds` in the background and folds whatever comes back
+ * into the cache. Never throws, never blocks rendering, and never touches
+ * {@link markerFetchFailed} — a failure here is a non-event.
+ *
+ * Deliberately **does not reconcile deletions**. Overpass truncates at 2000
+ * elements and can answer partially, so an object missing from its response is
+ * not evidence of deletion (gaps ≠ deletions). It only ever upserts, which is
+ * also why `storeMapNodes` preserving the `__deleted` tombstone matters: a
+ * marker the user deleted locally must not be resurrected by a live refresh.
+ *
+ * No client-side timeout is imposed, despite the plan's suggestion of ~5 s.
+ * Nothing waits on this, and aborting an Overpass query does not refund its
+ * server-side rate-limit slot — so cutting it off early would throw away a
+ * result we had already paid for. `overPassApi` applies its own per-attempt
+ * timeouts, instance pool and 429 cool-downs.
+ */
+async function refreshFromLiveSource(mapBounds: GeoBounds): Promise<void> {
+	// Pointless while offline, and it would only log failures.
+	const { isOnline } = useNetworkStatus();
+	if (!isOnline.value) return;
+	if (liveRefreshInFlight) return;
+
+	// Same padded+clamped bounds the static path uses, so both layers agree on
+	// what "this area" means and the tile keys line up.
+	const queryBounds = clampBounds(padBounds(mapBounds, BBOX_PADDING_RATIO));
+	const keys = coveringTileKeys(queryBounds);
+	if (areTilesLiveFresh(keys)) return;
+
+	liveRefreshInFlight = true;
+	try {
+		const liveElements = await fetchMarkerData(queryBounds);
+		// null = aborted (superseded by a newer pan) or every instance failed.
+		// Leave the tiles unstamped so the next movement tries again.
+		if (liveElements === null) return;
+
+		// Stamp on any answer, including an empty one: "Overpass says there is
+		// nothing here" is a real answer worth not re-asking for a while.
+		const now = Date.now();
+		for (const key of keys) liveFreshness.set(key, now);
+
+		if (liveElements.length === 0) return;
+
+		// Upsert only. storeMapNodes keys by ref and overwrites, so anything
+		// Overpass knows about more recently than the extract wins.
+		await storeMapNodes(liveElements);
+		markerCacheVersion.value++;
+	} catch {
+		// Silent by design — the static layer already rendered.
+	} finally {
+		liveRefreshInFlight = false;
+	}
+}
+
 async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]> {
 	// Pad the query bbox so small subsequent pans stay inside the fetched area,
 	// then apply the same span clamp as the actual query. Freshness stamps and
@@ -313,6 +397,13 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 					});
 			}
 		}
+
+		// Opportunistic live top-up on top of whichever branch ran above (§4.7).
+		// Fire-and-forget: the static data has already been resolved, so this can
+		// only add edits made since the extract was cut. Self-throttled by its own
+		// TTL and in-flight guard, so calling it on every map movement is safe.
+		void refreshFromLiveSource(mapBounds);
+
 		// Apply category filters — call inside the function so Pinia is active.
 		const { markerFilters } = useSettingsStore();
 		for (const element of mapElements) {
