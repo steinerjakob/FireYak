@@ -6,6 +6,7 @@ import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
 import { storeMapNodes, deleteMapNode } from '@/mapHandler/databaseHandler';
+import { markerCacheVersion } from '@/mapHandler/markerHandler';
 import { toastController, alertController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import * as OSM from 'osm-api';
@@ -231,6 +232,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					tags: finalTags
 				};
 				await storeMapNodes([updatedMarker]);
+				markerCacheVersion.value++;
 				markerStore.updateSelectedMarker(updatedMarker);
 
 				const toast = await toastController.create({
@@ -327,6 +329,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			);
 
 			await deleteMapNode(originalMarker.value.id);
+			markerCacheVersion.value++;
 			markerStore.selectMarker(null);
 			cancelEdit();
 

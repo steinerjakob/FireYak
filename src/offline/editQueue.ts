@@ -15,6 +15,7 @@ import {
 	deleteMapNode,
 	hardDeleteMapNodes
 } from '@/mapHandler/databaseHandler';
+import { markerCacheVersion } from '@/mapHandler/markerHandler';
 
 // ---------------------------------------------------------------------------
 // Offline edit queue + sync engine (§1.3)
@@ -120,6 +121,7 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 			// makes it as if the marker was never added.
 			if (create?.localId != null) await deletePendingEdit(create.localId);
 			await hardDeleteMapNodes([input.osmId]);
+			markerCacheVersion.value++;
 			return;
 		}
 
@@ -134,6 +136,7 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 		await storeMapNodes([
 			{ id: input.osmId, type: 'node', lat: input.lat, lon: input.lon, tags: input.tags }
 		]);
+		markerCacheVersion.value++;
 		return;
 	}
 
@@ -160,6 +163,7 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 			{ id: osmId, type: 'node', lat: input.lat, lon: input.lon, tags: input.tags }
 		]);
 	}
+	markerCacheVersion.value++;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +221,7 @@ async function remapTempId(tempId: number, newId: number): Promise<void> {
 	if (node) {
 		await storeMapNodes([{ ...node, id: newId }]);
 		await hardDeleteMapNodes([tempId]);
+		markerCacheVersion.value++;
 	}
 
 	// Defensive: coalescing normally folds later edits into the create, but any
@@ -322,11 +327,15 @@ export async function discardEdit(localId: number): Promise<void> {
 
 	if (edit.action === 'create') {
 		await hardDeleteMapNodes([edit.osmId]);
+		markerCacheVersion.value++;
 		return;
 	}
 
 	const server = await fetchNodeById(edit.osmId);
-	if (server) await storeMapNodes([server]);
+	if (server) {
+		await storeMapNodes([server]);
+		markerCacheVersion.value++;
+	}
 }
 
 /** Sets an errored edit back to `pending` so the next sync retries it. */
