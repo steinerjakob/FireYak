@@ -606,10 +606,12 @@ spatial index and cannot answer "give me node 123", but `fetchNodeById`
 refreshes the cache* — deep links and edit-conflict checks read from the cache
 that the bbox range reads have already filled. No FGB replacement, no change.
 
-**Background freshness (optional, phase 2).** Render static data immediately; fire
-the existing Overpass query in the background with a ~5 s timeout; on 429/500
-swallow silently. Objects missing from the Overpass response but present
-statically are **kept** (gaps ≠ deletions).
+**Background freshness — implemented.** Render static data immediately; fire the
+existing Overpass query in the background; on 429/500 swallow silently. Objects
+missing from the Overpass response but present statically are **kept**
+(gaps ≠ deletions). This is what closes the extract's staleness window: the
+static layer guarantees the map always draws, and the live layer opportunistically
+folds in anything mapped since the extract was cut.
 
 **[V]** Merge at the `OverPassElement` layer before `storeMapNodes`, not on GeoJSON
 features — see §4.3. And **drop the `@version` comparison**: nothing in the app
@@ -620,14 +622,31 @@ wins. That is the behaviour we want — express it directly rather than leaving 
 that only looks like it compares versions. A real version compare would need
 `out meta`, which is heavier for no benefit.
 
-```ts
-/** Live response wins for ids it contains; static-only ids are preserved. */
-export function mergeLive(staticEls: OverPassElement[], liveEls: OverPassElement[]) {
-  const byId = new Map(staticEls.map((e) => [e.id, e]));
-  for (const e of liveEls) byId.set(e.id, e);
-  return [...byId.values()];
-}
-```
+**Implemented as `refreshFromLiveSource()` in `markerHandler.ts`, and no explicit
+merge step is needed at all.** IndexedDB *is* the merge point: `storeMapNodes`
+keys by ref and overwrites, so a live result simply wins for the ids it contains
+while static-only ids stay put. The standalone `mergeLive` helper this plan
+sketched would have been dead code.
+
+Called fire-and-forget from `getMarkersForView` on every map movement, layered on
+top of whichever static branch ran. Design points worth keeping:
+
+- **Its own freshness registry** (`liveFreshness`, 5-min TTL), separate from the
+  static `tileFreshness` (15-min). They answer different questions and must not
+  satisfy each other. Combined with the existing 0.05° bbox snapping, small pans
+  collapse onto the same key and issue no new request.
+- **Upsert only, never reconcile.** Overpass truncates at 2000 elements and can
+  answer partially, so absence is not deletion. `storeMapNodes` preserving the
+  `__deleted` tombstone is what stops a live refresh resurrecting a marker the
+  user deleted locally.
+- **No client-side timeout**, despite the ~5 s above. Nothing waits on this, and
+  aborting an Overpass query does not refund its rate-limit slot — cutting it off
+  would discard a result already paid for. `overPassApi`'s own per-attempt
+  timeouts, instance pool and 429 cool-downs are the right controls.
+- **Skipped while offline**, so it doesn't log failures for no reason.
+- Order matters: stamp `liveFreshness` *before* bumping `markerCacheVersion`.
+  `MainMap` watches that ref by re-calling `getMarkersForView`, so stamping later
+  would re-enter and loop — the same trap as §4.3's empty-area bug.
 
 **[V]** With the static path in place the blocking-fetch failure mode effectively
 disappears, so decide what happens to `markerFetchFailed` and the toast wired at
