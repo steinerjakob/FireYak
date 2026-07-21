@@ -557,6 +557,23 @@ three things the chunk loop provides:
 - **Deletion reconciliation**, today guarded by
   `elements.length < OVERPASS_TRUNCATION_LIMIT` (`areaDataDownloader.ts:124`).
 
+**Implemented as:** `lastCompletedChunk` is repurposed as a 0/-1 "data phase
+done" flag (no DB migration — the field stays a `number`); the progress total
+becomes `DATA_PHASE_UNITS (1) + totalTilesFor(area)`, so tiles remain the bulk
+and the bar stays monotonic. `chunkBounds`/`countChunks` are deleted.
+
+Two UI call sites also assumed per-chunk semantics and had to move with it, or
+they'd have shown a stuck counter for the whole tile phase:
+`offlineAreaActions.ts` `downloadDetail` (dropped the `{done}/{total}` counter —
+the locale keys `offlineAreas.status.loading/refreshingSources` lost those
+params) and `OfflineAreasView.vue` `estimateLine` (dropped `{chunks}` from
+`offlineAreas.add.estimate`).
+
+**Measured worst case** — a full 1° area (`MAX_AREA_SPAN_DEGREES`) over the
+dense Ruhr region: **42,956 features in 2.3 s over 21 range requests / 11.5 MB**,
+~21 MB heap. The old path needed 16 chunked Overpass calls with a 1 s sleep
+between each. No chunking is needed for size or memory reasons.
+
 The last one is a genuine **win worth stating**: an FGB read is never truncated,
 so refresh-time `reconcileDeletedNodes` becomes exact over the whole area instead
 of being skipped whenever a chunk hit 2000 elements.
@@ -645,7 +662,9 @@ new source name — a separate plan, not a phase of this one.
 
 - Fetch `metadata.json` at startup → "Data as of {planet_timestamp}". Slot:
   the Data Source card at `src/views/AboutView.vue:91-109`, after the existing
-  attribution paragraph.
+  attribution paragraph. **Implemented** as `src/composable/dataFreshness.ts`
+  (Preferences-cached, network-refreshed) + key `about.dataAsOf`
+  (`Data as of {date}` / `Datenstand: {date}`).
   **[V]** No Workbox rule matches `data.fireyak.org` (`vite.config.ts:95-167`
   covers only protomaps / ArcGIS / mapterhorn / wikimedia), so this refetches on
   every launch and fails offline — persist the timestamp via Capacitor
