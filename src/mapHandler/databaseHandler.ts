@@ -304,7 +304,17 @@ export async function getMapNodeById(ref: OsmRef) {
 	}
 }
 
-export async function getMapNodeRefsForBounds(mapBounds: GeoBounds): Promise<OsmRef[]> {
+/**
+ * A cached node's key plus when we last learned about it. `fetchedAt` lets
+ * deletion reconciliation tell "the source says this is gone" apart from "the
+ * source is simply older than what we know" — see `reconcileDeletedNodes`.
+ */
+export interface CachedNodeRef {
+	ref: OsmRef;
+	fetchedAt: number;
+}
+
+export async function getMapNodeRefsForBounds(mapBounds: GeoBounds): Promise<CachedNodeRef[]> {
 	try {
 		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
 		const markerStore = transaction.objectStore(markerStoreName);
@@ -315,7 +325,7 @@ export async function getMapNodeRefsForBounds(mapBounds: GeoBounds): Promise<Osm
 			[mapBounds.north, mapBounds.east]
 		);
 
-		const refs: OsmRef[] = [];
+		const refs: CachedNodeRef[] = [];
 		let cursor = await index.openCursor(range);
 
 		while (cursor) {
@@ -323,7 +333,7 @@ export async function getMapNodeRefsForBounds(mapBounds: GeoBounds): Promise<Osm
 			const markerPoint = getNodePoint(mapMarker);
 
 			if (markerPoint && boundsContains(mapBounds, markerPoint)) {
-				refs.push(mapMarker.ref);
+				refs.push({ ref: mapMarker.ref, fetchedAt: mapMarker.fetchedAt ?? 0 });
 			}
 
 			cursor = await cursor.continue();

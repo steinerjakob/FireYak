@@ -9,41 +9,43 @@
  * as a *single* URL path segment for `/markers/:markerId`.
  */
 
-/** A namespaced OSM element key: `"n123"` (node) or `"w456"` (way). */
+/** A namespaced OSM element key: `"n123"` (node), `"w456"` (way) or `"r789"` (relation). */
 export type OsmRef = string;
 
-/** The two OSM element types FireYak deals with. */
-export type OsmType = 'node' | 'way';
+/** The OSM element types FireYak deals with. */
+export type OsmType = 'node' | 'way' | 'relation';
 
 /** Maps an {@link OsmType} to its {@link OsmRef} prefix letter. */
 const REF_PREFIX: Record<OsmType, string> = {
 	node: 'n',
-	way: 'w'
+	way: 'w',
+	relation: 'r'
 };
 
 const REF_TYPE_BY_PREFIX: Record<string, OsmType> = {
 	n: 'node',
-	w: 'way'
+	w: 'way',
+	r: 'relation'
 };
 
 /**
  * Builds the namespaced ref for an OSM element. `type` is typed loosely
  * (`OsmType | string`) because callers often hand in an {@link OverPassElement}
- * whose `type` field is a plain `string`; anything other than `'way'` is
- * treated as `'node'`, matching the rest of the codebase's node-first defaults.
+ * whose `type` field is a plain `string`; anything not recognised falls back to
+ * `'node'`, matching the rest of the codebase's node-first defaults.
  */
 export function toRef(type: OsmType | string, id: number): OsmRef {
-	const prefix = type === 'way' ? REF_PREFIX.way : REF_PREFIX.node;
+	const prefix = REF_PREFIX[type as OsmType] ?? REF_PREFIX.node;
 	return `${prefix}${id}`;
 }
 
 /**
  * Parses a namespaced ref back into its type and numeric id. Returns `null`
- * for anything that isn't a valid `n<id>` / `w<id>` ref (including bare
- * numbers — use {@link coerceRef} to accept those).
+ * for anything that isn't a valid `n<id>` / `w<id>` / `r<id>` ref (including
+ * bare numbers — use {@link coerceRef} to accept those).
  */
 export function parseRef(ref: OsmRef): { type: OsmType; id: number } | null {
-	const match = /^([nw])(-?\d+)$/.exec(ref);
+	const match = /^([nwr])(-?\d+)$/.exec(ref);
 	if (!match) return null;
 	return { type: REF_TYPE_BY_PREFIX[match[1]], id: Number(match[2]) };
 }
