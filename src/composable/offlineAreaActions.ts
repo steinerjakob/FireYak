@@ -1,7 +1,6 @@
 import { alertController, toastController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import { useOfflineAreasStore } from '@/store/offlineAreasStore';
-import { countChunks } from '@/offline/areaDataDownloader';
 import {
 	tileCount,
 	PROTOMAPS_MAX_ZOOM,
@@ -67,26 +66,23 @@ export function useOfflineAreaActions() {
 	}
 
 	/**
-	 * Progress text for an in-flight download. Water-source (Overpass) data and
-	 * tiles run in parallel, so this shows the overall tile-inclusive percentage
-	 * and, while the water-source fetch is still pending, a chunk counter for it
-	 * (each chunk is one long-running Overpass call).
+	 * Progress text for an in-flight download. Water-source data and tiles run in
+	 * parallel, so this shows the overall tile-inclusive percentage plus, while
+	 * the water-source read is still pending, a line for it.
+	 *
+	 * The data phase is a single FlatGeobuf bbox read (§4.6), so there is no
+	 * counter to show any more — `lastCompletedChunk` is now just a done flag
+	 * (`-1` pending, `0` done), not a chunk index.
 	 */
 	function downloadDetail(area: OfflineArea, refreshing: boolean): string {
 		const parts: string[] = [];
 
-		// Water-source fetch is still running while not every chunk is completed.
-		const chunkTotal = countChunks(area.bounds);
-		const chunksDone = area.lastCompletedChunk + 1;
-		if (chunksDone < chunkTotal) {
-			// While chunk i is in flight, lastCompletedChunk is i-1 → 1-based i+1.
-			const current = Math.min(chunksDone + 1, chunkTotal);
+		if (area.lastCompletedChunk < 0) {
 			parts.push(
 				t(
 					refreshing
 						? 'offlineAreas.status.refreshingSources'
-						: 'offlineAreas.status.loadingSources',
-					{ done: current, total: chunkTotal }
+						: 'offlineAreas.status.loadingSources'
 				)
 			);
 		}

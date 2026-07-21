@@ -128,6 +128,7 @@
 		"openInfo": "About & Support",
 		"dataSource": "Data Source",
 		"dataSourceDescription": "All water source data is provided by OpenStreetMap contributors.",
+		"dataAsOf": "Data as of {date}",
 		"version": "Version",
 		"supportOnKofiDescription": "If you find this app useful and want to support its development, consider supporting me on Ko-fi! Your support helps keep the project alive and enables new features.",
 		"addHydrantsTitle": "How to add hydrants to OpenStreetMap",
@@ -301,8 +302,8 @@
 			"description": "Download a district so its water sources stay available without a connection."
 		},
 		"status": {
-			"loadingSources": "Loading water sources… ({done}/{total})",
-			"refreshingSources": "Refreshing water sources… ({done}/{total})",
+			"loadingSources": "Loading water sources…",
+			"refreshingSources": "Refreshing water sources…",
 			"loadingTiles": "Downloading map tiles… {percent}%",
 			"refreshingTiles": "Checking map tiles… {percent}%",
 			"error": "Download incomplete",
@@ -347,7 +348,7 @@
 			"includeTerrainHint": "Needed for the offline pump calculation — terrain tiles provide the elevation data.",
 			"autoRefresh": "Auto-refresh on Wi-Fi",
 			"autoRefreshHint": "Refresh automatically over Wi-Fi when older than 30 days.",
-			"estimate": "About {width} × {height} km · {chunks} data chunks",
+			"estimate": "About {width} × {height} km",
 			"sizeEstimate": "Estimated download: {low}–{high} MB",
 			"tooLarge": "This area is too large. Zoom in to select a smaller region.",
 			"download": "Download",

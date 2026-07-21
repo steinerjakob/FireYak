@@ -45,9 +45,9 @@
 					<ion-label>
 						<h2>{{ area.name }}</h2>
 						<p>{{ statusLine(area) }}</p>
-						<!-- Water-source (Overpass) data and tiles download in parallel and
-						     both count toward one determinate bar; the status line notes
-						     while the water-source fetch is still pending. -->
+						<!-- Water-source data and tiles download in parallel and both count
+						     toward one determinate bar; the status line notes while the
+						     water-source read is still pending. -->
 						<ion-progress-bar
 							v-if="area.status === 'downloading' || area.status === 'refreshing'"
 							type="determinate"
@@ -201,7 +201,6 @@ import { storeToRefs } from 'pinia';
 import { GeoBounds, GeoPoint } from '@/types/geo';
 import { useNetworkStatus } from '@/composable/networkStatus';
 import { useOfflineAreasStore, isAreaTooLarge } from '@/store/offlineAreasStore';
-import { countChunks } from '@/offline/areaDataDownloader';
 import {
 	useOfflineAreaActions,
 	estimateSourceBytes,
@@ -314,8 +313,7 @@ const estimateLine = computed(() => {
 	const heightKm = (b.north - b.south) * 111;
 	return t('offlineAreas.add.estimate', {
 		width: widthKm.toFixed(1),
-		height: heightKm.toFixed(1),
-		chunks: countChunks(b)
+		height: heightKm.toFixed(1)
 	});
 });
 

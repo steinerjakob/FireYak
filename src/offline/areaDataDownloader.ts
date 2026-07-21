@@ -1,50 +1,15 @@
 import { GeoBounds } from '@/types/geo';
-import { fetchAreaRaw } from '@/mapHandler/overPassApi';
+import { fetchWaterSources, getExtractTimestampMs } from '@/mapHandler/staticDataApi';
 import { storeMapNodes } from '@/mapHandler/databaseHandler';
 import { reconcileDeletedNodes } from '@/mapHandler/markerHandler';
+import { toRef } from '@/helper/osmRef';
 
 // ---------------------------------------------------------------------------
 // Tuning
 // ---------------------------------------------------------------------------
 
-/**
- * Chunk edge length in degrees. Kept under the 0.5°/axis clamp that
- * `buildAreaQuery` applies, so no chunk is ever silently shrunk, and small
- * enough to stay well inside Overpass' server timeout and 2000-element limit.
- */
-const CHUNK_STEP_DEGREES = 0.25;
-/** Extra attempts per chunk after the first try fails (2 → up to 3 tries). */
-const CHUNK_RETRIES = 2;
-/** Polite pause between chunks so a large district doesn't hammer Overpass. */
-const CHUNK_SLEEP_MS = 1000;
-/** Overpass truncates an area query at this many elements. */
-const OVERPASS_TRUNCATION_LIMIT = 2000;
-
-/**
- * Splits `bounds` into a grid of `step`-degree chunks (last row/column clamped
- * to the outer edge). Non-overlapping, so a node lands in exactly one chunk.
- */
-export function* chunkBounds(bounds: GeoBounds, step = CHUNK_STEP_DEGREES): Generator<GeoBounds> {
-	for (let south = bounds.south; south < bounds.north; south += step) {
-		for (let west = bounds.west; west < bounds.east; west += step) {
-			yield {
-				south,
-				west,
-				north: Math.min(south + step, bounds.north),
-				east: Math.min(west + step, bounds.east)
-			};
-		}
-	}
-}
-
-/** Number of chunks an area's bounds decompose into (for progress totals). */
-export function countChunks(bounds: GeoBounds): number {
-	let count = 0;
-	for (const _ of chunkBounds(bounds)) count++;
-	return count;
-}
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Extra attempts after the first try fails (2 → up to 3 tries total). */
+const READ_RETRIES = 2;
 
 /**
  * Runs `fn`, retrying up to `attempts` extra times on failure. Aborts short-
@@ -65,75 +30,71 @@ async function retry<T>(fn: () => Promise<T>, attempts: number, signal: AbortSig
 }
 
 export interface AreaDownloadProgress {
-	/** Index of the chunk just completed (resume point). */
-	lastCompletedChunk: number;
-	/** Chunks finished so far. */
-	done: number;
-	/** Total chunks in the area. */
-	total: number;
-	/** Running count of distinct nodes stored for the area. */
+	/** `true` once the single data read has completed and been stored. */
+	dataDone: boolean;
+	/** Distinct node count stored for the area (only meaningful once `dataDone`). */
 	nodeCount: number;
 }
 
 export interface DownloadAreaOptions {
 	/** Bounds of the area to download. */
 	bounds: GeoBounds;
-	/** Resume point from a previous run (−1 when starting fresh). */
-	lastCompletedChunk: number;
-	/** Node count carried over from a previous partial run (0 on fresh/refresh). */
-	baseNodeCount: number;
 	/**
-	 * Refresh mode: iterate every chunk from the start and reconcile deletions
-	 * per chunk (nodes gone from OSM are removed from the cache).
+	 * `true` when a previous run already completed the data phase for this area
+	 * — skips the read entirely so a resumed download doesn't re-fetch data it
+	 * already has. Ignored when `refresh` is set: a refresh always re-reads, both
+	 * to pick up new data and to reconcile deletions.
+	 */
+	alreadyDownloaded: boolean;
+	/**
+	 * Refresh mode: re-read the whole area even if already downloaded, and
+	 * reconcile deletions against the fresh result (guarded by the extract's
+	 * staleness — see {@link reconcileDeletedNodes}).
 	 */
 	refresh: boolean;
-	/** Persisted after every completed chunk (DB write + reactive update). */
+	/** Called once the data phase finishes (or is skipped as already-done). */
 	onProgress: (progress: AreaDownloadProgress) => void | Promise<void>;
 }
 
 /**
- * Downloads all water-source data for an area, chunk by chunk, resuming at
- * `lastCompletedChunk + 1`. Each chunk is stored immediately so progress is
- * durable if the app is killed mid-download. On `refresh`, deletions are
- * reconciled per chunk (guarded against the truncation limit).
+ * Downloads all water-source data for an area via a single FlatGeobuf bbox
+ * range read (§4.6 of `plans/selfhost-osm-data.md`) — no chunking, no
+ * rate-limit pacing, and no truncation guard, since a range read is never
+ * truncated the way Overpass's 2000-element response could be.
  *
- * Throws `AbortError` when cancelled and re-throws the last chunk error when a
- * chunk fails after all retries — the caller marks the area `error` and can
- * resume later from the persisted `lastCompletedChunk`.
+ * On `refresh`, deletions are reconciled against the extract's planet
+ * timestamp: a cached node absent from the read is hard-deleted only if it was
+ * learned about *before* the extract was cut, so a marker the user just added
+ * through the app (or any other post-cut change) survives. If the timestamp
+ * can't be determined, reconciliation is skipped entirely for this run.
+ *
+ * Throws `AbortError` when cancelled, and re-throws the read's error when it
+ * fails after all retries — the caller marks the area `error` and can resume
+ * later (the persisted "already downloaded" flag makes a resume a no-op for
+ * the data phase if the read had actually succeeded before the failure).
  */
 export async function downloadAreaData(
 	options: DownloadAreaOptions,
 	signal: AbortSignal
 ): Promise<void> {
-	const chunks = [...chunkBounds(options.bounds)];
-	const total = chunks.length;
-	const start = options.refresh ? 0 : options.lastCompletedChunk + 1;
-	const baseNodeCount = options.refresh ? 0 : options.baseNodeCount;
+	if (options.alreadyDownloaded && !options.refresh) return;
 
-	// Distinct node ids seen during this run; chunks don't overlap, so this is an
-	// accurate delta on top of `baseNodeCount`.
-	const seenIds = new Set<number>();
+	if (signal.aborted) throw new DOMException('Download aborted', 'AbortError');
 
-	for (let i = start; i < total; i++) {
-		const elements = await retry(() => fetchAreaRaw(chunks[i], signal), CHUNK_RETRIES, signal);
+	const elements = await retry(() => fetchWaterSources(options.bounds), READ_RETRIES, signal);
 
-		await storeMapNodes(elements);
+	if (signal.aborted) throw new DOMException('Download aborted', 'AbortError');
 
-		// Only reconcile deletions when the chunk was not truncated, otherwise
-		// cut-off nodes would be wrongly hard-deleted.
-		if (options.refresh && elements.length < OVERPASS_TRUNCATION_LIMIT) {
-			await reconcileDeletedNodes(chunks[i], elements);
+	await storeMapNodes(elements);
+
+	if (options.refresh) {
+		const sourceTimestampMs = await getExtractTimestampMs();
+		if (sourceTimestampMs !== null) {
+			await reconcileDeletedNodes(options.bounds, elements, sourceTimestampMs);
 		}
-
-		for (const element of elements) seenIds.add(element.id);
-
-		await options.onProgress({
-			lastCompletedChunk: i,
-			done: i + 1,
-			total,
-			nodeCount: baseNodeCount + seenIds.size
-		});
-
-		if (i < total - 1) await sleep(CHUNK_SLEEP_MS);
 	}
+
+	const distinctRefs = new Set(elements.map((element) => toRef(element.type, element.id)));
+
+	await options.onProgress({ dataDone: true, nodeCount: distinctRefs.size });
 }
