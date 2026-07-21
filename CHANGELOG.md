@@ -1,6 +1,33 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.16.0] - 2026-07-15
+
+### Bug Fixes
+
+- *(pump-calculation)* Open marker chooser via touch long-press on mobile
+
+### Features
+
+- *(offline-areas)* Hide satellite download for imagery license compliance
+- *(offline-areas)* Enable terrain download by default in the add modal
+- *(offline-areas)* Add per-area detail view with coverage map and editable settings
+- *(offline-areas)* Support updating download settings on existing areas
+- *(pump-calculation)* Recalculate automatically when the line changes
+- *(pump-calculation)* Redesign result panel with elevation chart and synced selection
+- *(pump-calculation)* Add elevation profile chart component
+- *(pump-calculation)* Select result entries via map markers instead of popups
+
+### Chore
+
+- *(ui)* Remove iOS-specific condition in WhatsNewModal
+- *(whats-new)* Announce offline area detail view and terrain default
+- *(docs)* Remove outdated WhatsNewModal entries and minor translation fix
+
+### Docs
+
+- *(plans)* Add offline area review and settings plan
+- *(whats-new)* Announce pump result panel, auto-recalc, and mobile long-press
 ## [2.15.2] - 2026-07-11
 
 ### Bug Fixes
