@@ -1,7 +1,7 @@
 import { namedFlavor, type Flavor } from '@protomaps/basemaps';
 
 /**
- * Custom Protomaps flavor based on "dark" with Mapbox Navigation Night v1 colors.
+ * Custom Protomaps flavor based on "dark", inspired by Mapbox Navigation Night v1.
  */
 export const nightFlavor: Flavor = {
 	...namedFlavor('dark'),
@@ -38,8 +38,8 @@ export const nightFlavor: Flavor = {
 	tunnel_highway_casing: '#2f3032',
 	tunnel_other: '#2c3035',
 	tunnel_minor: '#2c3035',
-	tunnel_link: '#2c3035',
-	tunnel_major: '#2c3035',
+	tunnel_link: '#46536e',
+	tunnel_major: '#46536e',
 	tunnel_highway: '#58759d',
 
 	// Structures

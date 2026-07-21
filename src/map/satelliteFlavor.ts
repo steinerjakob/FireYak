@@ -31,7 +31,7 @@ export const satelliteFlavor: Flavor = {
 	zoo: 'transparent',
 	military: 'transparent',
 
-	// Tunnels — dashed dark casing with bright fill
+	// Tunnels — dark casing with bright fill
 	tunnel_other_casing: 'rgba(0, 0, 0, 0.6)',
 	tunnel_minor_casing: 'rgba(0, 0, 0, 0.6)',
 	tunnel_link_casing: 'rgba(0, 0, 0, 0.6)',
@@ -79,7 +79,7 @@ export const satelliteFlavor: Flavor = {
 	bridges_major: 'rgba(255, 220, 80, 0.95)',
 	bridges_highway: '#f0903c',
 
-	// Labels — bright white text with strong dark halos
+	// Labels — black text with strong white halos
 	roads_label_minor: '#000000',
 	roads_label_minor_halo: '#ffffff',
 	roads_label_major: '#000000',

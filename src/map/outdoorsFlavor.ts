@@ -1,5 +1,8 @@
 import { namedFlavor, type Flavor } from '@protomaps/basemaps';
 
+/**
+ * Custom Protomaps flavor based on "light" with an outdoors/terrain palette.
+ */
 export const outdoorsFlavor: Flavor = {
 	...namedFlavor('light'),
 
@@ -35,8 +38,8 @@ export const outdoorsFlavor: Flavor = {
 	tunnel_highway_casing: '#d6d6cd',
 	tunnel_other: '#f2f2f2',
 	tunnel_minor: '#f2f2f2',
-	tunnel_link: '#f2f2f2',
-	tunnel_major: '#f2f2f2',
+	tunnel_link: '#fbdfb0',
+	tunnel_major: '#fbdfb0',
 	tunnel_highway: '#ff9f80',
 
 	// Structures
