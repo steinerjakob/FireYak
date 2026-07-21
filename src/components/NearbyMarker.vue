@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import { coerceRef, toRef } from '@/helper/osmRef';
 
 const { list } = useNearbyWaterSource();
 const router = useRouter();
@@ -53,7 +54,7 @@ const formattedList = computed(() => {
 		// the hoses actually have to cover (and what the B-tube count is for).
 		const displayDistance = nearbyMarker.routedDistance ?? nearbyMarker.distance;
 		return {
-			id: nearbyMarker.element.id,
+			ref: toRef(nearbyMarker.element.type, nearbyMarker.element.id),
 			title: getTitle(nearbyMarker.element),
 			icon: nearbyMarker.icon,
 			distance: nearbyMarker.distance,
@@ -62,7 +63,15 @@ const formattedList = computed(() => {
 	});
 });
 
-const selectedMarkerId = computed(() => route.params.markerId || null);
+// Coerced, not compared raw: a legacy shared link still routes here as a bare
+// number (`/nearbysources/123`), which would never match the `n123` refs the
+// list items now carry.
+const selectedMarkerRef = computed(() => {
+	const param = Array.isArray(route.params.markerId)
+		? route.params.markerId[0]
+		: route.params.markerId;
+	return param ? coerceRef(param) : null;
+});
 </script>
 
 <template>
@@ -70,10 +79,10 @@ const selectedMarkerId = computed(() => route.params.markerId || null);
 		<!-- Nearby Water Sources -->
 		<ion-item
 			v-for="item in formattedList"
-			:key="item.id"
+			:key="item.ref"
 			button
-			@click="router.push(`/nearbysources/${item.id}`)"
-			:class="{ selected: selectedMarkerId === String(item.id) }"
+			@click="router.push(`/nearbysources/${item.ref}`)"
+			:class="{ selected: selectedMarkerRef === item.ref }"
 		>
 			<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
 			<ion-label>

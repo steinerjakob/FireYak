@@ -19,7 +19,7 @@ import {
 	getMapNodesForView,
 	getNearbyMapNodes,
 	storeMapNodes,
-	getMapNodeIdsForBounds,
+	getMapNodeRefsForBounds,
 	hardDeleteMapNodes
 } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
@@ -27,6 +27,7 @@ import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
 import { lngLatToTile, tileKey } from '@/helper/tileMath';
+import { OsmRef, toRef } from '@/helper/osmRef';
 
 // Map icon keys to URLs for use in MapLibre image loading
 export const markerIconUrls: Record<string, string> = {
@@ -159,10 +160,10 @@ export async function reconcileDeletedNodes(
 	mapBounds: GeoBounds,
 	freshElements: OverPassElement[]
 ) {
-	const freshIds = new Set(freshElements.map((e) => e.id));
-	const cachedIds = await getMapNodeIdsForBounds(mapBounds);
-	const staleIds = cachedIds.filter((id) => !freshIds.has(id));
-	await hardDeleteMapNodes(staleIds);
+	const freshRefs = new Set<OsmRef>(freshElements.map((e) => toRef(e.type, e.id)));
+	const cachedRefs = await getMapNodeRefsForBounds(mapBounds);
+	const staleRefs = cachedRefs.filter((ref) => !freshRefs.has(ref));
+	await hardDeleteMapNodes(staleRefs);
 }
 
 async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]> {
@@ -282,7 +283,7 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 					coordinates: [lng, lat]
 				},
 				properties: {
-					id: element.id,
+					ref: toRef(element.type, element.id),
 					icon: getIconKeyForNode(element)
 				}
 			});
@@ -356,7 +357,7 @@ export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise
 	return sortElementsByDistance(elements, latLng);
 }
 
-export async function getMarkerById(markerId: number) {
+export async function getMarkerById(ref: OsmRef) {
 	const markerStore = useMapMarkerStore();
-	return markerStore.fetchMarkerById(markerId);
+	return markerStore.fetchMarkerById(ref);
 }

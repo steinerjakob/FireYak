@@ -15,6 +15,7 @@ import { getRoutedPath } from '@/mapHandler/nearbyRouting';
 import { getMapNodeById } from '@/mapHandler/databaseHandler';
 import { alertController } from '@ionic/vue';
 import { GeoPoint, distanceTo } from '@/types/geo';
+import { OsmRef } from '@/helper/osmRef';
 
 const PUMP_LINE_SOURCE = 'pump-line';
 const PUMP_LINE_LAYER = 'pump-line-layer';
@@ -522,8 +523,8 @@ export function usePumpCalculation() {
 	 * `fire_hydrant:pressure` tag becomes the line's starting pressure (no
 	 * pump at the source); otherwise a source pump is still assumed.
 	 */
-	const useMarkerAsWaterSource = async (markerId: number, coords: GeoPoint) => {
-		const node = await getMapNodeById(markerId);
+	const useMarkerAsWaterSource = async (ref: OsmRef, coords: GeoPoint) => {
+		const node = await getMapNodeById(ref);
 		const emergency = node?.tags?.emergency;
 		const isWaterSource =
 			emergency === 'fire_hydrant' ||

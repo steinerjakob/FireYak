@@ -184,6 +184,7 @@ import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
 import { nightFlavor } from '@/map/nightFlavor';
 import { satelliteFlavor } from '@/map/satelliteFlavor';
+import { coerceRef } from '@/helper/osmRef';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 300;
@@ -1431,10 +1432,10 @@ function setupMapEventListeners(map: maplibregl.Map) {
 			// source offers it as the suction point (hydrant pressure and all)
 			// instead of navigating to the marker.
 			if (route.path.includes('supplypipe')) {
-				const tappedId = feature.properties?.id;
-				if (tappedId) {
+				const tappedRef = feature.properties?.ref;
+				if (tappedRef) {
 					const coords = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
-					pumpCalculation.useMarkerAsWaterSource(Number(tappedId), {
+					pumpCalculation.useMarkerAsWaterSource(tappedRef, {
 						lat: coords[1],
 						lng: coords[0]
 					});
@@ -1442,9 +1443,9 @@ function setupMapEventListeners(map: maplibregl.Map) {
 				return;
 			}
 
-			const markerId = feature.properties?.id;
-			if (markerId) {
-				router.push(`/markers/${markerId}`);
+			const markerRef = feature.properties?.ref;
+			if (markerRef) {
+				router.push(`/markers/${markerRef}`);
 			}
 			return;
 		}
@@ -1638,8 +1639,9 @@ onMounted(async () => {
 	watch(
 		() => route.params.markerId,
 		async (markerId) => {
-			const markerIdNumber = markerId ? Number(markerId) : null;
-			await markerStore.selectMarker(markerIdNumber);
+			const param = Array.isArray(markerId) ? markerId[0] : markerId;
+			const ref = param ? coerceRef(param) : null;
+			await markerStore.selectMarker(ref);
 		},
 		{ immediate: true }
 	);

@@ -1,16 +1,23 @@
 import { openDB } from 'idb';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { GeoPoint, GeoBounds, distanceTo, boundsContains } from '@/types/geo';
+import { OsmRef, toRef } from '@/helper/osmRef';
 
-const markerStoreName = 'fireMarker';
+const markerStoreName = 'fireMarkerRefs';
 
 /**
  * A node as it lives in the IndexedDB cache: the raw Overpass element plus
  * cache-only bookkeeping (`__deleted` soft-delete flag and the `fetchedAt`
- * timestamp added in DB v2). The optional fields let it be used anywhere an
- * {@link OverPassElement} is expected while still exposing `fetchedAt`.
+ * timestamp added in DB v2), plus the namespaced {@link OsmRef} that has been
+ * the store's keyPath since DB v4 (§4.5). The optional fields let it be used
+ * anywhere an {@link OverPassElement} is expected while still exposing
+ * `fetchedAt`.
  */
-export type CachedMapNode = OverPassElement & { __deleted?: boolean; fetchedAt?: number };
+export type CachedMapNode = OverPassElement & {
+	ref: OsmRef;
+	__deleted?: boolean;
+	fetchedAt?: number;
+};
 
 const offlineAreasStoreName = 'offlineAreas';
 const pendingEditsStoreName = 'pendingEdits';
@@ -71,11 +78,14 @@ function isDeleted(node: unknown): boolean {
 	return Boolean((node as CachedMapNode | null | undefined)?.__deleted);
 }
 
-const dbPromise = openDB('FireMarker', 3, {
+/** Store name used before the DB v4 namespaced-key migration (§4.5). */
+const legacyMarkerStoreName = 'fireMarker';
+
+const dbPromise = openDB('FireMarker', 4, {
 	async upgrade(db, oldVersion, _newVersion, tx) {
 		if (oldVersion < 1) {
 			// Fresh install: create the store keyed by the node `id`.
-			const store = db.createObjectStore(markerStoreName, {
+			const store = db.createObjectStore(legacyMarkerStoreName, {
 				keyPath: 'id',
 				autoIncrement: true
 			});
@@ -83,7 +93,7 @@ const dbPromise = openDB('FireMarker', 3, {
 		}
 
 		if (oldVersion < 2) {
-			const store = tx.objectStore(markerStoreName);
+			const store = tx.objectStore(legacyMarkerStoreName);
 
 			// The `id` index is redundant — `id` is already the keyPath.
 			if (store.indexNames.contains('id')) {
@@ -119,6 +129,42 @@ const dbPromise = openDB('FireMarker', 3, {
 			});
 			edits.createIndex('status', 'status');
 		}
+
+		if (oldVersion < 4) {
+			// Namespaced marker keys (§4.5): `node/123` and `way/123` are distinct
+			// OSM objects that would overwrite each other under the old bare-`id`
+			// keyPath. IndexedDB cannot change a store's keyPath in place, so we
+			// create a new store keyed by `ref` (`n123` / `w456`), copy every row
+			// across, and drop the old store.
+			//
+			// This MUST be a copy, never a wipe. The old `fireMarker` store also
+			// holds the water-source data for downloaded offline areas while
+			// `offlineAreas` still reports `status: 'ready'` — wiping it here would
+			// leave those areas claiming "ready" with no data behind them, a state
+			// the user only discovers once they are offline and it actually matters.
+			const newStore = db.createObjectStore(markerStoreName, { keyPath: 'ref' });
+			newStore.createIndex('lat, lon', ['lat', 'lon']);
+			newStore.createIndex('fetchedAt', 'fetchedAt');
+
+			// Defensive existence check: the `< 1` block above always creates
+			// `fireMarker` first (even for a brand-new install starting at
+			// `oldVersion === 0`, since every block up to v4 runs in this same
+			// upgrade transaction), so this is always true in practice.
+			if (tx.objectStoreNames.contains(legacyMarkerStoreName)) {
+				const oldStore = tx.objectStore(legacyMarkerStoreName);
+				let cursor = await oldStore.openCursor();
+				while (cursor) {
+					const row = cursor.value as CachedMapNode;
+					// Preserve `__deleted` tombstones and `fetchedAt` (the freshness
+					// index and the startup prune both depend on it), and keep `id`
+					// and `type` on the record — they are the OSM wire identity that
+					// `osm-api` and `fetchNodeById` still need.
+					await newStore.put({ ...row, ref: toRef(row.type ?? 'node', row.id) });
+					cursor = await cursor.continue();
+				}
+				db.deleteObjectStore(legacyMarkerStoreName);
+			}
+		}
 	}
 });
 
@@ -144,11 +190,13 @@ export async function storeMapNodes(nodes: OverPassElement[]) {
 					return;
 				}
 
-				const existing = (await tx.store.get(node.id)) as CachedMapNode | undefined;
+				const ref = toRef(node.type ?? 'node', node.id);
+				const existing = (await tx.store.get(ref)) as CachedMapNode | undefined;
 				const deletedFlag = existing?.__deleted ?? (node as CachedMapNode).__deleted ?? false;
 
 				const toStore: CachedMapNode = {
 					...(node as CachedMapNode),
+					ref,
 					__deleted: deletedFlag,
 					fetchedAt,
 					lat: point.lat,
@@ -243,11 +291,11 @@ export async function getNearbyMapNodes(location: GeoPoint, radius: number) {
 	}
 }
 
-export async function getMapNodeById(id: number) {
+export async function getMapNodeById(ref: OsmRef) {
 	try {
 		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
 		const store = transaction.objectStore(markerStoreName);
-		const result = (await store.get(id)) as CachedMapNode | undefined;
+		const result = (await store.get(ref)) as CachedMapNode | undefined;
 		if (!result || isDeleted(result)) return null;
 		return result;
 	} catch (e) {
@@ -256,7 +304,7 @@ export async function getMapNodeById(id: number) {
 	}
 }
 
-export async function getMapNodeIdsForBounds(mapBounds: GeoBounds): Promise<number[]> {
+export async function getMapNodeRefsForBounds(mapBounds: GeoBounds): Promise<OsmRef[]> {
 	try {
 		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
 		const markerStore = transaction.objectStore(markerStoreName);
@@ -267,7 +315,7 @@ export async function getMapNodeIdsForBounds(mapBounds: GeoBounds): Promise<numb
 			[mapBounds.north, mapBounds.east]
 		);
 
-		const ids: number[] = [];
+		const refs: OsmRef[] = [];
 		let cursor = await index.openCursor(range);
 
 		while (cursor) {
@@ -275,24 +323,24 @@ export async function getMapNodeIdsForBounds(mapBounds: GeoBounds): Promise<numb
 			const markerPoint = getNodePoint(mapMarker);
 
 			if (markerPoint && boundsContains(mapBounds, markerPoint)) {
-				ids.push(mapMarker.id);
+				refs.push(mapMarker.ref);
 			}
 
 			cursor = await cursor.continue();
 		}
 
-		return ids;
+		return refs;
 	} catch (e) {
-		console.error('Error getting map node IDs for bounds:', e);
+		console.error('Error getting map node refs for bounds:', e);
 		return [];
 	}
 }
 
-export async function hardDeleteMapNodes(ids: number[]) {
-	if (!ids.length) return;
+export async function hardDeleteMapNodes(refs: OsmRef[]) {
+	if (!refs.length) return;
 	try {
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
-		await Promise.all([...ids.map((id) => tx.store.delete(id)), tx.done]);
+		await Promise.all([...refs.map((ref) => tx.store.delete(ref)), tx.done]);
 	} catch (e) {
 		console.error('Error hard-deleting map nodes:', e);
 	}
@@ -336,12 +384,12 @@ export async function pruneStaleMapNodes(maxAgeMs: number) {
 	}
 }
 
-export async function deleteMapNode(id: number) {
+export async function deleteMapNode(ref: OsmRef) {
 	try {
 		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
 
 		// Soft-delete: keep the record in the cache, but mark it as deleted.
-		const existing = (await tx.store.get(id)) as CachedMapNode | undefined;
+		const existing = (await tx.store.get(ref)) as CachedMapNode | undefined;
 
 		if (existing) {
 			await tx.store.put({ ...existing, __deleted: true });
