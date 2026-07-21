@@ -89,18 +89,25 @@ Laptop (one-time bootstrap)          NAS DS423+ (recurring, every 2 days)
 **Data URLs** (overwriting objects keeps URLs constant):
 
 ```
-# development (rate-limited, CORS works)
-https://pub-2d208d725d5849bba36ed4ed8cfb4e8e.r2.dev/water_sources.fgb
+# production — live and CORS-verified 2026-07-21
+https://data.fireyak.org/fireyak-data/water_sources.fgb        # 617 MB
+https://data.fireyak.org/fireyak-data/water_sources.pmtiles    # 571 MB
+https://data.fireyak.org/fireyak-data/metadata.json
 
-# production
-https://data.fireyak.org/water_sources.pmtiles
-https://data.fireyak.org/water_sources.fgb
-https://data.fireyak.org/metadata.json
+# same objects via the dev URL (rate-limited, CORS also works)
+https://pub-2d208d725d5849bba36ed4ed8cfb4e8e.r2.dev/fireyak-data/…
 ```
 
-`BASE` in §4.3 should come from an env var (`VITE_DATA_BASE_URL`) defaulting to
-the production domain, so dev builds can point at `r2.dev` without a code change
-— and so the origin list above stays the complete set.
+Note the `fireyak-data/` **key prefix** — the upload placed the objects in a
+folder inside the bucket, so it is part of the URL. `BASE` therefore includes it.
+
+Gate result (§2.3), all three origins: `206` + `content-range` +
+`access-control-allow-origin` echoing the origin, including
+`capacitor://localhost`. Phase 0 is **done**.
+
+`BASE` in §4.3 comes from an env var (`VITE_DATA_BASE_URL`) defaulting to the
+production URL, so dev builds can point elsewhere without a code change — and so
+the origin list above stays the complete set.
 
 `water_sources.pmtiles` is still produced and uploaded by the pipeline, but the
 app does **not** consume it — see §4.8. It costs nothing to keep publishing and
@@ -170,6 +177,24 @@ ogrinfo -so ~/osm-data/out/water_sources.fgb water_sources | grep -i index
 
 If a file was built without it, rebuild just the FGB from the existing
 GeoJSONSeq (seconds–minutes) with `SPATIAL_INDEX=YES` before uploading.
+
+> ⚠️ **The export MUST carry the OSM element type — the first upload did not.**
+> Measured on the 2026-07-21 file: `@id` is a bare `Integer64` (e.g.
+> `6915617458`) with no type, and the `osm_type` column is empty on every
+> feature (it exists in the schema only because some OSM object somewhere
+> carries a literal `osm_type` *tag*). Without the type, `node/123` and
+> `way/123` cannot be told apart, which is exactly what the app's namespaced
+> keys (§4.5) need.
+>
+> Fix in `build.sh`: add **`--add-unique-id=type_id`** to the `osmium export`
+> invocation, so `@id` becomes the string `"n123"` / `"w456"` / `"r789"`.
+> Confirm the exact flag against `osmium export --help` on the build machine.
+> Then re-run and re-upload. Note this also introduces **relations** (`r`) —
+> `amenity=fire_station` multipolygons — which is why `OsmRef` supports them.
+>
+> Until that file lands, `staticDataApi.ts` falls back to inferring the type
+> from geometry (`Point` → node, else way) and warns once per session. That
+> fallback is transitional and should be deleted once the typed export is live.
 
 **Record the geometry mix per `emergency` value while you're here** — §4.4 needs
 to know which types arrive as ways/polygons rather than points, because that
@@ -367,6 +392,18 @@ Note the data-flow consequence: `getMarkersForView` **re-reads IndexedDB**, it
 does not render the fetch's return value. So the adapter's contract is "produce
 `OverPassElement[]` and let `storeMapNodes` persist it" — not "produce GeoJSON".
 
+> ⚠️ **Move the freshness check out of the cache-hit branch.** `getMarkersForView`
+> only consulted `areTilesFresh` when the cache already had markers; an empty
+> cache fetched unconditionally. An area with genuinely **no** water sources
+> caches nothing, so that condition never stops being true — and because
+> `updateNodeCache` bumps `markerCacheVersion`, which `MainMap.vue:546` watches
+> by calling `getMarkersForView` again, it is an **infinite fetch loop**, not
+> merely redundant polling. Observed in practice.
+>
+> The freshness registry is the only record that we already asked about an area
+> and the answer was "none here", so it must gate both branches. Compute
+> `areTilesFresh` once, before the empty/populated split, and use it in each.
+
 ```ts
 // src/mapHandler/staticDataApi.ts
 import { deserialize } from 'flatgeobuf/lib/mjs/geojson';
@@ -523,6 +560,26 @@ three things the chunk loop provides:
 The last one is a genuine **win worth stating**: an FGB read is never truncated,
 so refresh-time `reconcileDeletedNodes` becomes exact over the whole area instead
 of being skipped whenever a chunk hit 2000 elements.
+
+> ⚠️ **Correction to the above — reconciliation needs a staleness guard, not
+> just the dropped truncation guard.** This plan previously said the FGB path
+> could "reconcile unconditionally". That is wrong and would delete live data.
+> The extract is rebuilt every ~2 days (the file live on 2026-07-21 had a planet
+> timestamp of 2026-07-12 — a 9-day window), so it knows nothing about anything
+> mapped since it was cut. Reconciling against it would hard-delete every marker
+> newer than the extract from the local cache — **including the marker the user
+> just added through the app**, on their very next pan.
+>
+> Rule implemented instead: delete a cached node the extract doesn't mention
+> **only if `fetchedAt < planet_timestamp`** — i.e. only if our knowledge of it
+> predates the extract. Anything we learned after the cut is kept, since the
+> extract cannot be authoritative about it. This protects user edits, offline
+> temp creates, and `fetchNodeById` results, while still removing genuinely
+> deleted objects once a later rebuild advances past when we cached them.
+> `reconcileDeletedNodes` takes an optional `sourceTimestampMs`; omit it for a
+> live source like Overpass, where absence really does mean deletion. If the
+> timestamp can't be determined, skip reconciliation entirely — the TTL prune is
+> the safe backstop.
 
 ### 4.7 What stays on Overpass
 
