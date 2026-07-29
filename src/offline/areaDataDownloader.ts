@@ -81,7 +81,13 @@ export async function downloadAreaData(
 
 	if (signal.aborted) throw new DOMException('Download aborted', 'AbortError');
 
-	const elements = await retry(() => fetchWaterSources(options.bounds), READ_RETRIES, signal);
+	// The signal goes into the read itself, not just around it: a cancel has to
+	// abort the range requests in flight, not wait for them to finish.
+	const elements = await retry(
+		() => fetchWaterSources(options.bounds, signal),
+		READ_RETRIES,
+		signal
+	);
 
 	if (signal.aborted) throw new DOMException('Download aborted', 'AbortError');
 

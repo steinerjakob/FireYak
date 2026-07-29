@@ -8,6 +8,7 @@
  * is untouched here.
  */
 import { deserialize } from 'flatgeobuf/lib/mjs/geojson';
+import { HttpRangeClient } from 'flatgeobuf/lib/mjs/http-reader';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { GeoBounds } from '@/types/geo';
 import { OsmType } from '@/helper/osmRef';
@@ -193,20 +194,79 @@ export function toOverPassElement(feature: GeoJSON.Feature): OverPassElement | n
 // ---------------------------------------------------------------------------
 
 /**
+ * A `flatgeobuf` range client that threads an {@link AbortSignal} through to the
+ * underlying `fetch`.
+ *
+ * `deserialize()` takes no signal, and a bbox read is not one request but a
+ * chain of them (header, index, then one batch per run of nearby features).
+ * Breaking out of the consuming loop only stops *future* batches; the request
+ * already in flight would keep downloading — on a large offline-area read that
+ * is megabytes still arriving after the user hit Cancel. The library's own
+ * `HttpRangeClient` is the seam: `BufferedHttpRangeClient` accepts either a URL
+ * or a ready-made client instance (see its constructor's
+ * `source: string | HttpRangeClient`), and the reader passes that same instance
+ * on to every feature batch, so overriding `getRange` here makes *all* of the
+ * read's I/O abortable.
+ */
+class AbortableRangeClient extends HttpRangeClient {
+	private readonly signal: AbortSignal;
+
+	constructor(url: string, signal: AbortSignal) {
+		super(url, false);
+		this.signal = signal;
+	}
+
+	override async getRange(begin: number, length: number): Promise<ArrayBuffer> {
+		this.signal.throwIfAborted();
+
+		this.requestsEverMade += 1;
+		this.bytesEverRequested += length;
+
+		const headers = new Headers(this.headers);
+		headers.set('Range', `bytes=${begin}-${begin + length - 1}`);
+
+		const response = await fetch(this.url, { headers, signal: this.signal });
+		// The base client skips this check, which turns an error page into the
+		// confusing "Not a FlatGeobuf file" further up. A range read answers 206.
+		if (!response.ok) {
+			throw new Error(`Range request for ${this.url} failed with HTTP ${response.status}`);
+		}
+		return response.arrayBuffer();
+	}
+}
+
+/**
  * Fetches water-source features intersecting `bounds` from the static
  * FlatGeobuf extract via an HTTP range read, converting each to an
  * {@link OverPassElement}. Throws on network/parse failure — unlike
  * `fetchMarkerData`, which returns `null` — so callers must catch explicitly
  * (see `markerHandler.ts`'s `updateNodeCache`).
+ *
+ * Pass `signal` to make the read cancellable: it aborts the in-flight range
+ * request and throws `AbortError` instead of running to completion. Callers with
+ * nothing to cancel (the map's viewport read) can omit it.
  */
-export async function fetchWaterSources(bounds: GeoBounds): Promise<OverPassElement[]> {
+export async function fetchWaterSources(
+	bounds: GeoBounds,
+	signal?: AbortSignal
+): Promise<OverPassElement[]> {
+	// `deserialize`'s typings only advertise the URL form, but the range client it
+	// builds internally accepts a prepared client just as well — see
+	// AbortableRangeClient.
+	const source = signal
+		? (new AbortableRangeClient(FGB_URL, signal) as unknown as string)
+		: FGB_URL;
+
 	const out: OverPassElement[] = [];
-	for await (const feature of deserialize(FGB_URL, {
+	for await (const feature of deserialize(source, {
 		minX: bounds.west,
 		minY: bounds.south,
 		maxX: bounds.east,
 		maxY: bounds.north
 	})) {
+		// Stops the generator (and with it any further range requests) as soon as
+		// the caller gives up, even mid-batch.
+		signal?.throwIfAborted();
 		const element = toOverPassElement(feature as GeoJSON.Feature);
 		if (element) out.push(element);
 	}

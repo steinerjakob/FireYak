@@ -381,7 +381,14 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 				markerFetchFailed.value = lastStaticQueryFailed;
 			}
 		} else {
-			// Cache hit. Skip the background refresh entirely when the area was
+			// Cache hit: this view renders real data, so a failure recorded for a
+			// *different* area no longer describes what the user is looking at.
+			// Without this the flag would stay stuck `true` after one failed
+			// uncached load — the only other writer is the branch above, which
+			// never runs once an area has cached markers.
+			markerFetchFailed.value = false;
+
+			// Skip the background refresh entirely when the area was
 			// already fetched within the freshness TTL — avoids redundant load on
 			// small pans.
 			if (!tilesFresh && !backgroundRefreshInFlight) {

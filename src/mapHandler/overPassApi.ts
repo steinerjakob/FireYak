@@ -1,5 +1,6 @@
 import { GeoBounds } from '@/types/geo';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import type { OsmType } from '@/helper/osmRef';
 
 // ---------------------------------------------------------------------------
 // Overpass API instance pool
@@ -531,15 +532,20 @@ export async function fetchAreaRaw(
 }
 
 /**
- * Fetches a single node or way by its OSM ID.
+ * Runs a single-element Overpass lookup built from `selectors` (an already
+ * escaped `node(1);way(1);`-style fragment) and returns the first element, or
+ * `null` when nothing matched.
  *
  * Runs against the same {@link OVERPASS_INSTANCES} pool (with shared 429
  * cool-downs) as area queries. An overall client-side timeout of
  * {@link NODE_QUERY_TIMEOUT_MS} ms spans all instance attempts; on timeout or
  * total failure it returns `null`.
  */
-export async function fetchNodeById(nodeId: number): Promise<OverPassElement | null> {
-	const query = `[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];(node(${nodeId});way(${nodeId}););out center tags;`;
+async function fetchSingleElement(
+	selectors: string,
+	label: string
+): Promise<OverPassElement | null> {
+	const query = `[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];(${selectors});out center tags;`;
 
 	const outerSignal = AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS);
 
@@ -548,10 +554,44 @@ export async function fetchNodeById(nodeId: number): Promise<OverPassElement | n
 		return elements.length > 0 ? elements[0] : null;
 	} catch (e) {
 		if (outerSignal.aborted) {
-			console.warn('Overpass node query timed out for node:', nodeId);
+			console.warn('Overpass element query timed out for:', label);
 			return null;
 		}
-		console.error('Error fetching node by ID:', e);
+		console.error('Error fetching element by ID:', e);
 		return null;
 	}
+}
+
+/**
+ * Fetches a single node or way by its OSM ID.
+ *
+ * Kept for callers that only have a bare numeric id and no element type (the
+ * offline edit queue, which only ever deals with nodes). Prefer
+ * {@link fetchElementById} when the type is known: this one queries `node(id)`
+ * and `way(id)` together and returns whichever the server listed first, so for
+ * an id that exists as both it can answer with the wrong element — and it never
+ * finds relations at all.
+ */
+export async function fetchNodeById(nodeId: number): Promise<OverPassElement | null> {
+	return fetchSingleElement(`node(${nodeId});way(${nodeId});`, `node ${nodeId}`);
+}
+
+/** Overpass query keyword for each OSM element type. */
+const OVERPASS_KEYWORD: Record<OsmType, string> = {
+	node: 'node',
+	way: 'way',
+	relation: 'relation'
+};
+
+/**
+ * Fetches one OSM element by its type and ID.
+ *
+ * Unlike {@link fetchNodeById} this queries exactly the requested element type,
+ * so relations resolve (the extract publishes relation-typed ponds and tanks,
+ * §4.5) and a node/way id collision can't return the wrong object.
+ */
+export async function fetchElementById(type: OsmType, id: number): Promise<OverPassElement | null> {
+	const keyword = OVERPASS_KEYWORD[type];
+	if (!keyword) return null;
+	return fetchSingleElement(`${keyword}(${id});`, `${type} ${id}`);
 }

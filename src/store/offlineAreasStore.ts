@@ -6,7 +6,10 @@ import {
 	getAllOfflineAreas,
 	addOfflineArea,
 	updateOfflineArea,
-	deleteOfflineArea
+	deleteOfflineArea,
+	isDataPhaseDone,
+	DATA_PHASE_DONE,
+	DATA_PHASE_PENDING
 } from '@/mapHandler/databaseHandler';
 import { downloadAreaData } from '@/offline/areaDataDownloader';
 import { downloadTiles, downloadStyleAssets } from '@/offline/tileDownloader';
@@ -178,10 +181,12 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 		// live per-source tallies summed into the persisted `done`.
 		const combinedTotal = combinedTotalFor(area);
 		// `lastCompletedChunk` no longer indexes a chunk (§4.6) — it is repurposed
-		// as a simple "data phase done" flag: `-1` = not yet done, `0` = done. The
-		// DB field is kept as-is (still a `number`) so no migration is needed.
-		const dataPhaseFlag = refresh ? -1 : area.lastCompletedChunk;
-		const dataAlreadyDone = dataPhaseFlag >= 0;
+		// as a "data phase done" flag (see `isDataPhaseDone`). The DB field is kept
+		// as-is (still a `number`) so no schema migration is needed; records left
+		// over from the chunked downloader carry a chunk index, which counts as
+		// "not done" and is normalized by the persist below.
+		const dataAlreadyDone = !refresh && isDataPhaseDone(area);
+		const dataPhaseFlag = dataAlreadyDone ? DATA_PHASE_DONE : DATA_PHASE_PENDING;
 		let dataDone = dataAlreadyDone ? DATA_PHASE_UNITS : 0;
 
 		// Tile-phase resume state. Reset on refresh (re-verify every tile — cheap,
@@ -224,7 +229,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 				onProgress: (progress) => {
 					dataDone = progress.dataDone ? DATA_PHASE_UNITS : 0;
 					return persist(id, {
-						lastCompletedChunk: progress.dataDone ? 0 : -1,
+						lastCompletedChunk: progress.dataDone ? DATA_PHASE_DONE : DATA_PHASE_PENDING,
 						progress: { done: dataDone + tilesProcessed, total: combinedTotal },
 						nodeCount: progress.nodeCount
 					});
@@ -314,7 +319,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 			// Placeholder — `combinedTotalFor` needs `bounds`/`includeSatellite`/
 			// `includeTerrain`, all already set above.
 			progress: { done: 0, total: 0 },
-			lastCompletedChunk: -1
+			lastCompletedChunk: DATA_PHASE_PENDING
 		};
 		record.progress.total = combinedTotalFor(record);
 
@@ -326,8 +331,8 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 
 	/**
 	 * Resumes a failed/partial download: skips the data phase if it already
-	 * completed (`lastCompletedChunk >= 0`) and the tile phase resumes from its
-	 * own `tileResume` cursor.
+	 * completed (see `isDataPhaseDone`) and the tile phase resumes from its own
+	 * `tileResume` cursor.
 	 */
 	async function retryArea(id: number): Promise<void> {
 		await runDownload(id, false);

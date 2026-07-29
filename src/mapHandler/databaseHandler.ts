@@ -43,7 +43,14 @@ export interface OfflineArea {
 	sizeBytes: number;
 	status: 'downloading' | 'ready' | 'error' | 'refreshing';
 	progress: { done: number; total: number };
-	/** Resume info: index of the last successfully completed data chunk (−1 = none). */
+	/**
+	 * Data-phase resume state. Originally the index of the last successfully
+	 * completed Overpass chunk (−1 = none); since §4.6 the data phase is a single
+	 * FlatGeobuf read, so the field is repurposed as a tri-state flag — see
+	 * {@link DATA_PHASE_DONE} / {@link DATA_PHASE_PENDING}. The field type is
+	 * unchanged, so records written by older versions still load; any non-negative
+	 * value in one is a legacy chunk index and is treated as "not done".
+	 */
 	lastCompletedChunk: number;
 	/**
 	 * Tile-phase resume cursor: per-source count of tiles already processed
@@ -52,6 +59,34 @@ export interface OfflineArea {
 	 * optional field it needs no IndexedDB migration.
 	 */
 	tileResume?: Record<string, number>;
+}
+
+/**
+ * `lastCompletedChunk` value meaning "the data phase finished for this area".
+ *
+ * Deliberately **not** `0`: before §4.6 the field held a chunk index, where `0`
+ * meant "chunk 0 of N done" — i.e. a *partial* download. Reusing `0` as the done
+ * flag would make every legacy record that got at least one chunk in look fully
+ * downloaded, so a resumed download would skip the data read and leave the area
+ * with a fraction of its water sources. `-2` is outside the legacy value range
+ * (`-1` or a chunk index `>= 0`), so it can only ever have been written by a
+ * version that means it.
+ */
+export const DATA_PHASE_DONE = -2;
+
+/** `lastCompletedChunk` value meaning "the data phase still has to run". */
+export const DATA_PHASE_PENDING = -1;
+
+/**
+ * True when the area's data phase is known to have completed. Legacy chunk
+ * indices (`>= 0`) are *not* accepted: they came from a chunked download whose
+ * completion cannot be reconstructed, so they fall back to "run the data read
+ * again" — a single bbox read that upserts, hence safe to repeat. The record is
+ * normalized to {@link DATA_PHASE_DONE}/{@link DATA_PHASE_PENDING} as soon as
+ * that run persists its progress.
+ */
+export function isDataPhaseDone(area: Pick<OfflineArea, 'lastCompletedChunk'>): boolean {
+	return area.lastCompletedChunk === DATA_PHASE_DONE;
 }
 
 /**

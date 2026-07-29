@@ -217,7 +217,9 @@ rclone config create r2 s3 provider=Cloudflare \
   access_key_id=<R2_ACCESS_KEY> secret_access_key=<R2_SECRET> \
   endpoint=https://<accountid>.r2.cloudflarestorage.com
 
-rclone copy ~/osm-data/out/ r2:fireyak-data/ \
+# Bucket `fireyak-data`, key prefix `fireyak-data/` (see §1a "Data URLs") — the
+# prefix is part of the public object URL, so the upload has to write into it.
+rclone copy ~/osm-data/out/ r2:fireyak-data/fireyak-data/ \
   --include "water_sources.fgb" \
   --include "water_sources.pmtiles" \
   --include "metadata.json" -P
@@ -230,7 +232,7 @@ riskiest assumption in the whole plan — prove it before writing app code:
 for O in https://app.fireyak.org http://localhost:5173 https://localhost capacitor://localhost; do
   echo "--- $O"
   curl -sI -H "Origin: $O" -H "Range: bytes=0-99" \
-    https://data.fireyak.org/water_sources.fgb \
+    https://data.fireyak.org/fireyak-data/water_sources.fgb \
     | grep -iE "^HTTP|access-control-allow-origin|content-range|accept-ranges"
 done
 ```
@@ -356,7 +358,7 @@ npm install flatgeobuf     # `pmtiles` deliberately NOT installed — see §4.8
 |---|---|---|
 | Marker data for viewport | **FlatGeobuf** bbox range-read | `markerHandler.updateNodeCache()` **[V]** |
 | Offline area downloads | **FlatGeobuf** bbox read | `src/offline/areaDataDownloader.ts` |
-| Single marker by id (deep link, edit-conflict check) | **Overpass** — unchanged | `fetchNodeById` stays as-is **[V]** |
+| Single marker by id (deep link, edit-conflict check) | **Overpass** | `fetchElementById(type, id)` — type-aware, so relations resolve **[V]** |
 | Live freshness | Overpass (existing code) | background-only, never blocking |
 | User's own edits | local injection | existing pending-edits queue — already solved |
 | ~~Low-zoom overview layer~~ | ~~PMTiles~~ | **descoped — see §4.8** **[V]** |
@@ -410,7 +412,11 @@ import { deserialize } from 'flatgeobuf/lib/mjs/geojson';
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import type { GeoBounds } from '@/types/geo';
 
-const BASE = import.meta.env.VITE_DATA_BASE_URL ?? 'https://data.fireyak.org';
+// Includes the `fireyak-data/` key prefix — see §1a "Data URLs". The canonical
+// object URL is `https://data.fireyak.org/fireyak-data/…`; keep this default,
+// the §2.3 CORS/range check and the pipeline's upload path in lockstep.
+const BASE =
+  import.meta.env.VITE_DATA_BASE_URL ?? 'https://data.fireyak.org/fireyak-data';
 export const FGB_URL = `${BASE}/water_sources.fgb`;
 export const META_URL = `${BASE}/metadata.json`;
 
@@ -425,6 +431,18 @@ export async function fetchWaterSources(bounds: GeoBounds): Promise<OverPassElem
   return out;
 }
 ```
+
+**Cancellation.** `deserialize()` takes no `AbortSignal`, and one bbox read is a
+*chain* of range requests (header, index, then a batch per run of nearby
+features). Breaking out of the `for await` only stops future batches — the
+request already in flight keeps downloading, which on an offline-area read is
+megabytes still arriving after the user hit Cancel. `fetchWaterSources` therefore
+takes an optional signal and, when given one, hands `deserialize` a subclassed
+`HttpRangeClient` whose `getRange` passes the signal to `fetch`. The library's
+`BufferedHttpRangeClient` accepts `string | HttpRangeClient` and forwards the
+instance to every feature batch, so the whole read becomes abortable. The
+offline-area downloader passes its per-area signal; the map's viewport read has
+nothing to cancel and omits it.
 
 `clampBounds` exists to keep Overpass inside its server timeout. A range read has
 no such limit, so on the FGB path it can be relaxed — but the padded/clamped
@@ -530,7 +548,7 @@ enumerates the work):
 | `NearbyMarker.vue:75` | `router.push(\`/nearbysources/${toRef(...)}\`)` |
 | `pumpCalculation.ts:525` | `useMarkerAsWaterSource(ref, coords)` |
 | `editQueue.ts` | `PendingEdit` keeps numeric `osmId` + `elementType` (OSM wire identity, negative temp ids) — derive refs at the call sites: `hardDeleteMapNodes([toRef(edit.elementType, edit.osmId)])`. **No `pendingEdits` migration needed.** |
-| `overPassApi.ts` | `fetchNodeById(nodeId: number)` unchanged — it queries `node(id);way(id);`; the caller attaches the ref from the returned `type` |
+| `overPassApi.ts` | `fetchElementById(type, id)` added, querying exactly the requested element type; `fetchNodeById(nodeId)` (`node(id);way(id);`) stays for the edit queue, which only has bare numeric node ids |
 
 **One behavioural fix falls out of this.** `markerImageHandler.ts:42` builds the
 Commons category `Fire-fighting-facility node-${markerId}` — a node-only
@@ -557,10 +575,22 @@ three things the chunk loop provides:
 - **Deletion reconciliation**, today guarded by
   `elements.length < OVERPASS_TRUNCATION_LIMIT` (`areaDataDownloader.ts:124`).
 
-**Implemented as:** `lastCompletedChunk` is repurposed as a 0/-1 "data phase
-done" flag (no DB migration — the field stays a `number`); the progress total
+**Implemented as:** `lastCompletedChunk` is repurposed as a "data phase done"
+flag (no DB migration — the field stays a `number`); the progress total
 becomes `DATA_PHASE_UNITS (1) + totalTilesFor(area)`, so tiles remain the bulk
 and the bar stays monotonic. `chunkBounds`/`countChunks` are deleted.
+
+The flag's "done" value is `DATA_PHASE_DONE = -2`, **not** `0`: an area
+downloaded by the old chunked code persists a chunk index, where `0` means
+"chunk 0 of N done" — a *partial* download. Had `0` been reused as the done flag,
+every such record would have looked complete, so a resume would have skipped the
+data read and left the area with a fraction of its water sources. Picking a value
+outside the legacy range (`-1` or `>= 0`) makes legacy records fall through to
+"not done" without a migration pass: the read simply runs again (it upserts, so
+repeating it is free of consequence) and the record is normalized on its first
+progress write. `isDataPhaseDone` in `databaseHandler.ts` is the single reader —
+`offlineAreasStore` and `offlineAreaActions` `downloadDetail` both go through it
+rather than comparing the raw number.
 
 Two UI call sites also assumed per-chunk semantics and had to move with it, or
 they'd have shown a stuck counter for the whole tile phase:
@@ -600,11 +630,20 @@ of being skipped whenever a chunk hit 2000 elements.
 
 ### 4.7 What stays on Overpass
 
-**Single-node reads stay on Overpass by design, and that is fine.** FGB is a
-spatial index and cannot answer "give me node 123", but `fetchNodeById`
-(`mapMarkerStore.ts:31`, `editQueue.ts:265/309/334/348`) only ever *populates or
-refreshes the cache* — deep links and edit-conflict checks read from the cache
-that the bbox range reads have already filled. No FGB replacement, no change.
+**Single-element reads stay on Overpass by design, and that is fine.** FGB is a
+spatial index and cannot answer "give me node 123", but these lookups
+(`mapMarkerStore.ts`, `editQueue.ts:265/309/334/348`) only ever *populate or
+refresh the cache* — deep links and edit-conflict checks read from the cache that
+the bbox range reads have already filled. No FGB replacement needed.
+
+The lookup does have to be **type-aware**, though. `fetchNodeById` queries
+`node(id);way(id);` only, so a relation ref (`r…`) that isn't cached — a shared
+deep link, or a cache miss after a prune — would resolve to `null` even though
+the extract publishes relation-typed ponds and tanks and the rest of the app
+treats relations as first-class. `mapMarkerStore.fetchMarkerById` therefore goes
+through `fetchElementById(parsed.type, parsed.id)`, which asks for exactly the
+type the ref names. `fetchNodeById` remains for the edit queue, whose
+`PendingEdit.osmId` is a bare numeric node id with no ref to parse.
 
 **Background freshness — implemented.** Render static data immediately; fire the
 existing Overpass query in the background; on 429/500 swallow silently. Objects

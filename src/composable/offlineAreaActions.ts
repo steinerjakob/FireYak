@@ -8,7 +8,7 @@ import {
 	TERRAIN_MAX_ZOOM
 } from '@/offline/tileMath';
 import type { GeoBounds } from '@/types/geo';
-import type { OfflineArea } from '@/mapHandler/databaseHandler';
+import { isDataPhaseDone, type OfflineArea } from '@/mapHandler/databaseHandler';
 
 /**
  * Calibration constants for pre-download size estimates. Average compressed
@@ -71,13 +71,15 @@ export function useOfflineAreaActions() {
 	 * the water-source read is still pending, a line for it.
 	 *
 	 * The data phase is a single FlatGeobuf bbox read (§4.6), so there is no
-	 * counter to show any more — `lastCompletedChunk` is now just a done flag
-	 * (`-1` pending, `0` done), not a chunk index.
+	 * counter to show any more — `lastCompletedChunk` is now just a done flag,
+	 * not a chunk index. Read it through `isDataPhaseDone` so a legacy chunk
+	 * index on a record from the old chunked downloader isn't mistaken for
+	 * "sources already loaded" while the data read is in fact still running.
 	 */
 	function downloadDetail(area: OfflineArea, refreshing: boolean): string {
 		const parts: string[] = [];
 
-		if (area.lastCompletedChunk < 0) {
+		if (!isDataPhaseDone(area)) {
 			parts.push(
 				t(
 					refreshing

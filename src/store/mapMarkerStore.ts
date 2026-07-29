@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { OverPassElement } from '@/mapHandler/overPassApi';
-import { fetchNodeById } from '@/mapHandler/overPassApi';
+import { fetchElementById } from '@/mapHandler/overPassApi';
 import { CachedMapNode, getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
 import { fetchMediaWikiFiles, ImageInfo } from '@/mapHandler/markerImageHandler';
 import { useNetworkStatus } from '@/composable/networkStatus';
@@ -29,19 +29,19 @@ export const useMapMarkerStore = defineStore('marker', () => {
 
 				// If not in database, fetch from API
 				if (!node) {
-					// Overpass keys nodes and ways by numeric id in separate element
-					// types; the ref's numeric id is all `fetchNodeById` needs, it
-					// queries both `node(id)` and `way(id)`.
+					// The ref carries the element type, so ask Overpass for exactly
+					// that type. Relations matter here: the extract publishes
+					// relation-typed ponds and tanks, and a bare `node(id);way(id)`
+					// lookup would never find them — an `r…` marker opened from a
+					// shared link or a cache miss would resolve to nothing.
 					const parsed = parseRef(ref);
-					const fetched = parsed ? await fetchNodeById(parsed.id) : null;
+					const fetched = parsed ? await fetchElementById(parsed.type, parsed.id) : null;
 					if (fetched) {
 						// Store in database for future use — the element is valid data
 						// regardless of whether it is the one that was asked for.
 						await storeMapNodes([fetched]);
-						// `fetchNodeById` queries `node(id)` and `way(id)` together and
-						// returns whichever came back first, so for an id that exists as
-						// both it can answer with the wrong element type. Only adopt it
-						// when it actually matches the requested ref.
+						// Guard against a response that isn't the element we asked for
+						// (a differently-typed element with the same numeric id).
 						const fetchedRef = toRef(fetched.type, fetched.id);
 						node = fetchedRef === ref ? { ...fetched, ref: fetchedRef } : null;
 					}
