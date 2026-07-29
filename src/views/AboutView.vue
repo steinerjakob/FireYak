@@ -97,6 +97,9 @@
 					</ion-card-header>
 					<ion-card-content>
 						<p>{{ $t('about.dataSourceDescription') }}</p>
+						<p v-if="dataAsOf" class="data-as-of">
+							{{ $t('about.dataAsOf', { date: dataAsOf }) }}
+						</p>
 						<ion-button
 							expand="block"
 							fill="outline"
@@ -132,16 +135,21 @@ import {
 	IonBackButton
 } from '@ionic/vue';
 import { logoGithub, heart, star, bug, code, documentText, map, sparkles } from 'ionicons/icons';
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { App } from '@capacitor/app';
 import { AppInfo } from '@capacitor/app/dist/esm/definitions';
 import { Capacitor } from '@capacitor/core';
 import { version } from '@/../package.json';
 import { useWhatsNew } from '@/composable/whatsNew';
+import { useDataFreshness } from '@/composable/dataFreshness';
 
 const { openHistory } = useWhatsNew();
+const { planetTimestamp, load: loadDataFreshness, formatted } = useDataFreshness();
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
+
+/** Re-evaluates once the timestamp resolves; `null` hides the line entirely. */
+const dataAsOf = computed(() => (planetTimestamp.value ? formatted() : null));
 
 onMounted(async () => {
 	if (Capacitor.isNativePlatform()) {
@@ -149,6 +157,7 @@ onMounted(async () => {
 	} else {
 		appInfo.value = { version: version };
 	}
+	void loadDataFreshness();
 });
 </script>
 
@@ -157,6 +166,11 @@ onMounted(async () => {
 	max-width: 800px;
 	margin: 0 auto;
 	padding: 16px;
+}
+
+.data-as-of {
+	color: var(--ion-color-medium);
+	font-size: 0.875rem;
 }
 
 .logo-section {

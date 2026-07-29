@@ -1,3 +1,5 @@
+import { OsmRef, parseRef } from '@/helper/osmRef';
+
 // The MediaWiki API structure
 export interface ImageInfo {
 	// Original file details
@@ -35,11 +37,20 @@ interface ApiResponse {
  * Fetches a list of files from MediaWiki Commons matching a specific prefix
  * and retrieves image information, including a thumbnail of the specified width.
  *
+ * The Commons category convention (`Fire-fighting-facility node-<id>`) is
+ * node-only — there is no equivalent for ways — so this skips the request
+ * entirely for a way ref rather than querying a category that cannot exist.
+ *
  * @returns A promise that resolves to an array of file objects.
- * @param markerId
+ * @param ref
  */
-export async function fetchMediaWikiFiles(markerId: number): Promise<WikiPage[]> {
-	const prefix = `Fire-fighting-facility node-${markerId}`;
+export async function fetchMediaWikiFiles(ref: OsmRef): Promise<WikiPage[]> {
+	const parsed = parseRef(ref);
+	if (parsed?.type !== 'node') {
+		return [];
+	}
+
+	const prefix = `Fire-fighting-facility node-${parsed.id}`;
 	const encodedPrefix = encodeURIComponent(prefix);
 	const apiUrl = 'https://commons.wikimedia.org/w/api.php';
 	const thumbnailWidth = 200;

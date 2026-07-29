@@ -26,6 +26,7 @@ import PhotoSwipeLightbox from 'photoswipe/lightbox';
 import 'photoswipe/photoswipe.css';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useNetworkStatus } from '@/composable/networkStatus';
+import { coerceRef } from '@/helper/osmRef';
 
 const ionRouter = useIonRouter();
 const route = useRoute();
@@ -53,7 +54,10 @@ onMounted(async () => {
 
 	let markerImages = selectedMarkerImages;
 	if (!markerImages.length) {
-		markerImages = await fetchMarkerImageInfoById(parseInt(route.params.relatedId as string));
+		const ref = coerceRef(route.params.relatedId as string);
+		if (ref) {
+			markerImages = await fetchMarkerImageInfoById(ref);
+		}
 	}
 
 	// Map fetched image data to PhotoSwipe item format

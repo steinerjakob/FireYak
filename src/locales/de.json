@@ -128,6 +128,7 @@
 		"openInfo": "Über & Unterstützen",
 		"dataSource": "Datenquelle",
 		"dataSourceDescription": "Alle Wasserentnahmestellen werden von OpenStreetMap Mitwirkenden bereitgestellt.",
+		"dataAsOf": "Datenstand: {date}",
 		"version": "Version",
 		"supportOnKofiDescription": "Wenn Sie diese App nützlich finden und ihre Entwicklung unterstützen möchten, können Sie mich auf Ko-fi unterstützen! Ihre Unterstützung hält das Projekt am Leben und ermöglicht neue Funktionen.",
 		"addHydrantsTitle": "Wie man Hydranten zu OpenStreetMap hinzufügt",
@@ -301,8 +302,8 @@
 			"description": "Lade einen Bereich herunter, damit die Wasserentnahmestellen auch ohne Verbindung verfügbar bleiben."
 		},
 		"status": {
-			"loadingSources": "Wasserentnahmestellen werden geladen … ({done}/{total})",
-			"refreshingSources": "Wasserentnahmestellen werden aktualisiert … ({done}/{total})",
+			"loadingSources": "Wasserentnahmestellen werden geladen …",
+			"refreshingSources": "Wasserentnahmestellen werden aktualisiert …",
 			"loadingTiles": "Kartenkacheln werden geladen … {percent} %",
 			"refreshingTiles": "Kartenkacheln werden geprüft … {percent} %",
 			"error": "Download unvollständig",
@@ -347,7 +348,7 @@
 			"includeTerrainHint": "Für die Pumpenberechnung offline erforderlich — Geländekacheln liefern die Höhendaten.",
 			"autoRefresh": "Automatisch über WLAN aktualisieren",
 			"autoRefreshHint": "Automatisch über WLAN aktualisieren, wenn älter als 30 Tage.",
-			"estimate": "Etwa {width} × {height} km · {chunks} Datenblöcke",
+			"estimate": "Etwa {width} × {height} km",
 			"sizeEstimate": "Geschätzter Download: {low}–{high} MB",
 			"tooLarge": "Dieser Bereich ist zu groß. Zoome hinein, um einen kleineren Bereich zu wählen.",
 			"download": "Herunterladen",

@@ -16,6 +16,7 @@ import {
 	hardDeleteMapNodes
 } from '@/mapHandler/databaseHandler';
 import { markerCacheVersion } from '@/mapHandler/markerHandler';
+import { toRef } from '@/helper/osmRef';
 
 // ---------------------------------------------------------------------------
 // Offline edit queue + sync engine (§1.3)
@@ -120,7 +121,7 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 			// The create never hit OSM: dropping the queue entry and the temp node
 			// makes it as if the marker was never added.
 			if (create?.localId != null) await deletePendingEdit(create.localId);
-			await hardDeleteMapNodes([input.osmId]);
+			await hardDeleteMapNodes([toRef('node', input.osmId)]);
 			markerCacheVersion.value++;
 			return;
 		}
@@ -157,7 +158,7 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 
 	// Optimistic cache update so the map reflects the edit immediately.
 	if (input.action === 'delete') {
-		await deleteMapNode(osmId);
+		await deleteMapNode(toRef('node', osmId));
 	} else {
 		await storeMapNodes([
 			{ id: osmId, type: 'node', lat: input.lat, lon: input.lon, tags: input.tags }
@@ -217,10 +218,10 @@ async function uploadDelete(edit: PendingEdit): Promise<void> {
  * later queue entries that were enqueued against the temp ID.
  */
 async function remapTempId(tempId: number, newId: number): Promise<void> {
-	const node = await getMapNodeById(tempId);
+	const node = await getMapNodeById(toRef('node', tempId));
 	if (node) {
 		await storeMapNodes([{ ...node, id: newId }]);
-		await hardDeleteMapNodes([tempId]);
+		await hardDeleteMapNodes([toRef('node', tempId)]);
 		markerCacheVersion.value++;
 	}
 
@@ -326,7 +327,7 @@ export async function discardEdit(localId: number): Promise<void> {
 	await deletePendingEdit(localId);
 
 	if (edit.action === 'create') {
-		await hardDeleteMapNodes([edit.osmId]);
+		await hardDeleteMapNodes([toRef(edit.elementType, edit.osmId)]);
 		markerCacheVersion.value++;
 		return;
 	}

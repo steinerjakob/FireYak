@@ -14,6 +14,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { version } from '@/../package.json';
 import { useNetworkStatus } from '@/composable/networkStatus';
 import { enqueueEdit, isNetworkError } from '@/offline/editQueue';
+import { toRef } from '@/helper/osmRef';
 
 export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const isEditing = ref(false);
@@ -328,7 +329,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				change
 			);
 
-			await deleteMapNode(originalMarker.value.id);
+			await deleteMapNode(toRef('node', originalMarker.value.id));
 			markerCacheVersion.value++;
 			markerStore.selectMarker(null);
 			cancelEdit();

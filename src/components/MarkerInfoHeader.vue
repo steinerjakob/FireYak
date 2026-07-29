@@ -75,8 +75,8 @@ const openNavigation = () => {
 const shareMarker = async () => {
 	if (!markerData.value) return;
 
-	const markerId = markerData.value.id;
-	const url = `https://app.fireyak.org/#/markers/${markerId}`;
+	const markerRef = markerData.value.ref;
+	const url = `https://app.fireyak.org/#/markers/${markerRef}`;
 	const title = getTitle();
 
 	try {
@@ -105,11 +105,7 @@ const shareMarker = async () => {
 		<ion-toolbar class="ios26-disabled">
 			<ion-title>{{ getTitle() }}</ion-title>
 			<ion-buttons slot="end">
-				<ion-button
-					v-if="editAllowed"
-					@click="startEdit"
-					:title="t('markerEdit.title.edit')"
-				>
+				<ion-button v-if="editAllowed" @click="startEdit" :title="t('markerEdit.title.edit')">
 					<ion-icon :icon="createOutline" />
 				</ion-button>
 				<ion-button @click="shareMarker" :title="t('markerInfo.share.title')">

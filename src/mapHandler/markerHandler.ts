@@ -9,17 +9,14 @@ import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
 import iconWaterTank from '../assets/markers/watertank.png';
 
-import {
-	clampBounds,
-	fetchMarkerData,
-	OverPassElement,
-	wasLastAreaQueryFailure
-} from './overPassApi';
+import { clampBounds, fetchMarkerData, OverPassElement } from './overPassApi';
+import { fetchWaterSources, getExtractTimestampMs } from '@/mapHandler/staticDataApi';
+import { useNetworkStatus } from '@/composable/networkStatus';
 import {
 	getMapNodesForView,
 	getNearbyMapNodes,
 	storeMapNodes,
-	getMapNodeIdsForBounds,
+	getMapNodeRefsForBounds,
 	hardDeleteMapNodes
 } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
@@ -27,6 +24,7 @@ import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
 import { lngLatToTile, tileKey } from '@/helper/tileMath';
+import { OsmRef, toRef } from '@/helper/osmRef';
 
 // Map icon keys to URLs for use in MapLibre image loading
 export const markerIconUrls: Record<string, string> = {
@@ -39,29 +37,31 @@ export const markerIconUrls: Record<string, string> = {
 	firestation: iconFirestation
 };
 
+// §4.4 item 3 / plan bug fix: icon and category are decided from tags ONLY,
+// never from `element.type`. Overpass used to query ponds/tanks as
+// `node[…]` exclusively, so branching on `type === 'way'` for "everything
+// else is a fire station" was safe. The FlatGeobuf extract delivers
+// way- and relation-typed hydrants, ponds and tanks too, which would
+// otherwise all render (and filter) as fire stations.
 function getIconKeyForNode(element: OverPassElement): string {
-	if (element.type === 'node') {
-		const emergency = element.tags?.emergency;
-		const type = element.tags?.['fire_hydrant:type'];
-		switch (emergency) {
-			case 'fire_hydrant':
-				return (
-					(
-						{ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<
-							string,
-							string
-						>
-					)[type as string] || 'hydrant'
-				);
-			case 'suction_point':
-				return 'pump';
-			case 'fire_water_pond':
-				return 'water';
-			case 'water_tank':
-				return 'watertank';
+	const emergency = element.tags?.emergency;
+	switch (emergency) {
+		case 'fire_hydrant': {
+			const type = element.tags?.['fire_hydrant:type'];
+			return (
+				({ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<string, string>)[
+					type as string
+				] || 'hydrant'
+			);
 		}
+		case 'suction_point':
+			return 'pump';
+		case 'fire_water_pond':
+			return 'water';
+		case 'water_tank':
+			return 'watertank';
 	}
-	if (element.type === 'way') {
+	if (element.tags?.amenity === 'fire_station') {
 		return 'firestation';
 	}
 	return 'hydrant';
@@ -71,22 +71,20 @@ export function getIconUrlForNode(element: OverPassElement): string {
 	return markerIconUrls[getIconKeyForNode(element)];
 }
 
-/** Maps an OSM element to its filter category key. */
+/** Maps an OSM element to its filter category key. Tags only — see comment above. */
 function categoryForNode(element: OverPassElement): MarkerFilterKey {
-	if (element.type === 'node') {
-		const emergency = element.tags?.emergency;
-		switch (emergency) {
-			case 'fire_hydrant':
-				return 'fireHydrant';
-			case 'suction_point':
-				return 'suctionPoint';
-			case 'water_tank':
-				return 'waterTank';
-			case 'fire_water_pond':
-				return 'fireWaterPond';
-		}
+	const emergency = element.tags?.emergency;
+	switch (emergency) {
+		case 'fire_hydrant':
+			return 'fireHydrant';
+		case 'suction_point':
+			return 'suctionPoint';
+		case 'water_tank':
+			return 'waterTank';
+		case 'fire_water_pond':
+			return 'fireWaterPond';
 	}
-	if (element.type === 'way') return 'fireStation';
+	if (element.tags?.amenity === 'fire_station') return 'fireStation';
 	return 'fireHydrant';
 }
 
@@ -154,15 +152,122 @@ function markTilesFresh(keys: string[]): void {
  * Callers must only invoke this when the fresh result is **not** truncated by
  * the Overpass 2000-element limit, otherwise cut-off nodes would be wrongly
  * deleted. Exported for reuse by the offline area refresh (§1.2).
+ *
+ * `sourceTimestampMs` is the instant the data source is authoritative as of.
+ * Pass it whenever the source can be **older than the cache** — i.e. for the
+ * static extract, which is rebuilt only every couple of days. A cached node the
+ * extract doesn't mention is then deleted only if we learned about it *before*
+ * the extract was cut; anything newer is kept, because the extract cannot know
+ * about it yet. Without this, a marker the user just added through the app
+ * (present in the cache, absent from a days-old extract) would be silently
+ * hard-deleted on the next pan. Omit it for a live source like Overpass, where
+ * absence really does mean deletion.
  */
 export async function reconcileDeletedNodes(
 	mapBounds: GeoBounds,
-	freshElements: OverPassElement[]
+	freshElements: OverPassElement[],
+	sourceTimestampMs?: number
 ) {
-	const freshIds = new Set(freshElements.map((e) => e.id));
-	const cachedIds = await getMapNodeIdsForBounds(mapBounds);
-	const staleIds = cachedIds.filter((id) => !freshIds.has(id));
-	await hardDeleteMapNodes(staleIds);
+	const freshRefs = new Set<OsmRef>(freshElements.map((e) => toRef(e.type, e.id)));
+	const cachedRefs = await getMapNodeRefsForBounds(mapBounds);
+	const staleRefs = cachedRefs
+		.filter((cached) => !freshRefs.has(cached.ref))
+		.filter((cached) => sourceTimestampMs === undefined || cached.fetchedAt < sourceTimestampMs)
+		.map((cached) => cached.ref);
+	await hardDeleteMapNodes(staleRefs);
+}
+
+/**
+ * `true` when the most recent {@link updateNodeCache} call genuinely failed
+ * (the FGB fetch threw) rather than succeeding with data. Unlike Overpass's
+ * `fetchMarkerData`, `fetchWaterSources` never returns `null` for "aborted or
+ * superseded" — a range read has no such concept — so this is a plain
+ * success/failure flag, not a three-way distinguisher. Mirrors the role
+ * `wasLastAreaQueryFailure()` played for the Overpass path.
+ */
+let lastStaticQueryFailed = false;
+
+// --- Opportunistic live refresh (§4.7) -----------------------------------
+// The static extract is rebuilt every couple of days, so it is always somewhat
+// behind OSM. On top of it we ask Overpass for the same viewport in the
+// background: when it answers, the cache picks up edits newer than the extract;
+// when it is rate-limited or down, nothing happens and the user never finds out.
+// This is strictly additive — it can only ever make the map fresher, never
+// break it, which is why every failure path here is silent.
+
+/**
+ * Separate freshness registry from {@link tileFreshness}. The live layer needs
+ * its own TTL because it answers a different question ("has Overpass been asked
+ * about this area recently?") and must not be satisfied by a static read, or
+ * vice versa.
+ */
+const liveFreshness = new Map<string, number>();
+/** Shorter than the static TTL — live data is the whole point of asking. */
+const LIVE_FRESHNESS_TTL_MS = 5 * 60 * 1000;
+
+let liveRefreshInFlight = false;
+
+/** True when every given tile was asked of Overpass within the live TTL. */
+function areTilesLiveFresh(keys: string[]): boolean {
+	const now = Date.now();
+	return keys.every((key) => {
+		const fetchedAt = liveFreshness.get(key);
+		return fetchedAt !== undefined && now - fetchedAt < LIVE_FRESHNESS_TTL_MS;
+	});
+}
+
+/**
+ * Asks Overpass for `mapBounds` in the background and folds whatever comes back
+ * into the cache. Never throws, never blocks rendering, and never touches
+ * {@link markerFetchFailed} — a failure here is a non-event.
+ *
+ * Deliberately **does not reconcile deletions**. Overpass truncates at 2000
+ * elements and can answer partially, so an object missing from its response is
+ * not evidence of deletion (gaps ≠ deletions). It only ever upserts, which is
+ * also why `storeMapNodes` preserving the `__deleted` tombstone matters: a
+ * marker the user deleted locally must not be resurrected by a live refresh.
+ *
+ * No client-side timeout is imposed, despite the plan's suggestion of ~5 s.
+ * Nothing waits on this, and aborting an Overpass query does not refund its
+ * server-side rate-limit slot — so cutting it off early would throw away a
+ * result we had already paid for. `overPassApi` applies its own per-attempt
+ * timeouts, instance pool and 429 cool-downs.
+ */
+async function refreshFromLiveSource(mapBounds: GeoBounds): Promise<void> {
+	// Pointless while offline, and it would only log failures.
+	const { isOnline } = useNetworkStatus();
+	if (!isOnline.value) return;
+	if (liveRefreshInFlight) return;
+
+	// Same padded+clamped bounds the static path uses, so both layers agree on
+	// what "this area" means and the tile keys line up.
+	const queryBounds = clampBounds(padBounds(mapBounds, BBOX_PADDING_RATIO));
+	const keys = coveringTileKeys(queryBounds);
+	if (areTilesLiveFresh(keys)) return;
+
+	liveRefreshInFlight = true;
+	try {
+		const liveElements = await fetchMarkerData(queryBounds);
+		// null = aborted (superseded by a newer pan) or every instance failed.
+		// Leave the tiles unstamped so the next movement tries again.
+		if (liveElements === null) return;
+
+		// Stamp on any answer, including an empty one: "Overpass says there is
+		// nothing here" is a real answer worth not re-asking for a while.
+		const now = Date.now();
+		for (const key of keys) liveFreshness.set(key, now);
+
+		if (liveElements.length === 0) return;
+
+		// Upsert only. storeMapNodes keys by ref and overwrites, so anything
+		// Overpass knows about more recently than the extract wins.
+		await storeMapNodes(liveElements);
+		markerCacheVersion.value++;
+	} catch {
+		// Silent by design — the static layer already rendered.
+	} finally {
+		liveRefreshInFlight = false;
+	}
 }
 
 async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]> {
@@ -174,17 +279,20 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 	const queryBounds = clampBounds(padBounds(mapBounds, BBOX_PADDING_RATIO));
 
 	activeAreaFetches.value++;
-	let mapElements: OverPassElement[] | null;
+	let mapElements: OverPassElement[];
 	try {
-		mapElements = await fetchMarkerData(queryBounds);
+		mapElements = await fetchWaterSources(queryBounds);
+		lastStaticQueryFailed = false;
+	} catch (e) {
+		// Unlike fetchMarkerData, fetchWaterSources throws rather than returning
+		// null on failure. Leave the cache untouched — no fresh-tile stamping, no
+		// reconciliation — so a transient outage never looks like "everything in
+		// this area was deleted".
+		console.error('Static water-source fetch failed:', e);
+		lastStaticQueryFailed = true;
+		return [];
 	} finally {
 		activeAreaFetches.value--;
-	}
-
-	// null means the request was aborted or failed — skip cache operations
-	// to avoid falsely deleting cached markers.
-	if (mapElements === null) {
-		return [];
 	}
 
 	// Mark the covering tiles fresh so a following pan within this area can
@@ -192,10 +300,20 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 	markTilesFresh(coveringTileKeys(queryBounds));
 
 	await storeMapNodes(mapElements);
-	// Only reconcile when the result is not truncated by the 2000-element limit,
-	// otherwise we'd falsely hard-delete nodes that were just cut off.
-	if (mapElements.length < 2000) {
-		await reconcileDeletedNodes(queryBounds, mapElements);
+	// An FGB range read is never truncated the way Overpass's 2000-element
+	// response could be, so — unlike the old Overpass path — reconciliation
+	// always sees the complete set of features the extract holds for
+	// `queryBounds`, and needs no element-count guard.
+	//
+	// It does need a staleness guard instead: the extract is rebuilt only every
+	// couple of days, so it cannot know about anything mapped since it was cut.
+	// Reconciling against its planet timestamp keeps those newer nodes — most
+	// importantly the user's own just-added markers. If the timestamp can't be
+	// determined (metadata unreachable) we skip reconciliation entirely rather
+	// than risk deleting live data; stale nodes are handled by the TTL prune.
+	const extractTimestampMs = await getExtractTimestampMs();
+	if (extractTimestampMs !== null) {
+		await reconcileDeletedNodes(queryBounds, mapElements, extractTimestampMs);
 	}
 
 	// Signal that the cache changed so the map re-renders with the freshly
@@ -244,19 +362,36 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 	const features: GeoJSON.Feature[] = [];
 	try {
 		let mapElements: OverPassElement[] = await getMapNodesForView(mapBounds);
-		// if nothing is in the cache wait for the api call
+
+		// Freshness of the area a fetch would actually cover (padded then clamped,
+		// matching updateNodeCache). Computed for BOTH the empty- and populated-
+		// cache paths: an area that genuinely contains no water sources caches as
+		// "nothing", so a `!mapElements.length` check alone can never become
+		// satisfied and every map move would re-fetch that area forever. The
+		// freshness stamp is the only record that we already asked and the answer
+		// was "none here".
+		const tileKeys = coveringTileKeys(clampBounds(padBounds(mapBounds, BBOX_PADDING_RATIO)));
+		const tilesFresh = areTilesFresh(tileKeys);
+
 		if (!mapElements.length) {
-			mapElements = await updateNodeCache(mapBounds);
-			// updateNodeCache returns [] on both abort and genuine failure.
-			// wasLastAreaQueryFailure() distinguishes them.
-			markerFetchFailed.value = wasLastAreaQueryFailure();
+			// Nothing cached for this view. Fetch only if we haven't already
+			// covered this area within the freshness TTL.
+			if (!tilesFresh) {
+				mapElements = await updateNodeCache(mapBounds);
+				markerFetchFailed.value = lastStaticQueryFailed;
+			}
 		} else {
-			// Cache hit. Skip the background refresh entirely when the area a
-			// fetch would actually cover (padded then clamped, matching
-			// updateNodeCache) was already fetched within the freshness TTL —
-			// avoids redundant Overpass load and rate-limiting on small pans.
-			const tileKeys = coveringTileKeys(clampBounds(padBounds(mapBounds, BBOX_PADDING_RATIO)));
-			if (!areTilesFresh(tileKeys) && !backgroundRefreshInFlight) {
+			// Cache hit: this view renders real data, so a failure recorded for a
+			// *different* area no longer describes what the user is looking at.
+			// Without this the flag would stay stuck `true` after one failed
+			// uncached load — the only other writer is the branch above, which
+			// never runs once an area has cached markers.
+			markerFetchFailed.value = false;
+
+			// Skip the background refresh entirely when the area was
+			// already fetched within the freshness TTL — avoids redundant load on
+			// small pans.
+			if (!tilesFresh && !backgroundRefreshInFlight) {
 				// Fire-and-forget background cache refresh — silently ignore
 				// abort errors (superseded by a newer request) and network failures.
 				// Background failures while cached data is already on screen are
@@ -269,6 +404,13 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 					});
 			}
 		}
+
+		// Opportunistic live top-up on top of whichever branch ran above (§4.7).
+		// Fire-and-forget: the static data has already been resolved, so this can
+		// only add edits made since the extract was cut. Self-throttled by its own
+		// TTL and in-flight guard, so calling it on every map movement is safe.
+		void refreshFromLiveSource(mapBounds);
+
 		// Apply category filters — call inside the function so Pinia is active.
 		const { markerFilters } = useSettingsStore();
 		for (const element of mapElements) {
@@ -282,7 +424,7 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 					coordinates: [lng, lat]
 				},
 				properties: {
-					id: element.id,
+					ref: toRef(element.type, element.id),
 					icon: getIconKeyForNode(element)
 				}
 			});
@@ -356,7 +498,7 @@ export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise
 	return sortElementsByDistance(elements, latLng);
 }
 
-export async function getMarkerById(markerId: number) {
+export async function getMarkerById(ref: OsmRef) {
 	const markerStore = useMapMarkerStore();
-	return markerStore.fetchMarkerById(markerId);
+	return markerStore.fetchMarkerById(ref);
 }

@@ -1,5 +1,11 @@
 {
-	"unreleased": [],
+	"unreleased": [
+		{
+			"type": "improvement",
+			"en": "Water sources now load reliably and much faster, even at peak times.",
+			"de": "Wasserentnahmestellen laden jetzt zuverlässig und deutlich schneller – auch zu Stoßzeiten."
+		}
+	],
 	"releases": [
 		{
 			"version": "2.16.0",
