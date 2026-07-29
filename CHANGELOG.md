@@ -1,10 +1,16 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.17.0] - 2026-07-29
+
+### Features
+
+- *(water-sources)* Read markers from a self-hosted static OSM extract (#94)
 ## [2.16.0] - 2026-07-15
 
 ### Bug Fixes
 
+- *(marker-cache)* Increment cache version on marker edits and sync actions
 - *(pump-calculation)* Open marker chooser via touch long-press on mobile
 
 ### Features
@@ -20,6 +26,7 @@ All notable changes to FireYak.
 
 ### Chore
 
+- *(map)* Adjust tunnel and label colors in Protomaps flavors
 - *(ui)* Remove iOS-specific condition in WhatsNewModal
 - *(whats-new)* Announce offline area detail view and terrain default
 - *(docs)* Remove outdated WhatsNewModal entries and minor translation fix
