@@ -13,7 +13,7 @@ import { OverPassElement } from '@/mapHandler/overPassApi';
 import { GeoBounds } from '@/types/geo';
 import { OsmType } from '@/helper/osmRef';
 
-const BASE = import.meta.env.VITE_DATA_BASE_URL ?? 'https://data.fireyak.org/fireyak-data';
+const BASE = import.meta.env.VITE_DATA_BASE_URL ?? 'https://data.fireyak.org';
 export const FGB_URL = `${BASE}/water_sources.fgb`;
 export const META_URL = `${BASE}/metadata.json`;
 

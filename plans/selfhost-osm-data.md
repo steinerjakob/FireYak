@@ -90,16 +90,13 @@ Laptop (one-time bootstrap)          NAS DS423+ (recurring, every 2 days)
 
 ```
 # production — live and CORS-verified 2026-07-21
-https://data.fireyak.org/fireyak-data/water_sources.fgb        # 617 MB
-https://data.fireyak.org/fireyak-data/water_sources.pmtiles    # 571 MB
-https://data.fireyak.org/fireyak-data/metadata.json
+https://data.fireyak.org/water_sources.fgb        # 617 MB
+https://data.fireyak.org/water_sources.pmtiles    # 571 MB
+https://data.fireyak.org/metadata.json
 
 # same objects via the dev URL (rate-limited, CORS also works)
-https://pub-2d208d725d5849bba36ed4ed8cfb4e8e.r2.dev/fireyak-data/…
+https://pub-2d208d725d5849bba36ed4ed8cfb4e8e.r2.dev/f…
 ```
-
-Note the `fireyak-data/` **key prefix** — the upload placed the objects in a
-folder inside the bucket, so it is part of the URL. `BASE` therefore includes it.
 
 Gate result (§2.3), all three origins: `206` + `content-range` +
 `access-control-allow-origin` echoing the origin, including
@@ -219,7 +216,7 @@ rclone config create r2 s3 provider=Cloudflare \
 
 # Bucket `fireyak-data`, key prefix `fireyak-data/` (see §1a "Data URLs") — the
 # prefix is part of the public object URL, so the upload has to write into it.
-rclone copy ~/osm-data/out/ r2:fireyak-data/fireyak-data/ \
+rclone copy ~/osm-data/out/ r2:fireyak-data/ \
   --include "water_sources.fgb" \
   --include "water_sources.pmtiles" \
   --include "metadata.json" -P
@@ -232,7 +229,7 @@ riskiest assumption in the whole plan — prove it before writing app code:
 for O in https://app.fireyak.org http://localhost:5173 https://localhost capacitor://localhost; do
   echo "--- $O"
   curl -sI -H "Origin: $O" -H "Range: bytes=0-99" \
-    https://data.fireyak.org/fireyak-data/water_sources.fgb \
+    https://data.fireyak.org/water_sources.fgb \
     | grep -iE "^HTTP|access-control-allow-origin|content-range|accept-ranges"
 done
 ```
@@ -412,11 +409,10 @@ import { deserialize } from 'flatgeobuf/lib/mjs/geojson';
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import type { GeoBounds } from '@/types/geo';
 
-// Includes the `fireyak-data/` key prefix — see §1a "Data URLs". The canonical
-// object URL is `https://data.fireyak.org/fireyak-data/…`; keep this default,
+// object URL is `https://data.fireyak.org/…`; keep this default,
 // the §2.3 CORS/range check and the pipeline's upload path in lockstep.
 const BASE =
-  import.meta.env.VITE_DATA_BASE_URL ?? 'https://data.fireyak.org/fireyak-data';
+  import.meta.env.VITE_DATA_BASE_URL ?? 'https://data.fireyak.org';
 export const FGB_URL = `${BASE}/water_sources.fgb`;
 export const META_URL = `${BASE}/metadata.json`;
 
