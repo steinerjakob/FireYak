@@ -1,6 +1,11 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.17.1] - 2026-07-30
+
+### Bug Fixes
+
+- *(static-data)* Remove redundant `fireyak-data` prefix from URLs in code and docs
 ## [2.17.0] - 2026-07-29
 
 ### Features
