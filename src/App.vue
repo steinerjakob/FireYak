@@ -34,17 +34,13 @@ const CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 const { recordActiveDay, tryAutoPrompt } = useInAppReview();
 const { checkForUpdate } = useWhatsNew();
 
-/**
- * Delay before the review dialog may appear on startup. At mount the map and
- * its data are still loading, and both stores recommend asking only once the
- * user has had a real moment with the app.
- */
+// Lets the session settle before the rating dialog may appear — at mount the
+// map and its data are still loading.
 const REVIEW_PROMPT_DELAY_MS = 8000;
 
 let reviewPromptTimer: ReturnType<typeof setTimeout> | undefined;
 let appStateListener: PluginListenerHandle | undefined;
 
-/** Lets the user settle into the session before the rating dialog may appear. */
 const scheduleReviewPrompt = () => {
 	clearTimeout(reviewPromptTimer);
 	reviewPromptTimer = setTimeout(() => void tryAutoPrompt(), REVIEW_PROMPT_DELAY_MS);
@@ -77,10 +73,9 @@ onMounted(async () => {
 
 	await recordActiveDay();
 
-	// A mobile app is resumed far more often than it is cold started, so both the
-	// counter and the prompt have to run on resume too — otherwise a user who
-	// never swipes the app away stays stuck on the day they installed it, and a
-	// user who does reach the threshold would never be asked.
+	// Resumes far outnumber cold starts, so the counter and the prompt have to
+	// run here too — a user who never swipes the app away is otherwise stuck on
+	// the day they installed it and would never be asked.
 	appStateListener = await CapacitorApp.addListener('appStateChange', ({ isActive }) => {
 		if (!isActive) {
 			clearTimeout(reviewPromptTimer);
@@ -89,8 +84,7 @@ onMounted(async () => {
 		void recordActiveDay().then(scheduleReviewPrompt);
 	});
 
-	// What's New wins: if it's showing this session, skip the review prompt so
-	// a user reading release notes doesn't immediately get a rating dialog.
+	// What's New wins: don't stack a rating dialog on top of release notes.
 	if (!showingWhatsNew) {
 		scheduleReviewPrompt();
 	}

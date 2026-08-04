@@ -249,9 +249,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				await toast.present();
 				cancelEdit();
 
-				// A contribution that made it to OSM is the best moment we have to
-				// ask for a rating — once the success toast is gone, so the native
-				// dialog doesn't cover it. The composable decides who is eligible.
+				// A contribution that reached OSM is the best moment to ask for a
+				// rating — after the toast, so the dialog doesn't cover it.
 				setTimeout(() => void tryAutoPrompt(), SAVE_SUCCESS_TOAST_MS);
 			}
 		} catch (e) {
