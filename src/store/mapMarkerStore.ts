@@ -4,7 +4,12 @@ import { ref } from 'vue';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { fetchElementById } from '@/mapHandler/overPassApi';
 import { CachedMapNode, getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
-import { fetchMediaWikiFiles, ImageInfo } from '@/mapHandler/markerImageHandler';
+import {
+	fetchMediaWikiFiles,
+	fetchPanoramaxImages,
+	ImageInfo,
+	ImageSource
+} from '@/mapHandler/markerImageHandler';
 import { useNetworkStatus } from '@/composable/networkStatus';
 import { OsmRef, parseRef, toRef } from '@/helper/osmRef';
 
@@ -60,20 +65,67 @@ export const useMapMarkerStore = defineStore('marker', () => {
 		return fetchPromise;
 	}
 
-	async function fetchMarkerImageInfoById(ref: OsmRef) {
-		// Photo galleries (Wikimedia Commons) need a connection — skip the
-		// request entirely while offline instead of letting it fail.
+	/**
+	 * Order the photo sources are shown in. Street-level captures are usually
+	 * the most recent view of a water source, so they lead; the curated Commons
+	 * uploads come last. The first entry is also what {@link MarkerInfoPanel}
+	 * uses as the thumbnail, so this ordering decides that too.
+	 */
+	const sourcePriority: Record<ImageSource, number> = {
+		panoramax: 0,
+		wikimedia: 1
+	};
+
+	/**
+	 * Fetches photos for a marker from every configured source in parallel:
+	 * - Wikimedia Commons, matched by the OSM node id
+	 * - Panoramax, from the `panoramax` tag
+	 *
+	 * @param ref  The marker's namespaced OSM ref.
+	 * @param tags The marker's OSM tags. Resolved from the cache/selection when
+	 *             omitted, so callers that only hold a ref (the image viewer
+	 *             opened from a deep link) still get the tagged sources.
+	 */
+	async function fetchMarkerImageInfoById(
+		ref: OsmRef,
+		tags?: Record<string, string>
+	): Promise<ImageInfo[]> {
+		// Photo galleries need a connection — skip the requests entirely while
+		// offline instead of letting them fail.
 		const { isOnline } = useNetworkStatus();
 		if (!isOnline.value) {
 			selectedMarkerImages.value = [];
 			return [];
 		}
 
-		const imageData = await fetchMediaWikiFiles(ref);
-		const imageDataList: ImageInfo[] = [];
-		imageData.forEach((image) => {
-			imageDataList.push(...image.imageinfo);
+		const markerTags =
+			tags ??
+			(selectedMarker.value?.ref === ref
+				? selectedMarker.value.tags
+				: (await fetchMarkerById(ref))?.tags);
+
+		const requests: Promise<ImageInfo[]>[] = [fetchMediaWikiFiles(ref)];
+
+		if (markerTags?.panoramax) {
+			requests.push(fetchPanoramaxImages(markerTags.panoramax));
+		}
+
+		// Every fetcher already swallows its own errors, but settling keeps one
+		// unexpected rejection from dropping the photos of the other sources.
+		const results = await Promise.allSettled(requests);
+		const imageDataList = results.flatMap((result) =>
+			result.status === 'fulfilled' ? result.value : []
+		);
+
+		imageDataList.sort((a, b) => {
+			const priorityDiff = sourcePriority[a.source] - sourcePriority[b.source];
+			if (priorityDiff !== 0) return priorityDiff;
+			// Same source: newest first, undated entries last
+			const aTime = a.capturedAt ? Date.parse(a.capturedAt) : 0;
+			const bTime = b.capturedAt ? Date.parse(b.capturedAt) : 0;
+			return (bTime || 0) - (aTime || 0);
 		});
+
 		selectedMarkerImages.value = imageDataList;
 		return imageDataList;
 	}
@@ -87,7 +139,9 @@ export const useMapMarkerStore = defineStore('marker', () => {
 			const marker = await fetchMarkerById(ref);
 			if (marker) {
 				selectedMarker.value = marker;
-				fetchMarkerImageInfoById(ref);
+				// Pass the tags we already hold so the Panoramax id doesn't cost
+				// a second marker lookup.
+				fetchMarkerImageInfoById(ref, marker.tags);
 			}
 		}
 	}

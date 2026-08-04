@@ -23,7 +23,7 @@ FireYak is a hybrid mobile and web application designed for firefighters and eme
 - **Data Source**: OpenStreetMap via Overpass API (with a native Capacitor transport for mobile), address search via Photon
 - **Local Storage**: IndexedDB (via `idb`) for marker caching, offline areas, tiles, and the pending-edits queue; Capacitor Preferences for settings
 - **Internationalization**: vue-i18n (English + German)
-- **Image Gallery**: PhotoSwipe (for Wikimedia Commons images)
+- **Image Gallery**: PhotoSwipe (Wikimedia Commons and Panoramax images)
 - **Elevation Data**: Mapterhorn terrain DEM tiles (same offline-capable pipeline as the map), used for pump calculation and routing
 - **OSM Editing**: osm-api with OAuth2 PKCE; edits queue offline and sync when back online
 - **In-App Review**: `@capacitor-community/in-app-review`, gated by a usage-based composable
@@ -107,7 +107,7 @@ src/
 | `databaseHandler.ts` | IndexedDB wrapper for marker caching, offline areas, pending edits, and spatial queries |
 | `gridRouting.ts` | Cost-grid Dijkstra terrain routing for hose laying (not clamped to roads, avoids buildings) |
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
-| `markerImageHandler.ts` | Fetches Wikimedia Commons images for OSM nodes |
+| `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
 | `nearbyRouting.ts` | Road-aware ranking for the nearby water sources list (routed distance → weighted heuristic → straight-line) |
 | `obstacleGeometry.ts` | Decodes building footprints and road centerlines from Protomaps vector tiles for routing |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |

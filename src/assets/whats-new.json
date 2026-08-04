@@ -1,5 +1,11 @@
 {
-	"unreleased": [],
+	"unreleased": [
+		{
+			"type": "feature",
+			"en": "Photos of a water source can now also come from Panoramax, not just Wikimedia Commons. Each photo shows its source and links back to the original.",
+			"de": "Fotos einer Wasserentnahmestelle können jetzt auch von Panoramax stammen, nicht nur von Wikimedia Commons. Jedes Foto zeigt seine Quelle und verlinkt zum Original."
+		}
+	],
 	"releases": [
 		{
 			"version": "2.17.0",
