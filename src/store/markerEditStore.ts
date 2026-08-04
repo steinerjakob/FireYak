@@ -13,8 +13,12 @@ import * as OSM from 'osm-api';
 import { useRoute, useRouter } from 'vue-router';
 import { version } from '@/../package.json';
 import { useNetworkStatus } from '@/composable/networkStatus';
+import { useInAppReview } from '@/composable/inAppReview';
 import { enqueueEdit, isNetworkError } from '@/offline/editQueue';
 import { toRef } from '@/helper/osmRef';
+
+/** How long the "saved" toast stays up after a successful upload. */
+const SAVE_SUCCESS_TOAST_MS = 2000;
 
 export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const isEditing = ref(false);
@@ -28,6 +32,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const osmAuthStore = useOsmAuthStore();
 	const markerStore = useMapMarkerStore();
 	const pendingEditsStore = usePendingEditsStore();
+	const { tryAutoPrompt } = useInAppReview();
 	const { isOnline } = useNetworkStatus();
 	const { t } = useI18n();
 
@@ -238,11 +243,16 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 
 				const toast = await toastController.create({
 					message: t('markerEdit.messages.saveSuccess'),
-					duration: 2000,
+					duration: SAVE_SUCCESS_TOAST_MS,
 					color: 'success'
 				});
 				await toast.present();
 				cancelEdit();
+
+				// A contribution that made it to OSM is the best moment we have to
+				// ask for a rating — once the success toast is gone, so the native
+				// dialog doesn't cover it. The composable decides who is eligible.
+				setTimeout(() => void tryAutoPrompt(), SAVE_SUCCESS_TOAST_MS);
 			}
 		} catch (e) {
 			// A network failure mid-upload → fall back to the offline queue rather

@@ -236,9 +236,4 @@ html.ion-palette-dark .kofi-button-light-theme {
 html.ion-palette-dark .kofi-button-dark-theme {
 	display: inline;
 }
-
-.rate-app-description {
-	margin-top: 20px;
-	margin-bottom: 8px;
-}
 </style>

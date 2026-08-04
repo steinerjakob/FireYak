@@ -2,10 +2,9 @@
 
 ## Overview
 
-Add in-app review functionality to FireYak using [`@capacitor-community/in-app-review`](https://github.com/capacitor-community/in-app-review). Two trigger mechanisms:
+In-app review for FireYak using [`@capacitor-community/in-app-review`](https://github.com/capacitor-community/in-app-review), triggered **automatically** after a configurable number of active usage days, respecting iOS/Android platform guidelines.
 
-1. **Manual** — A "Rate this app" button in the About page support card
-2. **Automatic** — After a configurable number of active usage days, respecting iOS/Android platform guidelines
+A manual "Rate this app" button was considered and deliberately dropped — see below.
 
 ---
 
@@ -27,7 +26,15 @@ Add in-app review functionality to FireYak using [`@capacitor-community/in-app-r
 Both platforms throttle prompts automatically. Our job is to choose the right *moment* to request — the OS handles the rest. We should:
 - Never prompt on first launch
 - Track active usage days, not just calendar days
-- **One-shot auto-prompt**: trigger automatically only once ever; after that, only the manual button on the About page can request a review
+- **One-shot auto-prompt**: trigger automatically only once ever
+
+### Why there is no manual "Rate this app" button
+Both platforms explicitly discourage requesting the dialog in response to a
+button tap, and once their quota is spent the request is a silent no-op — the
+user taps "Rate this App" and nothing happens, which is worse than having no
+button at all. The dialog is therefore only ever asked for on a time/usage
+basis, and `requestReview()` is not exported from the composable so no caller
+can bypass those rules.
 
 ---
 
@@ -43,10 +50,8 @@ Both platforms throttle prompts automatically. Our job is to choose the right *m
 
 | File | Change |
 |---|---|
-| [`src/views/AboutView.vue`](src/views/AboutView.vue) | Add "Rate this App" button in the support card, only on native |
-| [`src/locales/en.json`](src/locales/en.json) | Add `about.rateApp` and `about.rateAppDescription` keys |
-| [`src/locales/de.json`](src/locales/de.json) | Add German translations for same keys |
-| [`src/App.vue`](src/App.vue) | Call auto-prompt check on app mount |
+| [`src/App.vue`](src/App.vue) | Record the active day and schedule the auto-prompt, on cold start and on every resume |
+| [`src/store/markerEditStore.ts`](src/store/markerEditStore.ts) | Attempt the auto-prompt after a successful OSM upload |
 | [`package.json`](package.json) | Add `@capacitor-community/in-app-review` dependency |
 
 ---
@@ -72,95 +77,66 @@ Uses Capacitor Preferences for persistence, matching the existing pattern in [`s
 
 ```typescript
 function useInAppReview() {
-  // Records today as an active usage day if not already recorded
+  // Records today as an active usage day if not already recorded.
+  // Call on app start *and* on every resume — see below.
   async function recordActiveDay(): Promise<void>
 
   // Checks if conditions are met and requests the review dialog (one-shot)
-  // Conditions: native platform, threshold met, not already auto-prompted
+  // Conditions: native platform, threshold met, not already auto-prompted.
+  // The one-shot flag is only set once the request reached the OS, so a
+  // failed call stays retryable.
   async function tryAutoPrompt(): Promise<void>
-
-  // Directly requests the review dialog — for the manual button
-  // On native: calls InAppReview.requestReview()
-  // On web: no-op or could open store URL as fallback
-  async function requestReview(): Promise<void>
 
   // Whether the current platform supports in-app review
   const isReviewAvailable: boolean
 }
 ```
 
+`requestReview()` (the raw native call) is intentionally *not* exported, so no
+caller can bypass the eligibility rules.
+
+**Day keys use local time**, not `toISOString()` — the latter converts to UTC
+first, which rolls the day over at the wrong local hour and files evening or
+early-morning usage under the neighbouring day.
+
 **Auto-prompt flow (one-shot):**
 
 ```mermaid
 flowchart TD
-    A[App starts] --> B[recordActiveDay]
-    B --> C{Is native platform?}
+    A[App start / resume] --> B[recordActiveDay]
+    B --> B2[Wait out the settle delay]
+    A2[Successful OSM upload] --> B2
+    B2 --> C{Is native platform?}
     C -- No --> Z[Skip]
-    C -- Yes --> D[Load review_auto_prompted flag]
+    C -- Yes --> C2{Another attempt in flight?}
+    C2 -- Yes --> Z
+    C2 -- No --> D[Load review_auto_prompted flag]
     D --> E{Already auto-prompted?}
     E -- Yes --> Z
     E -- No --> F[Load active_days from Preferences]
     F --> G{unique days >= 7?}
     G -- No --> Z
     G -- Yes --> H[Call InAppReview.requestReview]
-    H --> I[Set review_auto_prompted = true]
+    H --> H2{Request reached the OS?}
+    H2 -- No --> Z
+    H2 -- Yes --> I[Set review_auto_prompted = true]
     I --> Z[Done]
 ```
 
-### 2. AboutView.vue — Manual Button
+### 2. Trigger points
 
-Add a "Rate this App" button inside the existing **Support the Project** card, right after the GitHub button. The button is only rendered on native platforms since `InAppReview` requires StoreKit/Play Store.
+| Where | What runs | Why |
+|---|---|---|
+| [`src/App.vue`](src/App.vue) `onMounted` | `recordActiveDay()`, then the prompt after a settle delay | Cold start. The delay keeps the dialog off the still-loading map. Skipped when the What's New modal is showing. |
+| [`src/App.vue`](src/App.vue) `appStateChange` | `recordActiveDay()`, then the prompt after a settle delay | **Essential.** A mobile app is resumed far more often than cold started, so counting only mounts undercounts active days badly — and a user who never swipes the app away would never be asked at all. |
+| [`src/store/markerEditStore.ts`](src/store/markerEditStore.ts) after a successful upload | the prompt, once the success toast has gone | The best moment available: the user just contributed data to OSM. |
 
-```
-ion-button
-  icon: starOutline
-  text: about.rateApp
-  @click: requestReview()
-  v-if: isNative
-```
-
-The button placement within the support card makes contextual sense — the user is already looking at ways to support the project.
-
-### 3. App.vue — Auto-Prompt Integration
-
-In [`src/App.vue`](src/App.vue), after `loadSettings()`:
-
-```typescript
-const { recordActiveDay, tryAutoPrompt } = useInAppReview();
-
-onMounted(async () => {
-  await recordActiveDay();
-  await tryAutoPrompt();
-});
-```
-
-This runs once per app cold start. The composable internally ensures:
-- Only one day is recorded per calendar day
-- The auto-prompt fires only once ever (one-shot); subsequent launches skip it
+The composable internally ensures:
+- Only one day is recorded per calendar day, keyed in local time
+- The auto-prompt fires only once ever (one-shot); later attempts skip it
+- Concurrent attempts from two trigger points cannot double-fire
 - Non-native platforms are silently skipped
-- The manual "Rate this App" button on the About page remains available for users who want to review later
-
-### 4. i18n Keys
-
-**English:**
-```json
-{
-  "about": {
-    "rateApp": "Rate this App",
-    "rateAppDescription": "Enjoying FireYak? A quick rating helps others discover the app!"
-  }
-}
-```
-
-**German:**
-```json
-{
-  "about": {
-    "rateApp": "App bewerten",
-    "rateAppDescription": "Gefällt dir FireYak? Eine kurze Bewertung hilft anderen, die App zu finden!"
-  }
-}
-```
+- Corrupt stored state degrades to "start over" rather than throwing into the startup path
 
 ---
 
@@ -176,10 +152,12 @@ This runs once per app cold start. The composable internally ensures:
 
 | Scenario | Handling |
 |---|---|
-| Web/PWA platform | `isReviewAvailable` returns `false`; button hidden, auto-prompt skipped |
+| Web/PWA platform | `isReviewAvailable` returns `false`; auto-prompt skipped |
 | OS rejects the prompt silently | Expected behavior per platform guidelines; no error handling needed |
 | User clears app data | Active days reset; they get a fresh start before being prompted again |
-| Manual button press fails | Wrap in try/catch; log error but don't show error to user — the OS may simply decline |
+| The plugin call throws | Logged, and the one-shot flag is **not** set — the single automatic prompt stays retryable instead of being lost |
+| Corrupt `review_active_days` value | Treated as empty rather than thrown; must never break the startup path it runs in |
+| App resumed rather than cold started | Handled by the `appStateChange` listener — without it the day counter barely moves |
 | App used offline | Preferences is local storage; works offline |
 
 ---
