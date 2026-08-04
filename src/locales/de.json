@@ -133,9 +133,7 @@
 		"supportOnKofiDescription": "Wenn Sie diese App nützlich finden und ihre Entwicklung unterstützen möchten, können Sie mich auf Ko-fi unterstützen! Ihre Unterstützung hält das Projekt am Leben und ermöglicht neue Funktionen.",
 		"addHydrantsTitle": "Wie man Hydranten zu OpenStreetMap hinzufügt",
 		"addHydrantsDescription": "Wenn Sie fehlende Hydranten oder Wasserentnahmestellen ergänzen möchten, folgen Sie bitte der Anleitung im FireYak‑README auf GitHub. Dort wird die Nutzung des OpenStreetMap‑Editors erklärt und auf die offiziellen OSM‑Tagging‑Richtlinien verwiesen.",
-		"addHydrantsOpenReadme": "README Anleitung öffnen",
-		"rateApp": "App bewerten",
-		"rateAppDescription": "Gefällt dir FireYak? Eine kurze Bewertung hilft anderen, die App zu finden!"
+		"addHydrantsOpenReadme": "README Anleitung öffnen"
 	},
 	"pumpCalculation": {
 		"title": "Pumpenberechnung",

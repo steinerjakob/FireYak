@@ -8,8 +8,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import { IonApp, IonRouterOutlet } from '@ionic/vue';
+import { App as CapacitorApp } from '@capacitor/app';
+import type { PluginListenerHandle } from '@capacitor/core';
 import UpdateToast from '@/components/UpdateToast.vue';
 import NativeAppInstallPrompt from '@/components/NativeAppInstallPrompt.vue';
 import WhatsNewModal from '@/components/WhatsNewModal.vue';
@@ -29,8 +31,11 @@ loadSettings();
 const CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 // Track active usage days and auto-prompt for review (one-shot)
-const { recordActiveDay, tryAutoPrompt } = useInAppReview();
+const { recordActiveDay, scheduleAutoPrompt, cancelAutoPrompt } = useInAppReview();
 const { checkForUpdate } = useWhatsNew();
+
+let appStateListener: PluginListenerHandle | undefined;
+let appForeground = true;
 
 // Offline areas: load records and run the Wi-Fi auto-refresh check on startup,
 // and re-check whenever connectivity is regained.
@@ -55,13 +60,32 @@ onMounted(async () => {
 	// Fire-and-forget: hydrate the pending-edits queue and attempt a sync.
 	pendingEditsStore.init();
 
-	// What's New wins: if it's showing this session, skip the review prompt so
-	// a user reading release notes doesn't immediately get a rating dialog.
-	const showingWhatsNew = await checkForUpdate();
+	await checkForUpdate();
 
 	await recordActiveDay();
-	if (!showingWhatsNew) {
-		await tryAutoPrompt();
-	}
+
+	// Resumes far outnumber cold starts, so the counter and the prompt have to
+	// run here too — a user who never swipes the app away is otherwise stuck on
+	// the day they installed it and would never be asked.
+	appStateListener = await CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+		appForeground = isActive;
+		if (!isActive) {
+			cancelAutoPrompt();
+			return;
+		}
+		// Re-check after the await: the app may have gone back to the background
+		// while the day was being recorded, and that path has no timer to cancel.
+		void recordActiveDay().then(() => {
+			if (appForeground) scheduleAutoPrompt();
+		});
+	});
+
+	scheduleAutoPrompt();
+});
+
+onUnmounted(() => {
+	appForeground = false;
+	cancelAutoPrompt();
+	void appStateListener?.remove();
 });
 </script>
