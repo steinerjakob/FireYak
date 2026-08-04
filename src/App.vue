@@ -35,6 +35,7 @@ const { recordActiveDay, scheduleAutoPrompt, cancelAutoPrompt } = useInAppReview
 const { checkForUpdate } = useWhatsNew();
 
 let appStateListener: PluginListenerHandle | undefined;
+let appForeground = true;
 
 // Offline areas: load records and run the Wi-Fi auto-refresh check on startup,
 // and re-check whenever connectivity is regained.
@@ -67,17 +68,23 @@ onMounted(async () => {
 	// run here too — a user who never swipes the app away is otherwise stuck on
 	// the day they installed it and would never be asked.
 	appStateListener = await CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+		appForeground = isActive;
 		if (!isActive) {
 			cancelAutoPrompt();
 			return;
 		}
-		void recordActiveDay().then(() => scheduleAutoPrompt());
+		// Re-check after the await: the app may have gone back to the background
+		// while the day was being recorded, and that path has no timer to cancel.
+		void recordActiveDay().then(() => {
+			if (appForeground) scheduleAutoPrompt();
+		});
 	});
 
 	scheduleAutoPrompt();
 });
 
 onUnmounted(() => {
+	appForeground = false;
 	cancelAutoPrompt();
 	void appStateListener?.remove();
 });

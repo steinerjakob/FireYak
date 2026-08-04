@@ -12,8 +12,21 @@ const ACTIVE_DAYS_THRESHOLD = 7;
 /** Lets the session settle first — at app start the map is still loading. */
 const DEFAULT_PROMPT_DELAY_MS = 8000;
 
-/** Matches the `YYYY-MM-DD` keys written by {@link getTodayString}. */
+/** Matches the shape of the `YYYY-MM-DD` keys written by {@link getTodayString}. */
 const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Whether `value` is a real calendar day, not just the right shape — the
+ * round-trip rejects `2026-02-30` and friends, which `Date` would roll over.
+ */
+const isValidDayKey = (value: string): boolean => {
+	if (!DAY_KEY_PATTERN.test(value)) return false;
+
+	const [year, month, day] = value.split('-').map(Number);
+	const date = new Date(year, month - 1, day);
+
+	return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+};
 
 /** Keeps the several trigger points from firing two review requests at once. */
 let autoPromptInFlight = false;
@@ -51,13 +64,11 @@ const readActiveDays = async (): Promise<string[]> => {
 		const parsed: unknown = JSON.parse(value);
 		if (!Array.isArray(parsed)) return [];
 
-		// Unique, well-formed keys only: the threshold counts *distinct* days,
+		// Unique, real days only: the threshold counts *distinct calendar days*,
 		// so junk in the stored array must not be able to satisfy it.
 		return [
 			...new Set(
-				parsed.filter(
-					(entry): entry is string => typeof entry === 'string' && DAY_KEY_PATTERN.test(entry)
-				)
+				parsed.filter((entry): entry is string => typeof entry === 'string' && isValidDayKey(entry))
 			)
 		];
 	} catch (error) {
