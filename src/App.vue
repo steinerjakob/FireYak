@@ -31,20 +31,10 @@ loadSettings();
 const CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 // Track active usage days and auto-prompt for review (one-shot)
-const { recordActiveDay, tryAutoPrompt } = useInAppReview();
+const { recordActiveDay, scheduleAutoPrompt, cancelAutoPrompt } = useInAppReview();
 const { checkForUpdate } = useWhatsNew();
 
-// Lets the session settle before the rating dialog may appear — at mount the
-// map and its data are still loading.
-const REVIEW_PROMPT_DELAY_MS = 8000;
-
-let reviewPromptTimer: ReturnType<typeof setTimeout> | undefined;
 let appStateListener: PluginListenerHandle | undefined;
-
-const scheduleReviewPrompt = () => {
-	clearTimeout(reviewPromptTimer);
-	reviewPromptTimer = setTimeout(() => void tryAutoPrompt(), REVIEW_PROMPT_DELAY_MS);
-};
 
 // Offline areas: load records and run the Wi-Fi auto-refresh check on startup,
 // and re-check whenever connectivity is regained.
@@ -69,7 +59,7 @@ onMounted(async () => {
 	// Fire-and-forget: hydrate the pending-edits queue and attempt a sync.
 	pendingEditsStore.init();
 
-	const showingWhatsNew = await checkForUpdate();
+	await checkForUpdate();
 
 	await recordActiveDay();
 
@@ -78,20 +68,17 @@ onMounted(async () => {
 	// the day they installed it and would never be asked.
 	appStateListener = await CapacitorApp.addListener('appStateChange', ({ isActive }) => {
 		if (!isActive) {
-			clearTimeout(reviewPromptTimer);
+			cancelAutoPrompt();
 			return;
 		}
-		void recordActiveDay().then(scheduleReviewPrompt);
+		void recordActiveDay().then(() => scheduleAutoPrompt());
 	});
 
-	// What's New wins: don't stack a rating dialog on top of release notes.
-	if (!showingWhatsNew) {
-		scheduleReviewPrompt();
-	}
+	scheduleAutoPrompt();
 });
 
 onUnmounted(() => {
-	clearTimeout(reviewPromptTimer);
+	cancelAutoPrompt();
 	void appStateListener?.remove();
 });
 </script>

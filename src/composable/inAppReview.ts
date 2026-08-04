@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { InAppReview } from '@capacitor-community/in-app-review';
 import { Preferences } from '@capacitor/preferences';
+import { useWhatsNew } from '@/composable/whatsNew';
 
 const ACTIVE_DAYS_KEY = 'review_active_days';
 const AUTO_PROMPTED_KEY = 'review_auto_prompted';
@@ -8,8 +9,23 @@ const AUTO_PROMPTED_KEY = 'review_auto_prompted';
 /** Minimum unique active usage days before the one-shot auto-prompt fires. */
 const ACTIVE_DAYS_THRESHOLD = 7;
 
+/** Lets the session settle first — at app start the map is still loading. */
+const DEFAULT_PROMPT_DELAY_MS = 8000;
+
+/** Matches the `YYYY-MM-DD` keys written by {@link getTodayString}. */
+const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 /** Keeps the several trigger points from firing two review requests at once. */
 let autoPromptInFlight = false;
+
+/**
+ * Set as soon as a request reaches the OS, so a failed `Preferences` write
+ * cannot let another trigger ask again before the next launch.
+ */
+let autoPromptedThisSession = false;
+
+/** The single pending attempt; module-level so any trigger point can cancel it. */
+let promptTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * Returns today's date as `YYYY-MM-DD` in the user's local timezone.
@@ -35,7 +51,15 @@ const readActiveDays = async (): Promise<string[]> => {
 		const parsed: unknown = JSON.parse(value);
 		if (!Array.isArray(parsed)) return [];
 
-		return parsed.filter((entry): entry is string => typeof entry === 'string');
+		// Unique, well-formed keys only: the threshold counts *distinct* days,
+		// so junk in the stored array must not be able to satisfy it.
+		return [
+			...new Set(
+				parsed.filter(
+					(entry): entry is string => typeof entry === 'string' && DAY_KEY_PATTERN.test(entry)
+				)
+			)
+		];
 	} catch (error) {
 		console.warn('[InAppReview] Could not read active days, starting over:', error);
 		return [];
@@ -45,6 +69,8 @@ const readActiveDays = async (): Promise<string[]> => {
 export function useInAppReview() {
 	/** Whether the current platform supports the native in-app review dialog. */
 	const isReviewAvailable = Capacitor.isNativePlatform();
+
+	const { isOpen: isWhatsNewOpen } = useWhatsNew();
 
 	/**
 	 * Records today as an active usage day, deduplicated by calendar day.
@@ -94,7 +120,12 @@ export function useInAppReview() {
 	 * before. One-shot: once it reaches the OS it never auto-prompts again.
 	 */
 	const tryAutoPrompt = async (): Promise<void> => {
-		if (!isReviewAvailable || autoPromptInFlight) return;
+		if (!isReviewAvailable || autoPromptInFlight || autoPromptedThisSession) return;
+
+		// What's New wins: don't stack a rating dialog on top of release notes.
+		// Checked here rather than at schedule time, since the modal may still be
+		// open when the timer fires.
+		if (isWhatsNewOpen.value) return;
 
 		autoPromptInFlight = true;
 		try {
@@ -108,6 +139,7 @@ export function useInAppReview() {
 			// call stays retryable instead of losing the prompt for good.
 			if (!(await requestReview())) return;
 
+			autoPromptedThisSession = true;
 			await Preferences.set({
 				key: AUTO_PROMPTED_KEY,
 				value: 'true'
@@ -119,12 +151,31 @@ export function useInAppReview() {
 		}
 	};
 
+	/** Cancels a pending attempt — call when the app goes inactive or unmounts. */
+	const cancelAutoPrompt = (): void => {
+		clearTimeout(promptTimer);
+		promptTimer = undefined;
+	};
+
+	/**
+	 * Queues an attempt after `delayMs`, replacing any pending one. Every
+	 * trigger point goes through here so a single `cancelAutoPrompt()` can stop
+	 * whatever is outstanding.
+	 */
+	const scheduleAutoPrompt = (delayMs = DEFAULT_PROMPT_DELAY_MS): void => {
+		if (!isReviewAvailable) return;
+
+		cancelAutoPrompt();
+		promptTimer = setTimeout(() => void tryAutoPrompt(), delayMs);
+	};
+
 	// `requestReview` stays unexported on purpose: a "Rate this app" button
 	// wired to it does nothing once the store quota is spent, which is why
 	// there isn't one. Eligibility is only ever decided by `tryAutoPrompt`.
 	return {
 		isReviewAvailable,
 		recordActiveDay,
-		tryAutoPrompt
+		scheduleAutoPrompt,
+		cancelAutoPrompt
 	};
 }

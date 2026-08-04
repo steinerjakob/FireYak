@@ -32,7 +32,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const osmAuthStore = useOsmAuthStore();
 	const markerStore = useMapMarkerStore();
 	const pendingEditsStore = usePendingEditsStore();
-	const { tryAutoPrompt } = useInAppReview();
+	const { scheduleAutoPrompt } = useInAppReview();
 	const { isOnline } = useNetworkStatus();
 	const { t } = useI18n();
 
@@ -251,7 +251,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 
 				// A contribution that reached OSM is the best moment to ask for a
 				// rating — after the toast, so the dialog doesn't cover it.
-				setTimeout(() => void tryAutoPrompt(), SAVE_SUCCESS_TOAST_MS);
+				scheduleAutoPrompt(SAVE_SUCCESS_TOAST_MS);
 			}
 		} catch (e) {
 			// A network failure mid-upload → fall back to the offline queue rather
