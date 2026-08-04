@@ -75,8 +75,12 @@ Changes are uploaded immediately and include a changeset comment referencing Fir
 
 ### Photos
 
-If photos exist on Wikimedia Commons using the naming pattern
-`Fire-fighting-facility node-<OSM_ID>`, FireYak shows them in a full-screen gallery for the selected marker.
+FireYak shows photos of the selected marker in a full-screen gallery, collected from:
+
+- **Wikimedia Commons** — files named after the pattern `Fire-fighting-facility node-<OSM_ID>`
+- **Panoramax** — the picture referenced by the marker's `panoramax` tag
+
+Each photo is labelled with its source and links back to the original.
 
 ### Nearby water sources
 
@@ -132,7 +136,7 @@ Configuration:
 | Mobile | Capacitor (iOS + Android) |
 | OSM editing | osm-api (OAuth2 PKCE) |
 | Elevation | Open-Meteo API |
-| Image gallery | PhotoSwipe (Wikimedia Commons) |
+| Image gallery | PhotoSwipe (Wikimedia Commons, Panoramax) |
 | CI/CD | GitHub Actions + Fastlane |
 
 ## Development
