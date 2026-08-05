@@ -111,6 +111,10 @@
 			"loading": "Lade Marker-Informationen...",
 			"dataUpdated": "Daten aktualisiert {time}",
 			"photosOfflineHint": "Fotos sind offline nicht verfügbar."
+		},
+		"images": {
+			"alt": "Foto der Wasserentnahmestelle",
+			"viewOnSource": "Auf {source} ansehen ↗"
 		}
 	},
 	"about": {

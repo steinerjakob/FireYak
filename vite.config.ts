@@ -163,6 +163,38 @@ const pwaOptions: Partial<VitePWAOptions> = {
 						statuses: [0, 200]
 					}
 				}
+			},
+			{
+				// Panoramax serves picture bytes under the picture id
+				// (`…/pictures/<uuid>/hd.jpg`). They are immutable, so cache them
+				// outright — this rule must precede the metadata rule below, which
+				// would otherwise re-download every photo in the background.
+				urlPattern: /^https:\/\/api\.panoramax\.xyz\/api\/pictures\/[^/]+\/.+/,
+				handler: 'CacheFirst',
+				options: {
+					cacheName: 'panoramax-images-cache',
+					expiration: {
+						maxEntries: 200,
+						maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
+			},
+			{
+				urlPattern: /^https:\/\/api\.panoramax\.xyz\/api\/pictures\/[^/]+$/,
+				handler: 'StaleWhileRevalidate',
+				options: {
+					cacheName: 'panoramax-api-cache',
+					expiration: {
+						maxEntries: 100,
+						maxAgeSeconds: 7 * 24 * 60 * 60 // 7 days
+					},
+					cacheableResponse: {
+						statuses: [0, 200]
+					}
+				}
 			}
 		]
 	}

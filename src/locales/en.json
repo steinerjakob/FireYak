@@ -111,6 +111,10 @@
 			"loading": "Loading marker information...",
 			"dataUpdated": "Data updated {time}",
 			"photosOfflineHint": "Photos are unavailable offline."
+		},
+		"images": {
+			"alt": "Water source photo",
+			"viewOnSource": "View on {source} ↗"
 		}
 	},
 	"about": {
