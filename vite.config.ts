@@ -169,7 +169,7 @@ const pwaOptions: Partial<VitePWAOptions> = {
 				// (`…/pictures/<uuid>/hd.jpg`). They are immutable, so cache them
 				// outright — this rule must precede the metadata rule below, which
 				// would otherwise re-download every photo in the background.
-				urlPattern: /^https?:\/\/api\.panoramax\.xyz\/api\/pictures\/[^/]+\/.+/,
+				urlPattern: /^https:\/\/api\.panoramax\.xyz\/api\/pictures\/[^/]+\/.+/,
 				handler: 'CacheFirst',
 				options: {
 					cacheName: 'panoramax-images-cache',
@@ -183,7 +183,7 @@ const pwaOptions: Partial<VitePWAOptions> = {
 				}
 			},
 			{
-				urlPattern: /^https?:\/\/api\.panoramax\.xyz\/api\/pictures\/[^/]+$/,
+				urlPattern: /^https:\/\/api\.panoramax\.xyz\/api\/pictures\/[^/]+$/,
 				handler: 'StaleWhileRevalidate',
 				options: {
 					cacheName: 'panoramax-api-cache',

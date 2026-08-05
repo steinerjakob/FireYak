@@ -5,8 +5,8 @@ export type ImageSource = 'wikimedia' | 'panoramax';
 
 /**
  * One photo, normalised across every provider. Wikimedia Commons is the only
- * source that fills in all of the optional metadata; the street-level sources
- * populate what their APIs return and leave the rest undefined.
+ * source that fills in all of the optional metadata; Panoramax populates what
+ * its API returns and leaves the rest undefined.
  */
 export interface ImageInfo {
 	// Original file details
@@ -29,15 +29,19 @@ export interface ImageInfo {
 
 /**
  * Guards every URL that reaches an `<img src>` or an `<a href>` in the viewer.
- * All three providers hand back URLs we did not construct, and two of them are
- * reached via ids that come straight out of user-editable OSM tags, so a
+ * Both providers hand back URLs we did not construct, and one of them is
+ * reached via an id that comes straight out of a user-editable OSM tag, so a
  * `javascript:` or `data:` URL must never make it through.
+ *
+ * HTTPS only: both APIs serve everything over TLS, so a cleartext URL in a
+ * response is a downgrade rather than a case to support. Dropping it here also
+ * keeps native builds (where the app origin is not itself https) from loading
+ * a photo in the clear.
  */
-function isSafeHttpUrl(url: string | undefined): url is string {
+function isHttpsUrl(url: string | undefined): url is string {
 	if (!url) return false;
 	try {
-		const protocol = new URL(url).protocol;
-		return protocol === 'https:' || protocol === 'http:';
+		return new URL(url).protocol === 'https:';
 	} catch {
 		return false;
 	}
@@ -121,16 +125,16 @@ export async function fetchMediaWikiFiles(ref: OsmRef): Promise<ImageInfo[]> {
 		const images: ImageInfo[] = [];
 		for (const page of Object.values(data.query?.pages ?? {})) {
 			for (const info of page.imageinfo ?? []) {
-				if (!isSafeHttpUrl(info.url)) continue;
+				if (!isHttpsUrl(info.url)) continue;
 				images.push({
 					url: info.url,
 					width: info.width,
 					height: info.height,
-					thumburl: isSafeHttpUrl(info.thumburl) ? info.thumburl : info.url,
+					thumburl: isHttpsUrl(info.thumburl) ? info.thumburl : info.url,
 					thumbwidth: info.thumbwidth,
 					thumbheight: info.thumbheight,
 					source: 'wikimedia',
-					descriptionurl: isSafeHttpUrl(info.descriptionurl) ? info.descriptionurl : undefined,
+					descriptionurl: isHttpsUrl(info.descriptionurl) ? info.descriptionurl : undefined,
 					descriptionshorturl: info.descriptionshorturl,
 					size: info.size,
 					capturedAt: info.timestamp
@@ -197,7 +201,7 @@ export async function fetchPanoramaxImages(panoramaxId: string): Promise<ImageIn
 
 		const feature: PanoramaxFeature = await response.json();
 
-		const fullUrl = [feature.assets?.hd?.href, feature.assets?.sd?.href].find(isSafeHttpUrl);
+		const fullUrl = [feature.assets?.hd?.href, feature.assets?.sd?.href].find(isHttpsUrl);
 		if (!fullUrl) return [];
 
 		const thumbUrl = feature.assets?.thumb?.href;
@@ -208,7 +212,7 @@ export async function fetchPanoramaxImages(panoramaxId: string): Promise<ImageIn
 				// Unknown until the image is loaded — see the doc comment above.
 				width: 0,
 				height: 0,
-				thumburl: isSafeHttpUrl(thumbUrl) ? thumbUrl : fullUrl,
+				thumburl: isHttpsUrl(thumbUrl) ? thumbUrl : fullUrl,
 				thumbwidth: 200,
 				thumbheight: 150,
 				source: 'panoramax',
