@@ -525,7 +525,19 @@ function getMapBounds(): GeoBounds | null {
 	};
 }
 
-async function handleMapMovement() {
+/** Monotonic id per {@link handleMapMovement} call, used to order renders. */
+let moveSequence = 0;
+/** Sequence of the most recent render that actually reached `setData`. */
+let lastRenderedSequence = 0;
+/**
+ * Aborts the fetch belonging to the view the *next* map movement replaces. Only
+ * movement-driven renders arm it — a re-render triggered by a filter change or
+ * a finished background refresh must never cancel a load that is still on its
+ * way, or the map would be left empty until the user pans again.
+ */
+let pendingMoveFetch: AbortController | null = null;
+
+async function handleMapMovement(options: { supersedes?: boolean } = {}) {
 	// do not fetch data for big zoom areas!
 	if (!rootMap || rootMap.getZoom() <= 9) return;
 
@@ -534,8 +546,22 @@ async function handleMapMovement() {
 		return;
 	}
 
-	const geojson = await getMarkersForView(bounds);
-	const source = rootMap.getSource(MARKER_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+	const controller = new AbortController();
+	if (options.supersedes) {
+		pendingMoveFetch?.abort();
+		pendingMoveFetch = controller;
+	}
+	const sequence = ++moveSequence;
+
+	const geojson = await getMarkersForView(bounds, controller.signal);
+
+	// Superseded by a newer movement, or overtaken by a render that started
+	// later and already landed — either way this frame is stale.
+	if (controller.signal.aborted || sequence < lastRenderedSequence) return;
+	if (pendingMoveFetch === controller) pendingMoveFetch = null;
+	lastRenderedSequence = sequence;
+
+	const source = rootMap?.getSource(MARKER_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
 	if (source) {
 		source.setData(geojson);
 	}
@@ -804,7 +830,9 @@ watch(pumpCalculation.calculationResult, (val) => {
 	}
 });
 
-const debouncedMapMove = debounce(handleMapMovement, MOVE_DEBOUNCE_MS);
+// Only the movement path supersedes: a new viewport makes any load still
+// running for the previous one dead weight.
+const debouncedMapMove = debounce(() => handleMapMovement({ supersedes: true }), MOVE_DEBOUNCE_MS);
 
 // ---------------------------------------------------------------------------
 // Fetch-error toast (§1.5)

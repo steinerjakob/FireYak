@@ -30,6 +30,22 @@ loadSettings();
 // Number of days a cached water source is kept before it is pruned.
 const CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
+/** How long housekeeping waits for an idle moment before running anyway. */
+const IDLE_TASK_TIMEOUT_MS = 10_000;
+
+/**
+ * Runs background housekeeping once the main thread has nothing better to do.
+ * Falls back to a plain timeout on engines without `requestIdleCallback`
+ * (notably iOS WebKit, which is exactly where a blocked main thread hurts most).
+ */
+function runWhenIdle(task: () => void): void {
+	if (typeof window.requestIdleCallback === 'function') {
+		window.requestIdleCallback(task, { timeout: IDLE_TASK_TIMEOUT_MS });
+	} else {
+		window.setTimeout(task, IDLE_TASK_TIMEOUT_MS / 2);
+	}
+}
+
 // Track active usage days and auto-prompt for review (one-shot)
 const { recordActiveDay, scheduleAutoPrompt, cancelAutoPrompt } = useInAppReview();
 const { checkForUpdate } = useWhatsNew();
@@ -49,10 +65,15 @@ onOnline(() => {
 });
 
 onMounted(async () => {
-	// Fire-and-forget: drop cache entries older than 90 days so the local
-	// IndexedDB store doesn't grow unboundedly as the user pans around.
-	// Nodes inside a downloaded offline area are exempt from pruning.
-	pruneStaleMapNodes(CACHE_MAX_AGE_MS);
+	// Drop cache entries older than 90 days so the local IndexedDB store doesn't
+	// grow unboundedly as the user pans around. Nodes inside a downloaded offline
+	// area are exempt from pruning.
+	//
+	// Deferred to idle rather than run here: the prune deletes in `readwrite`
+	// transactions, which take an exclusive lock on the marker store, and the map
+	// mounts at the same moment and immediately reads it. Started eagerly, the
+	// very first viewport read waits on the prune.
+	runWhenIdle(() => void pruneStaleMapNodes(CACHE_MAX_AGE_MS));
 
 	// Fire-and-forget: hydrate the offline-areas store (also triggers auto-refresh).
 	offlineAreasStore.init();
