@@ -425,11 +425,16 @@ async function readTilesFromDb(keys: string[]): Promise<Map<string, CachedMapNod
 
 /** Returns every cached node in the given tiles, reading the missing ones. */
 async function getTiles(keys: string[], attempt = 0): Promise<CachedMapNode[]> {
+	// Fenced before the residency check, not inside it: a *resident* tile is
+	// just as stale as a missing one while a write that has not yet reached
+	// `applyStoredNodesToCache` is outstanding. Fencing only the miss path
+	// would let an all-resident read return pre-write rows.
+	await pendingWrites;
+
 	const missing = keys.filter((key) => !tileCache.has(key));
 	let fetched: Map<string, CachedMapNode[]> | null = null;
 
 	if (missing.length > 0) {
-		await pendingWrites;
 		const epoch = cacheEpoch;
 		fetched = await readTilesFromDb(missing);
 
@@ -692,13 +697,35 @@ export async function pruneStaleMapNodes(maxAgeMs: number) {
 
 		// Phase 2 — delete in bounded batches, each its own short transaction, so
 		// a read never waits on more than one batch.
+		//
+		// Every candidate is re-checked inside its write transaction. Splitting
+		// selection from deletion opened a window the single-cursor version did
+		// not have: the prune runs from `runWhenIdle` while the map is loading its
+		// first viewport, and that fetch re-stores exactly the rows most likely to
+		// be 90 days old — the area the user last looked at. Deleting on the phase-1
+		// verdict alone would drop those markers immediately after they arrived,
+		// and the freshness stamp in `markerHandler` would suppress a re-fetch for
+		// the rest of the TTL.
 		for (let i = 0; i < doomed.length; i += PRUNE_BATCH_SIZE) {
 			const batch = doomed.slice(i, i + PRUNE_BATCH_SIZE);
-			const tx = db.transaction(markerStoreName, 'readwrite');
-			await Promise.all([...batch.map((ref) => tx.store.delete(ref)), tx.done]);
+			await trackWrite(
+				(async () => {
+					const tx = db.transaction(markerStoreName, 'readwrite');
+					const rows = (await Promise.all(batch.map((ref) => tx.store.get(ref)))) as (
+						| CachedMapNode
+						| undefined
+					)[];
+					const stillStale = rows.filter(
+						(row): row is CachedMapNode => row !== undefined && (row.fetchedAt ?? 0) < cutoff
+					);
+					await Promise.all([...stillStale.map((row) => tx.store.delete(row.ref)), tx.done]);
+					// Surgical, and tracked: the whole point of running at idle is to
+					// stay out of the map's way, so clearing every resident tile here
+					// would throw away the cache the first render just warmed.
+					forgetRefsInCache(new Set(stillStale.map((row) => row.ref)));
+				})()
+			);
 		}
-
-		clearTileCache();
 	} catch (e) {
 		console.error('Error pruning stale map nodes:', e);
 		clearTileCache();

@@ -201,13 +201,20 @@ let liveRefreshInFlight = false;
 
 /**
  * Everything about an element that the marker layer actually draws: which
- * object it is and which icon it gets. Two elements with the same signature
- * produce the same feature, so a live refresh that only returns those has
- * nothing to re-render — tag edits that don't move the icon are picked up by
- * the info panel, which reads the node itself.
+ * object it is, which icon it gets and where it sits. Two elements with the
+ * same signature produce the same feature, so a live refresh that only returns
+ * those has nothing to re-render — tag edits that change neither the icon nor
+ * the position are picked up by the info panel, which reads the node itself.
+ *
+ * The position has to be in here: a node that was moved in OSM keeps its ref
+ * and its icon, so without it the refresh would decide nothing changed and
+ * leave the marker at its old coordinates until the next pan. Rounded to ~1 cm
+ * so float noise can't force a pointless re-render.
  */
 function renderSignature(element: OverPassElement): string {
-	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}`;
+	const lat = (element.lat ?? element.center?.lat ?? 0).toFixed(7);
+	const lng = (element.lon ?? element.center?.lon ?? 0).toFixed(7);
+	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${lat},${lng}`;
 }
 
 /** True when every given tile was asked of Overpass within the live TTL. */
