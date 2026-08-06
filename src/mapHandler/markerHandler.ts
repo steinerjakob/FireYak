@@ -23,7 +23,7 @@ import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
-import { lngLatToTile, tileKey } from '@/helper/tileMath';
+import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
 
 // Map icon keys to URLs for use in MapLibre image loading
@@ -119,15 +119,7 @@ function padBounds(bounds: GeoBounds, ratio: number): GeoBounds {
 
 /** All z{@link FRESHNESS_ZOOM} tile keys covering the given bounds. */
 function coveringTileKeys(bounds: GeoBounds): string[] {
-	const nw = lngLatToTile(bounds.north, bounds.west, FRESHNESS_ZOOM);
-	const se = lngLatToTile(bounds.south, bounds.east, FRESHNESS_ZOOM);
-	const keys: string[] = [];
-	for (let x = nw.x; x <= se.x; x++) {
-		for (let y = nw.y; y <= se.y; y++) {
-			keys.push(tileKey({ z: FRESHNESS_ZOOM, x, y }));
-		}
-	}
-	return keys;
+	return tileKeysForBounds(bounds, FRESHNESS_ZOOM);
 }
 
 /** True when every given tile was fetched within the freshness TTL. */
@@ -207,6 +199,17 @@ const LIVE_FRESHNESS_TTL_MS = 5 * 60 * 1000;
 
 let liveRefreshInFlight = false;
 
+/**
+ * Everything about an element that the marker layer actually draws: which
+ * object it is and which icon it gets. Two elements with the same signature
+ * produce the same feature, so a live refresh that only returns those has
+ * nothing to re-render — tag edits that don't move the icon are picked up by
+ * the info panel, which reads the node itself.
+ */
+function renderSignature(element: OverPassElement): string {
+	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}`;
+}
+
 /** True when every given tile was asked of Overpass within the live TTL. */
 function areTilesLiveFresh(keys: string[]): boolean {
 	const now = Date.now();
@@ -259,10 +262,19 @@ async function refreshFromLiveSource(mapBounds: GeoBounds): Promise<void> {
 
 		if (liveElements.length === 0) return;
 
+		// Decide whether this changes anything *on screen* before storing, while
+		// the cached rows still describe what is currently rendered. Overpass is
+		// asked on every move into a new area, and in the overwhelmingly common
+		// case it just confirms the extract — bumping the cache version regardless
+		// would then cost a full re-read, GeoJSON rebuild and supercluster
+		// re-index for a frame identical to the one already on screen.
+		const rendered = new Set((await getMapNodesForView(queryBounds)).map(renderSignature));
+		const changed = liveElements.some((element) => !rendered.has(renderSignature(element)));
+
 		// Upsert only. storeMapNodes keys by ref and overwrites, so anything
 		// Overpass knows about more recently than the extract wins.
 		await storeMapNodes(liveElements);
-		markerCacheVersion.value++;
+		if (changed) markerCacheVersion.value++;
 	} catch {
 		// Silent by design — the static layer already rendered.
 	} finally {
@@ -270,7 +282,76 @@ async function refreshFromLiveSource(mapBounds: GeoBounds): Promise<void> {
 	}
 }
 
-async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]> {
+/** True for the `AbortError` a superseded or cancelled fetch rejects with. */
+function isAbortError(error: unknown): boolean {
+	return error instanceof DOMException && error.name === 'AbortError';
+}
+
+/**
+ * Writes a completed fetch into the cache: store, then reconcile deletions.
+ *
+ * Deliberately **not** awaited by the render path. Storing a thousand nodes and
+ * then reconciling them is a few thousand IndexedDB requests, and none of it is
+ * something the user has to wait to see — the elements needed to draw the
+ * viewport are already in hand the moment the fetch resolves. Keeping this in
+ * front of the first paint was what made moving into a new city feel slow.
+ *
+ * `databaseHandler` fences its own reads behind these writes, so a viewport read
+ * issued while this is still running cannot observe the pre-write state.
+ */
+async function persistFetchedNodes(
+	queryBounds: GeoBounds,
+	elements: OverPassElement[],
+	notify: boolean
+): Promise<void> {
+	try {
+		await storeMapNodes(elements);
+
+		// An FGB range read is never truncated the way Overpass's 2000-element
+		// response could be, so — unlike the old Overpass path — reconciliation
+		// always sees the complete set of features the extract holds for
+		// `queryBounds`, and needs no element-count guard.
+		//
+		// It does need a staleness guard instead: the extract is rebuilt only every
+		// couple of days, so it cannot know about anything mapped since it was cut.
+		// Reconciling against its planet timestamp keeps those newer nodes — most
+		// importantly the user's own just-added markers. If the timestamp can't be
+		// determined (metadata unreachable) we skip reconciliation entirely rather
+		// than risk deleting live data; stale nodes are handled by the TTL prune.
+		//
+		// This lookup is also why the reconcile must not block rendering: on the
+		// first fetch of a session it is an uncached network round-trip to
+		// `metadata.json`, sitting between the user and their markers.
+		const extractTimestampMs = await getExtractTimestampMs();
+		if (extractTimestampMs !== null) {
+			await reconcileDeletedNodes(queryBounds, elements, extractTimestampMs);
+		}
+	} catch (e) {
+		console.error('Persisting fetched water sources failed:', e);
+	} finally {
+		// Signal that the cache changed so the map re-renders with the freshly
+		// fetched markers. Only the silent background refresh needs this: its
+		// caller already returned the (stale) cached features, so without the bump
+		// the new data wouldn't appear until the next pan. The foreground path
+		// renders the fetched elements itself and passes `notify: false`, since a
+		// bump there would only buy a second, identical render.
+		if (notify) markerCacheVersion.value++;
+	}
+}
+
+interface NodeCacheUpdate {
+	/** The freshly fetched elements, ready to render. Empty on failure. */
+	elements: OverPassElement[];
+	/** Resolves once {@link persistFetchedNodes} has finished. */
+	persisted: Promise<void>;
+	/** The fetch was cancelled rather than attempted — see {@link isAbortError}. */
+	aborted: boolean;
+}
+
+async function updateNodeCache(
+	mapBounds: GeoBounds,
+	options: { notify: boolean; signal?: AbortSignal }
+): Promise<NodeCacheUpdate> {
 	// Pad the query bbox so small subsequent pans stay inside the fetched area,
 	// then apply the same span clamp as the actual query. Freshness stamps and
 	// stale-node reconciliation below must only ever cover the area that was
@@ -281,16 +362,23 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 	activeAreaFetches.value++;
 	let mapElements: OverPassElement[];
 	try {
-		mapElements = await fetchWaterSources(queryBounds);
+		mapElements = await fetchWaterSources(queryBounds, options.signal);
 		lastStaticQueryFailed = false;
 	} catch (e) {
 		// Unlike fetchMarkerData, fetchWaterSources throws rather than returning
 		// null on failure. Leave the cache untouched — no fresh-tile stamping, no
 		// reconciliation — so a transient outage never looks like "everything in
 		// this area was deleted".
+		if (isAbortError(e)) {
+			// The user panned away; this view is nobody's concern any more. Not a
+			// failure, so `lastStaticQueryFailed` is left exactly as it was — and
+			// the tiles stay unstamped, so the area is fetched again if it is next
+			// looked at.
+			return { elements: [], persisted: Promise.resolve(), aborted: true };
+		}
 		console.error('Static water-source fetch failed:', e);
 		lastStaticQueryFailed = true;
-		return [];
+		return { elements: [], persisted: Promise.resolve(), aborted: false };
 	} finally {
 		activeAreaFetches.value--;
 	}
@@ -299,29 +387,11 @@ async function updateNodeCache(mapBounds: GeoBounds): Promise<OverPassElement[]>
 	// skip its background refresh.
 	markTilesFresh(coveringTileKeys(queryBounds));
 
-	await storeMapNodes(mapElements);
-	// An FGB range read is never truncated the way Overpass's 2000-element
-	// response could be, so — unlike the old Overpass path — reconciliation
-	// always sees the complete set of features the extract holds for
-	// `queryBounds`, and needs no element-count guard.
-	//
-	// It does need a staleness guard instead: the extract is rebuilt only every
-	// couple of days, so it cannot know about anything mapped since it was cut.
-	// Reconciling against its planet timestamp keeps those newer nodes — most
-	// importantly the user's own just-added markers. If the timestamp can't be
-	// determined (metadata unreachable) we skip reconciliation entirely rather
-	// than risk deleting live data; stale nodes are handled by the TTL prune.
-	const extractTimestampMs = await getExtractTimestampMs();
-	if (extractTimestampMs !== null) {
-		await reconcileDeletedNodes(queryBounds, mapElements, extractTimestampMs);
-	}
-
-	// Signal that the cache changed so the map re-renders with the freshly
-	// fetched markers. Crucial for the silent background refresh path: its caller
-	// already returned the (stale) cached features, so without this bump the new
-	// data wouldn't appear until the next pan.
-	markerCacheVersion.value++;
-	return mapElements;
+	return {
+		elements: mapElements,
+		persisted: persistFetchedNodes(queryBounds, mapElements, options.notify),
+		aborted: false
+	};
 }
 
 /**
@@ -358,7 +428,20 @@ let backgroundRefreshInFlight = false;
  */
 export const markerFetchFailed = ref(false);
 
-export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.FeatureCollection> {
+/**
+ * Builds the marker layer's GeoJSON for `mapBounds`, fetching the area first if
+ * nothing is cached for it.
+ *
+ * Pass `signal` to cancel a fetch that a newer map movement has superseded: the
+ * in-flight range requests are aborted rather than left to download a viewport
+ * nobody is looking at any more. A cancelled fetch is not treated as a failure
+ * and leaves no freshness stamp, so the area is simply fetched again if the user
+ * comes back to it.
+ */
+export async function getMarkersForView(
+	mapBounds: GeoBounds,
+	signal?: AbortSignal
+): Promise<GeoJSON.FeatureCollection> {
 	const features: GeoJSON.Feature[] = [];
 	try {
 		let mapElements: OverPassElement[] = await getMapNodesForView(mapBounds);
@@ -377,8 +460,15 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 			// Nothing cached for this view. Fetch only if we haven't already
 			// covered this area within the freshness TTL.
 			if (!tilesFresh) {
-				mapElements = await updateNodeCache(mapBounds);
-				markerFetchFailed.value = lastStaticQueryFailed;
+				// `notify: false` — the fetched elements are rendered below, so the
+				// cache-version bump would only trigger an identical second render.
+				// The write itself is not awaited: markers appear as soon as the
+				// network read lands, and persistence catches up behind them.
+				const update = await updateNodeCache(mapBounds, { notify: false, signal });
+				mapElements = update.elements;
+				// A cancelled fetch says nothing about whether the data source is
+				// reachable, so it must not raise *or* clear the error banner.
+				if (!update.aborted) markerFetchFailed.value = lastStaticQueryFailed;
 			}
 		} else {
 			// Cache hit: this view renders real data, so a failure recorded for a
@@ -396,12 +486,22 @@ export async function getMarkersForView(mapBounds: GeoBounds): Promise<GeoJSON.F
 				// abort errors (superseded by a newer request) and network failures.
 				// Background failures while cached data is already on screen are
 				// intentionally not surfaced (markerFetchFailed stays unchanged).
+				//
+				// Deliberately not given `signal`: nothing is waiting on this render,
+				// so letting it finish keeps the cache warm for when the user pans
+				// back. The in-flight guard is held until the *write* completes, not
+				// just the fetch, so a burst of pans can't stack overlapping stores.
 				backgroundRefreshInFlight = true;
-				updateNodeCache(mapBounds)
-					.catch(() => {})
-					.finally(() => {
+				void (async () => {
+					try {
+						const update = await updateNodeCache(mapBounds, { notify: true });
+						await update.persisted;
+					} catch {
+						// Silent by design — cached data is already on screen.
+					} finally {
 						backgroundRefreshInFlight = false;
-					});
+					}
+				})();
 			}
 		}
 
