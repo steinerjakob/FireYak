@@ -4,6 +4,11 @@
 			"type": "feature",
 			"en": "Photos of a water source can now also come from Panoramax, each labelled with its source and linked to the original.",
 			"de": "Fotos einer Wasserentnahmestelle können jetzt auch von Panoramax stammen – mit Quellenangabe und Link zum Original."
+		},
+		{
+			"type": "improvement",
+			"en": "Water sources now appear as soon as the map reaches a new area, instead of after a noticeable wait.",
+			"de": "Wasserentnahmestellen erscheinen jetzt direkt beim Wechsel in ein neues Gebiet – ohne spürbare Wartezeit."
 		}
 	],
 	"releases": [
