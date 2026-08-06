@@ -2,25 +2,59 @@ import { openDB } from 'idb';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { GeoPoint, GeoBounds, distanceTo, boundsContains } from '@/types/geo';
 import { OsmRef, toRef } from '@/helper/osmRef';
+import { lngLatToTile, tileKey, tileKeysForBounds } from '@/helper/tileMath';
 
 const markerStoreName = 'fireMarkerRefs';
+
+/**
+ * Zoom level of the slippy tile each cached node is filed under (DB v5).
+ *
+ * Every viewport read resolves to "which tiles does this bbox touch?" plus one
+ * index lookup per tile, so the zoom trades read count against over-fetch. At
+ * z10 a tile is roughly 27 × 19 km at central-European latitudes — about a
+ * city — which keeps a typical viewport at a handful of lookups while never
+ * pulling in more than a city's worth of rows per lookup.
+ *
+ * This value is baked into the stored `tile` property, so changing it requires
+ * a migration that recomputes every row.
+ */
+export const CACHE_TILE_ZOOM = 10;
 
 /**
  * A node as it lives in the IndexedDB cache: the raw Overpass element plus
  * cache-only bookkeeping (`__deleted` soft-delete flag and the `fetchedAt`
  * timestamp added in DB v2), plus the namespaced {@link OsmRef} that has been
- * the store's keyPath since DB v4 (§4.5). The optional fields let it be used
- * anywhere an {@link OverPassElement} is expected while still exposing
- * `fetchedAt`.
+ * the store's keyPath since DB v4 (§4.5) and the `tile` key added in DB v5.
+ * The optional fields let it be used anywhere an {@link OverPassElement} is
+ * expected while still exposing `fetchedAt`.
  */
 export type CachedMapNode = OverPassElement & {
 	ref: OsmRef;
 	__deleted?: boolean;
 	fetchedAt?: number;
+	/** z{@link CACHE_TILE_ZOOM} {@link tileKey} of the node's position. */
+	tile?: string;
 };
 
 const offlineAreasStoreName = 'offlineAreas';
 const pendingEditsStoreName = 'pendingEdits';
+const deletedRefsStoreName = 'deletedRefs';
+
+/**
+ * A tombstone for a node the user deleted locally (DB v5).
+ *
+ * Before v5 this lived as a `__deleted` flag on the cached node itself, which
+ * meant every single write had to `get` the existing row first just to find out
+ * whether it was carrying one — doubling the request count of a 1000-node
+ * viewport store. Keeping the refs in their own tiny store lets
+ * {@link storeMapNodes} read the whole tombstone set in one request and then
+ * issue nothing but `put`s. The flag is still mirrored onto the node so readers
+ * (and the reconciliation pass) need not join across two stores.
+ */
+interface DeletedRefRecord {
+	ref: OsmRef;
+	deletedAt: number;
+}
 
 /**
  * A pre-downloaded offline area: the geographic bounds plus download bookkeeping.
@@ -116,7 +150,14 @@ function isDeleted(node: unknown): boolean {
 /** Store name used before the DB v4 namespaced-key migration (§4.5). */
 const legacyMarkerStoreName = 'fireMarker';
 
-const dbPromise = openDB('FireMarker', 4, {
+/**
+ * Rows read (and rewritten) per batch by the DB v5 backfill. Small enough that
+ * an upgrade on a large cache never holds thousands of records in memory,
+ * large enough that the writes pipeline instead of paying a round-trip each.
+ */
+const MIGRATION_CHUNK_SIZE = 1000;
+
+const dbPromise = openDB('FireMarker', 5, {
 	async upgrade(db, oldVersion, _newVersion, tx) {
 		if (oldVersion < 1) {
 			// Fresh install: create the store keyed by the node `id`.
@@ -200,6 +241,64 @@ const dbPromise = openDB('FireMarker', 4, {
 				db.deleteObjectStore(legacyMarkerStoreName);
 			}
 		}
+
+		if (oldVersion < 5) {
+			// Tile-keyed reads (see CACHE_TILE_ZOOM). The `lat, lon` index this
+			// replaces is a *compound* index, and `IDBKeyRange.bound([south, west],
+			// [north, east])` over one is lexicographic, not a 2D box: it matches
+			// every row whose latitude falls in the band, at any longitude on the
+			// planet. Reads therefore cost what the whole cache holds at that
+			// latitude rather than what the viewport holds — which is why the map
+			// got slower the more the user had panned around. A plain `tile` index
+			// turns the same query into one exact-match lookup per covered tile.
+			//
+			// `lat, lon` is deliberately kept: `readNodesForBounds` still falls back
+			// to it for bounds too large to enumerate as tiles.
+			const store = tx.objectStore(markerStoreName);
+			if (!store.indexNames.contains('tile')) {
+				store.createIndex('tile', 'tile');
+			}
+
+			// Soft-delete tombstones move out of the node rows — see DeletedRefRecord.
+			const tombstones = db.objectStoreNames.contains(deletedRefsStoreName)
+				? tx.objectStore(deletedRefsStoreName)
+				: db.createObjectStore(deletedRefsStoreName, { keyPath: 'ref' });
+
+			// Backfill `tile` on every existing row, and lift its `__deleted` flag
+			// into the tombstone store. Walked in primary-key order in bounded
+			// batches whose writes are issued together: awaiting each `put` in turn
+			// would make an upgrade on a six-figure cache pay one IndexedDB
+			// round-trip per row, stalling the first launch after the update.
+			const migratedAt = Date.now();
+			let lastRef: OsmRef | undefined;
+			for (;;) {
+				const range = lastRef === undefined ? undefined : IDBKeyRange.lowerBound(lastRef, true);
+				const rows = (await store.getAll(range, MIGRATION_CHUNK_SIZE)) as CachedMapNode[];
+				if (rows.length === 0) break;
+
+				const writes: Promise<unknown>[] = [];
+				for (const row of rows) {
+					if (row.__deleted) {
+						writes.push(tombstones.put({ ref: row.ref, deletedAt: migratedAt }));
+					}
+					const point = getNodePoint(row);
+					// A row without coordinates was already invisible to every reader
+					// (they all resolve a point first), so leaving it untiled changes
+					// nothing except that the prune will eventually collect it.
+					if (!point) continue;
+					writes.push(
+						store.put({
+							...row,
+							tile: tileKey(lngLatToTile(point.lat, point.lng, CACHE_TILE_ZOOM))
+						})
+					);
+				}
+				await Promise.all(writes);
+
+				lastRef = rows[rows.length - 1].ref;
+				if (rows.length < MIGRATION_CHUNK_SIZE) break;
+			}
+		}
 	}
 });
 
@@ -214,70 +313,240 @@ function getNodePoint(node: OverPassElement): GeoPoint | null {
 	return { lat, lng };
 }
 
-export async function storeMapNodes(nodes: OverPassElement[]) {
-	try {
-		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
-		const fetchedAt = Date.now();
-		await Promise.all([
-			...nodes.map(async (node) => {
-				const point = getNodePoint(node);
-				if (!point) {
-					return;
-				}
+// ---------------------------------------------------------------------------
+// In-memory tile cache
+//
+// IndexedDB is the durable store; this is the read path in front of it. Panning
+// around a city re-reads the same handful of tiles over and over, and every one
+// of those reads otherwise costs a structured-clone of a few thousand records
+// out of the database thread. Holding the decoded rows keeps a small pan
+// entirely on the main thread's own heap.
+//
+// Correctness rests on two things: every mutation below updates or drops the
+// affected tiles, and `cacheEpoch` fences reads that were already in flight when
+// a mutation landed so they cannot write what they read back into the cache.
+// ---------------------------------------------------------------------------
 
-				const ref = toRef(node.type ?? 'node', node.id);
-				const existing = (await tx.store.get(ref)) as CachedMapNode | undefined;
-				const deletedFlag = existing?.__deleted ?? (node as CachedMapNode).__deleted ?? false;
+/** Tiles held in memory, in least-recently-used-first order. */
+const tileCache = new Map<string, CachedMapNode[]>();
 
-				const toStore: CachedMapNode = {
-					...(node as CachedMapNode),
-					ref,
-					__deleted: deletedFlag,
-					fetchedAt,
-					lat: point.lat,
-					lon: point.lng
-				};
-				return tx.store.put(toStore);
-			}),
-			tx.done
-		]);
-	} catch (e) {
-		console.error(e);
+/**
+ * Tile budget. A z{@link CACHE_TILE_ZOOM} tile is about a city, so this is
+ * generous for a session's worth of panning while bounding worst-case memory.
+ */
+const MAX_CACHED_TILES = 96;
+
+/**
+ * Bumped by every mutation. A read that started before the bump must not
+ * populate the cache with the rows it saw, because they predate the write.
+ */
+let cacheEpoch = 0;
+
+/**
+ * Resolves once every write handed to {@link trackWrite} has settled.
+ *
+ * Marker writes are deliberately not awaited by the code that renders (see
+ * `markerHandler`'s `updateNodeCache`), so a read issued moments later could
+ * otherwise open its transaction *before* the write opened its own and observe
+ * the pre-write state. Readers await this first, which costs nothing in the
+ * common case where no write is outstanding.
+ */
+let pendingWrites: Promise<void> = Promise.resolve();
+
+function trackWrite(work: Promise<unknown>): Promise<void> {
+	pendingWrites = Promise.allSettled([pendingWrites, work]).then(() => undefined);
+	return pendingWrites;
+}
+
+function evictTiles(): void {
+	while (tileCache.size > MAX_CACHED_TILES) {
+		const oldest = tileCache.keys().next();
+		if (oldest.done) break;
+		tileCache.delete(oldest.value);
 	}
 }
 
-export async function getMapNodesForView(mapBounds: GeoBounds) {
-	try {
-		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
-		const markerStore = transaction.objectStore(markerStoreName);
+/** Drops every cached tile. Used when a mutation's extent isn't worth tracking. */
+function clearTileCache(): void {
+	cacheEpoch++;
+	tileCache.clear();
+}
 
-		// Create an index on lat and lon keys
-		const index = markerStore.index('lat, lon');
+/**
+ * Folds freshly stored rows into the tiles that happen to be resident. Rows for
+ * tiles that aren't cached are ignored — the next read pulls them from
+ * IndexedDB. Refs are removed from every tile first so a node whose position
+ * moved across a tile boundary doesn't linger in its old one.
+ */
+function applyStoredNodesToCache(rows: CachedMapNode[]): void {
+	if (rows.length === 0) return;
+	const refs = new Set(rows.map((row) => row.ref));
+	forgetRefsInCache(refs);
+	for (const row of rows) {
+		const bucket = row.tile ? tileCache.get(row.tile) : undefined;
+		if (bucket) bucket.push(row);
+	}
+	cacheEpoch++;
+}
 
-		// Initialize an empty array to store the results
-		const results: CachedMapNode[] = [];
+/** Removes the given refs from every resident tile. */
+function forgetRefsInCache(refs: Set<OsmRef>): void {
+	for (const [key, rows] of tileCache) {
+		const kept = rows.filter((row) => !refs.has(row.ref));
+		// Replacing an existing key's value leaves Map iteration order untouched,
+		// so mutating while iterating is safe here.
+		if (kept.length !== rows.length) tileCache.set(key, kept);
+	}
+	cacheEpoch++;
+}
 
-		const range = IDBKeyRange.bound(
-			[mapBounds.south, mapBounds.west],
-			[mapBounds.north, mapBounds.east]
-		);
+/** Flags a resident node as soft-deleted without dropping its tile. */
+function markDeletedInCache(ref: OsmRef): void {
+	for (const [key, rows] of tileCache) {
+		const index = rows.findIndex((row) => row.ref === ref);
+		if (index === -1) continue;
+		const updated = rows.slice();
+		updated[index] = { ...updated[index], __deleted: true };
+		tileCache.set(key, updated);
+	}
+	cacheEpoch++;
+}
 
-		let cursor = await index.openCursor(range);
+/** One exact-match index lookup per tile, all inside a single transaction. */
+async function readTilesFromDb(keys: string[]): Promise<Map<string, CachedMapNode[]>> {
+	const tx = (await dbPromise).transaction(markerStoreName, 'readonly');
+	const index = tx.store.index('tile');
+	const batches = await Promise.all(
+		keys.map((key) => index.getAll(key) as Promise<CachedMapNode[]>)
+	);
+	await tx.done;
+	return new Map(keys.map((key, i) => [key, batches[i]]));
+}
 
-		while (cursor) {
-			const mapMarker = cursor.value as CachedMapNode;
+/** Returns every cached node in the given tiles, reading the missing ones. */
+async function getTiles(keys: string[], attempt = 0): Promise<CachedMapNode[]> {
+	const missing = keys.filter((key) => !tileCache.has(key));
+	let fetched: Map<string, CachedMapNode[]> | null = null;
 
-			if (!isDeleted(mapMarker)) {
-				const markerPoint = getNodePoint(mapMarker);
+	if (missing.length > 0) {
+		await pendingWrites;
+		const epoch = cacheEpoch;
+		fetched = await readTilesFromDb(missing);
 
-				if (markerPoint && boundsContains(mapBounds, markerPoint)) {
-					results.push(mapMarker);
-				}
+		if (epoch !== cacheEpoch) {
+			// A write landed mid-read. Retrying is cheap (the tiles it touched are
+			// the ones we want anyway) but must not spin forever under a steady
+			// write load, so fall through and serve what we read after two tries.
+			if (attempt < 2) return getTiles(keys, attempt + 1);
+		} else {
+			for (const [key, rows] of fetched) tileCache.set(key, rows);
+			evictTiles();
+		}
+	}
+
+	const results: CachedMapNode[] = [];
+	for (const key of keys) {
+		const rows = tileCache.get(key);
+		if (rows) {
+			// Touch for LRU: re-inserting moves the key to the end of the Map.
+			tileCache.delete(key);
+			tileCache.set(key, rows);
+			results.push(...rows);
+			continue;
+		}
+		const justRead = fetched?.get(key);
+		if (justRead) results.push(...justRead);
+	}
+	return results;
+}
+
+/**
+ * Upper bound on tiles a single bbox read will enumerate. The map only fetches
+ * markers above zoom 9 and clamps its query span, so real viewports stay far
+ * below this; the cap exists so an unexpectedly wide bbox degrades to one broad
+ * scan instead of thousands of index lookups.
+ */
+const MAX_TILE_QUERY_KEYS = 128;
+
+/**
+ * Every cached node whose tile overlaps `bounds` — a superset of the nodes
+ * actually inside it, since tiles overhang the edges. Callers filter.
+ */
+async function readNodesForBounds(bounds: GeoBounds): Promise<CachedMapNode[]> {
+	const keys = tileKeysForBounds(bounds, CACHE_TILE_ZOOM);
+	if (keys.length > MAX_TILE_QUERY_KEYS) {
+		await pendingWrites;
+		const tx = (await dbPromise).transaction(markerStoreName, 'readonly');
+		const index = tx.store.index('lat, lon');
+		const range = IDBKeyRange.bound([bounds.south, bounds.west], [bounds.north, bounds.east]);
+		const rows = (await index.getAll(range)) as CachedMapNode[];
+		await tx.done;
+		return rows;
+	}
+	return getTiles(keys);
+}
+
+export async function storeMapNodes(nodes: OverPassElement[]) {
+	if (nodes.length === 0) return;
+	const write = (async () => {
+		try {
+			const tx = (await dbPromise).transaction(
+				[markerStoreName, deletedRefsStoreName],
+				'readwrite'
+			);
+			const markers = tx.objectStore(markerStoreName);
+
+			// One request for the whole tombstone set, rather than a `get` per node
+			// just to find out whether this particular one was soft-deleted. Read
+			// inside the same transaction as the writes so a concurrent
+			// `deleteMapNode` can't slip between the two and be overwritten.
+			const tombstones = new Set(
+				(await tx.objectStore(deletedRefsStoreName).getAllKeys()) as OsmRef[]
+			);
+
+			const fetchedAt = Date.now();
+			const stored: CachedMapNode[] = [];
+			const writes: Promise<unknown>[] = [];
+
+			for (const node of nodes) {
+				const point = getNodePoint(node);
+				if (!point) continue;
+
+				const ref = toRef(node.type ?? 'node', node.id);
+				const toStore: CachedMapNode = {
+					...(node as CachedMapNode),
+					ref,
+					__deleted: tombstones.has(ref) || Boolean((node as CachedMapNode).__deleted),
+					fetchedAt,
+					lat: point.lat,
+					lon: point.lng,
+					tile: tileKey(lngLatToTile(point.lat, point.lng, CACHE_TILE_ZOOM))
+				};
+				stored.push(toStore);
+				writes.push(markers.put(toStore));
 			}
 
-			cursor = await cursor.continue();
+			await Promise.all([...writes, tx.done]);
+			applyStoredNodesToCache(stored);
+		} catch (e) {
+			console.error(e);
+			// The cache may hold rows this write was meant to replace; drop it
+			// rather than serve a half-applied view.
+			clearTileCache();
 		}
-		return results;
+	})();
+
+	await trackWrite(write);
+}
+
+export async function getMapNodesForView(mapBounds: GeoBounds): Promise<CachedMapNode[]> {
+	try {
+		const candidates = await readNodesForBounds(mapBounds);
+		return candidates.filter((node) => {
+			if (isDeleted(node)) return false;
+			const point = getNodePoint(node);
+			return point !== null && boundsContains(mapBounds, point);
+		});
 	} catch (e) {
 		console.error(e);
 		return [];
@@ -286,37 +555,24 @@ export async function getMapNodesForView(mapBounds: GeoBounds) {
 
 export async function getNearbyMapNodes(location: GeoPoint, radius: number) {
 	try {
-		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
-		const markerStore = transaction.objectStore(markerStoreName);
-
 		const latDelta = radius / 111000;
 		const lngDelta = radius / (111000 * Math.cos((location.lat * Math.PI) / 180));
+		const bounds: GeoBounds = {
+			south: location.lat - latDelta,
+			north: location.lat + latDelta,
+			west: location.lng - lngDelta,
+			east: location.lng + lngDelta
+		};
 
-		const index = markerStore.index('lat, lon');
-		const range = IDBKeyRange.bound(
-			[location.lat - latDelta, location.lng - lngDelta],
-			[location.lat + latDelta, location.lng + lngDelta]
-		);
-
+		const candidates = await readNodesForBounds(bounds);
 		const results: OverPassElement[] = [];
-		let cursor = await index.openCursor(range);
 
-		while (cursor) {
-			const mapMarker = cursor.value as CachedMapNode;
-
-			if (!isDeleted(mapMarker)) {
-				const markerPoint = getNodePoint(mapMarker);
-
-				if (markerPoint) {
-					const distance = distanceTo(location, markerPoint);
-
-					if (distance <= radius) {
-						results.push(mapMarker);
-					}
-				}
+		for (const node of candidates) {
+			if (isDeleted(node)) continue;
+			const point = getNodePoint(node);
+			if (point && distanceTo(location, point) <= radius) {
+				results.push(node);
 			}
-
-			cursor = await cursor.continue();
 		}
 
 		return results;
@@ -351,27 +607,16 @@ export interface CachedNodeRef {
 
 export async function getMapNodeRefsForBounds(mapBounds: GeoBounds): Promise<CachedNodeRef[]> {
 	try {
-		const transaction = (await dbPromise).transaction(markerStoreName, 'readonly');
-		const markerStore = transaction.objectStore(markerStoreName);
-		const index = markerStore.index('lat, lon');
-
-		const range = IDBKeyRange.bound(
-			[mapBounds.south, mapBounds.west],
-			[mapBounds.north, mapBounds.east]
-		);
-
+		const candidates = await readNodesForBounds(mapBounds);
 		const refs: CachedNodeRef[] = [];
-		let cursor = await index.openCursor(range);
 
-		while (cursor) {
-			const mapMarker = cursor.value as CachedMapNode;
-			const markerPoint = getNodePoint(mapMarker);
-
-			if (markerPoint && boundsContains(mapBounds, markerPoint)) {
-				refs.push({ ref: mapMarker.ref, fetchedAt: mapMarker.fetchedAt ?? 0 });
+		for (const node of candidates) {
+			// Soft-deleted rows are deliberately included: reconciliation is what
+			// eventually collects them once the source agrees they are gone.
+			const point = getNodePoint(node);
+			if (point && boundsContains(mapBounds, point)) {
+				refs.push({ ref: node.ref, fetchedAt: node.fetchedAt ?? 0 });
 			}
-
-			cursor = await cursor.continue();
 		}
 
 		return refs;
@@ -383,12 +628,21 @@ export async function getMapNodeRefsForBounds(mapBounds: GeoBounds): Promise<Cac
 
 export async function hardDeleteMapNodes(refs: OsmRef[]) {
 	if (!refs.length) return;
-	try {
-		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
-		await Promise.all([...refs.map((ref) => tx.store.delete(ref)), tx.done]);
-	} catch (e) {
-		console.error('Error hard-deleting map nodes:', e);
-	}
+	const write = (async () => {
+		try {
+			const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
+			await Promise.all([...refs.map((ref) => tx.store.delete(ref)), tx.done]);
+			// Surgical rather than a full clear: this runs after every viewport
+			// fetch, and dropping all resident tiles each time would undo the
+			// in-memory cache entirely.
+			forgetRefsInCache(new Set(refs));
+		} catch (e) {
+			console.error('Error hard-deleting map nodes:', e);
+			clearTileCache();
+		}
+	})();
+
+	await trackWrite(write);
 }
 
 /**
@@ -398,6 +652,9 @@ export async function hardDeleteMapNodes(refs: OsmRef[]) {
  * without a timestamp) is treated as stale. Iterates the `fetchedAt` index so
  * only stale rows are visited.
  */
+/** Nodes deleted per prune transaction — see {@link pruneStaleMapNodes}. */
+const PRUNE_BATCH_SIZE = 500;
+
 export async function pruneStaleMapNodes(maxAgeMs: number) {
 	try {
 		// Nodes inside a downloaded offline area must never be pruned, even when
@@ -405,45 +662,79 @@ export async function pruneStaleMapNodes(maxAgeMs: number) {
 		// Membership is a pure bounds check, so we load the areas once per run.
 		const areas = await getAllOfflineAreas();
 		const isProtected = (node: CachedMapNode): boolean => {
-			if (areas.length === 0) return false;
 			const point = getNodePoint(node);
 			return point !== null && areas.some((area) => boundsContains(area.bounds, point));
 		};
 
 		const cutoff = Date.now() - maxAgeMs;
-		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
-		const index = tx.store.index('fetchedAt');
+		const db = await dbPromise;
 
+		// Phase 1 — decide what goes, under a *readonly* transaction. The previous
+		// implementation cursor-deleted inside one long readwrite transaction,
+		// which holds an exclusive lock on the marker store: every viewport read
+		// issued while it ran queued behind it. Since this is kicked off at
+		// startup, that lock sat directly in front of the first map render.
+		const readTx = db.transaction(markerStoreName, 'readonly');
+		const index = readTx.store.index('fetchedAt');
 		// upperBound(cutoff, true) → strictly `fetchedAt < cutoff`.
-		let cursor = await index.openCursor(IDBKeyRange.upperBound(cutoff, true));
-		while (cursor) {
-			if (!isProtected(cursor.value as CachedMapNode)) {
-				await cursor.delete();
-			}
-			cursor = await cursor.continue();
+		const range = IDBKeyRange.upperBound(cutoff, true);
+		// With no offline areas nothing can be protected, so the coordinates are
+		// never needed and the keys alone are far cheaper to materialize.
+		const doomed: OsmRef[] =
+			areas.length === 0
+				? ((await index.getAllKeys(range)) as OsmRef[])
+				: ((await index.getAll(range)) as CachedMapNode[])
+						.filter((node) => !isProtected(node))
+						.map((node) => node.ref);
+		await readTx.done;
+
+		if (doomed.length === 0) return;
+
+		// Phase 2 — delete in bounded batches, each its own short transaction, so
+		// a read never waits on more than one batch.
+		for (let i = 0; i < doomed.length; i += PRUNE_BATCH_SIZE) {
+			const batch = doomed.slice(i, i + PRUNE_BATCH_SIZE);
+			const tx = db.transaction(markerStoreName, 'readwrite');
+			await Promise.all([...batch.map((ref) => tx.store.delete(ref)), tx.done]);
 		}
 
-		await tx.done;
+		clearTileCache();
 	} catch (e) {
 		console.error('Error pruning stale map nodes:', e);
+		clearTileCache();
 	}
 }
 
 export async function deleteMapNode(ref: OsmRef) {
-	try {
-		const tx = (await dbPromise).transaction(markerStoreName, 'readwrite');
+	const write = (async () => {
+		try {
+			const tx = (await dbPromise).transaction(
+				[markerStoreName, deletedRefsStoreName],
+				'readwrite'
+			);
+			const markers = tx.objectStore(markerStoreName);
 
-		// Soft-delete: keep the record in the cache, but mark it as deleted.
-		const existing = (await tx.store.get(ref)) as CachedMapNode | undefined;
+			// The tombstone is the authoritative record — it is what keeps a later
+			// `storeMapNodes` from resurrecting the node when the extract, which is
+			// days behind OSM, still lists it. The flag on the row is a mirror so
+			// readers don't have to join the two stores.
+			const existing = (await markers.get(ref)) as CachedMapNode | undefined;
+			const writes: Promise<unknown>[] = [
+				tx.objectStore(deletedRefsStoreName).put({ ref, deletedAt: Date.now() } as DeletedRefRecord)
+			];
+			if (existing) {
+				writes.push(markers.put({ ...existing, __deleted: true }));
+			}
 
-		if (existing) {
-			await tx.store.put({ ...existing, __deleted: true });
+			await Promise.all([...writes, tx.done]);
+			markDeletedInCache(ref);
+		} catch (e) {
+			console.error(e);
+			clearTileCache();
 		}
+	})();
 
-		await tx.done;
-	} catch (e) {
-		console.error(e);
-	}
+	await trackWrite(write);
 }
 
 // ---------------------------------------------------------------------------
