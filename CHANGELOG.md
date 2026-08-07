@@ -1,6 +1,20 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.18.0] - 2026-08-07
+
+### Features
+
+- *(images)* Add Panoramax as a marker photo source (#97)
+- *(review)* Implement in-app review with auto-prompt (#95)
+
+### Performance
+
+- *(cache)* Index cached markers by tile and keep hot tiles in memory (#98)
+
+### Docs
+
+- Add the missing What's New entry and a CLAUDE.md pointer to AGENTS.md (#99)
 ## [2.17.1] - 2026-07-30
 
 ### Bug Fixes
