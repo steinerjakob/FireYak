@@ -75,7 +75,7 @@ src/
 
 | File | Purpose |
 |---|---|
-| `darkModeDetection.ts` | System/manual dark mode detection and application |
+| `darkModeDetection.ts` | Read-only reactive "is the dark palette active" flag (view of `settingsStore`) |
 | `inAppReview.ts` | Tracks active usage days and triggers the one-shot native in-app review prompt |
 | `modalBreakpointWatcher.ts` | Tracks Ionic modal breakpoint state changes |
 | `nearbyWaterSource.ts` | Reactive list of nearby water sources, ranked by road-aware distance |
@@ -85,6 +85,7 @@ src/
 | `screenDetection.ts` | Mobile/desktop breakpoint detection (768px) |
 | `screenOrientation.ts` | Device orientation monitoring via Capacitor |
 | `settings.ts` | Loads/saves persistent settings via Capacitor Preferences |
+| `systemColorScheme.ts` | Single source of truth for the OS `prefers-color-scheme` preference; re-polls on every foreground transition because Android's WebView drops the `change` event while backgrounded |
 | `whatsNew.ts` | Loads `whats-new.json`, tracks last-seen app version, drives the What's New modal |
 
 ### Helpers (`src/helper/`)
