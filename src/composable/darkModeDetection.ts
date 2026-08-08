@@ -2,14 +2,10 @@ import { computed, type ComputedRef } from 'vue';
 import { useSettingsStore } from '@/store/settingsStore';
 
 /**
- * Reactive "is the dark palette active" flag for consumers that have to restyle
- * themselves in JS (the map flavors, mainly).
- *
- * This is a read-only view of the settings store, which owns both the theme
- * setting and the system-preference listener and is the only place that touches
- * the palette classes on `<html>`. Detecting and applying the theme a second
- * time here used to let the two copies drift apart: the map followed a system
- * switch while the document classes did not.
+ * Reactive "is the dark palette active" flag, for consumers that restyle
+ * themselves in JS (the map flavors, mainly). Read-only view of the settings
+ * store, which owns detection and is the only place that touches the palette
+ * classes on `<html>`.
  */
 export function useDarkMode(): { isDarkMode: ComputedRef<boolean> } {
 	const settingsStore = useSettingsStore();

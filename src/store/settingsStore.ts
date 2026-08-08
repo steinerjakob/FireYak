@@ -28,13 +28,11 @@ const resolveIsDark = (theme: ThemeSetting) =>
 const applyThemeToDocument = (theme: ThemeSetting) => {
 	const isDark = resolveIsDark(theme);
 
-	// Toggle Ionic's dark palette class
 	document.documentElement.classList.toggle('ion-palette-dark', isDark);
 
-	// `ion-palette-light` pins the palette to light and, by design, opts the MD3
-	// tokens out of the `prefers-color-scheme: dark` media query. It must
-	// therefore only be set for an explicit light choice — leaving it on in
-	// 'auto' mode would keep the CSS stuck in light after a system switch.
+	// `ion-palette-light` opts the MD3 tokens out of the `prefers-color-scheme:
+	// dark` media query, so it may only be set for an explicit light choice —
+	// in 'auto' it would pin the CSS to light across a system switch.
 	document.documentElement.classList.toggle('ion-palette-light', theme === 'light');
 
 	if (Capacitor.isNativePlatform()) {
@@ -42,7 +40,6 @@ const applyThemeToDocument = (theme: ThemeSetting) => {
 	}
 };
 
-/** Guards against stacking system-preference listeners on repeated init calls. */
 let systemThemeListenerAttached = false;
 
 const DEFAULT_MARKER_FILTERS: MarkerFilters = {
@@ -101,9 +98,8 @@ export const useSettingsStore = defineStore('settings', {
 		/**
 		 * Initializes the theme system. Should be called when the app starts.
 		 *
-		 * The system listener stays attached regardless of the current theme
-		 * setting: it is what keeps `isDarkMode` truthful, and re-applying is a
-		 * no-op while the user has pinned 'light' or 'dark'.
+		 * The system listener stays attached whatever the theme setting is —
+		 * re-applying is a no-op while 'light' or 'dark' is pinned.
 		 */
 		initializeTheme() {
 			initSystemColorScheme();
