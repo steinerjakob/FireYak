@@ -45,6 +45,7 @@
 				"pillar": "Pillar Hydrant",
 				"underground": "Underground Hydrant",
 				"wall": "Wall Hydrant",
+				"pipe": "Pipe Hydrant",
 				"pond": "Pond"
 			},
 			"fire_hydrant:position": {

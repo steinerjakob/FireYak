@@ -47,6 +47,9 @@ function getIconKeyForNode(element: OverPassElement): string {
 	const emergency = element.tags?.emergency;
 	switch (emergency) {
 		case 'fire_hydrant': {
+			// Fixed suction pipes are tagged as hydrants in OSM, but need
+			// the same map symbol as dedicated suction points.
+			if (element.tags?.['fire_hydrant:pressure'] === 'suction') return 'pump';
 			const type = element.tags?.['fire_hydrant:type'];
 			return (
 				({ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<string, string>)[

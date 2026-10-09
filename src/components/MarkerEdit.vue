@@ -27,7 +27,7 @@ const markerEditStore = useMarkerEditStore();
 const osmAuthStore = useOsmAuthStore();
 const { t } = useI18n();
 
-const hydrantTypes = ['pillar', 'underground', 'wall' /*, 'pond'*/];
+const hydrantTypes = ['pillar', 'underground', 'wall', 'pipe' /*, 'pond'*/];
 const hydrantPositions = ['sidewalk', 'lane', 'parking_lot', 'green', 'street'];
 const waterSources = [
 	'main',
@@ -56,6 +56,7 @@ const commonFlowRates = ['600 l/min', '800 l/min', '1200 l/min'];
 const commonCouplingsCounts = ['1', '2', '3'];
 const commonCouplingTypes = [
 	'Storz',
+	'Perrot',
 	'Bayonet',
 	'Barcelona',
 	'Guillemin',
