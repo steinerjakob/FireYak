@@ -4,6 +4,7 @@ import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
 import iconPump from '../assets/markers/pump.png';
+import iconSuctionPoint from '../assets/markers/suctionpoint.png';
 import iconUnderground from '../assets/markers/underground.png';
 import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
@@ -32,6 +33,7 @@ export const markerIconUrls: Record<string, string> = {
 	underground: iconUnderground,
 	wall: iconWall,
 	pump: iconPump,
+	suctionpoint: iconSuctionPoint,
 	water: iconWater,
 	watertank: iconWaterTank,
 	firestation: iconFirestation
@@ -58,7 +60,7 @@ function getIconKeyForNode(element: OverPassElement): string {
 			);
 		}
 		case 'suction_point':
-			return 'pump';
+			return 'suctionpoint';
 		case 'fire_water_pond':
 			return 'water';
 		case 'water_tank':
