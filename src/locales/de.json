@@ -45,7 +45,7 @@
 				"pillar": "Überflurhydrant",
 				"underground": "Unterflurhydrant",
 				"wall": "Wandhydrant",
-				"pipe": "Löschwasserbrunnen",
+				"pipe": "Anschlussrohr",
 				"pond": "Löschwasserteich"
 			},
 			"fire_hydrant:position": {
