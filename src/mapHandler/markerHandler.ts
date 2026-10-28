@@ -3,6 +3,7 @@ import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
+import iconPump from '../assets/markers/pump.png';
 import iconSuctionPoint from '../assets/markers/suctionpoint.png';
 import iconUnderground from '../assets/markers/underground.png';
 import iconWall from '../assets/markers/wall.png';
@@ -31,6 +32,7 @@ export const markerIconUrls: Record<string, string> = {
 	hydrant: iconHydrant,
 	underground: iconUnderground,
 	wall: iconWall,
+	pump: iconPump,
 	suctionpoint: iconSuctionPoint,
 	water: iconWater,
 	watertank: iconWaterTank,
@@ -49,7 +51,7 @@ function getIconKeyForNode(element: OverPassElement): string {
 		case 'fire_hydrant': {
 			// Fixed suction pipes are tagged as hydrants in OSM, but need
 			// the same map symbol as dedicated suction points.
-			if (element.tags?.['fire_hydrant:pressure'] === 'suction') return 'suctionpoint';
+			if (element.tags?.['fire_hydrant:pressure'] === 'suction') return 'pump';
 			const type = element.tags?.['fire_hydrant:type'];
 			return (
 				({ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<string, string>)[
@@ -58,7 +60,7 @@ function getIconKeyForNode(element: OverPassElement): string {
 			);
 		}
 		case 'suction_point':
-			return 'suctionpoint';
+			return 'pump';
 		case 'fire_water_pond':
 			return 'water';
 		case 'water_tank':
@@ -81,7 +83,7 @@ function categoryForNode(element: OverPassElement): MarkerFilterKey {
 		case 'fire_hydrant':
 			return 'fireHydrant';
 		case 'suction_point':
-			return 'suctionPoint';
+			return 'pump';
 		case 'water_tank':
 			return 'waterTank';
 		case 'fire_water_pond':
