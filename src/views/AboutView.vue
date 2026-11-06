@@ -42,20 +42,22 @@
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
-						<p>{{ $t('about.supportOnKofiDescription') }}</p>
+						<template v-if="showDonation">
+							<p>{{ $t('about.supportOnKofiDescription') }}</p>
 
-						<a href="https://ko-fi.com/jakobsteiner" target="_blank" class="kofi-link">
-							<img
-								src="/assets/kofi/support_me_on_kofi_dark.png"
-								alt="Support me on Ko-fi"
-								class="kofi-button-img kofi-button-light-theme"
-							/>
-							<img
-								src="/assets/kofi/support_me_on_kofi_beige.png"
-								alt="Support me on Ko-fi"
-								class="kofi-button-img kofi-button-dark-theme"
-							/>
-						</a>
+							<a :href="DONATION_URL" target="_blank" class="kofi-link">
+								<img
+									src="/assets/kofi/support_me_on_kofi_dark.png"
+									alt="Support me on Ko-fi"
+									class="kofi-button-img kofi-button-light-theme"
+								/>
+								<img
+									src="/assets/kofi/support_me_on_kofi_beige.png"
+									alt="Support me on Ko-fi"
+									class="kofi-button-img kofi-button-dark-theme"
+								/>
+							</a>
+						</template>
 
 						<ion-list>
 							<ion-item>
@@ -76,12 +78,7 @@
 							</ion-item>
 						</ion-list>
 
-						<ion-button
-							expand="block"
-							href="https://github.com/steinerjakob/FireYak"
-							target="_blank"
-							class="support-button"
-						>
+						<ion-button expand="block" :href="GITHUB_URL" target="_blank" class="support-button">
 							<ion-icon :icon="logoGithub" slot="start"></ion-icon>
 							{{ $t('about.viewOnGitHub') }}
 						</ion-button>
@@ -142,9 +139,13 @@ import { Capacitor } from '@capacitor/core';
 import { version } from '@/../package.json';
 import { useWhatsNew } from '@/composable/whatsNew';
 import { useDataFreshness } from '@/composable/dataFreshness';
+import { DONATION_URL, GITHUB_URL } from '@/helper/appStoreInfos';
 
 const { openHistory } = useWhatsNew();
 const { planetTimestamp, load: loadDataFreshness, formatted } = useDataFreshness();
+
+/** Donation links are web-only — see DONATION_URL for the store-policy reason. */
+const showDonation = !Capacitor.isNativePlatform();
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
 
