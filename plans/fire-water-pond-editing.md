@@ -78,11 +78,23 @@ Tap the pond marker, then **Edit**. The form opens with the **pond section**.
   details are changed."* The delete button becomes **"Not a fire pond anymore"**
   (unflag).
 
-### B. Add a pond with long-press → type "Fire water pond"
-1. The user long-presses, the add form opens, and the user picks the
-   *Fire water pond* type.
-2. **If online**, FireYak looks up water areas **at or next to** the pressed point
-   (see §3).
+### B. Add a pond (add button **or** long-press) → type "Fire water pond"
+Both entry points are equal:
+- **Add button (FAB):** `MainMap.vue → startAdding()` uses the **map centre** as
+  `pendingLocation`.
+- **Long-press:** uses the pressed point.
+
+Both call `markerEditStore.requestStartAdding(location)` and open the same form. The
+pond logic therefore keys only off `pendingLocation` and the selected type, never off
+how the form was opened. A "Fire water pond" option in the type select is enough. No
+separate button is needed.
+
+1. The add form opens. The user picks *Fire water pond*, or it is **suggested** when
+   the Protomaps check (§B2) finds pond-like water under the pin.
+2. **If online** and the Protomaps check finds water (or cannot tell), FireYak looks
+   up water areas **at or next to** the pin (see §2.1). With the add button, the user
+   pans the map so the crosshair sits on the pond. With long-press, the pressed point
+   is used. Dragging the pin runs the lookup again.
    - **Candidates found:** show an action sheet or inline card:
      - "Use water area *Löschteich Musterdorf* (≈ 450 m²)": flag the existing area
        (flow A with `emergency=fire_water_pond` prefilled).
@@ -90,6 +102,49 @@ Tap the pond marker, then **Edit**. The form opens with the **pond section**.
    - **Nothing found:** create a node, as for the other types.
 3. **If offline:** node only, with a short hint that existing water areas can only be
    used online. The node goes into the offline queue as usual.
+
+### B2. Detecting water from the Protomaps layer: what is possible
+
+I checked the Protomaps basemap source (`tiles/…/layers/Water.java`, v4 schema) to see
+what the `water` source layer contains:
+
+| Available in the tile | Not available |
+|---|---|
+| Polygon geometry of water areas from z6 (not simplified away at z14/z15) | **OSM ID**: water polygons get no `setId(...)`. Only line features and label points do. |
+| `kind`: `water`, `lake` (also for `landuse=reservoir`), `basin`, `swimming_pool`, `ocean`, … | **Name**: names sit on separate label points, not on the polygon |
+| `kind_detail`: the OSM `water=*` value, e.g. `pond`, `reservoir`, `basin` | **Exact outline**: polygons are clipped at tile edges, and `postProcess` runs `mergeNearbyPolygons`, so neighbouring ponds can arrive as one shape |
+| Works **offline** (tiles come through `offline://`, also in downloaded areas) | Any OSM tags beyond `kind`/`kind_detail` |
+
+**Conclusion:** Protomaps can answer *"is there water under the pin, and what kind?"*
+It can draw an approximate outline right away and offline. It **cannot identify the
+OSM object to tag**, because there is no ID. Flagging an existing area therefore
+still needs the Overpass lookup (§2.1). Use Protomaps as a fast, free **pre-check**
+before that lookup:
+
+1. On `pendingLocation` change (add mode), run
+   `map.queryRenderedFeatures(map.project(pin), { layers: [<protomaps water fill layer ids>] })`.
+   Check the real layer IDs that `@protomaps/basemaps` generates in our flavors,
+   typically `water`. Fall back to `querySourceFeatures` with `sourceLayer: 'water'`
+   plus a point-in-polygon test when the layer is not rendered (satellite mode).
+2. Use the result to:
+   - **Suggest the type:** if `kind_detail ∈ {pond, reservoir, basin}` or
+     `kind = basin`, show a chip *"Water detected: add as fire water pond?"*. Do not
+     switch the type automatically, because the same spot may be a suction point.
+   - **Skip Overpass** when there is no water under or near the pin. This saves
+     rate-limit budget and goes straight to "add as point".
+   - **Show the large-water hint (§D) early** for `kind = lake|ocean|river`. Use the
+     tile polygon area as a rough size.
+   - **Highlight right away:** draw the tile polygon as a temporary outline until the
+     Overpass candidate (`out geom`) replaces it with the exact shape.
+   - **Offline:** water detected but no Overpass → offer *"Add as point"* with the
+     hint *"Connect to the internet to mark the existing water area instead."*
+3. Always run Overpass if Protomaps finds nothing but the user still chooses the pond
+   type. The tiles may be older than OSM, and small ponds below the min pixel size can
+   be missing.
+
+Possible later step: Overpass could be replaced by a lookup in FireYak's own static
+extract, if that extract one day also contains `natural=water` areas with IDs
+(see `plans/selfhost-osm-data.md`). Protomaps itself will not provide IDs.
 
 ### C. Duplicate guard
 Before a pond node is created, check the local cache for an existing
@@ -256,9 +311,17 @@ Show the element type (icon or text "Area"). Unflag edits are shown as
 Derive both from `baseTags` and `tags`.
 
 **2.5 Add flow in `MarkerEdit.vue` / `markerEditStore`**
-- `watch(emergencyType)`: when it is `'fire_water_pond'` while `isAdding` and online,
-  debounce (`helper.ts`), then call `fetchWaterAreasAt(pendingLocation)`, then fill
-  `areaCandidates`.
+- The flow works the same from the add button (map centre) and from long-press, because
+  both end in `requestStartAdding(location)`. No entry-point-specific code.
+- New helper `detectWaterAt(map, lngLat)` in `src/mapHandler/waterDetection.ts`. It
+  runs the Protomaps check from §B2 and returns
+  `{ kind, kindDetail, polygon, approxAreaM2 } | null`. `MainMap.vue` owns the map
+  instance, so it calls the helper when `pendingLocation` changes in add mode and
+  writes the result to `markerEditStore.detectedWater`.
+- `watch([emergencyType, pendingLocation])`: when the type is `'fire_water_pond'`,
+  `isAdding` is true, the app is online, and `detectedWater` is not `null` (or the
+  user explicitly picked the pond type), debounce (`helper.ts`), then call
+  `fetchWaterAreasAt(pendingLocation)`, then fill `areaCandidates`.
 - Show the candidates as a card at the top of the form. Selecting one calls
   `startFlagging`. "As point" keeps the node flow.
 - Run the lookup again when the pin is dragged. Keep the debounce, because of Overpass rate limits.
@@ -269,9 +332,8 @@ Derive both from `baseTags` and `tags`.
   focused, load `out geom` and draw it as a temporary GeoJSON `fill` + `line` layer
   in `MainMap.vue`. This lets the user see which polygon is being tagged. This is the
   most important visual aid for flow B.
-- **Tap on water to flag:** in "add" mode, query the Protomaps `water` layer at the
-  tapped point. Protomaps does not carry OSM IDs, so this only detects that there is
-  water there, and the actual lookup still runs through 2.1.
+- **Tap on water to flag:** tapping a water area outside add mode opens a small
+  popup, *"Mark as fire water pond"*. It uses the §B2 detection, then the §2.1 lookup.
 - **"Add suction point at the shore"** as a quick action on the pond info panel
   (the same as flow E, but available at any time).
 - **Node to area upgrade** (pond node sits inside an unflagged water area): offer to
@@ -309,7 +371,8 @@ Derive both from `baseTags` and `tags`.
 | `src/components/MarkerInfoHeader.vue` | allow editing for `fire_water_pond` |
 | `src/components/MarkerEdit.vue` | pond section, locked type for areas, candidate card, area hint |
 | `src/components/MarkerEditHeader.vue` | title or delete icon → "unflag" for areas |
-| `src/components/MainMap.vue` | no drag marker for areas; (Phase 3) outline layer |
+| `src/components/MainMap.vue` | no drag marker for areas; run Protomaps water detection on `pendingLocation`; outline layer |
+| `src/mapHandler/waterDetection.ts` (new) | Protomaps `water` layer query → `kind`, `kind_detail`, polygon, approximate area |
 | `src/views/PendingEditsView.vue` | element type and flag/unflag label |
 | `src/locales/en.json`, `de.json` | all new strings |
 | `src/assets/whats-new.json` | `unreleased` entry (AGENTS.md §6) |
@@ -335,6 +398,11 @@ Otherwise, review the changesets carefully.
 3. Edit a relation pond: `modify relation`, members unchanged.
 4. Long-press next to an unflagged pond, pick "Fire water pond": the candidate appears.
    Use it: the way gets `emergency=fire_water_pond`, and `natural=water` stays.
+4b. Same check through the **add button**: pan the map so the crosshair is on the pond,
+   then press add and pick the pond type. The same candidate appears.
+4c. With the pin on the water, the "Water detected" chip appears, also in flight mode.
+   With the pin on dry land, Overpass is not called for the candidate search (check
+   the network log).
 5. Same place, "As point": a node is created with `emergency=fire_water_pond`,
    `natural=water` and `water=pond`.
 6. Offline: node creation goes into the queue. A way pond edit goes into the queue
