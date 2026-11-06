@@ -1,12 +1,17 @@
 {
-	"unreleased": [
-		{
-			"type": "fix",
-			"en": "Switching your phone to dark mode while the app is in the background now takes effect as soon as you reopen it.",
-			"de": "Ein Wechsel in den Dunkelmodus im Hintergrund wirkt jetzt sofort, sobald die App wieder geöffnet wird."
-		}
-	],
+	"unreleased": [],
 	"releases": [
+		{
+			"version": "2.19.0",
+			"date": "2026-11-06",
+			"entries": [
+				{
+					"type": "fix",
+					"en": "Switching your phone to dark mode while the app is in the background now takes effect as soon as you reopen it.",
+					"de": "Ein Wechsel in den Dunkelmodus im Hintergrund wirkt jetzt sofort, sobald die App wieder geöffnet wird."
+				}
+			]
+		},
 		{
 			"version": "2.18.0",
 			"date": "2026-08-07",

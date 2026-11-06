@@ -1,6 +1,15 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.19.0] - 2026-11-06
+
+### Features
+
+- Add pipe hydrant and Perrot coupling support (#102)
+
+### Bug Fixes
+
+- *(theme)* Follow the system dark mode switch again after a resume (#100)
 ## [2.18.0] - 2026-08-07
 
 ### Features
@@ -25,12 +34,15 @@ All notable changes to FireYak.
 ### Features
 
 - *(water-sources)* Read markers from a self-hosted static OSM extract (#94)
-## [2.16.0] - 2026-07-15
 
 ### Bug Fixes
 
 - *(marker-cache)* Increment cache version on marker edits and sync actions
-- *(pump-calculation)* Open marker chooser via touch long-press on mobile
+
+### Chore
+
+- *(map)* Adjust tunnel and label colors in Protomaps flavors
+## [2.16.0] - 2026-07-15
 
 ### Features
 
@@ -43,9 +55,12 @@ All notable changes to FireYak.
 - *(pump-calculation)* Add elevation profile chart component
 - *(pump-calculation)* Select result entries via map markers instead of popups
 
+### Bug Fixes
+
+- *(pump-calculation)* Open marker chooser via touch long-press on mobile
+
 ### Chore
 
-- *(map)* Adjust tunnel and label colors in Protomaps flavors
 - *(ui)* Remove iOS-specific condition in WhatsNewModal
 - *(whats-new)* Announce offline area detail view and terrain default
 - *(docs)* Remove outdated WhatsNewModal entries and minor translation fix
@@ -71,6 +86,12 @@ All notable changes to FireYak.
 - *(workflows)* Add Ruby setup for caching and simplify dependency management
 ## [2.15.0] - 2026-07-10
 
+### Features
+
+- *(whats-new)* Show feature overview on first launch
+- *(app)* Show What's New popup after updates
+- *(map)* Marker path line toggle, distance cap, and UI-aware fit padding
+
 ### Bug Fixes
 
 - *(theme)* Reduce popup frost blur to 4px for improved balance
@@ -79,12 +100,6 @@ All notable changes to FireYak.
 - *(theme)* Frost ios glass popups for readability
 - *(whats-new)* Apply ios26 liquid-glass style to the popup
 - *(lint)* Migrate eslint config to v10 flat config, clean dead imports
-
-### Features
-
-- *(whats-new)* Show feature overview on first launch
-- *(app)* Show What's New popup after updates
-- *(map)* Marker path line toggle, distance cap, and UI-aware fit padding
 
 ### Build
 
@@ -98,38 +113,16 @@ All notable changes to FireYak.
 - *(whats-new)* Polish German wording of release notes
 - Share project verify skill, ignore local build/agent artifacts
 
-### Ci
-
-- Harden pipelines and add unified release workflow
-
 ### Docs
 
 - Refresh AGENTS.md to current architecture and pipelines
 - Add feature and pipeline plans
 - Add issue/PR templates and What's New maintenance rule
+
+### Ci
+
+- Harden pipelines and add unified release workflow
 ## [2.14.0] - 2026-07-08
-
-### Bug Fixes
-
-- *(map)* Avoid wasted startup Overpass fetch; quieten Overpass client
-- *(theme)* Harmonize color palette with new MD3 token values
-- *(theme)* Emit -rgb tokens as bare triplets so Ionic alpha states work
-- *(theme)* Card and snackbar typography per MD3
-- *(theme)* Use headline/title scale for headings instead of display
-- *(theme)* Size buttons per MD3 spec (40px default, 32px small, 56px large)
-- *(ui)* Stack labels on pump and hose number inputs
-- *(pump)* Round displayed elevation difference to whole meters
-- *(pump)* Correct hose counts, elevation-0 handling and steep-terrain loop
-- *(map)* Reconnect simplified T-junctions; nearby view zoom + highlight
-- *(map)* Stop terrain routes from looping around whole blocks
-- *(map)* Anchor the path distance label to the route midpoint
-- *(map)* Route around building blocks instead of falling back to straight lines
-- *(offline)* Clip the capture-rect scrim to the picker map
-- *(ui)* Use readable text token instead of surface-mapped medium color
-- *(map)* Reduce Overpass load and surface fetch activity
-- *(offline)* Clone records to plain objects before IndexedDB writes
-- *(pwa)* Raise workbox precache limit for the grown main chunk
-- *(overpass)* Send queries via POST to avoid URL encoding issues
 
 ### Features
 
@@ -165,6 +158,28 @@ All notable changes to FireYak.
 - *(overpass)* Clamp oversized area query bounds
 - *(overpass)* Per-attempt timeouts and instance pool with 429 cool-down
 
+### Bug Fixes
+
+- *(map)* Avoid wasted startup Overpass fetch; quieten Overpass client
+- *(theme)* Harmonize color palette with new MD3 token values
+- *(theme)* Emit -rgb tokens as bare triplets so Ionic alpha states work
+- *(theme)* Card and snackbar typography per MD3
+- *(theme)* Use headline/title scale for headings instead of display
+- *(theme)* Size buttons per MD3 spec (40px default, 32px small, 56px large)
+- *(ui)* Stack labels on pump and hose number inputs
+- *(pump)* Round displayed elevation difference to whole meters
+- *(pump)* Correct hose counts, elevation-0 handling and steep-terrain loop
+- *(map)* Reconnect simplified T-junctions; nearby view zoom + highlight
+- *(map)* Stop terrain routes from looping around whole blocks
+- *(map)* Anchor the path distance label to the route midpoint
+- *(map)* Route around building blocks instead of falling back to straight lines
+- *(offline)* Clip the capture-rect scrim to the picker map
+- *(ui)* Use readable text token instead of surface-mapped medium color
+- *(map)* Reduce Overpass load and surface fetch activity
+- *(offline)* Clone records to plain objects before IndexedDB writes
+- *(pwa)* Raise workbox precache limit for the grown main chunk
+- *(overpass)* Send queries via POST to avoid URL encoding issues
+
 ### Chore
 
 - *(theme)* Map Ionic color variables to MD3 tokens for iOS compatibility
@@ -178,14 +193,14 @@ All notable changes to FireYak.
 - Add project review and improvements plan
 ## [2.13.0] - 2026-04-30
 
-### Bug Fixes
-
-- Preserve cached markers when updateNodeCache is aborted or fails
-
 ### Features
 
 - Add loading indicator for marker fetching
 - Add request cancellation, fallback, and timeout handling to Overpass API
+
+### Bug Fixes
+
+- Preserve cached markers when updateNodeCache is aborted or fails
 
 ### Other
 
@@ -208,18 +223,19 @@ All notable changes to FireYak.
 - Apply theme color to search action buttons
 ## [2.11.0] - 2026-03-28
 
-### Bug Fixes
-
-- Load PROTOMAPS_API_KEY from environment variables
-- Adjust popup position
-- Adjust clustering settings
-
 ### Features
 
 - Add address search bar with photon geocoder (#71)
 - Add mapterhorn 3d terrain source (#70)
 - Support for editing AWWA Class
 - Add chips with preselected values
+
+### Bug Fixes
+
+- Load PROTOMAPS_API_KEY from environment variables
+- Adjust popup position
+- Adjust clustering settings
+- Allow clearing any input during edit
 
 ### Build
 
@@ -230,7 +246,6 @@ All notable changes to FireYak.
 ### Bug Fixes
 
 - Supply pipe polyline not showing after layer change (#69)
-- Allow clearing any input during edit
 ## [2.10.2] - 2026-03-20
 
 ### Bug Fixes
@@ -264,10 +279,6 @@ All notable changes to FireYak.
 - Browser background theme color
 - Reconcile deleted nodes from cache when fetching fresh marker data
 
-### Build
-
-- Bump husky and re-enable git hooks
-
 ### Ci
 
 - Remove unuse upload metadata lanes
@@ -276,21 +287,26 @@ All notable changes to FireYak.
 
 - Update app name
 - Update store listings for Android and iOS
-## [2.9.0] - 2026-03-06
 
-### Bug Fixes
+### Build
 
-- Move version commit after deployment in Android workflow and simplify git operations
-
-### Features
-
-- Add comprehensive SEO, metadata, and sitemap configuration
+- Bump husky and re-enable git hooks
 
 ### Chore
 
 - Update eslint configuration
 - Enable pre commit hooks
 - Reformat with prettier
+## [2.9.0] - 2026-03-06
+
+### Features
+
+- Add comprehensive SEO, metadata, and sitemap configuration
+
+### Bug Fixes
+
+- Move version commit after deployment in Android workflow and simplify git operations
+- Commit version changes before fetching/rebasing in CI workflows
 
 ### Docs
 
@@ -301,14 +317,9 @@ All notable changes to FireYak.
 
 ### Bug Fixes
 
-- Commit version changes before fetching/rebasing in CI workflows
 - Re-enable deep link handling for app URL opens
 - Exclude land.html from service worker caching and navigation fallback
 ## [2.8.0] - 2026-03-03
-
-### Bug Fixes
-
-- Remove extra ampersand in CARTO attribution text
 
 ### Features
 
@@ -322,6 +333,10 @@ All notable changes to FireYak.
 - Update dark mode styling to consider satellite map layer selection
 - Add map layer selector with satellite and standard options
 
+### Bug Fixes
+
+- Remove extra ampersand in CARTO attribution text
+
 ### Other
 
 - Improve OSM auth flow and cleanup
@@ -330,14 +345,14 @@ All notable changes to FireYak.
 - Centralize OAuth logic in reusable service
 - Remove OSM hydrant guide card from About page
 
+### Ci
+
+- Remove push trigger from GitHub Pages deployment workflow
+
 ### Chore
 
 - Replace @capgo/inappbrowser with @capacitor/inappbrowser in dependencies
 - IOS location permission descriptions with FireYak-specific context
-
-### Ci
-
-- Remove push trigger from GitHub Pages deployment workflow
 
 ### Docs
 
@@ -353,12 +368,11 @@ All notable changes to FireYak.
 
 - Add ios applink support
 ## [2.5.0] - 2026-02-26
-## [2.4.3] - 2026-02-26
 
 ### Features
 
 - Add apple-app-site-association file for iOS universal links
-## [2.4.2] - 2026-02-26
+## [2.4.3] - 2026-02-26
 
 ### Bug Fixes
 
@@ -367,11 +381,12 @@ All notable changes to FireYak.
 ### Chore
 
 - Downgrade vue-router to 4.6.4 in package.json
-## [2.4.1] - 2026-02-26
+## [2.4.2] - 2026-02-26
 
 ### Other
 
 - Replace `Capacitor.getPlatform()` calls with `isNativeIos` computed property
+## [2.4.1] - 2026-02-26
 ## [2.4.0] - 2026-02-26
 
 ### Features
@@ -418,21 +433,6 @@ All notable changes to FireYak.
 - Restrict marker editing to fire hydrants with emergency tags
 ## [2.2.0] - 2026-02-24
 
-### Bug Fixes
-
-- Invalid json format
-
-### Other
-
-- Comment out unused tag description fields in MarkerEdit component
-- Simplify and consolidate MD3 theme styles
-## [2.1.3] - 2026-02-24
-## [2.1.2] - 2026-02-21
-
-### Bug Fixes
-
-- Update DE locale for hydrant pressure descriptions
-
 ### Features
 
 - Improve authentication and UX for marker editing
@@ -441,10 +441,22 @@ All notable changes to FireYak.
 - Update OSM authentication configuration
 - Add marker editing feature
 
+### Bug Fixes
+
+- Invalid json format
+- Update DE locale for hydrant pressure descriptions
+
+### Other
+
+- Comment out unused tag description fields in MarkerEdit component
+- Simplify and consolidate MD3 theme styles
+- Adjust OSM authentication and add redirect handling
+## [2.1.3] - 2026-02-24
+## [2.1.2] - 2026-02-21
+
 ### Other
 
 - Consolidate spacing overrides and enhance MD3 component styling
-- Adjust OSM authentication and add redirect handling
 
 ### Style
 
@@ -456,10 +468,6 @@ All notable changes to FireYak.
 - Initialize theme system on app startup
 ## [2.1.0] - 2026-02-01
 
-### Bug Fixes
-
-- Theme switching did not work properly
-
 ### Features
 
 - Add guard to prevent invalid pressure inputs
@@ -467,14 +475,18 @@ All notable changes to FireYak.
 - Add settings page
 - Add zoom buttons to map
 
-### Build
+### Bug Fixes
 
-- Add AGENTS.md file
+- Theme switching did not work properly
 
 ### Ci
 
 - Improve versioning
 - Generate apk to provide it on github
+
+### Build
+
+- Add AGENTS.md file
 ## [2.0.2] - 2025-12-04
 
 ### Bug Fixes
@@ -499,28 +511,6 @@ All notable changes to FireYak.
 - Update permissions
 - Configure semantic versionings
 ## [2.0.0] - 2025-12-03
-
-### Bug Fixes
-
-- Location request in web
-- Adjust marker info modal breakpoints and scroll behavior
-- Improve pump placement logic (#42)
-- Update clustering zoom behavior and improve marker cluster interactions
-- Do not show marker info panel
-- Enhance navigation URLs by platform in MarkerInfoHeader for improved map integration
-- Correct localization key for "tubes" in en.json
-- Improve tube calculation accuracy and simplify distance handling
-- Rename pumpCalculation store to pumpCalculationSettings
-- Waypoint deletion popup not appearing
-- Improve pump count
-- Do not require gps hardware
-- Update URL splitting logic for route slug parsing
-- Standardize route path casing for "supplypipe" references
-- Update share message text for more accurate description
-- Icon name casing
-- Icon name casing
-- Update marker URL to use absolute path
-- Handle null fallback for `fetchMarkerById`
 
 ### Features
 
@@ -671,6 +661,28 @@ All notable changes to FireYak.
 - Map fullscreen
 - Add first leaflet map
 
+### Bug Fixes
+
+- Location request in web
+- Adjust marker info modal breakpoints and scroll behavior
+- Improve pump placement logic (#42)
+- Update clustering zoom behavior and improve marker cluster interactions
+- Do not show marker info panel
+- Enhance navigation URLs by platform in MarkerInfoHeader for improved map integration
+- Correct localization key for "tubes" in en.json
+- Improve tube calculation accuracy and simplify distance handling
+- Rename pumpCalculation store to pumpCalculationSettings
+- Waypoint deletion popup not appearing
+- Improve pump count
+- Do not require gps hardware
+- Update URL splitting logic for route slug parsing
+- Standardize route path casing for "supplypipe" references
+- Update share message text for more accurate description
+- Icon name casing
+- Icon name casing
+- Update marker URL to use absolute path
+- Handle null fallback for `fetchMarkerById`
+
 ### Other
 
 - Extract pump calculation logic into composable
@@ -697,6 +709,23 @@ All notable changes to FireYak.
 - Updated favicon
 - Disable vite pwa for now
 
+### Ci
+
+- Autogenerate version
+- Add PAT_TOKEN to GitHub Actions checkout step
+- Create main.yml (#31)
+
+### Docs
+
+- Update README.md
+- Improved readme and added logo
+- Improved readme and added logo
+- Initial readme
+
+### Style
+
+- Update About button color to light in MainMap FAB
+
 ### Chore
 
 - Use full screen of app
@@ -722,20 +751,3 @@ All notable changes to FireYak.
 - Lint-staged
 - Added commitlint with husky
 - Add prettier
-
-### Ci
-
-- Autogenerate version
-- Add PAT_TOKEN to GitHub Actions checkout step
-- Create main.yml (#31)
-
-### Docs
-
-- Update README.md
-- Improved readme and added logo
-- Improved readme and added logo
-- Initial readme
-
-### Style
-
-- Update About button color to light in MainMap FAB
