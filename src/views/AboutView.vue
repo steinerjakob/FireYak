@@ -78,12 +78,7 @@
 							</ion-item>
 						</ion-list>
 
-						<ion-button
-							expand="block"
-							href="https://github.com/steinerjakob/FireYak"
-							target="_blank"
-							class="support-button"
-						>
+						<ion-button expand="block" :href="GITHUB_URL" target="_blank" class="support-button">
 							<ion-icon :icon="logoGithub" slot="start"></ion-icon>
 							{{ $t('about.viewOnGitHub') }}
 						</ion-button>
@@ -144,7 +139,7 @@ import { Capacitor } from '@capacitor/core';
 import { version } from '@/../package.json';
 import { useWhatsNew } from '@/composable/whatsNew';
 import { useDataFreshness } from '@/composable/dataFreshness';
-import { DONATION_URL } from '@/helper/appStoreInfos';
+import { DONATION_URL, GITHUB_URL } from '@/helper/appStoreInfos';
 
 const { openHistory } = useWhatsNew();
 const { planetTimestamp, load: loadDataFreshness, formatted } = useDataFreshness();

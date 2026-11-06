@@ -1,3 +1,6 @@
+/** Project repository; the native builds link here instead of DONATION_URL. */
+export const GITHUB_URL = 'https://github.com/steinerjakob/FireYak';
+
 export const APP_STORE_URLS = {
 	ios: 'https://apps.apple.com/app/id6759717059',
 	android: 'https://play.google.com/store/apps/details?id=at.jst.fireyak'
