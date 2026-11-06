@@ -14,8 +14,8 @@ The goal is to let users:
 2. **Flag** an existing water area that is already in OSM but not tagged as a fire pond
    (add `emergency=fire_water_pond` to it). No geometry editing is needed.
 3. **Add** a new fire water pond when there is no water area to use. FireYak creates
-   a **node** for it. This is valid OSM tagging, and mappers can turn it into an
-   area later.
+   a **node** tagged `emergency=fire_water_pond` + `natural=water` + `water=pond`.
+   The wiki allows both tags on nodes, and mappers can turn the node into an area later.
 4. **Remove** the fire pond flag from a way or relation **without deleting the water
    body**.
 
@@ -42,16 +42,29 @@ shared nodes, and keeps the risk to OSM data low.
 
 ---
 
-## OSM tagging reference (check against the wiki before implementation)
+## OSM tagging reference (checked against the wiki)
 
-- `emergency=fire_water_pond`: allowed on **node** and **area**.
-  <https://wiki.openstreetmap.org/wiki/Tag:emergency%3Dfire_water_pond>
-- Useful sub-tags for the form: `name`, `water_volume` (m³), `access`,
-  `operator`, `couplings`, `couplings:type`, `seasonal` / `intermittent`,
-  `description`, `note`.
-- Leave the water body's own tags as they are (`natural=water`, `water=*`, `landuse=*`).
-- A suction point on the pond shore can be a separate `emergency=suction_point` node.
-  This is a possible follow-up: "add suction point here".
+Source: <https://wiki.openstreetmap.org/wiki/Tag:emergency%3Dfire_water_pond>
+(status *in use*), plus the `natural=water` and `emergency=suction_point` pages.
+
+| Rule from the wiki | What it means for FireYak |
+|---|---|
+| `onNode=yes`, `onArea=yes`, `onWay=no`, `onRelation=no` | Nodes and areas are both valid. An "area" is a closed way **or a multipolygon relation** (the wiki convention counts multipolygons under `onArea`; `onRelation=no` only rules out other relation types). Never tag an open way or a non-multipolygon relation. |
+| *"requires `natural=water` or similar"* / *"use in conjunction with a tag for the physical object, typically `natural=water` + `water=pond`"* | `emergency=fire_water_pond` is an **add-on tag**, never a feature by itself. **New pond nodes must also get `natural=water` + `water=pond`** (`natural=water` is `onNode=yes`). When flagging an area, the physical tag is already there. When unflagging, the physical tag stays. |
+| *"A man made or natural pond … specifically designed or selected (in case of a natural one)"* | Natural ponds may be flagged. The pond only needs to be one the fire service actually uses. |
+| *"For the specific point where the fire department can pump water, `emergency=suction_point` is used instead."* | The pump or parking spot is a **separate** `emergency=suction_point` node (`onNode=yes`, `onArea=no`). Pipe connections are `emergency=fire_hydrant` + `fire_hydrant:type=pipe` + `fire_hydrant:pressure=suction`. Couplings therefore belong on that hydrant or suction point, **not on the pond**. |
+| The wiki documents **no pond-specific sub-tags** | Keep the form small and use only general keys (see 1.6). |
+
+**Tags FireYak writes:**
+
+- **New pond node:** `emergency=fire_water_pond`, `natural=water`, `water=pond`. The
+  user can switch `water` to `reservoir` or `basin`. Optional fields come from the form.
+- **Flag an existing area:** add `emergency=fire_water_pond`. Do not change any other tag.
+- **Unflag:** remove `emergency=fire_water_pond` and the FireYak-only sub-tags. Keep
+  `natural=water`, `water=*`, `name` and everything else.
+
+The candidate search accepts the same "or similar" physical tags: `natural=water`,
+`landuse=reservoir`, `landuse=basin`.
 
 ---
 
@@ -84,10 +97,20 @@ Before a pond node is created, check the local cache for an existing
 If there is one, offer "Edit existing pond" instead.
 
 ### D. Large water bodies (quality guard)
-If a candidate has `water=lake|river|canal|reservoir`, or its bounding box is larger
-than about 2 ha, still list it but show a warning and suggest a
-**suction point node** instead. Fire ponds are artificial or dedicated ponds, and
-flagging a lake is usually wrong tagging. Never offer `waterway=*` lines.
+The wiki allows natural ponds that the fire service has *selected*, so flagging
+them is not wrong. For large or flowing water, though, the useful information is the
+access point, not the whole water body.
+- If a candidate has `water=lake|river|canal|stream`, or its bounding box is larger
+  than about 2 ha, still list it, but show a hint: *"For lakes and rivers, mark the
+  pumping spot as a suction point instead."* Include a button that switches the form
+  to `suction_point` at the pressed location.
+- Never offer `waterway=*` lines. They are not areas, and the tag is `onWay=no`.
+
+### E. Pumping spot at a pond
+After a pond is saved, show the hint *"Add the pumping spot as a suction point?"*.
+It opens the add form with type `suction_point` at the current pin. This follows the
+wiki's split between the pond (water supply) and the suction point (where the engine
+parks and pumps).
 
 ---
 
@@ -150,11 +173,27 @@ Add `'fire_water_pond'` to `editAllowed`.
 **1.6 `MarkerEdit.vue`: pond section**
 - Type select: add `<ion-select-option value="fire_water_pond">`. Lock it
   (`:disabled="markerEditStore.isArea"`) for areas.
-- New `<ion-item-group v-if="emergencyType === 'fire_water_pond'">` with: `name`,
-  `water_volume` (number, m³), `access`, `operator`, `couplings`/`couplings:type`,
-  `seasonal` (yes/no/—).
-- `onTypeChange`: also remove pond-specific tags when the type changes away from
-  `fire_water_pond`. This only matters for nodes, because the type is locked for areas.
+- New `<ion-item-group v-if="emergencyType === 'fire_water_pond'">`. The wiki
+  documents no pond sub-tags, so the form uses only general, widely used keys:
+  - `name`
+  - `water` (select `pond` / `reservoir` / `basin`). Editable for nodes. For areas,
+    show it read-only, because it describes the existing water body.
+  - `access` (reuse the existing `accessOptions`)
+  - `operator`
+  - `intermittent` (yes/no/—). This is the `natural=water` combination key for ponds
+    that dry out, and it matters to firefighters.
+  - `water_volume` (m³), marked as optional. It is not documented on the pond page,
+    so it needs a taginfo check before release. If it is barely used, leave it out.
+  - **No** `couplings*`. Those belong on a suction point or pipe hydrant (see the
+    tagging reference).
+- `onTypeChange` (nodes only, because the type is locked for areas):
+  - Switching **to** `fire_water_pond`: set `natural=water` and `water=pond` if they
+    are missing.
+  - Switching **away**: remove `emergency`-specific pond fields. Also remove
+    `natural`/`water`, but **only if FireYak added them in this session**. Track this
+    with a flag, so physical tags that were already on the object are never removed.
+- Save validation: a pond must have `natural=water`, `landuse=reservoir|basin` or a
+  similar physical tag. Otherwise block the save. The wiki says the physical tag is required.
 - Add any new keys to `relevantTags`. Make sure tags that are not shown
   (`natural`, `water`, …) are **not removed** from `editableTags`. Today this works
   because `editableTags` starts as a copy of all tags. Keep it that way.
@@ -200,8 +239,12 @@ originalMarker.value = candidate;      // baseTags = the real server tags, witho
 **2.3 Unflag instead of delete for areas**
 - `requestDeleteMarker`: if `isArea`, show a different dialog: *"Remove the fire pond
   information? The water area itself stays in OpenStreetMap."*
-- Implementation: an `update` with the tags minus `emergency` and the pond-only sub-tags
-  (`water_volume`, `couplings*`, …). `natural=water`, `name` etc. stay.
+- Implementation: an `update` with the tags minus `emergency` and `water_volume`.
+  The physical tags (`natural=water`, `water=*`, `intermittent`) and `name`, `access`,
+  `operator` stay. They describe the water body and are valid without the flag.
+- Node ponds: unflagging would leave a bare `natural=water` node. So for nodes, keep
+  today's **delete** behaviour, and also offer "Keep as plain water (remove fire pond
+  only)" for the case where the pond really exists but the fire service no longer uses it.
 - Cache: the element is no longer a marker, so call `deleteMapNode(toRef(type, id))`
   (with a **tombstone**). This keeps the static extract, which can lag several days,
   from showing the pond again. Check that the tombstone expires once the extract no
@@ -229,7 +272,8 @@ Derive both from `baseTags` and `tags`.
 - **Tap on water to flag:** in "add" mode, query the Protomaps `water` layer at the
   tapped point. Protomaps does not carry OSM IDs, so this only detects that there is
   water there, and the actual lookup still runs through 2.1.
-- **"Add suction point at the shore"** as a quick action on the pond info panel.
+- **"Add suction point at the shore"** as a quick action on the pond info panel
+  (the same as flow E, but available at any time).
 - **Node to area upgrade** (pond node sits inside an unflagged water area): offer to
   move the tags to the area and delete the node. Do this later and only with an extra
   confirmation, because it rewrites the history of two objects.
@@ -244,7 +288,9 @@ Derive both from `baseTags` and `tags`.
 | Coordinates are written onto a way | `lat/lon` are only set when `elementType === 'node'` |
 | Node/way ID collision in the cache or a lookup | Use `toRef(type,id)` and `fetchElementById` everywhere; deprecate `fetchNodeById` |
 | A member way of a multipolygon gets tagged | Only relations or ways with their own water tag become candidates |
-| A lake or river is flagged by mistake | Large-water warning plus a suggestion to add a suction point |
+| A lake or river is flagged by mistake | Large-water hint plus a one-tap switch to a suction point |
+| A pond is saved without a physical tag (the wiki says "requires `natural=water` or similar") | Node creation prefills `natural=water` + `water=pond`; save validation blocks ponds without a physical tag |
+| Existing physical tags are removed when the type is changed | Only remove `natural`/`water` that FireYak itself added in this edit session |
 | The static extract shows an unflagged pond again | Tombstone in `deleteMapNode` |
 | Overpass rate limit during the candidate search | Debounce, a single query, `out … 10` limit, reuse the existing cool-down pool |
 | Concurrent edit on the area | The existing `baseTags` conflict check, now type-aware |
@@ -289,7 +335,8 @@ Otherwise, review the changesets carefully.
 3. Edit a relation pond: `modify relation`, members unchanged.
 4. Long-press next to an unflagged pond, pick "Fire water pond": the candidate appears.
    Use it: the way gets `emergency=fire_water_pond`, and `natural=water` stays.
-5. Same place, "As point": a node is created.
+5. Same place, "As point": a node is created with `emergency=fire_water_pond`,
+   `natural=water` and `water=pond`.
 6. Offline: node creation goes into the queue. A way pond edit goes into the queue
    and syncs correctly after reconnecting (type `way`).
 7. Unflag a way pond: the way stays in OSM, the marker disappears, and it does not
