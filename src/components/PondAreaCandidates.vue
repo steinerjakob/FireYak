@@ -12,7 +12,8 @@ import { waterOutline, alertCircleOutline, cloudOfflineOutline } from 'ionicons/
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
-import type { WaterAreaCandidate } from '@/mapHandler/overPassApi';
+import type { OverPassElement, WaterAreaCandidate } from '@/mapHandler/overPassApi';
+import { toRef } from '@/helper/osmRef';
 
 const emit = defineEmits<{ (e: 'switch-type', type: string): void }>();
 
@@ -25,16 +26,35 @@ const LARGE_WATER_M2 = 20_000;
 const LARGE_WATER_VALUES = ['lake', 'river', 'canal', 'stream', 'oxbow', 'lagoon'];
 
 const state = computed(() => markerEditStore.areaLookupState);
+
+const refOf = (e: OverPassElement) => toRef(e.type, e.id);
+
+/**
+ * Ponds that already exist near the pin (duplicate guard): fire-pond areas
+ * from the search plus pond nodes/areas from the local marker cache, which
+ * also works offline. Each is shown once, nearest first.
+ */
+const existingPonds = computed(() => {
+	const seen = new Set<string>();
+	const list: { element: OverPassElement; distanceM: number }[] = [];
+	const add = (element: OverPassElement, distanceM: number) => {
+		const ref = refOf(element);
+		if (seen.has(ref)) return;
+		seen.add(ref);
+		list.push({ element, distanceM });
+	};
+	markerEditStore.areaCandidates
+		.filter((c) => c.element.tags['emergency'] === 'fire_water_pond')
+		.forEach((c) => add(c.element, c.inside ? 0 : c.distanceM));
+	markerEditStore.nearbyPonds.forEach((p) => add(p.element, p.distanceM));
+	return list.sort((a, b) => a.distanceM - b.distanceM);
+});
+
+/** Water areas without the flag — these can be marked as fire ponds. */
 const candidates = computed(() =>
-	markerEditStore.areaCandidates.filter(
-		(c) => c.element.tags['emergency'] == null || c.element.tags['emergency'] === 'fire_water_pond'
-	)
+	markerEditStore.areaCandidates.filter((c) => c.element.tags['emergency'] == null)
 );
 const waterNearPin = computed(() => markerEditStore.detectedWater?.status === 'water');
-
-function isExistingPond(c: WaterAreaCandidate): boolean {
-	return c.element.tags['emergency'] === 'fire_water_pond';
-}
 
 function isLarge(c: WaterAreaCandidate): boolean {
 	return (
@@ -42,8 +62,8 @@ function isLarge(c: WaterAreaCandidate): boolean {
 	);
 }
 
-function title(c: WaterAreaCandidate): string {
-	const tags = c.element.tags;
+function title(element: OverPassElement): string {
+	const tags = element.tags;
 	if (tags['name']) return tags['name'];
 	const waterKey = `markerInfo.values.water.${tags['water']}`;
 	if (tags['water'] && te(waterKey)) return t(waterKey);
@@ -60,6 +80,13 @@ function formatArea(m2: number): string {
 	return `${rounded.toLocaleString(lang)} m²`;
 }
 
+function existingSubtitle(p: { element: OverPassElement; distanceM: number }): string {
+	const kind =
+		p.element.type === 'node' ? t('markerEdit.pondAreas.point') : t('markerEdit.pondAreas.area');
+	if (p.distanceM < 5) return `${kind} · ${t('markerEdit.pondAreas.atPin')}`;
+	return `${kind} · ${t('markerEdit.pondAreas.metersAway', { m: Math.round(p.distanceM) })}`;
+}
+
 function subtitle(c: WaterAreaCandidate): string {
 	const where = c.inside ? t('markerEdit.pondAreas.atPin') : t('markerEdit.pondAreas.nextToPin');
 	return `${where} · ≈ ${formatArea(c.approxAreaM2)}`;
@@ -68,6 +95,29 @@ function subtitle(c: WaterAreaCandidate): string {
 
 <template>
 	<div class="pond-areas">
+		<!-- Duplicate guard: ponds already mapped right here -->
+		<template v-if="existingPonds.length">
+			<ion-note class="intro">{{ t('markerEdit.pondAreas.existingIntro') }}</ion-note>
+			<div v-for="p in existingPonds" :key="refOf(p.element)" class="candidate existing">
+				<div class="candidate-text">
+					<strong>{{ title(p.element) }}</strong>
+					<span>{{ existingSubtitle(p) }}</span>
+					<span class="badge">{{ t('markerEdit.pondAreas.alreadyPond') }}</span>
+				</div>
+				<div class="candidate-actions">
+					<ion-button
+						size="small"
+						fill="outline"
+						@click="markerEditStore.startEditing(p.element)"
+						>{{ t('markerEdit.pondAreas.editExisting') }}</ion-button
+					>
+				</div>
+			</div>
+			<ion-note v-if="!(state === 'done' && candidates.length)" class="intro">{{
+				t('markerEdit.pondAreas.orPoint')
+			}}</ion-note>
+		</template>
+
 		<!-- Lookup running -->
 		<ion-item v-if="state === 'loading'" lines="none">
 			<ion-spinner slot="start" name="crescent" />
@@ -90,7 +140,10 @@ function subtitle(c: WaterAreaCandidate): string {
 		</ion-item>
 
 		<ion-item
-			v-else-if="state === 'skipped' || (state === 'done' && candidates.length === 0)"
+			v-else-if="
+				(state === 'skipped' || (state === 'done' && candidates.length === 0)) &&
+				!existingPonds.length
+			"
 			lines="none"
 		>
 			<ion-icon slot="start" :icon="waterOutline" />
@@ -98,44 +151,25 @@ function subtitle(c: WaterAreaCandidate): string {
 		</ion-item>
 
 		<!-- Candidates -->
-		<template v-else-if="state === 'done'">
+		<template v-else-if="state === 'done' && candidates.length">
 			<ion-note class="intro">{{ t('markerEdit.pondAreas.intro') }}</ion-note>
-			<div
-				v-for="c in candidates"
-				:key="`${c.element.type}${c.element.id}`"
-				class="candidate"
-				:class="{ existing: isExistingPond(c) }"
-			>
+			<div v-for="c in candidates" :key="refOf(c.element)" class="candidate">
 				<div class="candidate-text">
-					<strong>{{ title(c) }}</strong>
+					<strong>{{ title(c.element) }}</strong>
 					<span>{{ subtitle(c) }}</span>
-					<span v-if="isExistingPond(c)" class="badge">{{
-						t('markerEdit.pondAreas.alreadyPond')
-					}}</span>
-					<span v-else-if="isLarge(c)" class="warning">{{
-						t('markerEdit.pondAreas.largeWater')
-					}}</span>
+					<span v-if="isLarge(c)" class="warning">{{ t('markerEdit.pondAreas.largeWater') }}</span>
 				</div>
 				<div class="candidate-actions">
+					<ion-button size="small" @click="markerEditStore.startFlagging(c)">{{
+						t('markerEdit.pondAreas.useArea')
+					}}</ion-button>
 					<ion-button
-						v-if="isExistingPond(c)"
+						v-if="isLarge(c)"
 						size="small"
-						fill="outline"
-						@click="markerEditStore.startEditing(c.element)"
-						>{{ t('markerEdit.pondAreas.editExisting') }}</ion-button
+						fill="clear"
+						@click="emit('switch-type', 'suction_point')"
+						>{{ t('markerEdit.pondAreas.useSuctionPoint') }}</ion-button
 					>
-					<template v-else>
-						<ion-button size="small" @click="markerEditStore.startFlagging(c)">{{
-							t('markerEdit.pondAreas.useArea')
-						}}</ion-button>
-						<ion-button
-							v-if="isLarge(c)"
-							size="small"
-							fill="clear"
-							@click="emit('switch-type', 'suction_point')"
-							>{{ t('markerEdit.pondAreas.useSuctionPoint') }}</ion-button
-						>
-					</template>
 				</div>
 			</div>
 			<ion-note class="intro">{{ t('markerEdit.pondAreas.orPoint') }}</ion-note>

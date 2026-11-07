@@ -620,6 +620,99 @@ export interface WaterAreaCandidate {
 	approxAreaM2: number;
 	/** Distance (m) from the pin to the area's center, for ordering. */
 	distanceM: number;
+	/** Outline for the map highlight, clipped to the search window (may be absent). */
+	outline?: GeoJSON.Geometry;
+}
+
+/** Half-size (degrees) of the window that returned outlines are clipped to. */
+const OUTLINE_CLIP_DEGREES = 0.01;
+
+interface OverpassGeomPoint {
+	lat: number;
+	lon: number;
+}
+
+interface OverpassGeomElement {
+	type: string;
+	geometry?: OverpassGeomPoint[];
+	members?: { type: string; role?: string; geometry?: OverpassGeomPoint[] }[];
+}
+
+/**
+ * Converts an Overpass `out geom` way/relation into GeoJSON for the outline
+ * highlight. A closed way becomes a Polygon (filled); a multipolygon becomes
+ * the MultiLineString of its member ways — assembling rings from split members
+ * is not worth it for a highlight. Clipped (`geom(bbox)`) output can leave gaps
+ * in the outline of large areas, which is fine for a highlight.
+ */
+export function overpassOutline(element: OverpassGeomElement): GeoJSON.Geometry | undefined {
+	const toLine = (pts: OverpassGeomPoint[] | undefined): GeoJSON.Position[] =>
+		(pts ?? []).filter((p) => p != null).map((p) => [p.lon, p.lat]);
+
+	if (element.type === 'way') {
+		const line = toLine(element.geometry);
+		if (line.length < 2) return undefined;
+		const first = line[0];
+		const last = line[line.length - 1];
+		const closed = line.length >= 4 && first[0] === last[0] && first[1] === last[1];
+		return closed
+			? { type: 'Polygon', coordinates: [line] }
+			: { type: 'LineString', coordinates: line };
+	}
+	if (element.type === 'relation') {
+		const lines = (element.members ?? [])
+			.filter((m) => m.type === 'way')
+			.map((m) => toLine(m.geometry))
+			.filter((l) => l.length >= 2);
+		return lines.length ? { type: 'MultiLineString', coordinates: lines } : undefined;
+	}
+	return undefined;
+}
+
+/** Bounds of an outline — fallback when Overpass sends no `bounds`. */
+function outlineBounds(geometry: GeoJSON.Geometry | undefined): OverpassBounds | undefined {
+	if (!geometry || !('coordinates' in geometry)) return undefined;
+	const flat = (geometry.coordinates as unknown[]).flat(3) as number[];
+	if (flat.length < 2) return undefined;
+	const b = { minlat: Infinity, minlon: Infinity, maxlat: -Infinity, maxlon: -Infinity };
+	for (let i = 0; i + 1 < flat.length; i += 2) {
+		b.minlon = Math.min(b.minlon, flat[i]);
+		b.maxlon = Math.max(b.maxlon, flat[i]);
+		b.minlat = Math.min(b.minlat, flat[i + 1]);
+		b.maxlat = Math.max(b.maxlat, flat[i + 1]);
+	}
+	return b;
+}
+
+/** `geom(s,w,n,e)` clip window around a point, so huge lakes stay small. */
+function clipWindow(lat: number, lon: number): string {
+	const d = OUTLINE_CLIP_DEGREES;
+	return `${(lat - d).toFixed(5)},${(lon - d).toFixed(5)},${(lat + d).toFixed(5)},${(lon + d).toFixed(5)}`;
+}
+
+/**
+ * Fetches the outline of one way/relation (for highlighting a selected or
+ * edited pond area), clipped to a window around `near`.
+ */
+export async function fetchElementOutline(
+	type: OsmType,
+	id: number,
+	near: { lat: number; lon: number },
+	signal?: AbortSignal
+): Promise<GeoJSON.Geometry | null> {
+	if (type === 'node') return null;
+	const keyword = OVERPASS_KEYWORD[type];
+	const query = `[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];${keyword}(${id});out geom(${clipWindow(near.lat, near.lon)});`;
+	const outerSignal = signal
+		? AbortSignal.any([signal, AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS)])
+		: AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS);
+	try {
+		const [element] = await fetchFromPool(query, outerSignal);
+		return element ? (overpassOutline(element as unknown as OverpassGeomElement) ?? null) : null;
+	} catch (e) {
+		if (!signal?.aborted) console.warn('Outline lookup failed:', e);
+		return null;
+	}
 }
 
 interface OverpassBounds {
@@ -670,6 +763,7 @@ export async function fetchWaterAreasAt(
 ): Promise<WaterAreaCandidate[] | null> {
 	const p = `${lat.toFixed(7)},${lon.toFixed(7)}`;
 	const r = WATER_AREA_NEAR_RADIUS_M;
+	const clip = clipWindow(lat, lon);
 	const filters = ['[natural=water]', '[landuse~"^(reservoir|basin)$"]'];
 	const inside = filters
 		.flatMap((f) => [`way(pivot.a)${f};`, `rel(pivot.a)[type=multipolygon]${f};`])
@@ -680,11 +774,13 @@ export async function fetchWaterAreasAt(
 	const query =
 		`[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];` +
 		`is_in(${p})->.a;(${inside})->.inside;(${near})->.near;` +
-		// `bb` and `center` are mutually exclusive output modes (Overpass keeps
-		// only one), so ask for the bounds and derive the center from them.
-		`.inside out tags bb ${WATER_AREA_MAX_RESULTS};` +
+		// `out geom` also returns each element's bounds (`center` and `bb`/`geom`
+		// are mutually exclusive, so the center is derived from the bounds). The
+		// geometry is clipped to a window around the pin so a huge lake the pin
+		// sits in stays a small response; it feeds the outline highlight.
+		`.inside out tags geom(${clip}) ${WATER_AREA_MAX_RESULTS};` +
 		`make ${WATER_AREA_SEPARATOR};out;` +
-		`(.near; - .inside;)->.nearOnly;.nearOnly out tags bb ${WATER_AREA_MAX_RESULTS};`;
+		`(.near; - .inside;)->.nearOnly;.nearOnly out tags geom(${clip}) ${WATER_AREA_MAX_RESULTS};`;
 
 	const outerSignal = signal
 		? AbortSignal.any([signal, AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS)])
@@ -706,7 +802,8 @@ export async function fetchWaterAreasAt(
 			continue;
 		}
 		if (element.type !== 'way' && element.type !== 'relation') continue;
-		const bounds = (element as { bounds?: OverpassBounds }).bounds;
+		const outline = overpassOutline(element as unknown as OverpassGeomElement);
+		const bounds = (element as { bounds?: OverpassBounds }).bounds ?? outlineBounds(outline);
 		const center =
 			element.center ??
 			(bounds
@@ -717,7 +814,8 @@ export async function fetchWaterAreasAt(
 			element: { id: element.id, type: element.type, center, tags: element.tags ?? {} },
 			inside: isInside,
 			approxAreaM2: boundsAreaM2(bounds),
-			distanceM: distanceM(lat, lon, center.lat, center.lon)
+			distanceM: distanceM(lat, lon, center.lat, center.lon),
+			outline
 		});
 	}
 

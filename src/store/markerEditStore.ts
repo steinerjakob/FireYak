@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
-import { GeoPoint } from '@/types/geo';
+import { GeoPoint, distanceTo } from '@/types/geo';
 import {
 	OverPassElement,
 	fetchWaterAreasAt,
@@ -11,7 +11,13 @@ import { debounce } from '@/helper/helper';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
-import { storeMapNodes, deleteMapNode, clearDeletedMapNode } from '@/mapHandler/databaseHandler';
+import {
+	storeMapNodes,
+	deleteMapNode,
+	clearDeletedMapNode,
+	getNearbyMapNodes
+} from '@/mapHandler/databaseHandler';
+import { rememberOutline } from '@/mapHandler/areaOutline';
 import { markerCacheVersion } from '@/mapHandler/markerHandler';
 import { toastController, alertController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
@@ -95,6 +101,14 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		'idle'
 	);
 	let areaLookupController: AbortController | null = null;
+	/**
+	 * Fire water ponds already on the map near the pin, from the local marker
+	 * cache — the duplicate guard for pond **nodes** (Overpass only returns
+	 * areas). Works offline, as far as the cache reaches.
+	 */
+	const nearbyPonds = ref<{ element: OverPassElement; distanceM: number }[]>([]);
+	/** Radius (m) in which an existing pond counts as "probably the same one". */
+	const DUPLICATE_POND_RADIUS_M = 60;
 	/** Debounce for the Overpass lookup — pin drags must not burn rate limit. */
 	const AREA_LOOKUP_DEBOUNCE_MS = 700;
 
@@ -106,12 +120,29 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		areaLookupController?.abort();
 		areaLookupController = null;
 		areaCandidates.value = [];
+		nearbyPonds.value = [];
 		areaLookupState.value = 'idle';
+	}
+
+	async function findNearbyPonds(location: GeoPoint) {
+		const nodes = await getNearbyMapNodes(location, DUPLICATE_POND_RADIUS_M);
+		if (pendingLocation.value !== location) return; // pin moved meanwhile
+		nearbyPonds.value = nodes
+			.filter((n) => n.tags?.['emergency'] === 'fire_water_pond' && n.id > 0)
+			.map((element) => {
+				const position = elementPosition(element);
+				const distanceM = position
+					? distanceTo(location, { lat: position.lat, lng: position.lon })
+					: 0;
+				return { element, distanceM };
+			})
+			.sort((a, b) => a.distanceM - b.distanceM);
 	}
 
 	const runAreaLookup = debounce(async () => {
 		const location = pendingLocation.value;
 		if (!wantsAreaLookup.value || !location) return;
+		void findNearbyPonds(location);
 		if (!isOnline.value) {
 			areaCandidates.value = [];
 			areaLookupState.value = 'offline';
@@ -133,6 +164,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		const result = await fetchWaterAreasAt(location.lat, location.lng, controller.signal);
 		if (controller.signal.aborted || areaLookupController !== controller) return;
 		areaLookupController = null;
+		for (const c of result ?? []) rememberOutline(toRef(c.element.type, c.element.id), c.outline);
 		areaCandidates.value = result ?? [];
 		areaLookupState.value = result ? 'done' : 'failed';
 	}, AREA_LOOKUP_DEBOUNCE_MS);
@@ -238,6 +270,37 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		resetAreaLookup();
 		startEditing(element);
 		editableTags.value = { ...element.tags, emergency: 'fire_water_pond' };
+	}
+
+	/**
+	 * Opens the add form for the pond's pumping spot (plan flow E): a suction
+	 * point at `location`, prefilled with `water_source=pond`. The user then
+	 * drags the pin to where the engine actually parks and pumps.
+	 */
+	async function requestAddSuctionPoint(location: GeoPoint) {
+		if (!osmAuthStore.isAuthenticated) {
+			await showAuthAlert();
+			return;
+		}
+		startAdding(location);
+		editableTags.value = { emergency: 'suction_point', water_source: 'pond' };
+	}
+
+	/** After a pond is saved, offer to add its pumping spot right away. */
+	async function offerSuctionPoint(location: GeoPoint) {
+		const toast = await toastController.create({
+			message: t('markerEdit.suctionOffer.message'),
+			duration: 6000,
+			buttons: [
+				{
+					text: t('markerEdit.suctionOffer.action'),
+					handler: () => {
+						void requestAddSuctionPoint(location);
+					}
+				}
+			]
+		});
+		await toast.present();
 	}
 
 	function cancelEdit() {
@@ -445,7 +508,14 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					color: 'success'
 				});
 				await toast.present();
+				// A newly added or newly marked pond rarely has its pumping spot
+				// mapped yet — offer it once the "saved" toast is gone.
+				const offerPumpingSpot =
+					finalTags['emergency'] === 'fire_water_pond' && (isAdding.value || isFlagging.value);
 				cancelEdit();
+				if (offerPumpingSpot) {
+					setTimeout(() => void offerSuctionPoint({ lat, lng: lon }), SAVE_SUCCESS_TOAST_MS);
+				}
 
 				// A contribution that reached OSM is the best moment to ask for a
 				// rating — after the toast, so the dialog doesn't cover it.
@@ -623,6 +693,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		addTagIfMissing,
 		removeAutoAddedTags,
 		isFlagging,
+		nearbyPonds,
+		requestAddSuctionPoint,
 		detectedWater,
 		areaCandidates,
 		areaLookupState,

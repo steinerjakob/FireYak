@@ -324,7 +324,16 @@
 			"largeWater": "Großes oder fließendes Gewässer: Eine Saugstelle passt meist besser.",
 			"editExisting": "Bearbeiten",
 			"useArea": "Diese Fläche verwenden",
-			"useSuctionPoint": "Lieber Saugstelle"
+			"useSuctionPoint": "Lieber Saugstelle",
+			"existingIntro": "Hier ist bereits ein Löschteich eingetragen. Bearbeite ihn, statt ihn doppelt anzulegen:",
+			"point": "Punkt",
+			"area": "Wasserfläche",
+			"metersAway": "{m} m entfernt"
+		},
+		"suctionOffer": {
+			"message": "Wo saugt das Fahrzeug an diesem Teich an? Trag die Stelle als Saugstelle ein.",
+			"action": "Eintragen",
+			"button": "Saugstelle hinzufügen"
 		}
 	},
 	"nativeApp": {

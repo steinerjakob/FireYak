@@ -324,7 +324,16 @@
 			"largeWater": "Large or flowing water: a suction point is usually the better choice.",
 			"editExisting": "Edit",
 			"useArea": "Use this area",
-			"useSuctionPoint": "Suction point instead"
+			"useSuctionPoint": "Suction point instead",
+			"existingIntro": "A fire water pond is already mapped here. Edit it instead of adding a duplicate:",
+			"point": "Point",
+			"area": "Water area",
+			"metersAway": "{m} m away"
+		},
+		"suctionOffer": {
+			"message": "Where does the fire engine pump from this pond? Add the spot as a suction point.",
+			"action": "Add",
+			"button": "Add pumping spot"
 		}
 	},
 	"nativeApp": {

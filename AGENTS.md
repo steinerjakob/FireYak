@@ -115,6 +115,7 @@ src/
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker |
 | `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
+| `areaOutline.ts` | Session cache + Overpass `out geom` lookup for pond-area outlines (map highlight) |
 
 ### Offline mode (`src/offline/`)
 
