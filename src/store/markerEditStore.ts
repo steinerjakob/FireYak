@@ -38,6 +38,7 @@ import {
 	toCacheElement,
 	withoutFirePondFlag
 } from '@/helper/osmElement';
+import { OSM_EDITS_TARGET_OTHER_SERVER } from '@/services/osmConfig';
 
 /** How long the "saved" toast stays up after a successful upload. */
 const SAVE_SUCCESS_TOAST_MS = 2000;
@@ -243,7 +244,26 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		await alert.present();
 	}
 
+	/**
+	 * Preview builds edit the OSM dev server, but existing markers (and water
+	 * areas) come from production OSM: their IDs are missing or belong to
+	 * unrelated objects there, so saving them could modify the wrong one. Only
+	 * locally created markers (negative temp IDs) may be edited. Returns `true`
+	 * (after telling the user) when the element must not be edited.
+	 */
+	async function blockedOnOtherServer(element: OverPassElement): Promise<boolean> {
+		if (!OSM_EDITS_TARGET_OTHER_SERVER || element.id <= 0) return false;
+		const alert = await alertController.create({
+			header: t('markerEdit.devServerAlert.title'),
+			message: t('markerEdit.devServerAlert.message'),
+			buttons: [t('markerEdit.buttons.cancel')]
+		});
+		await alert.present();
+		return true;
+	}
+
 	async function requestStartEditing(marker: OverPassElement) {
+		if (await blockedOnOtherServer(marker)) return;
 		if (!osmAuthStore.isAuthenticated) {
 			await showAuthAlert();
 			return;
@@ -265,8 +285,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	 * (conflict snapshot) and only `emergency=fire_water_pond` is added; the
 	 * user can then fill in the remaining fields and save as a tag-only edit.
 	 */
-	function startFlagging(candidate: WaterAreaCandidate) {
+	async function startFlagging(candidate: WaterAreaCandidate) {
 		const element = candidate.element;
+		// Water areas come from production OSM — same rule as editing markers.
+		if (await blockedOnOtherServer(element)) return;
 		resetAreaLookup();
 		startEditing(element);
 		editableTags.value = { ...element.tags, emergency: 'fire_water_pond' };

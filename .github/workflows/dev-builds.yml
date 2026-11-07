@@ -1,0 +1,93 @@
+name: Dev Builds
+
+# Every push to main ships a test build of the native apps:
+#   - iOS     → TestFlight (internal testers only)
+#   - Android → Google Play internal testing track
+# (The web dev page is deployed separately by Cloudflare Pages.)
+#
+# Dev builds carry the *upcoming* release version (computed like release.yml)
+# and a build number from the commit time, so the next release always outranks
+# them. Nothing is committed or tagged. They use production OSM like the store
+# apps (native builds ignore the VITE_OSM_* preview overrides).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'plans/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.github/dependabot.yml'
+      - 'fastlane/metadata/**'
+  workflow_dispatch:
+
+concurrency:
+  group: 'dev-builds'
+  cancel-in-progress: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.semver.outputs.version }}
+      build_number: ${{ steps.build.outputs.build_number }}
+      sha: ${{ steps.build.outputs.sha }}
+      short_sha: ${{ steps.build.outputs.short_sha }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Same settings as release.yml, so dev builds carry the version the next
+      # release will get.
+      - name: Compute Semantic Version
+        id: semver
+        uses: paulhatch/semantic-version@a8f8f59fd7f0625188492e945240f12d7ad2dca3 # v5.4.0
+        with:
+          tag_prefix: 'v'
+          version_format: '${major}.${minor}.${patch}'
+          bump_each_commit: false
+          major_pattern: 'BREAKING CHANGE'
+          minor_pattern: 'feat'
+
+      - name: Compute Build Number
+        id: build
+        run: |
+          SHA=$(git rev-parse HEAD)
+          # 10-second ticks since 2023-11-14 (epoch 1700000000) of the commit time.
+          # release.yml / ios.yml use "now" + 1 on the same scale, so a release
+          # always outranks every dev build of earlier commits.
+          BUILD=$(( $(git log -1 --format=%ct "$SHA") / 10 - 170000000 ))
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHA:0:7}" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Dev build ${{ steps.semver.outputs.version }} ($BUILD) from $SHA"
+
+  android:
+    needs: version
+    permissions:
+      contents: write # required by android.yml's deploy job; the dev path commits nothing
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
+    with:
+      ref: ${{ needs.version.outputs.sha }}
+      build_number: ${{ needs.version.outputs.build_number }}
+      version_name: ${{ needs.version.outputs.version }}-dev.${{ needs.version.outputs.short_sha }}
+      build_label: dev.${{ needs.version.outputs.short_sha }}
+
+  ios:
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios.yml
+    secrets: inherit
+    with:
+      ref: ${{ needs.version.outputs.sha }}
+      build_number: ${{ needs.version.outputs.build_number }}
+      marketing_version: ${{ needs.version.outputs.version }}
+      build_label: dev.${{ needs.version.outputs.short_sha }}

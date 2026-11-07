@@ -4,8 +4,25 @@ on:
   workflow_call:
     inputs:
       version:
-        description: 'Version to build (checks out tag v<version>)'
-        required: true
+        description: 'Version to build (checks out tag v<version>); empty for a dev build'
+        required: false
+        type: string
+      # --- main-branch dev builds (dev-builds.yml); nothing is committed ---
+      ref:
+        description: 'Commit to build when no version is given'
+        required: false
+        type: string
+      build_number:
+        description: 'versionCode for a dev build (marks the run as a dev build)'
+        required: false
+        type: string
+      version_name:
+        description: 'versionName for a dev build'
+        required: false
+        type: string
+      build_label:
+        description: 'Commit label shown on the About screen of a dev build'
+        required: false
         type: string
   workflow_dispatch:
     inputs:
@@ -15,7 +32,8 @@ on:
         type: string
 
 concurrency:
-  group: 'android'
+  # Dev builds only cancel older dev builds, never a release/hotfix run.
+  group: android-${{ inputs.build_number && 'dev' || 'release' }}
   cancel-in-progress: true
 
 jobs:
@@ -29,7 +47,10 @@ jobs:
       contents: read
     env:
       VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY_ANDROID }}
+      APP_BUILD_LABEL: ${{ inputs.build_label }}
       INPUT_VERSION: ${{ inputs.version }}
+      INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+      INPUT_VERSION_NAME: ${{ inputs.version_name }}
     outputs:
       version: ${{ steps.version.outputs.version }}
       version_code: ${{ steps.version.outputs.version_code }}
@@ -37,7 +58,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.version && format('v{0}', inputs.version) || github.ref }}
+          ref: ${{ inputs.version && format('v{0}', inputs.version) || inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Set up Node
@@ -55,7 +76,14 @@ jobs:
       - name: Resolve version
         id: version
         run: |
-          if [ -n "$INPUT_VERSION" ]; then
+          if [ -n "$INPUT_BUILD_NUMBER" ]; then
+            # Main-branch dev build: version/code come from dev-builds.yml and
+            # are only applied to this checkout, never committed.
+            VERSION="$INPUT_VERSION_NAME"
+            CODE="$INPUT_BUILD_NUMBER"
+            sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VERSION}\"/" android/app/build.gradle
+            sed -i -E "s/versionCode [0-9]+/versionCode ${CODE}/" android/app/build.gradle
+          elif [ -n "$INPUT_VERSION" ]; then
             # Called from release.yml (or dispatch with a version): the prepare
             # job already committed the version bump in tag v<version>.
             VERSION="$INPUT_VERSION"
@@ -64,7 +92,9 @@ jobs:
             # Standalone hotfix dispatch: bump the build number here.
             VERSION=$(node -p "require('./package.json').version")
             CUR=$(grep -oP 'versionCode\s+\K[0-9]+' android/app/build.gradle)
-            CODE=$((CUR + 1))
+            # Same tick scheme as release.yml, so a hotfix outranks earlier dev builds.
+            TICK=$(( $(date +%s) / 10 - 170000000 + 1 ))
+            CODE=$(( CUR + 1 > TICK ? CUR + 1 : TICK ))
             sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VERSION}\"/" android/app/build.gradle
             sed -i -E "s/versionCode [0-9]+/versionCode ${CODE}/" android/app/build.gradle
           fi
@@ -122,7 +152,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.version && format('v{0}', inputs.version) || github.ref }}
+          ref: ${{ inputs.version && format('v{0}', inputs.version) || inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Download Unsigned AAB
@@ -190,16 +220,21 @@ jobs:
         with:
           ruby-version: '3.3'
 
-      - name: Deploy to Google Play (internal)
+      - name: Deploy to Google Play
         run: |
           # supply auto-detects .apk files in the cwd and refuses apk+aab;
           # the signed apk is already on the GitHub release at this point
           rm -f aligned.apk fireyak-v*.apk
           bundle install
-          bundle exec fastlane android internal aab:"$(pwd)/artifacts/aab/app-release.aab"
+          # Tagged versions (release.yml, or a dispatch with a version) go straight
+          # to production; everything else (main-branch dev builds, untagged
+          # dispatch) goes to the internal testing track.
+          if [ -n "$INPUT_VERSION" ]; then LANE=production; else LANE=internal; fi
+          echo "Lane $LANE: $VERSION ($VERSION_CODE)"
+          bundle exec fastlane android "$LANE" aab:"$(pwd)/artifacts/aab/app-release.aab"
 
       - name: Commit Version Bump
-        if: ${{ inputs.version == '' }}
+        if: ${{ inputs.version == '' && inputs.build_number == '' }}
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |

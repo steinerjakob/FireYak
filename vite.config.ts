@@ -12,6 +12,23 @@ const isNativeBuild = process.env.BUILD_TARGET === 'native';
 
 const purpose = 'any maskable';
 
+/**
+ * Extra label shown next to the version on the About screen for non-release
+ * builds, so testers can tell which commit they are running. Empty for
+ * releases (the label is hidden).
+ * - `APP_BUILD_LABEL`: set by the main-branch dev builds (dev-builds.yml), e.g. `dev.efc03e6`
+ * - Cloudflare Pages: `<branch>.<sha7>` from the built-in `CF_PAGES_*` build variables
+ */
+function getBuildLabel(): string {
+	if (process.env.APP_BUILD_LABEL) return process.env.APP_BUILD_LABEL;
+	const sha = process.env.CF_PAGES_COMMIT_SHA?.slice(0, 7);
+	if (process.env.CF_PAGES === '1' && sha) {
+		const branch = process.env.CF_PAGES_BRANCH;
+		return branch ? `${branch}.${sha}` : sha;
+	}
+	return '';
+}
+
 // PWA options - for native builds, the service worker only handles runtime
 // caching (map tiles) with no precaching or navigation fallback.
 // For web builds, full PWA behavior is enabled.
@@ -222,7 +239,8 @@ export default defineConfig({
 	define: {
 		'process.env': {},
 		// Expose build target to client code for conditional service worker handling
-		__BUILD_TARGET_NATIVE__: JSON.stringify(isNativeBuild)
+		__BUILD_TARGET_NATIVE__: JSON.stringify(isNativeBuild),
+		__APP_BUILD_LABEL__: JSON.stringify(getBuildLabel())
 	},
 	resolve: {
 		alias: {

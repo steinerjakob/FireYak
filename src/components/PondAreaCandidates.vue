@@ -108,7 +108,7 @@ function subtitle(c: WaterAreaCandidate): string {
 					<ion-button
 						size="small"
 						fill="outline"
-						@click="markerEditStore.startEditing(p.element)"
+						@click="markerEditStore.requestStartEditing(p.element)"
 						>{{ t('markerEdit.pondAreas.editExisting') }}</ion-button
 					>
 				</div>

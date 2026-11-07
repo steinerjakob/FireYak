@@ -48,7 +48,7 @@ src/
 ├── offline/         # Offline mode: tile download/store, area data, edit queue, offline:// protocol
 ├── plugins/         # Vue plugin registration (Pinia, Router, Ionic, i18n)
 ├── router/          # Route definitions
-├── services/        # External auth service integration (OSM OAuth)
+├── services/        # External auth service integration (OSM OAuth) and OSM endpoint config (`osmConfig.ts`)
 ├── store/           # Pinia stores
 ├── theme/           # SCSS variables and Material Design 3 CSS overrides
 ├── types/           # Shared TypeScript types (geo, obstacles)
@@ -191,12 +191,22 @@ src/
 
 | Workflow | Trigger | Description |
 |---|---|---|
-| `release.yml` | Manual (`workflow_dispatch`) | Unified release pipeline. `prepare` job computes the next semver from Conventional Commits, bumps `package.json`/Android version, generates `CHANGELOG.md` via git-cliff, stamps `src/assets/whats-new.json`, commits, tags `v<version>`, and creates the GitHub Release; then fans out to `main.yml`/`android.yml`/`ios.yml` (each checks out that tag, read-only) |
+| `release.yml` | Manual (`workflow_dispatch`) | Unified release pipeline. `prepare` job computes the next semver from Conventional Commits, bumps `package.json`/Android version, generates `CHANGELOG.md` via git-cliff, stamps `src/assets/whats-new.json`, commits, tags `v<version>`, and creates the GitHub Release; then fans out to `main.yml`/`android.yml`/`ios.yml` (each checks out that tag, read-only). **A release publishes to production**: GitHub Pages, Google Play production, and App Store review with automatic release on approval. Test builds are reviewed beforehand via `dev-builds.yml` |
 | `main.yml` | `workflow_call` (from `release.yml`) or manual | Builds the web app and deploys to GitHub Pages |
-| `android.yml` | `workflow_call` or manual | Two-job pipeline: `build` runs `npm ci`/Gradle to produce an **unsigned** AAB+APK (no secrets); `deploy` downloads those artifacts, signs them with the keystore, uploads the signed APK to the GitHub Release, and pushes the AAB to the Google Play **internal** track via Fastlane |
-| `ios.yml` | `workflow_call` or manual | Builds and archives via Xcode/Fastlane, uploads to TestFlight |
+| `android.yml` | `workflow_call` or manual | Two-job pipeline: `build` runs `npm ci`/Gradle to produce an **unsigned** AAB+APK (no secrets); `deploy` downloads those artifacts, signs them with the keystore, uploads the signed APK to the GitHub Release, and pushes the AAB via Fastlane: tagged versions (`version` input set) to the **production** track (`android production` lane), everything else to the **internal** track |
+| `ios.yml` | `workflow_call` or manual | Builds and archives via Xcode/Fastlane. Tagged versions run the `ios release` lane (upload, wait for processing, submit for App Store review with automatic release, only `release_notes.txt` from `fastlane/metadata/ios` sent); everything else runs `ios beta` (TestFlight internal only) |
+| `dev-builds.yml` | Push to `main` (code changes; docs-only pushes skipped) or manual | Native test builds: computes the upcoming release version (same semver rules as `release.yml`) and a commit-time build number, then calls `android.yml` (Play **internal** track) and `ios.yml` (TestFlight, internal testers only) in dev mode. Commits/tags nothing. Build numbers are 10-second ticks since epoch 1700000000; releases use "now"+1 on the same scale so they always outrank earlier dev builds |
 
 All workflows pin third-party actions to a commit SHA and install dependencies with `npm ci --ignore-scripts`.
+
+### Preview deployments (Cloudflare Pages)
+
+Separate from the GitHub Actions above, **Cloudflare Pages** (Git integration, configured in the Cloudflare dashboard — there is no workflow or Cloudflare config in this repo) builds the web app (`npm run build` → `dist`) on every push:
+
+- **`main`** → dev page at `https://fireyak.pages.dev` (not production; app.fireyak.org on GitHub Pages stays production).
+- **Every other branch** (except `dependabot/*`) → preview at `https://<branch-alias>.fireyak.pages.dev` plus a per-commit `https://<sha>.fireyak.pages.dev`. Cloudflare posts the link as a check/comment on the PR. Branches from forks are not built.
+
+Cloudflare builds set `VITE_OSM_URL`/`VITE_OSM_CLIENT_ID` (read by `src/services/osmConfig.ts`), so OSM login and edits go to the **OSM dev server** (`master.apis.dev.openstreetmap.org`). Login works only on hosts registered as exact redirect URIs on the dev OAuth app, so not on per-commit URLs. Because map data still comes from production OSM, editing/deleting *existing* markers is blocked on such builds (`OSM_EDITS_TARGET_OTHER_SERVER`); adding new markers works, and marker "view/edit on OSM" links always use production (`OSM_DATA_WEB_URL`). Native builds ignore these variables. Full setup and caveats: `plans/cloudflare-pages-previews.md`.
 
 ## 4. Key Commands
 
@@ -262,7 +272,8 @@ Rules:
 
 - **No test suite exists.** There are no unit or integration tests.
 - **Areas get tag-only edits.** Fire water ponds can be ways or multipolygon relations. For those, FireYak only changes tags: never coordinates, member nodes or members, and it never deletes them (that would remove the water body). "Delete" on a pond area removes only the `emergency=fire_water_pond` flag. Helpers live in `src/helper/osmElement.ts`; the edit queue rejects area deletes.
-- **OSM OAuth2 uses PKCE flow** — see `osmAuthStore.ts` for the implementation.
+- **OSM OAuth2 uses PKCE flow** — see `osmAuthStore.ts` for the implementation. Never hard-code `www.openstreetmap.org` or the client ID; use `OSM_WEB_URL`/`OSM_CLIENT_ID` from `src/services/osmConfig.ts` so preview builds hit the OSM dev server.
+- **Web changes get a Cloudflare Pages preview per branch** (see §3 "Preview deployments"); point reviewers to the PR's preview link for UI checks.
 - **The PWA manifest is generated by `vite-plugin-pwa`** from `vite.config.ts`, not a static file.
 - **Marker icons** are in `src/assets/` as SVG/PNG files with type-specific variants.
 - **Elevation data** comes from the Mapterhorn terrain DEM tiles the map already loads (`src/helper/demElevation.ts`), not a separate API — this keeps pump calculation working offline inside a downloaded area.

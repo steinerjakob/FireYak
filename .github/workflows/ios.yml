@@ -4,8 +4,25 @@ on:
   workflow_call:
     inputs:
       version:
-        description: 'Version to build (checks out tag v<version>)'
-        required: true
+        description: 'Version to build (checks out tag v<version>); empty for a dev build'
+        required: false
+        type: string
+      # --- main-branch dev builds (dev-builds.yml) ---
+      ref:
+        description: 'Commit to build when no version is given'
+        required: false
+        type: string
+      build_number:
+        description: 'CFBundleVersion for a dev build (marks the run as a dev build)'
+        required: false
+        type: string
+      marketing_version:
+        description: 'CFBundleShortVersionString for a dev build'
+        required: false
+        type: string
+      build_label:
+        description: 'Commit label shown on the About screen of a dev build'
+        required: false
         type: string
   workflow_dispatch:
     inputs:
@@ -15,7 +32,8 @@ on:
         type: string
 
 concurrency:
-  group: 'ios'
+  # Dev builds only cancel older dev builds, never a release/hotfix run.
+  group: ios-${{ inputs.build_number && 'dev' || 'release' }}
   cancel-in-progress: true
 
 jobs:
@@ -28,11 +46,12 @@ jobs:
       contents: read
     env:
       VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY_IOS }}
+      APP_BUILD_LABEL: ${{ inputs.build_label }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ inputs.version && format('v{0}', inputs.version) || github.ref }}
+          ref: ${{ inputs.version && format('v{0}', inputs.version) || inputs.ref || github.ref }}
           persist-credentials: false
 
       - name: Set up Node
@@ -63,11 +82,27 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Deploy to TestFlight
+      - name: Deploy to TestFlight / App Store
         env:
           AUTHKEY_FILE: ${{ secrets.AUTHKEY_FILE }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+          INPUT_MARKETING_VERSION: ${{ inputs.marketing_version }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           echo "$AUTHKEY_FILE" | base64 -d > authkey.json
           bundle install
-          bundle exec fastlane ios beta
+          # Build numbers are 10-second ticks since 2023-11-14 (epoch 1700000000). Main-branch
+          # dev builds (dev-builds.yml) use their commit time, releases use "now" + 1, so a
+          # release always outranks the dev builds before it on Play and TestFlight.
+          BUILD="${INPUT_BUILD_NUMBER:-$(( $(date +%s) / 10 - 170000000 + 1 ))}"
+          ARGS=(build_number:"$BUILD")
+          if [ -n "$INPUT_MARKETING_VERSION" ]; then
+            ARGS+=(version:"$INPUT_MARKETING_VERSION")
+          fi
+          # Tagged versions (release.yml, or a dispatch with a version) are submitted
+          # to App Store review and auto-released on approval; everything else
+          # (main-branch dev builds, untagged dispatch) only goes to TestFlight.
+          if [ -n "$INPUT_VERSION" ]; then LANE=release; else LANE=beta; fi
+          echo "Lane $LANE: build $BUILD ${INPUT_MARKETING_VERSION:-(package.json version)}"
+          bundle exec fastlane ios "$LANE" "${ARGS[@]}"

@@ -6,9 +6,8 @@ import { OAuthService } from '@/services/OAuthService';
 import { App as CapApp } from '@capacitor/app';
 import { useSettings } from '@/composable/settings';
 import { useSettingsStore } from '@/store/settingsStore';
-
-// Placeholder values - should be configured via env or settings
-const CLIENT_ID = '5RmzpVAEyynIFoe3Lj5IdMvQ-1L-Z1ZhzQ0U33JJE-o';
+// Also applies the osm-api `apiUrl` override for preview builds (side effect on import).
+import { OSM_CLIENT_ID as CLIENT_ID, OSM_WEB_URL } from '@/services/osmConfig';
 
 // On native, the redirect URI is the Capacitor server origin so the OAuth callback
 // stays in the local app context. On web, it points to land.html which uses a
@@ -17,9 +16,8 @@ const REDIRECT_URI = Capacitor.isNativePlatform()
 	? 'https://app.fireyak.org'
 	: `${window.location.origin}/land.html`;
 
-const OSM_BASE_URL = 'https://www.openstreetmap.org';
-const OSM_AUTH_URL = `${OSM_BASE_URL}/oauth2/authorize`;
-const OSM_TOKEN_URL = `${OSM_BASE_URL}/oauth2/token`;
+const OSM_AUTH_URL = `${OSM_WEB_URL}/oauth2/authorize`;
+const OSM_TOKEN_URL = `${OSM_WEB_URL}/oauth2/token`;
 
 const SCOPES = ['read_prefs', 'write_api'] as const;
 
@@ -35,11 +33,6 @@ let _nativeAuthInProgress = false;
 export function isNativeAuthInProgress(): boolean {
 	return _nativeAuthInProgress;
 }
-
-// Configure OSM API
-// OSM.configure({
-// 	apiUrl: 'https://master.apis.dev.openstreetmap.org'
-// });
 
 /**
  * Generates a cryptographically random PKCE code verifier.
@@ -269,7 +262,6 @@ export const useOsmAuthStore = defineStore('osmAuth', () => {
 			window.location.replace('/');
 		}
 	}
-
 
 	onMounted(() => loadToken());
 

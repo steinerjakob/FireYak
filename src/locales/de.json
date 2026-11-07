@@ -254,6 +254,10 @@
 			"title": "OpenStreetMap-Konto erforderlich",
 			"message": "Sie benötigen ein OpenStreetMap-Konto, um Marker hinzuzufügen oder zu bearbeiten. Möchten Sie sich einloggen?"
 		},
+		"devServerAlert": {
+			"title": "Bearbeiten nicht verfügbar",
+			"message": "Diese Testversion speichert auf dem OpenStreetMap-Testserver, die Karte zeigt aber Produktivdaten. Bestehende Marker können hier daher nicht bearbeitet oder gelöscht werden. Neue Marker hinzufügen funktioniert."
+		},
 		"deleteDialog": {
 			"title": "Von OpenStreetMap entfernen",
 			"message": "Sind Sie sicher, dass Sie diesen Marker dauerhaft von OpenStreetMap entfernen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",

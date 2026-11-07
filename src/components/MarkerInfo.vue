@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { elementPosition } from '@/helper/osmElement';
+import { OSM_DATA_WEB_URL } from '@/services/osmConfig';
 
 const markerStore = useMapMarkerStore();
 
@@ -186,18 +187,12 @@ const getCoordinates = () => {
 
 const openOsmUrl = () => {
 	if (!markerData.value) return '';
-	window.open(
-		`https://www.openstreetmap.org/${markerData.value.type}/${markerData.value.id}`,
-		'_blank'
-	);
+	window.open(`${OSM_DATA_WEB_URL}/${markerData.value.type}/${markerData.value.id}`, '_blank');
 };
 
 const openOsmEditUrl = () => {
 	if (!markerData.value) return '';
-	window.open(
-		`https://www.openstreetmap.org/edit?${markerData.value.type}=${markerData.value.id}`,
-		'_blank'
-	);
+	window.open(`${OSM_DATA_WEB_URL}/edit?${markerData.value.type}=${markerData.value.id}`, '_blank');
 };
 </script>
 
