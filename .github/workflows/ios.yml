@@ -82,12 +82,13 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Deploy to TestFlight
+      - name: Deploy to TestFlight / App Store
         env:
           AUTHKEY_FILE: ${{ secrets.AUTHKEY_FILE }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
           INPUT_MARKETING_VERSION: ${{ inputs.marketing_version }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           echo "$AUTHKEY_FILE" | base64 -d > authkey.json
           bundle install
@@ -99,5 +100,9 @@ jobs:
           if [ -n "$INPUT_MARKETING_VERSION" ]; then
             ARGS+=(version:"$INPUT_MARKETING_VERSION")
           fi
-          echo "Uploading build $BUILD ${INPUT_MARKETING_VERSION:-(package.json version)}"
-          bundle exec fastlane ios beta "${ARGS[@]}"
+          # Tagged versions (release.yml, or a dispatch with a version) are submitted
+          # to App Store review and auto-released on approval; everything else
+          # (main-branch dev builds, untagged dispatch) only goes to TestFlight.
+          if [ -n "$INPUT_VERSION" ]; then LANE=release; else LANE=beta; fi
+          echo "Lane $LANE: build $BUILD ${INPUT_MARKETING_VERSION:-(package.json version)}"
+          bundle exec fastlane ios "$LANE" "${ARGS[@]}"
