@@ -16,6 +16,7 @@ import { useNetworkStatus } from '@/composable/networkStatus';
 import { useInAppReview } from '@/composable/inAppReview';
 import { enqueueEdit, isNetworkError } from '@/offline/editQueue';
 import { toRef } from '@/helper/osmRef';
+import { OSM_EDITS_TARGET_OTHER_SERVER } from '@/services/osmConfig';
 
 /** How long the "saved" toast stays up after a successful upload. */
 const SAVE_SUCCESS_TOAST_MS = 2000;
@@ -91,6 +92,19 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	}
 
 	async function requestStartEditing(marker: OverPassElement) {
+		// Preview builds edit the OSM dev server, but existing markers come from
+		// production OSM: their IDs are missing or belong to unrelated nodes there,
+		// so saving/deleting them could modify the wrong node. Only locally
+		// created markers (negative temp IDs) may be edited.
+		if (OSM_EDITS_TARGET_OTHER_SERVER && marker.id > 0) {
+			const alert = await alertController.create({
+				header: t('markerEdit.devServerAlert.title'),
+				message: t('markerEdit.devServerAlert.message'),
+				buttons: [t('markerEdit.buttons.cancel')]
+			});
+			await alert.present();
+			return;
+		}
 		if (!osmAuthStore.isAuthenticated) {
 			await showAuthAlert();
 			return;

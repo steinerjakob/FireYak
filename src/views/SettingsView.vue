@@ -204,6 +204,7 @@ import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { useSettings } from '@/composable/settings';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
+import { OSM_WEB_URL } from '@/services/osmConfig';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
 import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
@@ -284,7 +285,7 @@ const onHoseNameChange = (event: InputCustomEvent) => {
 	}
 };
 
-const OSM_ACCOUNT_URL = 'https://www.openstreetmap.org/account/edit';
+const OSM_ACCOUNT_URL = `${OSM_WEB_URL}/account/edit`;
 
 /**
  * Opens the OpenStreetMap account profile page.
