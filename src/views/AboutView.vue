@@ -33,8 +33,8 @@
 					</ion-card-content>
 				</ion-card>
 
-				<!-- Combined Support Card (Buy Me a Coffee + Support) -->
-				<ion-card>
+				<!-- Support card (donations + GitHub): web/PWA only, see DONATION_URL -->
+				<ion-card v-if="showDonation">
 					<ion-card-header>
 						<ion-card-title>
 							<ion-icon :icon="heart" style="vertical-align: middle; margin-right: 8px"></ion-icon>
@@ -42,22 +42,20 @@
 						</ion-card-title>
 					</ion-card-header>
 					<ion-card-content>
-						<template v-if="showDonation">
-							<p>{{ $t('about.supportOnKofiDescription') }}</p>
+						<p>{{ $t('about.supportOnKofiDescription') }}</p>
 
-							<a :href="DONATION_URL" target="_blank" class="kofi-link">
-								<img
-									src="/assets/kofi/support_me_on_kofi_dark.png"
-									alt="Support me on Ko-fi"
-									class="kofi-button-img kofi-button-light-theme"
-								/>
-								<img
-									src="/assets/kofi/support_me_on_kofi_beige.png"
-									alt="Support me on Ko-fi"
-									class="kofi-button-img kofi-button-dark-theme"
-								/>
-							</a>
-						</template>
+						<a :href="DONATION_URL" target="_blank" class="kofi-link">
+							<img
+								src="/assets/kofi/support_me_on_kofi_dark.png"
+								alt="Support me on Ko-fi"
+								class="kofi-button-img kofi-button-light-theme"
+							/>
+							<img
+								src="/assets/kofi/support_me_on_kofi_beige.png"
+								alt="Support me on Ko-fi"
+								class="kofi-button-img kofi-button-dark-theme"
+							/>
+						</a>
 
 						<ion-list>
 							<ion-item>
@@ -144,7 +142,10 @@ import { DONATION_URL, GITHUB_URL } from '@/helper/appStoreInfos';
 const { openHistory } = useWhatsNew();
 const { planetTimestamp, load: loadDataFreshness, formatted } = useDataFreshness();
 
-/** Donation links are web-only — see DONATION_URL for the store-policy reason. */
+/**
+ * The support card (donations and GitHub, whose README links to donation
+ * pages) is web-only — see DONATION_URL for the store-policy reason.
+ */
 const showDonation = !Capacitor.isNativePlatform();
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
