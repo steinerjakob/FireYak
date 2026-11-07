@@ -4,7 +4,6 @@ import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
 import iconPump from '../assets/markers/pump.png';
-import iconSuctionPoint from '../assets/markers/suctionpoint.png';
 import iconUnderground from '../assets/markers/underground.png';
 import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
@@ -28,13 +27,14 @@ import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearb
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
 
-// Map icon keys to URLs for use in MapLibre image loading
+// Map icon keys to URLs for use in MapLibre image loading. Suction points and
+// suction hydrants use the blue/white `pump` icon on the map; `suctionpoint.png`
+// is reserved for the pump (supply pipe) calculation UI.
 export const markerIconUrls: Record<string, string> = {
 	hydrant: iconHydrant,
 	underground: iconUnderground,
 	wall: iconWall,
 	pump: iconPump,
-	suctionpoint: iconSuctionPoint,
 	water: iconWater,
 	watertank: iconWaterTank,
 	firestation: iconFirestation
