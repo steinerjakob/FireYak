@@ -53,7 +53,11 @@ jobs:
         run: |
           npm version "$VERSION" --no-git-tag-version
           CUR=$(grep -oP 'versionCode\s+\K[0-9]+' android/app/build.gradle)
-          CODE=$((CUR + 1))
+          # Build numbers are 10-second ticks since 2023-11-14 (epoch 1700000000). Main-branch
+          # dev builds (dev-builds.yml) use their commit time, releases use "now" + 1, so a
+          # release always outranks the dev builds before it on Play and TestFlight.
+          TICK=$(( $(date +%s) / 10 - 170000000 + 1 ))
+          CODE=$(( CUR + 1 > TICK ? CUR + 1 : TICK ))
           sed -i -E "s/versionName \"[^\"]*\"/versionName \"${VERSION}\"/" android/app/build.gradle
           sed -i -E "s/versionCode [0-9]+/versionCode ${CODE}/" android/app/build.gradle
           echo "Bumped to versionName=$VERSION versionCode=$CODE"

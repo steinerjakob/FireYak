@@ -191,6 +191,7 @@ src/
 | `main.yml` | `workflow_call` (from `release.yml`) or manual | Builds the web app and deploys to GitHub Pages |
 | `android.yml` | `workflow_call` or manual | Two-job pipeline: `build` runs `npm ci`/Gradle to produce an **unsigned** AAB+APK (no secrets); `deploy` downloads those artifacts, signs them with the keystore, uploads the signed APK to the GitHub Release, and pushes the AAB to the Google Play **internal** track via Fastlane |
 | `ios.yml` | `workflow_call` or manual | Builds and archives via Xcode/Fastlane, uploads to TestFlight |
+| `dev-builds.yml` | Push to `main` (code changes; docs-only pushes skipped) or manual | Native test builds: computes the upcoming release version (same semver rules as `release.yml`) and a commit-time build number, then calls `android.yml` (Play **internal** track) and `ios.yml` (TestFlight, internal testers only) in dev mode. Commits/tags nothing. Build numbers are 10-second ticks since epoch 1700000000; releases use "now"+1 on the same scale so they always outrank earlier dev builds |
 
 All workflows pin third-party actions to a commit SHA and install dependencies with `npm ci --ignore-scripts`.
 
