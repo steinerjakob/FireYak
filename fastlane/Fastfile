@@ -1,3 +1,6 @@
+require 'tmpdir'
+require 'fileutils'
+
 # This file contains the fastlane.tools configuration
 # You can find the documentation at https://docs.fastlane.tools
 #
@@ -38,6 +41,18 @@ platform :android do
       skip_upload_images: true
     )
   end
+
+  desc "Publish a pre-built, signed AAB of a tagged release straight to production"
+  lane :production do |options|
+    upload_to_play_store(
+      track: "production",
+      release_status: "completed",
+      aab: options[:aab],
+      skip_upload_apk: true,
+      skip_upload_screenshots: true,
+      skip_upload_images: true
+    )
+  end
 end
 
 platform :ios do
@@ -70,6 +85,40 @@ platform :ios do
 				distribute_external: false,
         api_key_path: "./authkey.json"
 		)
+  end
+
+  desc "Build a tagged release, upload it and submit it for App Store review (auto-release on approval)"
+  lane :release do |options|
+    default_ios_app_build(options)
+    # Wait for processing: a build can only be submitted once App Store Connect has processed it.
+    pilot(
+      skip_waiting_for_build_processing: false,
+      distribute_external: false,
+      api_key_path: "./authkey.json"
+    )
+
+    # Only the release notes are sent with the submission; the rest of the store
+    # listing (description, keywords, screenshots) is left as it is in App Store Connect.
+    notes_dir = File.join(Dir.mktmpdir, "metadata")
+    Dir.glob(File.expand_path("metadata/ios/*/release_notes.txt", __dir__)).each do |file|
+      locale_dir = File.join(notes_dir, File.basename(File.dirname(file)))
+      FileUtils.mkdir_p(locale_dir)
+      FileUtils.cp(file, locale_dir)
+    end
+
+    deliver(
+      api_key_path: "./authkey.json",
+      app_version: lane_context[SharedValues::VERSION_NUMBER] || get_package_version_without_prerelease,
+      build_number: options[:build_number].to_s,
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      metadata_path: notes_dir,
+      submit_for_review: true,
+      automatic_release: true,
+      force: true, # no interactive HTML preview on CI
+      run_precheck_before_submit: false,
+      submission_information: { add_id_info_uses_idfa: false }
+    )
   end
 
 end
