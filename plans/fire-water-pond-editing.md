@@ -360,6 +360,23 @@ Derive both from `baseTags` and `tags`.
 
 ---
 
+## Data pipeline (`steinerjakob/fireyak-data`): no change needed
+
+Checked against `build.sh` and `export-config.json`:
+- `osmium tags-filter … nwr/emergency=fire_water_pond` already keeps nodes, ways **and**
+  relations, together with their referenced nodes and members.
+- `export-config.json` lists `emergency=fire_water_pond` in `area_tags`. Closed ways
+  and multipolygons are therefore exported as polygons with `@id`/`@type`, and
+  `staticDataApi.ts` already reduces them to a `center`.
+- Physical tags such as `natural=water` / `water=pond` survive, because all tags are kept.
+- Freshness lag after a flag or unflag is handled on the app side: optimistic cache
+  updates plus tombstones (§2.3).
+
+Only the optional idea in §B2 (replacing the Overpass candidate search with a static
+lookup) would need a pipeline change: a separate `water_areas.fgb` with
+`natural=water` / `landuse=reservoir|basin` areas. This would be millions of polygons
+worldwide, so it is not recommended for now.
+
 ## Files touched (summary)
 
 | File | Change |
