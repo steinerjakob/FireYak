@@ -22,22 +22,23 @@ Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to G
    |---|---|---|
    | `NODE_VERSION` | `22` | `22` |
    | `VITE_PROTOMAPS_API_KEY` | key (Secret) | key (Secret) |
-   | `VITE_OSM_URL` | *(unset)* | `https://master.apis.dev.openstreetmap.org` |
-   | `VITE_OSM_CLIENT_ID` | *(unset)* | client ID from step 3 |
+   | `VITE_OSM_URL` | `https://master.apis.dev.openstreetmap.org` | same |
+   | `VITE_OSM_CLIENT_ID` | client ID from step 3 | same |
 
-   Leaving `VITE_OSM_*` unset makes a build use the real
-   www.openstreetmap.org with the production client, as on app.fireyak.org.
-   That client only knows the app.fireyak.org redirect URI, so OSM login does
-   not work on `*.pages.dev` production builds. Only Preview builds are meant
-   for login testing.
+   Set the OSM variables in **both** environments. The real production site is
+   app.fireyak.org on GitHub Pages. On Cloudflare, `main` deploys a dev page to
+   `https://fireyak.pages.dev`, which should never log in to real OSM. Without
+   these variables a build falls back to www.openstreetmap.org and the
+   production client. That client only knows the app.fireyak.org redirect URI,
+   so login would fail on `*.pages.dev`.
 
 ## 2. Branch / preview settings
 
 Settings → **Builds & deployments → Branch control**:
 
-- **Production branch:** `main`. You can also turn off automatic production
-  deployments, because app.fireyak.org is the real production site and the
-  Cloudflare "production" deployment is just another preview.
+- **Production branch:** `main`. Every merge deploys the dev page at
+  `https://fireyak.pages.dev`. app.fireyak.org on GitHub Pages stays the real
+  production site.
 - **Preview branches:** *Custom branches*, with include `*` and exclude
   `dependabot/*`. Dependabot (`.github/dependabot.yml`) opens many short-lived
   branches that would each use up a build.
