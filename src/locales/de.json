@@ -6,7 +6,9 @@
 			"waterTank": "Wassertank",
 			"suctionPoint": "Saugstelle",
 			"fireWaterPond": "Löschwasserteich",
-			"fireStation": "Feuerwehrhaus"
+			"fireStation": "Feuerwehrhaus",
+			"suctionPipe": "Saugrohr",
+			"suctionHydrant": "Saughydrant"
 		},
 		"tags": {
 			"emergencyType": "Notfall-Typ",

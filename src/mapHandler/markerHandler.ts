@@ -22,6 +22,7 @@ import {
 } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
+import { isSuctionHydrant } from '@/helper/markerTitle';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
 import { tileKeysForBounds } from '@/helper/tileMath';
@@ -51,7 +52,7 @@ function getIconKeyForNode(element: OverPassElement): string {
 		case 'fire_hydrant': {
 			// Fixed suction pipes are tagged as hydrants in OSM, but need
 			// the same map symbol as dedicated suction points.
-			if (element.tags?.['fire_hydrant:pressure'] === 'suction') return 'pump';
+			if (isSuctionHydrant(element.tags)) return 'pump';
 			const type = element.tags?.['fire_hydrant:type'];
 			return (
 				({ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<string, string>)[
@@ -81,9 +82,13 @@ function categoryForNode(element: OverPassElement): MarkerFilterKey {
 	const emergency = element.tags?.emergency;
 	switch (emergency) {
 		case 'fire_hydrant':
-			return 'fireHydrant';
+			// Suction pipes share the suction-point symbol, so they belong to the
+			// same filter: hiding suction points must hide them too.
+			return isSuctionHydrant(element.tags) ? 'suctionPoint' : 'fireHydrant';
 		case 'suction_point':
-			return 'pump';
+			// Must be a MarkerFilterKey: an unknown key reads as "filtered out"
+			// and hid every suction point (regression in 2.19.0).
+			return 'suctionPoint';
 		case 'water_tank':
 			return 'waterTank';
 		case 'fire_water_pond':

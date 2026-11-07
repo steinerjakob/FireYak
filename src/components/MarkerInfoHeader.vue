@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { Share } from '@capacitor/share';
+import { markerTitleKey } from '@/helper/markerTitle';
 
 const markerStore = useMapMarkerStore();
 const markerEditStore = useMarkerEditStore();
@@ -33,18 +34,9 @@ const startEdit = () => {
 const getTitle = () => {
 	if (!markerData.value) return t('markerInfo.title.locationInfo');
 
-	const emergency = markerData.value.tags?.emergency;
-	const amenity = markerData.value.tags?.amenity;
 	const name = markerData.value.tags?.name;
-
 	if (name) return name;
-	if (emergency === 'fire_hydrant') return t('markerInfo.title.fireHydrant');
-	if (emergency === 'water_tank') return t('markerInfo.title.waterTank');
-	if (emergency === 'suction_point') return t('markerInfo.title.suctionPoint');
-	if (emergency === 'fire_water_pond') return t('markerInfo.title.fireWaterPond');
-	if (amenity === 'fire_station') return t('markerInfo.title.fireStation');
-
-	return t('markerInfo.title.locationInfo');
+	return t(markerTitleKey(markerData.value.tags));
 };
 
 const openNavigation = () => {

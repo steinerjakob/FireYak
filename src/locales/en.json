@@ -6,7 +6,9 @@
 			"waterTank": "Water Tank",
 			"suctionPoint": "Suction Point",
 			"fireWaterPond": "Fire Water Pond",
-			"fireStation": "Fire Station"
+			"fireStation": "Fire Station",
+			"suctionPipe": "Suction Pipe",
+			"suctionHydrant": "Suction Hydrant"
 		},
 		"tags": {
 			"emergencyType": "Emergency Type",

@@ -2,6 +2,16 @@
 	"unreleased": [
 		{
 			"type": "fix",
+			"en": "Suction points show up on the map again.",
+			"de": "Saugstellen werden wieder auf der Karte angezeigt."
+		},
+		{
+			"type": "improvement",
+			"en": "Suction pipes and suction hydrants are now labelled as such and are shown and hidden together with suction points.",
+			"de": "Saugrohre und Saughydranten heißen jetzt auch so und werden zusammen mit den Saugstellen ein- und ausgeblendet."
+		},
+		{
+			"type": "fix",
 			"en": "Offline map downloads no longer stop when the map server is busy – they pause briefly and carry on.",
 			"de": "Offline-Kartendownloads brechen nicht mehr ab, wenn der Kartenserver ausgelastet ist – sie pausieren kurz und laufen weiter."
 		}
