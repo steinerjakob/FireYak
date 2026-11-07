@@ -1,5 +1,11 @@
 {
-	"unreleased": [],
+	"unreleased": [
+		{
+			"type": "fix",
+			"en": "Offline map downloads no longer stop when the map server is busy – they pause briefly and carry on.",
+			"de": "Offline-Kartendownloads brechen nicht mehr ab, wenn der Kartenserver ausgelastet ist – sie pausieren kurz und laufen weiter."
+		}
+	],
 	"releases": [
 		{
 			"version": "2.19.0",
