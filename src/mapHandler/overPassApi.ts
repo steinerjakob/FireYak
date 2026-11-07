@@ -207,11 +207,14 @@ function buildAreaQuery(mapBounds: GeoBounds): string {
 	const bounds = clampBounds(mapBounds);
 	const boundString = `(${bounds.south},${bounds.west},${bounds.north},${bounds.east})`;
 
-	// A single regex node filter does one bbox scan server-side instead of four
+	// A single regex node filter does one bbox scan server-side instead of
 	// separate `node[emergency=…]` scans — cheaper and less likely to time out
-	// on large bboxes.
+	// on large bboxes. Fire water ponds are usually mapped on the water area
+	// itself (closed way or multipolygon), so they are queried as `nwr`; the
+	// `center` output reduces those areas to a marker position.
 	const statements = [
-		`node[emergency~"^(fire_hydrant|water_tank|suction_point|fire_water_pond)$"]${boundString};`,
+		`node[emergency~"^(fire_hydrant|water_tank|suction_point)$"]${boundString};`,
+		`nwr[emergency=fire_water_pond]${boundString};`,
 		`way[amenity=fire_station]${boundString};`
 	];
 

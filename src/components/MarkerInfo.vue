@@ -75,7 +75,9 @@ const tagTranslationKeys: Record<string, string> = {
 	note: 'markerInfo.tags.note',
 	'survey:date': 'markerInfo.tags.surveyDate',
 	access: 'markerInfo.tags.access',
-	location: 'markerInfo.tags.location'
+	location: 'markerInfo.tags.location',
+	water: 'markerInfo.tags.waterType',
+	intermittent: 'markerInfo.tags.intermittent'
 };
 
 // Tags that are relevant for fire brigades
@@ -109,13 +111,18 @@ const relevantTags = [
 	'note',
 	'survey:date',
 	'access',
-	'location'
+	'location',
+	'water',
+	'intermittent'
 ];
 
 // Translate value if translation exists
 const translateValue = (key: string, value: string): string => {
 	// Check if this is a fire_hydrant field or water_source
-	if (key.startsWith('fire_hydrant:') || key === 'water_source' || key === 'pillar:type') {
+	if (
+		key.startsWith('fire_hydrant:') ||
+		['water_source', 'pillar:type', 'water', 'intermittent'].includes(key)
+	) {
 		const translationKey = `markerInfo.values.${key}.${value}`;
 		// Check if translation exists
 		if (te(translationKey)) {

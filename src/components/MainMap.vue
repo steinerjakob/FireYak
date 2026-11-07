@@ -595,6 +595,11 @@ watch(
 watch(
 	() => markerEditStore.pendingLocation,
 	(loc) => {
+		// Pond areas keep their geometry: no draggable pin, nothing to move.
+		if (markerEditStore.isArea) {
+			ghostMarker?.remove();
+			return;
+		}
 		if (loc && rootMap && markerEditStore.isActive) {
 			if (!ghostMarker) {
 				ghostMarker = createGhostMarker();
@@ -1451,6 +1456,7 @@ function setupMapEventListeners(map: maplibregl.Map) {
 
 			// Individual marker click
 			if (markerEditStore.isActive) {
+				if (markerEditStore.isArea) return;
 				// In edit mode, clicking a marker updates pending location
 				markerEditStore.pendingLocation = { lat: e.lngLat.lat, lng: e.lngLat.lng };
 				return;
@@ -1480,6 +1486,7 @@ function setupMapEventListeners(map: maplibregl.Map) {
 
 		// Click on empty map area
 		if (markerEditStore.isActive) {
+			if (markerEditStore.isArea) return;
 			markerEditStore.pendingLocation = { lat: e.lngLat.lat, lng: e.lngLat.lng };
 			return;
 		}

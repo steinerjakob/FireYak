@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { GeoPoint, GeoBounds, distanceTo, boundsContains } from '@/types/geo';
-import { OsmRef, toRef } from '@/helper/osmRef';
+import { OsmRef, OsmType, toRef } from '@/helper/osmRef';
 import { lngLatToTile, tileKey, tileKeysForBounds } from '@/helper/tileMath';
 
 const markerStoreName = 'fireMarkerRefs';
@@ -130,7 +130,13 @@ export function isDataPhaseDone(area: Pick<OfflineArea, 'lastCompletedChunk'>): 
 export interface PendingEdit {
 	localId?: number;
 	action: 'create' | 'update' | 'delete';
-	elementType: 'node';
+	/**
+	 * OSM element type the edit targets. Creates are always nodes; updates may
+	 * target a way or multipolygon relation (fire water ponds mapped as areas).
+	 * Areas only ever get tag updates — never deletes or coordinate changes.
+	 * Rows written before areas were editable all carry `'node'`.
+	 */
+	elementType: OsmType;
 	/** Negative temp ID for creates (−1, −2, …), real OSM ID otherwise. */
 	osmId: number;
 	/** Snapshot of the tags at edit time — used for conflict detection. */
@@ -757,6 +763,27 @@ export async function deleteMapNode(ref: OsmRef) {
 			markDeletedInCache(ref);
 		} catch (e) {
 			console.error(e);
+			clearTileCache();
+		}
+	})();
+
+	await trackWrite(write);
+}
+
+/**
+ * Removes the tombstone {@link deleteMapNode} left for `ref`, so the next
+ * {@link storeMapNodes} for it is visible again. Used when a queued delete (or
+ * a fire-pond unflag) is discarded and the server's version is restored.
+ */
+export async function clearDeletedMapNode(ref: OsmRef) {
+	const write = (async () => {
+		try {
+			await (await dbPromise).delete(deletedRefsStoreName, ref);
+		} catch (e) {
+			console.error(e);
+		} finally {
+			// The in-memory tile cache mirrors the `__deleted` flag; drop it so
+			// the restored row is read fresh.
 			clearTileCache();
 		}
 	})();

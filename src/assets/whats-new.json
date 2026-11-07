@@ -1,5 +1,11 @@
 {
-	"unreleased": [],
+	"unreleased": [
+		{
+			"type": "feature",
+			"en": "Fire water ponds can now be added and edited, including ponds drawn as a water area on the map.",
+			"de": "Löschteiche lassen sich jetzt hinzufügen und bearbeiten – auch solche, die als Wasserfläche eingezeichnet sind."
+		}
+	],
 	"releases": [
 		{
 			"version": "2.19.0",

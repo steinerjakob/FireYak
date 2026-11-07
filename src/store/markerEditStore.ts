@@ -16,6 +16,16 @@ import { useNetworkStatus } from '@/composable/networkStatus';
 import { useInAppReview } from '@/composable/inAppReview';
 import { enqueueEdit, isNetworkError } from '@/offline/editQueue';
 import { toRef } from '@/helper/osmRef';
+import {
+	describeEdit,
+	elementPosition,
+	elementTypeOf,
+	hasPhysicalWaterTag,
+	isAreaType,
+	isMarkerTags,
+	toCacheElement,
+	withoutFirePondFlag
+} from '@/helper/osmElement';
 
 /** How long the "saved" toast stays up after a successful upload. */
 const SAVE_SUCCESS_TOAST_MS = 2000;
@@ -36,8 +46,24 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const { isOnline } = useNetworkStatus();
 	const { t } = useI18n();
 
+	/**
+	 * Physical tags (`natural`, `water`) that the form added itself when the
+	 * type was switched to fire water pond. Only these may be removed again on
+	 * a type switch — tags that were already on the object never are.
+	 */
+	const autoAddedTags = ref<string[]>([]);
+
 	const isActive = computed(() => isEditing.value || isAdding.value);
 	const markerType = computed(() => editableTags.value['emergency'] || 'fire_hydrant');
+	/** OSM type of the element being edited; new markers are always nodes. */
+	const elementType = computed(() =>
+		isEditing.value ? elementTypeOf(originalMarker.value) : 'node'
+	);
+	/**
+	 * True while editing a way/relation (a pond mapped on its water area). Only
+	 * its tags can change: no moving, no type switch, no delete.
+	 */
+	const isArea = computed(() => isAreaType(elementType.value));
 
 	watch(isActive, (isActive) => {
 		if (isActive) {
@@ -56,7 +82,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		isAdding.value = false;
 		originalMarker.value = marker;
 		editableTags.value = { ...marker.tags };
-		pendingLocation.value = marker.lat && marker.lon ? { lat: marker.lat, lng: marker.lon } : null;
+		autoAddedTags.value = [];
+		// Areas show their center for orientation only; it is never uploaded.
+		const position = elementPosition(marker);
+		pendingLocation.value = position ? { lat: position.lat, lng: position.lon } : null;
 	}
 
 	function startAdding(location: GeoPoint) {
@@ -67,6 +96,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			emergency: 'fire_hydrant',
 			'fire_hydrant:type': 'pillar'
 		};
+		autoAddedTags.value = [];
 		pendingLocation.value = location;
 	}
 
@@ -112,6 +142,23 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		pendingLocation.value = null;
 		editableTags.value = {};
 		originalMarker.value = null;
+		autoAddedTags.value = [];
+	}
+
+	/**
+	 * Sets a physical tag on behalf of the user (only if it is missing) and
+	 * remembers it, so {@link removeAutoAddedTags} can undo exactly that.
+	 */
+	function addTagIfMissing(key: string, value: string) {
+		if (editableTags.value[key]) return;
+		editableTags.value[key] = value;
+		if (!autoAddedTags.value.includes(key)) autoAddedTags.value.push(key);
+	}
+
+	/** Removes the tags {@link addTagIfMissing} added during this edit session. */
+	function removeAutoAddedTags() {
+		for (const key of autoAddedTags.value) delete editableTags.value[key];
+		autoAddedTags.value = [];
 	}
 
 	/** Toast shown when an edit is queued for later sync instead of uploaded. */
@@ -135,21 +182,24 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		if (isAdding.value) {
 			await enqueueEdit({ action: 'create', osmId: 0, baseTags: null, tags: finalTags, lat, lon });
 		} else if (isEditing.value && originalMarker.value) {
+			const type = elementType.value;
 			await enqueueEdit({
 				action: 'update',
+				elementType: type,
 				osmId: originalMarker.value.id,
 				baseTags: originalMarker.value.tags ?? null,
 				tags: finalTags,
 				lat,
 				lon
 			});
-			markerStore.updateSelectedMarker({
-				id: originalMarker.value.id,
-				type: 'node',
-				lat,
-				lon,
-				tags: finalTags
-			});
+			if (isMarkerTags(finalTags)) {
+				markerStore.updateSelectedMarker(
+					toCacheElement(type, originalMarker.value.id, lat, lon, finalTags)
+				);
+			} else {
+				// Unflagged pond area: it is no longer a marker.
+				markerStore.selectMarker(null);
+			}
 		} else {
 			return;
 		}
@@ -167,6 +217,28 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		const finalTags = Object.fromEntries(
 			Object.entries(editableTags.value).filter(([, v]) => v !== '' && v != null)
 		);
+
+		// The OSM wiki requires `emergency=fire_water_pond` to sit on a physical
+		// water feature (`natural=water` or similar) — never save a bare flag.
+		if (finalTags['emergency'] === 'fire_water_pond' && !hasPhysicalWaterTag(finalTags)) {
+			const toast = await toastController.create({
+				message: t('markerEdit.messages.pondNeedsWater'),
+				duration: 3000,
+				color: 'warning'
+			});
+			await toast.present();
+			return;
+		}
+
+		await commitTags(finalTags, t('markerEdit.messages.saveSuccess'));
+	}
+
+	/**
+	 * Uploads `finalTags` for the current add/edit (or queues them offline) and
+	 * updates the local cache. For areas only the tags change: the element is
+	 * re-fetched from OSM and uploaded with its own nodes/members untouched.
+	 */
+	async function commitTags(finalTags: Record<string, string>, successMessage: string) {
 		const lat = pendingLocation.value?.lat || 0;
 		const lon = pendingLocation.value?.lng || 0;
 
@@ -201,19 +273,28 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					change
 				);
 			} else if (isEditing.value && originalMarker.value) {
-				const [node] = await OSM.getFeature('node', originalMarker.value.id);
-				node.lat = lat;
-				node.lon = lon;
+				const [element] = await OSM.getFeature(elementType.value, originalMarker.value.id);
+				// Only nodes move. Ways/relations keep their geometry untouched.
+				if (element.type === 'node') {
+					element.lat = lat;
+					element.lon = lon;
+				}
 				// Replace tags entirely so cleared fields are removed from OSM
-				node.tags = finalTags;
+				element.tags = finalTags;
 
 				const change: OSM.OsmChange = {
 					create: [],
-					modify: [node],
+					modify: [element],
 					delete: []
 				};
+				const description = describeEdit(
+					'update',
+					elementType.value,
+					originalMarker.value.tags,
+					finalTags
+				);
 				result = await OSM.uploadChangeset(
-					{ comment: `Update ${markerType.value} via FireYak ${version}` },
+					{ comment: `${description} via FireYak ${version}` },
 					change
 				);
 			} else {
@@ -230,19 +311,21 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				}
 
 				// Update local cache
-				const updatedMarker: OverPassElement = {
-					id: finalId,
-					type: 'node',
-					lat,
-					lon,
-					tags: finalTags
-				};
-				await storeMapNodes([updatedMarker]);
+				const type = isAdding.value ? 'node' : elementType.value;
+				if (isMarkerTags(finalTags)) {
+					const updatedMarker: OverPassElement = toCacheElement(type, finalId, lat, lon, finalTags);
+					await storeMapNodes([updatedMarker]);
+					markerStore.updateSelectedMarker(updatedMarker);
+				} else {
+					// An unflagged pond area is no longer a marker; tombstone it so the
+					// static extract (days behind OSM) cannot bring it back.
+					await deleteMapNode(toRef(type, finalId));
+					markerStore.selectMarker(null);
+				}
 				markerCacheVersion.value++;
-				markerStore.updateSelectedMarker(updatedMarker);
 
 				const toast = await toastController.create({
-					message: t('markerEdit.messages.saveSuccess'),
+					message: successMessage,
 					duration: SAVE_SUCCESS_TOAST_MS,
 					color: 'success'
 				});
@@ -272,6 +355,13 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 
 	async function requestDeleteMarker() {
 		if (!osmAuthStore.isAuthenticated || !originalMarker.value) {
+			return;
+		}
+
+		// Areas are never deleted — that would remove the water body itself.
+		// "Delete" on a pond area removes only the fire-pond information.
+		if (isArea.value) {
+			await requestUnflag();
 			return;
 		}
 
@@ -313,8 +403,43 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		await showQueuedToast();
 	}
 
+	async function requestUnflag() {
+		const alert = await alertController.create({
+			header: t('markerEdit.unflagDialog.title'),
+			message: t('markerEdit.unflagDialog.message'),
+			buttons: [
+				{
+					text: t('markerEdit.buttons.cancel'),
+					role: 'cancel'
+				},
+				{
+					text: t('markerEdit.unflagDialog.confirm'),
+					role: 'destructive',
+					handler: () => {
+						unflagMarker();
+					}
+				}
+			]
+		});
+		await alert.present();
+	}
+
+	/**
+	 * Removes `emergency=fire_water_pond` (and pond-only sub-tags) from the
+	 * edited area, starting from its server tags — unsaved form changes are
+	 * dropped. The water body and its physical tags stay in OSM.
+	 */
+	async function unflagMarker() {
+		if (!osmAuthStore.isAuthenticated || !originalMarker.value || !isArea.value) {
+			return;
+		}
+		const tags = withoutFirePondFlag(originalMarker.value.tags ?? {});
+		editableTags.value = { ...tags };
+		await commitTags(tags, t('markerEdit.messages.unflagSuccess'));
+	}
+
 	async function deleteMarker() {
-		if (!osmAuthStore.isAuthenticated || !originalMarker.value) {
+		if (!osmAuthStore.isAuthenticated || !originalMarker.value || isArea.value) {
 			return;
 		}
 
@@ -378,6 +503,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		isAdding,
 		isActive,
 		markerType,
+		elementType,
+		isArea,
+		addTagIfMissing,
+		removeAutoAddedTags,
 		pendingLocation,
 		editableTags,
 		originalMarker,

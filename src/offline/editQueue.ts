@@ -1,6 +1,6 @@
 import * as OSM from 'osm-api';
 import { version } from '@/../package.json';
-import { fetchNodeById, OverPassElement } from '@/mapHandler/overPassApi';
+import { fetchElementById } from '@/mapHandler/overPassApi';
 import { useNetworkStatus } from '@/composable/networkStatus';
 import {
 	PendingEdit,
@@ -13,10 +13,12 @@ import {
 	getMapNodeById,
 	storeMapNodes,
 	deleteMapNode,
-	hardDeleteMapNodes
+	hardDeleteMapNodes,
+	clearDeletedMapNode
 } from '@/mapHandler/databaseHandler';
 import { markerCacheVersion } from '@/mapHandler/markerHandler';
-import { toRef } from '@/helper/osmRef';
+import { toRef, type OsmType } from '@/helper/osmRef';
+import { describeEdit, isAreaType, isMarkerTags, toCacheElement } from '@/helper/osmElement';
 
 // ---------------------------------------------------------------------------
 // Offline edit queue + sync engine (§1.3)
@@ -41,9 +43,14 @@ let isSyncing = false;
 
 const { isOnline } = useNetworkStatus();
 
-/** The marker type used in changeset comments, matching the online save path. */
-function markerTypeOf(tags: Record<string, string>): string {
-	return tags['emergency'] || 'fire_hydrant';
+/** Changeset comment for a queued edit, matching the online save path's wording. */
+function commentFor(edit: PendingEdit): string {
+	return `${describeEdit(edit.action, edit.elementType ?? 'node', edit.baseTags, edit.tags)} via FireYak ${version} (offline sync)`;
+}
+
+/** Element type of a queued edit; rows from before area editing are nodes. */
+function typeOf(edit: Pick<PendingEdit, 'elementType'>): OsmType {
+	return edit.elementType ?? 'node';
 }
 
 /** Shallow, order-independent equality of two tag maps. */
@@ -94,6 +101,12 @@ export async function initEditQueue(): Promise<void> {
 
 export interface EnqueueInput {
 	action: PendingEdit['action'];
+	/**
+	 * Element type the edit targets; defaults to `'node'`. Creates are always
+	 * nodes. Ways/relations (pond areas) only accept `update` — a delete would
+	 * remove the water body itself, so it is rejected.
+	 */
+	elementType?: OsmType;
 	/** Real OSM ID for update/delete; ignored for create (a temp ID is assigned). */
 	osmId: number;
 	baseTags: Record<string, string> | null;
@@ -113,6 +126,11 @@ export interface EnqueueInput {
  * from the cache). Either way no new queue entry is added.
  */
 export async function enqueueEdit(input: EnqueueInput): Promise<void> {
+	const elementType: OsmType = input.action === 'create' ? 'node' : (input.elementType ?? 'node');
+	if (input.action === 'delete' && isAreaType(elementType)) {
+		throw new Error(`Refusing to delete ${elementType} ${input.osmId}: areas only get tag edits`);
+	}
+
 	// --- Coalesce edits that target a not-yet-synced offline create ---------
 	if (input.action !== 'create' && input.osmId < 0) {
 		const create = (await getAllPendingEdits()).find((e) => e.osmId === input.osmId);
@@ -134,9 +152,7 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 				lon: input.lon
 			});
 		}
-		await storeMapNodes([
-			{ id: input.osmId, type: 'node', lat: input.lat, lon: input.lon, tags: input.tags }
-		]);
+		await storeMapNodes([toCacheElement('node', input.osmId, input.lat, input.lon, input.tags)]);
 		markerCacheVersion.value++;
 		return;
 	}
@@ -146,7 +162,7 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 
 	await addPendingEdit({
 		action: input.action,
-		elementType: 'node',
+		elementType,
 		osmId,
 		baseTags: input.baseTags,
 		tags: input.tags,
@@ -156,13 +172,13 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 		status: 'pending'
 	});
 
-	// Optimistic cache update so the map reflects the edit immediately.
-	if (input.action === 'delete') {
-		await deleteMapNode(toRef('node', osmId));
+	// Optimistic cache update so the map reflects the edit immediately. An
+	// update that leaves no marker tags (a pond area whose fire-pond flag was
+	// removed) tombstones the entry, exactly like a delete.
+	if (input.action === 'delete' || !isMarkerTags(input.tags)) {
+		await deleteMapNode(toRef(elementType, osmId));
 	} else {
-		await storeMapNodes([
-			{ id: osmId, type: 'node', lat: input.lat, lon: input.lon, tags: input.tags }
-		]);
+		await storeMapNodes([toCacheElement(elementType, osmId, input.lat, input.lon, input.tags)]);
 	}
 	markerCacheVersion.value++;
 }
@@ -179,10 +195,7 @@ async function uploadCreate(edit: PendingEdit): Promise<number> {
 		modify: [],
 		delete: []
 	};
-	const result = await OSM.uploadChangeset(
-		{ comment: `Add ${markerTypeOf(edit.tags)} via FireYak ${version} (offline sync)` },
-		change
-	);
+	const result = await OSM.uploadChangeset({ comment: commentFor(edit) }, change);
 	const changesetId = parseInt(Object.keys(result)[0]);
 	const diff = result[changesetId].diffResult;
 	if (!diff.node || diff.node[-1] == null) {
@@ -192,24 +205,26 @@ async function uploadCreate(edit: PendingEdit): Promise<number> {
 }
 
 async function uploadUpdate(edit: PendingEdit): Promise<void> {
-	const [node] = await OSM.getFeature('node', edit.osmId);
-	node.lat = edit.lat;
-	node.lon = edit.lon;
-	node.tags = edit.tags;
-	const change: OSM.OsmChange = { create: [], modify: [node], delete: [] };
-	await OSM.uploadChangeset(
-		{ comment: `Update ${markerTypeOf(edit.tags)} via FireYak ${version} (offline sync)` },
-		change
-	);
+	const type = typeOf(edit);
+	const [element] = await OSM.getFeature(type, edit.osmId);
+	// Areas keep their geometry (way nodes / relation members) untouched; only
+	// nodes are moved.
+	if (element.type === 'node') {
+		element.lat = edit.lat;
+		element.lon = edit.lon;
+	}
+	element.tags = edit.tags;
+	const change: OSM.OsmChange = { create: [], modify: [element], delete: [] };
+	await OSM.uploadChangeset({ comment: commentFor(edit) }, change);
 }
 
 async function uploadDelete(edit: PendingEdit): Promise<void> {
+	if (isAreaType(typeOf(edit))) {
+		throw new Error(`Refusing to delete ${typeOf(edit)} ${edit.osmId}: areas only get tag edits`);
+	}
 	const [node] = await OSM.getFeature('node', edit.osmId);
 	const change: OSM.OsmChange = { create: [], modify: [], delete: [node] };
-	await OSM.uploadChangeset(
-		{ comment: `Remove ${markerTypeOf(edit.tags)} via FireYak ${version} (offline sync)` },
-		change
-	);
+	await OSM.uploadChangeset({ comment: commentFor(edit) }, change);
 }
 
 /**
@@ -263,7 +278,7 @@ export async function processQueue(): Promise<number> {
 						break;
 					}
 					case 'update': {
-						const server = await fetchNodeById(edit.osmId);
+						const server = await fetchElementById(typeOf(edit), edit.osmId);
 						// Missing/deleted server node, or tags changed since our snapshot →
 						// conflict. Never silently clobber a concurrent edit.
 						if (!server || (edit.baseTags && !tagsEqual(server.tags, edit.baseTags))) {
@@ -307,7 +322,7 @@ export async function processQueue(): Promise<number> {
 export async function applyMineAnyway(localId: number): Promise<void> {
 	const edit = await getPendingEdit(localId);
 	if (!edit) return;
-	const server = await fetchNodeById(edit.osmId);
+	const server = await fetchElementById(typeOf(edit), edit.osmId);
 	await updatePendingEdit(localId, {
 		status: 'pending',
 		baseTags: server?.tags ?? null,
@@ -332,8 +347,11 @@ export async function discardEdit(localId: number): Promise<void> {
 		return;
 	}
 
-	const server = await fetchNodeById(edit.osmId);
+	const server = await fetchElementById(typeOf(edit), edit.osmId);
 	if (server) {
+		// A discarded delete/unflag tombstoned the element; lift it so the
+		// restored server version shows again.
+		await clearDeletedMapNode(toRef(typeOf(edit), edit.osmId));
 		await storeMapNodes([server]);
 		markerCacheVersion.value++;
 	}
@@ -344,8 +362,11 @@ export async function retryEdit(localId: number): Promise<void> {
 	await updatePendingEdit(localId, { status: 'pending', errorMessage: undefined });
 }
 
-/** Fetches the server's current tags for a node (used by the conflict view). */
-export async function fetchServerTags(osmId: number): Promise<Record<string, string> | null> {
-	const server: OverPassElement | null = await fetchNodeById(osmId);
+/** Fetches the server's current tags for an element (used by the conflict view). */
+export async function fetchServerTags(
+	osmId: number,
+	elementType: OsmType = 'node'
+): Promise<Record<string, string> | null> {
+	const server = await fetchElementById(elementType, osmId);
 	return server?.tags ?? null;
 }
