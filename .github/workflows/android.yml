@@ -220,13 +220,18 @@ jobs:
         with:
           ruby-version: '3.3'
 
-      - name: Deploy to Google Play (internal)
+      - name: Deploy to Google Play
         run: |
           # supply auto-detects .apk files in the cwd and refuses apk+aab;
           # the signed apk is already on the GitHub release at this point
           rm -f aligned.apk fireyak-v*.apk
           bundle install
-          bundle exec fastlane android internal aab:"$(pwd)/artifacts/aab/app-release.aab"
+          # Tagged versions (release.yml, or a dispatch with a version) go straight
+          # to production; everything else (main-branch dev builds, untagged
+          # dispatch) goes to the internal testing track.
+          if [ -n "$INPUT_VERSION" ]; then LANE=production; else LANE=internal; fi
+          echo "Lane $LANE: $VERSION ($VERSION_CODE)"
+          bundle exec fastlane android "$LANE" aab:"$(pwd)/artifacts/aab/app-release.aab"
 
       - name: Commit Version Bump
         if: ${{ inputs.version == '' && inputs.build_number == '' }}
