@@ -1,4 +1,4 @@
-/** Project repository. Web-only in the UI: its README and sidebar link to donation pages. */
+/** Project repository. Hidden on Android: its README and sidebar link to donation pages. */
 export const GITHUB_URL = 'https://github.com/steinerjakob/FireYak';
 
 export const APP_STORE_URLS = {
@@ -13,7 +13,7 @@ export const APP_STORE_URLS = {
  * organisation (Apple's guideline 3.1.1 / 3.2.2 is similar), so the native
  * builds must not show them. This includes indirect paths: Google rejected
  * v2.19.1 because its GitHub link led to the README's donation buttons, so the
- * native builds must not link to GITHUB_URL or frame anything as "support"
- * either.
+ * Android build must not link to GITHUB_URL or frame anything as "support"
+ * either (iOS still shows the GitHub link for now).
  */
 export const DONATION_URL = 'https://ko-fi.com/jakobsteiner';

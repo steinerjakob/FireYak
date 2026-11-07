@@ -4,7 +4,7 @@ import { IonModal, IonButton, IonIcon } from '@ionic/vue';
 import { sparkles, trendingUp, bug, heart } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { Capacitor } from '@capacitor/core';
-import { DONATION_URL } from '@/helper/appStoreInfos';
+import { DONATION_URL, GITHUB_URL } from '@/helper/appStoreInfos';
 import {
 	useWhatsNew,
 	type WhatsNewEntry,
@@ -15,8 +15,12 @@ import {
 const { t, locale } = useI18n();
 const { isOpen, visibleReleases, dismiss } = useWhatsNew();
 
-/** The support button is web-only — see DONATION_URL for the store-policy reason. */
-const showDonation = !Capacitor.isNativePlatform();
+/**
+ * Support button: Ko-fi on the web, GitHub on iOS, hidden on Android — see
+ * DONATION_URL for the store-policy reason.
+ */
+const showSupport = Capacitor.getPlatform() !== 'android';
+const supportUrl = Capacitor.isNativePlatform() ? GITHUB_URL : DONATION_URL;
 
 /** Display order and icon for each entry type; only non-empty groups are rendered. */
 const GROUPS: { type: WhatsNewEntryType; icon: string }[] = [
@@ -75,10 +79,10 @@ const groupedEntries = (release: WhatsNewRelease) => {
 
 			<div class="whats-new-actions">
 				<ion-button
-					v-if="showDonation"
+					v-if="showSupport"
 					expand="block"
 					fill="outline"
-					:href="DONATION_URL"
+					:href="supportUrl"
 					target="_blank"
 				>
 					<ion-icon :icon="heart" slot="start"></ion-icon>
