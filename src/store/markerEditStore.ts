@@ -355,6 +355,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			await enqueueEdit({
 				action: 'update',
 				elementType: type,
+				outline: originalMarker.value.outline,
 				osmId: originalMarker.value.id,
 				baseTags: originalMarker.value.tags ?? null,
 				tags: finalTags,
@@ -363,7 +364,14 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			});
 			if (isMarkerTags(finalTags)) {
 				markerStore.updateSelectedMarker(
-					toCacheElement(type, originalMarker.value.id, lat, lon, finalTags)
+					toCacheElement(
+						type,
+						originalMarker.value.id,
+						lat,
+						lon,
+						finalTags,
+						originalMarker.value.outline
+					)
 				);
 			} else {
 				// Unflagged pond area: it is no longer a marker.
@@ -491,7 +499,14 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					// A freshly flagged area may carry a tombstone from an earlier
 					// local unflag — lift it so the stored marker is visible.
 					if (isAreaType(type)) await clearDeletedMapNode(toRef(type, finalId));
-					const updatedMarker: OverPassElement = toCacheElement(type, finalId, lat, lon, finalTags);
+					const updatedMarker: OverPassElement = toCacheElement(
+						type,
+						finalId,
+						lat,
+						lon,
+						finalTags,
+						originalMarker.value?.outline
+					);
 					await storeMapNodes([updatedMarker]);
 					markerStore.updateSelectedMarker(updatedMarker);
 				} else {

@@ -32,10 +32,14 @@ export function toCacheElement(
 	id: number,
 	lat: number,
 	lon: number,
-	tags: Record<string, string>
+	tags: Record<string, string>,
+	outline?: GeoJSON.Geometry
 ): OverPassElement {
 	if (isAreaType(type)) {
-		return { id, type, center: { lat, lon }, tags };
+		// Keep the area's outline (from the static extract) across edits.
+		return outline
+			? { id, type, center: { lat, lon }, tags, outline }
+			: { id, type, center: { lat, lon }, tags };
 	}
 	return { id, type: 'node', lat, lon, tags };
 }

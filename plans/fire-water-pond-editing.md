@@ -178,9 +178,10 @@ parks and pumps).
   search (`fetchWaterAreasAt`), the candidate list (`PondAreaCandidates.vue`),
   flagging (`startFlagging`), the duplicate guard for areas that are already ponds,
   and the large-water hint.
-- **Phase 3: done.** Outline highlight (`areaOutline.ts`; the search returns
-  outlines clipped with `out geom(bbox)`; a selected or edited area fetches its
-  outline once), the "Add pumping spot" quick action (info panel + offer after
+- **Phase 3: done.** Outline highlight (`areaOutline.ts`). Pond areas keep their
+  real polygon from the static extract, so their highlight needs no request.
+  Search candidates bring outlines clipped with `out geom(bbox)`, and only
+  elements without either fall back to a one-off Overpass `out geom`. the "Add pumping spot" quick action (info panel + offer after
   saving a pond, flow E), and a duplicate guard for nearby pond nodes from the
   local marker cache (60 m, works offline).
 - Left open: "tap water to mark it" outside add mode, and node → area upgrade

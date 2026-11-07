@@ -151,6 +151,12 @@ export interface OverPassElement {
 	tags: {
 		[key: string]: string;
 	};
+	/**
+	 * Real outline of a pond area, kept from the static extract (which ships
+	 * full polygons) so the map highlight needs no extra request. Only set for
+	 * `emergency=fire_water_pond` ways/relations of modest size.
+	 */
+	outline?: GeoJSON.Geometry;
 }
 
 // ---------------------------------------------------------------------------
@@ -811,7 +817,9 @@ export async function fetchWaterAreasAt(
 				: undefined);
 		if (!center) continue;
 		candidates.push({
-			element: { id: element.id, type: element.type, center, tags: element.tags ?? {} },
+			// The outline rides along on the element, so a marked area keeps it
+			// in the marker cache (it is clipped to the search window).
+			element: { id: element.id, type: element.type, center, tags: element.tags ?? {}, outline },
 			inside: isInside,
 			approxAreaM2: boundsAreaM2(bounds),
 			distanceM: distanceM(lat, lon, center.lat, center.lon),

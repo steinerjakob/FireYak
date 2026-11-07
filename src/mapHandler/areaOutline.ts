@@ -27,6 +27,8 @@ export function cachedOutline(ref: OsmRef): GeoJSON.Geometry | undefined {
 export async function getAreaOutline(element: OverPassElement): Promise<GeoJSON.Geometry | null> {
 	const type = elementTypeOf(element);
 	if (!isAreaType(type)) return null;
+	// The static extract ships the real polygon with the marker.
+	if (element.outline) return element.outline;
 	const ref = toRef(type, element.id);
 	const cached = outlines.get(ref);
 	if (cached) return cached;

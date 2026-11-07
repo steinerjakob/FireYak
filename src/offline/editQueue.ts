@@ -107,6 +107,8 @@ export interface EnqueueInput {
 	 * remove the water body itself, so it is rejected.
 	 */
 	elementType?: OsmType;
+	/** Outline of an area, carried into the optimistic cache entry. */
+	outline?: GeoJSON.Geometry;
 	/** Real OSM ID for update/delete; ignored for create (a temp ID is assigned). */
 	osmId: number;
 	baseTags: Record<string, string> | null;
@@ -181,7 +183,9 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 		// A water area flagged as fire pond may carry a tombstone from an
 		// earlier local unflag — lift it, or the store below stays hidden.
 		if (isAreaType(elementType)) await clearDeletedMapNode(toRef(elementType, osmId));
-		await storeMapNodes([toCacheElement(elementType, osmId, input.lat, input.lon, input.tags)]);
+		await storeMapNodes([
+			toCacheElement(elementType, osmId, input.lat, input.lon, input.tags, input.outline)
+		]);
 	}
 	markerCacheVersion.value++;
 }

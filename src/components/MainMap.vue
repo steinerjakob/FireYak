@@ -1344,7 +1344,7 @@ function addMapLayers(map: maplibregl.Map) {
 		id: AREA_OUTLINE_FILL_LAYER,
 		type: 'fill',
 		source: AREA_OUTLINE_SOURCE,
-		filter: ['==', ['geometry-type'], 'Polygon'],
+		filter: ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
 		paint: { 'fill-color': '#d32f2f', 'fill-opacity': 0.12 }
 	});
 	// Solid line for the pond in focus, dashed for candidates while adding.
