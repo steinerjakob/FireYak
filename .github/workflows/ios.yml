@@ -20,6 +20,10 @@ on:
         description: 'CFBundleShortVersionString for a dev build'
         required: false
         type: string
+      build_label:
+        description: 'Commit label shown on the About screen of a dev build'
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       version:
@@ -42,6 +46,7 @@ jobs:
       contents: read
     env:
       VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY_IOS }}
+      APP_BUILD_LABEL: ${{ inputs.build_label }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

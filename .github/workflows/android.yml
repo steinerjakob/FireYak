@@ -20,6 +20,10 @@ on:
         description: 'versionName for a dev build'
         required: false
         type: string
+      build_label:
+        description: 'Commit label shown on the About screen of a dev build'
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       version:
@@ -43,6 +47,7 @@ jobs:
       contents: read
     env:
       VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY_ANDROID }}
+      APP_BUILD_LABEL: ${{ inputs.build_label }}
       INPUT_VERSION: ${{ inputs.version }}
       INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
       INPUT_VERSION_NAME: ${{ inputs.version_name }}

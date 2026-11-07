@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/client" />
 
+/** Commit label for dev/preview builds (empty for releases) — see `getBuildLabel` in vite.config.ts. */
+declare const __APP_BUILD_LABEL__: string;
+
 interface ImportMetaEnv {
 	readonly VITE_PROTOMAPS_API_KEY: string;
 	/** Overrides the base URL for the static OSM data extract (§4.3). Defaults
