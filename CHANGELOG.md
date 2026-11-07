@@ -1,6 +1,16 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.19.2] - 2026-11-07
+
+### Bug Fixes
+
+- Hide GitHub support link in the Android app (#104)
+## [2.19.1] - 2026-11-06
+
+### Bug Fixes
+
+- Remove Ko-fi donation links from native app builds (#103)
 ## [2.19.0] - 2026-11-06
 
 ### Features
