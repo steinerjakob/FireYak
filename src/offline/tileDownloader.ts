@@ -5,36 +5,108 @@ import { NETWORK_URL } from '@/offline/offlineProtocol';
 
 /** Parallel tile fetches per source. Kept modest to stay polite to the CDNs. */
 const CONCURRENCY = 6;
-/** Extra attempts after the first failure (exponential backoff between them). */
-const MAX_RETRIES = 4;
-const BASE_BACKOFF_MS = 500;
+/**
+ * Extra attempts after the first failure. With the capped exponential backoff
+ * below this is roughly 5 minutes of waiting per tile, enough to ride out a
+ * typical per-minute rate-limit window instead of failing the whole download.
+ */
+const MAX_RETRIES = 10;
+const BASE_BACKOFF_MS = 1000;
+const MAX_BACKOFF_MS = 60_000;
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** Permanent HTTP failure: retrying won't help (e.g. 404, 403 bad key). */
+class PermanentHttpError extends Error {}
+
+const abortError = () => new DOMException('Download aborted', 'AbortError');
+
+/** setTimeout that rejects right away when the download is paused/cancelled. */
+function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve, reject) => {
+		if (signal.aborted) return reject(abortError());
+		const onAbort = () => {
+			clearTimeout(timer);
+			reject(abortError());
+		};
+		const timer = setTimeout(() => {
+			signal.removeEventListener('abort', onAbort);
+			resolve();
+		}, ms);
+		signal.addEventListener('abort', onAbort, { once: true });
+	});
+}
 
 /**
- * Fetches `url`, retrying on 429/5xx and network errors with exponential
- * backoff. Aborts short-circuit immediately (pause/cancel from the UI). Rethrows
- * the last error after the retry budget is spent so the caller can mark the area
- * `error` and resume later.
+ * Per-host "do not send before" timestamp. When one worker is rate limited,
+ * every worker hitting that host backs off together instead of the other five
+ * continuing to hammer it (which only extends the throttle).
+ */
+const hostCooldownUntil = new Map<string, number>();
+
+function hostOf(url: string): string {
+	try {
+		return new URL(url).host;
+	} catch {
+		return url;
+	}
+}
+
+/**
+ * Parses `Retry-After` (delta-seconds or HTTP-date) into milliseconds. Note it
+ * is only readable cross-origin if the server exposes it via CORS; otherwise we
+ * fall back to our own backoff.
+ */
+function retryAfterMs(resp: Response): number | null {
+	const header = resp.headers.get('Retry-After');
+	if (!header) return null;
+	const seconds = Number(header);
+	if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+	const date = Date.parse(header);
+	return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
+}
+
+/** Exponential backoff with ±25% jitter so workers don't retry in lockstep. */
+function backoffMs(attempt: number): number {
+	const base = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** attempt);
+	return base * (0.75 + Math.random() * 0.5);
+}
+
+/**
+ * Fetches `url`, retrying on 429/5xx and network errors with capped
+ * exponential backoff (honouring `Retry-After` when present). A 429 or 5xx
+ * puts the whole host into a shared cooldown. Aborts short-circuit immediately,
+ * including mid-wait (pause/cancel from the UI). Rethrows the last error after
+ * the retry budget is spent so the caller can mark the area `error` and resume
+ * later.
  */
 async function fetchWithBackoff(url: string, signal: AbortSignal): Promise<Response> {
+	const host = hostOf(url);
 	let lastError: unknown;
 	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-		if (signal.aborted) throw new DOMException('Download aborted', 'AbortError');
+		// Respect a cooldown another worker set for this host.
+		const waitForHost = (hostCooldownUntil.get(host) ?? 0) - Date.now();
+		if (waitForHost > 0) await abortableSleep(waitForHost, signal);
+		if (signal.aborted) throw abortError();
+
+		let delay = backoffMs(attempt);
 		try {
 			const resp = await fetch(url, { signal });
 			if (resp.ok) return resp;
-			// Retry only transient statuses; 4xx (except 429) is permanent.
-			if (resp.status !== 429 && resp.status < 500) {
-				throw new Error(`Tile HTTP ${resp.status}`);
+			// Retry only transient statuses; 4xx (except 408/429) is permanent.
+			if (resp.status !== 429 && resp.status !== 408 && resp.status < 500) {
+				throw new PermanentHttpError(`Tile HTTP ${resp.status}`);
 			}
 			lastError = new Error(`Tile HTTP ${resp.status}`);
+			const hinted = retryAfterMs(resp);
+			if (hinted != null) delay = Math.min(Math.max(delay, hinted), 5 * MAX_BACKOFF_MS);
+			// Throttle every worker on this host, not just this one.
+			hostCooldownUntil.set(host, Math.max(hostCooldownUntil.get(host) ?? 0, Date.now() + delay));
 		} catch (err) {
-			if (signal.aborted) throw err;
+			if (signal.aborted || err instanceof PermanentHttpError) throw err;
+			// Network error. In browsers a 429 without CORS headers also lands here.
 			lastError = err;
 		}
 		if (attempt < MAX_RETRIES) {
-			await sleep(BASE_BACKOFF_MS * 2 ** attempt);
+			await abortableSleep(delay, signal);
 		}
 	}
 	throw lastError;
