@@ -46,14 +46,19 @@ platform :ios do
     setup_ci
     ios_dir = File.expand_path('../ios')
 
+    # `version` overrides the marketing version (main-branch dev builds ship
+    # the upcoming release's version; see .github/workflows/dev-builds.yml).
     increment_version_number(
-      version_number: get_package_version_without_prerelease,
+      version_number: options[:version] || get_package_version_without_prerelease,
       xcodeproj: File.join(ios_dir, "App/App.xcodeproj")
     )
 
     match(type: "appstore", readonly: is_ci, api_key_path: "./authkey.json")
 
-		build_app(project: File.join(ios_dir, "App/App.xcodeproj"), scheme: "App")
+    # `build_number` sets CFBundleVersion (Info.plist reads CURRENT_PROJECT_VERSION).
+    # It must grow across dev and release uploads of the same version.
+    xcargs = options[:build_number] ? "CURRENT_PROJECT_VERSION=#{options[:build_number]}" : nil
+		build_app(project: File.join(ios_dir, "App/App.xcodeproj"), scheme: "App", xcargs: xcargs)
 
   end
 
@@ -62,6 +67,7 @@ platform :ios do
     default_ios_app_build(options)
 		pilot(
 				skip_waiting_for_build_processing: true,
+				distribute_external: false,
         api_key_path: "./authkey.json"
 		)
   end

@@ -17,6 +17,7 @@
 					<p class="version">
 						{{ $t('about.version') }} {{ appInfo?.version }}
 						<template v-if="appInfo?.build"> ({{ appInfo.build }}) </template>
+						<template v-if="showBuildLabel"> · {{ buildLabel }}</template>
 					</p>
 					<ion-button fill="clear" size="small" @click="openHistory">
 						<ion-icon :icon="sparkles" slot="start"></ion-icon>
@@ -149,6 +150,13 @@ const showDonation = !Capacitor.isNativePlatform();
 const showSupportCard = Capacitor.getPlatform() !== 'android';
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
+
+// Dev/preview builds identify their commit; Android dev builds already carry
+// it in versionName, so don't repeat it there.
+const buildLabel = __APP_BUILD_LABEL__;
+const showBuildLabel = computed(
+	() => !!buildLabel && !(appInfo.value?.version ?? '').includes(buildLabel)
+);
 
 /** Re-evaluates once the timestamp resolves; `null` hides the line entirely. */
 const dataAsOf = computed(() => (planetTimestamp.value ? formatted() : null));
