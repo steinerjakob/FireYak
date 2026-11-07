@@ -36,9 +36,11 @@ export function toCacheElement(
 	outline?: GeoJSON.Geometry
 ): OverPassElement {
 	if (isAreaType(type)) {
-		// Keep the area's outline (from the static extract) across edits.
+		// Keep the area's outline (from the static extract) across edits. It
+		// usually comes out of reactive store state, and IndexedDB cannot clone a
+		// Vue proxy (DataCloneError) — so store a plain copy.
 		return outline
-			? { id, type, center: { lat, lon }, tags, outline }
+			? { id, type, center: { lat, lon }, tags, outline: JSON.parse(JSON.stringify(outline)) }
 			: { id, type, center: { lat, lon }, tags };
 	}
 	return { id, type: 'node', lat, lon, tags };

@@ -18,6 +18,7 @@ import {
 } from '@/mapHandler/databaseHandler';
 import { markerCacheVersion } from '@/mapHandler/markerHandler';
 import { toRef, type OsmType } from '@/helper/osmRef';
+import { getFeatureForEdit, rememberDevServerCreate, uploadChange } from '@/services/osmWrite';
 import { describeEdit, isAreaType, isMarkerTags, toCacheElement } from '@/helper/osmElement';
 
 // ---------------------------------------------------------------------------
@@ -202,18 +203,20 @@ async function uploadCreate(edit: PendingEdit): Promise<number> {
 		modify: [],
 		delete: []
 	};
-	const result = await OSM.uploadChangeset({ comment: commentFor(edit) }, change);
+	const result = await uploadChange({ comment: commentFor(edit) }, change, { interactive: false });
 	const changesetId = parseInt(Object.keys(result)[0]);
 	const diff = result[changesetId].diffResult;
 	if (!diff.node || diff.node[-1] == null) {
 		throw new Error('Create changeset returned no new node ID');
 	}
-	return diff.node[-1].newId;
+	const newId = diff.node[-1].newId;
+	rememberDevServerCreate('node', newId);
+	return newId;
 }
 
 async function uploadUpdate(edit: PendingEdit): Promise<void> {
 	const type = typeOf(edit);
-	const [element] = await OSM.getFeature(type, edit.osmId);
+	const element = await getFeatureForEdit(type, edit.osmId);
 	// Areas keep their geometry (way nodes / relation members) untouched; only
 	// nodes are moved.
 	if (element.type === 'node') {
@@ -222,16 +225,16 @@ async function uploadUpdate(edit: PendingEdit): Promise<void> {
 	}
 	element.tags = edit.tags;
 	const change: OSM.OsmChange = { create: [], modify: [element], delete: [] };
-	await OSM.uploadChangeset({ comment: commentFor(edit) }, change);
+	await uploadChange({ comment: commentFor(edit) }, change, { interactive: false });
 }
 
 async function uploadDelete(edit: PendingEdit): Promise<void> {
 	if (isAreaType(typeOf(edit))) {
 		throw new Error(`Refusing to delete ${typeOf(edit)} ${edit.osmId}: areas only get tag edits`);
 	}
-	const [node] = await OSM.getFeature('node', edit.osmId);
+	const node = await getFeatureForEdit('node', edit.osmId);
 	const change: OSM.OsmChange = { create: [], modify: [], delete: [node] };
-	await OSM.uploadChangeset({ comment: commentFor(edit) }, change);
+	await uploadChange({ comment: commentFor(edit) }, change, { interactive: false });
 }
 
 /**

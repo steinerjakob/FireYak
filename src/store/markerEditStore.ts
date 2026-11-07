@@ -38,7 +38,7 @@ import {
 	toCacheElement,
 	withoutFirePondFlag
 } from '@/helper/osmElement';
-import { OSM_EDITS_TARGET_OTHER_SERVER } from '@/services/osmConfig';
+import { getFeatureForEdit, rememberDevServerCreate, uploadChange } from '@/services/osmWrite';
 
 /** How long the "saved" toast stays up after a successful upload. */
 const SAVE_SUCCESS_TOAST_MS = 2000;
@@ -244,26 +244,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		await alert.present();
 	}
 
-	/**
-	 * Preview builds edit the OSM dev server, but existing markers (and water
-	 * areas) come from production OSM: their IDs are missing or belong to
-	 * unrelated objects there, so saving them could modify the wrong one. Only
-	 * locally created markers (negative temp IDs) may be edited. Returns `true`
-	 * (after telling the user) when the element must not be edited.
-	 */
-	async function blockedOnOtherServer(element: OverPassElement): Promise<boolean> {
-		if (!OSM_EDITS_TARGET_OTHER_SERVER || element.id <= 0) return false;
-		const alert = await alertController.create({
-			header: t('markerEdit.devServerAlert.title'),
-			message: t('markerEdit.devServerAlert.message'),
-			buttons: [t('markerEdit.buttons.cancel')]
-		});
-		await alert.present();
-		return true;
-	}
-
+	// Preview builds may edit existing (production) objects: saving them is a
+	// dry run that shows the changeset instead of uploading it — see
+	// `src/services/osmWrite.ts`.
 	async function requestStartEditing(marker: OverPassElement) {
-		if (await blockedOnOtherServer(marker)) return;
 		if (!osmAuthStore.isAuthenticated) {
 			await showAuthAlert();
 			return;
@@ -287,8 +271,6 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	 */
 	async function startFlagging(candidate: WaterAreaCandidate) {
 		const element = candidate.element;
-		// Water areas come from production OSM — same rule as editing markers.
-		if (await blockedOnOtherServer(element)) return;
 		resetAreaLookup();
 		startEditing(element);
 		editableTags.value = { ...element.tags, emergency: 'fire_water_pond' };
@@ -473,12 +455,13 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					modify: [],
 					delete: []
 				};
-				result = await OSM.uploadChangeset(
+				result = await uploadChange(
 					{ comment: `Add ${markerType.value} via FireYak ${version}` },
-					change
+					change,
+					{ interactive: true }
 				);
 			} else if (isEditing.value && originalMarker.value) {
-				const [element] = await OSM.getFeature(elementType.value, originalMarker.value.id);
+				const element = await getFeatureForEdit(elementType.value, originalMarker.value.id);
 				// Only nodes move. Ways/relations keep their geometry untouched.
 				if (element.type === 'node') {
 					element.lat = lat;
@@ -498,10 +481,9 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					originalMarker.value.tags,
 					finalTags
 				);
-				result = await OSM.uploadChangeset(
-					{ comment: `${description} via FireYak ${version}` },
-					change
-				);
+				result = await uploadChange({ comment: `${description} via FireYak ${version}` }, change, {
+					interactive: true
+				});
 			} else {
 				return;
 			}
@@ -513,6 +495,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 
 				if (isAdding.value && diff.node) {
 					finalId = diff.node[-1].newId;
+					rememberDevServerCreate('node', finalId);
 				}
 
 				// Update local cache
@@ -674,16 +657,15 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		}
 
 		try {
-			const [node] = await OSM.getFeature('node', originalMarker.value.id);
+			const node = await getFeatureForEdit('node', originalMarker.value.id);
 			const change: OSM.OsmChange = {
 				create: [],
 				modify: [],
 				delete: [node]
 			};
-			await OSM.uploadChangeset(
-				{ comment: `Remove ${markerType.value} via FireYak ${version}` },
-				change
-			);
+			await uploadChange({ comment: `Remove ${markerType.value} via FireYak ${version}` }, change, {
+				interactive: true
+			});
 
 			await deleteMapNode(toRef('node', originalMarker.value.id));
 			markerCacheVersion.value++;

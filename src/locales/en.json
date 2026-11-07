@@ -254,10 +254,6 @@
 			"title": "OpenStreetMap Account Required",
 			"message": "You need an OpenStreetMap account to add or edit markers. Do you want to log in?"
 		},
-		"devServerAlert": {
-			"title": "Editing not available",
-			"message": "This test build saves to the OpenStreetMap dev server, but the map shows production data, so existing markers can't be edited or deleted here. Adding new markers works."
-		},
 		"deleteDialog": {
 			"title": "Remove from OpenStreetMap",
 			"message": "Are you sure you want to permanently remove this marker from OpenStreetMap? This action cannot be undone.",
@@ -338,6 +334,12 @@
 			"message": "Where does the fire engine pump from this pond? Add the spot as a suction point.",
 			"action": "Add",
 			"button": "Add pumping spot"
+		},
+		"dryRun": {
+			"title": "Preview build: not uploaded",
+			"subtitle": "This is the change FireYak would send to OpenStreetMap. The map shows it locally.",
+			"ok": "OK",
+			"toast": "Preview build: a queued change to an existing object was not uploaded."
 		}
 	},
 	"nativeApp": {
