@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonIcon } from '@ionic/vue';
-import { close, trashOutline } from 'ionicons/icons';
+import { close, trashOutline, removeCircleOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
@@ -11,10 +11,12 @@ const markerEditStore = useMarkerEditStore();
 const typeMap: Record<string, string> = {
 	fire_hydrant: 'FireHydrant',
 	suction_point: 'SuctionPoint',
-	water_tank: 'WaterTank'
+	water_tank: 'WaterTank',
+	fire_water_pond: 'FireWaterPond'
 };
 
 const titleKey = computed(() => {
+	if (markerEditStore.isFlagging) return 'markerEdit.title.flagFireWaterPond';
 	const type = markerEditStore.editableTags['emergency'] || 'fire_hydrant';
 	const mode = markerEditStore.isAdding ? 'add' : 'edit';
 	const suffix = typeMap[type] ?? 'FireHydrant';
@@ -32,12 +34,19 @@ const closePanel = () => {
 	<ion-header class="ion-no-border ios26-disabled">
 		<ion-toolbar class="ios26-disabled">
 			<ion-buttons slot="start">
+				<!-- Pond areas are never deleted: the button only removes the
+				     fire-pond information and keeps the water body. -->
 				<ion-button
-					v-if="markerEditStore.isEditing"
+					v-if="markerEditStore.canDelete"
 					@click="markerEditStore.requestDeleteMarker()"
 					color="danger"
+					:aria-label="
+						markerEditStore.isArea
+							? t('markerEdit.unflagDialog.title')
+							: t('markerEdit.deleteDialog.title')
+					"
 				>
-					<ion-icon :icon="trashOutline" />
+					<ion-icon :icon="markerEditStore.isArea ? removeCircleOutline : trashOutline" />
 				</ion-button>
 			</ion-buttons>
 

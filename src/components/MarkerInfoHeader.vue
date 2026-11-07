@@ -21,7 +21,9 @@ const markerEditStore = useMarkerEditStore();
 const { t } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
 const editAllowed = computed(() =>
-	['fire_hydrant', 'suction_point', 'water_tank'].includes(markerData.value?.tags?.emergency || '')
+	['fire_hydrant', 'suction_point', 'water_tank', 'fire_water_pond'].includes(
+		markerData.value?.tags?.emergency || ''
+	)
 );
 
 const startEdit = () => {

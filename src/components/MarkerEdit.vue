@@ -17,11 +17,12 @@ import {
 	IonModal,
 	IonChip
 } from '@ionic/vue';
-import { saveOutline, closeOutline, logInOutline } from 'ionicons/icons';
+import { saveOutline, closeOutline, logInOutline, waterOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
+import PondAreaCandidates from '@/components/PondAreaCandidates.vue';
 
 const markerEditStore = useMarkerEditStore();
 const osmAuthStore = useOsmAuthStore();
@@ -42,6 +43,9 @@ const waterSources = [
 	'water_works'
 ];
 const locationOptions = ['overground', 'underground'];
+/** `water=*` values offered for fire water ponds (wiki: "typically water=pond"). */
+const pondWaterTypes = ['pond', 'reservoir', 'basin'];
+const intermittentOptions = ['yes', 'no'];
 const accessOptions = ['yes', 'private', 'permissive', 'no'];
 
 const commonDiameters = ['80', '100', '150', '200', '300'];
@@ -108,10 +112,43 @@ const onTypeChange = () => {
 	if (type !== 'suction_point') {
 		delete markerEditStore.editableTags['water_source'];
 	}
+	if (type === 'fire_water_pond') {
+		// The wiki requires the physical water feature next to the flag.
+		markerEditStore.addTagIfMissing('natural', 'water');
+		markerEditStore.addTagIfMissing('water', 'pond');
+	} else {
+		// Only drops physical tags this form added — never pre-existing ones.
+		markerEditStore.removeAutoAddedTags();
+		delete markerEditStore.editableTags['intermittent'];
+	}
 	if (type === 'fire_hydrant' && !markerEditStore.editableTags['fire_hydrant:type']) {
 		markerEditStore.editableTags['fire_hydrant:type'] = 'pillar';
 	}
 };
+
+/**
+ * Choosing a water body type on a pond that lacks `natural=water` (older node
+ * data) adds it, so the save-time "physical tag" check is satisfied.
+ */
+const onPondWaterTypeChange = () => {
+	if (markerEditStore.editableTags['water']) {
+		markerEditStore.addTagIfMissing('natural', 'water');
+	}
+};
+
+/** Switches the add form to another type, with the same clean-up as the select. */
+const switchType = (type: string) => {
+	markerEditStore.editableTags['emergency'] = type;
+	onTypeChange();
+};
+
+/** Protomaps sees a pond-sized water body under the pin (plan §B2). */
+const suggestPond = computed(
+	() =>
+		markerEditStore.isAdding &&
+		emergencyType.value !== 'fire_water_pond' &&
+		markerEditStore.detectedWater?.pondLike === true
+);
 
 const onHydrantTypeChange = () => {
 	if (markerEditStore.editableTags['fire_hydrant:type'] !== 'pillar') {
@@ -138,6 +175,9 @@ const relevantTags = [
 	'water_tank:volume',
 	'water_volume',
 	'location',
+	'natural',
+	'water',
+	'intermittent',
 	'access',
 	'ref',
 	'operator',
@@ -192,8 +232,20 @@ const login = () => {
 					<ion-select-option value="water_tank">{{
 						t('markerInfo.title.waterTank')
 					}}</ion-select-option>
+					<ion-select-option value="fire_water_pond">{{
+						t('markerInfo.title.fireWaterPond')
+					}}</ion-select-option>
 				</ion-select>
 			</ion-item>
+			<!-- Water under the pin: suggest the pond type, never switch silently -->
+			<div v-if="suggestPond" class="suggestion-chips">
+				<ion-chip @click="switchType('fire_water_pond')">
+					<ion-icon :icon="waterOutline" />
+					<ion-label>{{ t('markerEdit.pondAreas.waterDetected') }}</ion-label>
+				</ion-chip>
+			</div>
+			<!-- Existing water areas at the pin (mark instead of adding a point) -->
+			<pond-area-candidates v-if="emergencyType === 'fire_water_pond'" @switch-type="switchType" />
 		</ion-item-group>
 
 		<!-- ==================== FIRE HYDRANT FIELDS ==================== -->
@@ -502,6 +554,120 @@ const login = () => {
 			</ion-item>
 		</ion-item-group>
 
+		<!-- ==================== FIRE WATER POND FIELDS ==================== -->
+		<ion-item-group v-if="emergencyType === 'fire_water_pond'">
+			<ion-item-divider>
+				<ion-label>{{ t('markerInfo.title.fireWaterPond') }}</ion-label>
+			</ion-item-divider>
+
+			<!-- Pond mapped as a water area: only tags change -->
+			<ion-item v-if="markerEditStore.isArea" lines="none">
+				<ion-note class="area-hint">{{ t('markerEdit.hints.pondArea') }}</ion-note>
+			</ion-item>
+
+			<!-- Water body type (describes the existing area → read-only there) -->
+			<ion-item lines="none">
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.waterType')"
+					v-model="markerEditStore.editableTags['water']"
+					:disabled="markerEditStore.isArea"
+					:placeholder="t('markerInfo.tags.waterType')"
+					:helper-text="t('markerEdit.hints.waterType')"
+					@ionChange="onPondWaterTypeChange"
+				>
+					<ion-select-option v-for="w in pondWaterTypes" :key="w" :value="w">
+						{{ t(`markerInfo.values.water.${w}`) }}
+					</ion-select-option>
+					<ion-select-option
+						v-if="
+							markerEditStore.editableTags['water'] &&
+							!pondWaterTypes.includes(markerEditStore.editableTags['water'])
+						"
+						:value="markerEditStore.editableTags['water']"
+					>
+						{{ markerEditStore.editableTags['water'] }}
+					</ion-select-option>
+				</ion-select>
+			</ion-item>
+
+			<!-- A pond point with a conflicting natural=* (e.g. natural=scrub) can't be
+			     saved (the wiki requires natural=water or similar). Let the user fix
+			     it explicitly instead of rewriting it silently. -->
+			<ion-item
+				v-if="
+					!markerEditStore.isArea &&
+					markerEditStore.editableTags['natural'] &&
+					markerEditStore.editableTags['natural'] !== 'water'
+				"
+				lines="none"
+			>
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerEdit.labels.natural')"
+					v-model="markerEditStore.editableTags['natural']"
+					:helper-text="
+						t('markerEdit.hints.naturalConflict', {
+							value: markerEditStore.editableTags['natural']
+						})
+					"
+				>
+					<ion-select-option value="water">natural=water</ion-select-option>
+					<ion-select-option :value="markerEditStore.editableTags['natural']"
+						>natural={{ markerEditStore.editableTags['natural'] }}</ion-select-option
+					>
+				</ion-select>
+			</ion-item>
+
+			<!-- Intermittent -->
+			<ion-item lines="none">
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.intermittent')"
+					v-model="markerEditStore.editableTags['intermittent']"
+					:placeholder="t('markerInfo.tags.intermittent')"
+					:helper-text="t('markerEdit.hints.intermittent')"
+				>
+					<ion-select-option value="">—</ion-select-option>
+					<ion-select-option v-for="i in intermittentOptions" :key="i" :value="i">
+						{{ t(`markerInfo.values.intermittent.${i}`) }}
+					</ion-select-option>
+				</ion-select>
+			</ion-item>
+
+			<!-- Access -->
+			<ion-item lines="none">
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.access')"
+					v-model="markerEditStore.editableTags['access']"
+					:placeholder="t('markerInfo.tags.access')"
+					:helper-text="t('markerEdit.hints.access')"
+				>
+					<ion-select-option value="">—</ion-select-option>
+					<ion-select-option v-for="a in accessOptions" :key="a" :value="a">
+						{{ t(`markerInfo.values.access.${a}`) }}
+					</ion-select-option>
+				</ion-select>
+			</ion-item>
+
+			<!-- Name -->
+			<ion-item lines="none">
+				<ion-input
+					fill="outline"
+					label-placement="stacked"
+					:clear-input="true"
+					:label="t('markerInfo.tags.name')"
+					v-model="markerEditStore.editableTags['name']"
+					:helper-text="t('markerEdit.hints.name')"
+				></ion-input>
+			</ion-item>
+		</ion-item-group>
+
 		<!-- ==================== WATER TANK FIELDS ==================== -->
 		<ion-item-group v-if="emergencyType === 'water_tank'">
 			<ion-item-divider>
@@ -689,6 +855,13 @@ const login = () => {
 <style scoped>
 .edit-list {
 	background: transparent;
+}
+
+.area-hint {
+	display: block;
+	padding: 4px 0 8px;
+	font-size: 0.875rem;
+	line-height: 1.4;
 }
 
 .edit-list ion-input,

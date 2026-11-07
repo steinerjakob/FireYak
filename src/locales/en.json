@@ -38,7 +38,9 @@
 			"osmId": "OSM ID",
 			"flowCapacity": "Flow Capacity",
 			"flowRate": "Flow Rate",
-			"awwaClass": "AWWA Class"
+			"awwaClass": "AWWA Class",
+			"waterType": "Water Body Type",
+			"intermittent": "Dries Out Seasonally"
 		},
 		"values": {
 			"fire_hydrant:type": {
@@ -97,6 +99,15 @@
 				"A": "Class A — 1000–1500 gal/min (Green)",
 				"B": "Class B — 500–1000 gal/min (Yellow)",
 				"C": "Class C — <500 gal/min (Red)"
+			},
+			"water": {
+				"pond": "Pond",
+				"reservoir": "Reservoir",
+				"basin": "Basin"
+			},
+			"intermittent": {
+				"yes": "Yes",
+				"no": "No"
 			}
 		},
 		"navigation": {
@@ -231,18 +242,18 @@
 			"addSuctionPoint": "Add Suction Point",
 			"editSuctionPoint": "Edit Suction Point",
 			"addWaterTank": "Add Water Tank",
-			"editWaterTank": "Edit Water Tank"
+			"editWaterTank": "Edit Water Tank",
+			"addFireWaterPond": "Add Fire Water Pond",
+			"editFireWaterPond": "Edit Fire Water Pond",
+			"flagFireWaterPond": "Mark as Fire Water Pond"
 		},
 		"labels": {
-			"markerType": "Water Source Type"
+			"markerType": "Water Source Type",
+			"natural": "Physical feature"
 		},
 		"authDialog": {
 			"title": "OpenStreetMap Account Required",
 			"message": "You need an OpenStreetMap account to add or edit markers. Do you want to log in?"
-		},
-		"devServerAlert": {
-			"title": "Editing not available",
-			"message": "This test build saves to the OpenStreetMap dev server, but the map shows production data, so existing markers can't be edited or deleted here. Adding new markers works."
 		},
 		"deleteDialog": {
 			"title": "Remove from OpenStreetMap",
@@ -279,14 +290,63 @@
 			"tankLocation": "Whether the tank is located above or below ground.",
 			"name": "A distinctive name for this water source, if it has one.",
 			"surveyDate": "Date when this water source was last surveyed or verified on site.",
-			"awwaClass": "AWWA colour classification based on flow capacity. Used in some US jurisdictions to indicate hydrant performance by bonnet/cap colour."
+			"awwaClass": "AWWA colour classification based on flow capacity. Used in some US jurisdictions to indicate hydrant performance by bonnet/cap colour.",
+			"pondArea": "This pond is mapped as a water area in OpenStreetMap. Its shape stays as it is — only the details below are changed.",
+			"waterType": "What kind of water body this is. Ponds are small standing waters, reservoirs and basins are man-made.",
+			"intermittent": "Whether the pond can run dry, e.g. in summer. Important to know before relying on it.",
+			"naturalConflict": "This point is tagged natural={value}. A fire water pond needs natural=water — change it if the point really is the pond."
 		},
 		"messages": {
 			"saveSuccess": "Successfully saved to OpenStreetMap!",
 			"saveError": "Failed to save to OpenStreetMap. Please try again.",
 			"locationSet": "Location set successfully.",
 			"deleteSuccess": "Successfully removed from OpenStreetMap!",
-			"deleteError": "Failed to remove from OpenStreetMap. Please try again."
+			"deleteError": "Failed to remove from OpenStreetMap. Please try again.",
+			"pondNeedsWater": "A fire water pond also needs the water body type. Please select one.",
+			"unflagSuccess": "Fire pond information removed from OpenStreetMap."
+		},
+		"unflagDialog": {
+			"title": "Remove fire pond information",
+			"message": "This water area will no longer be marked as a fire water pond. The water area itself stays in OpenStreetMap.",
+			"confirm": "Remove"
+		},
+		"pondAreas": {
+			"waterDetected": "Water detected here — add a fire water pond?",
+			"loading": "Looking for mapped water areas here…",
+			"offline": "Offline: the pond will be added as a point.",
+			"offlineWater": "Water detected here. Connect to the internet to mark the existing water area instead of adding a point.",
+			"failed": "Mapped water areas could not be loaded. You can still add the pond as a point.",
+			"none": "No mapped water area at the pin — the pond will be added as a point.",
+			"intro": "This pond may already be on the map. Mark the existing water area instead of adding a point:",
+			"orPoint": "None of these? Fill in the form below to add the pond as a point.",
+			"unnamed": "Unnamed water area",
+			"atPin": "At the pin",
+			"nextToPin": "Next to the pin",
+			"alreadyPond": "Already marked as a fire water pond",
+			"largeWater": "Large or flowing water: a suction point is usually the better choice.",
+			"editExisting": "Edit",
+			"useArea": "Use this area",
+			"useSuctionPoint": "Suction point instead",
+			"existingIntro": "A fire water pond is already mapped here. Edit it instead of adding a duplicate:",
+			"point": "Point",
+			"area": "Water area",
+			"metersAway": "{m} m away"
+		},
+		"suctionOffer": {
+			"message": "Where does the fire engine pump from this pond? Add the spot as a suction point.",
+			"action": "Add",
+			"button": "Add pumping spot"
+		},
+		"dryRun": {
+			"title": "Preview build: not uploaded",
+			"subtitle": "This is the change FireYak would send to OpenStreetMap. The map shows it locally.",
+			"ok": "OK",
+			"toast": "Preview build: a queued change to an existing object was not uploaded."
+		},
+		"conflictDialog": {
+			"title": "Changed on OpenStreetMap meanwhile",
+			"message": "Someone else changed {keys} on this object since you opened it, so nothing was saved. The form now shows their values for those fields — check them and save again.",
+			"ok": "OK"
 		}
 	},
 	"nativeApp": {
@@ -424,7 +484,9 @@
 			"delete": "Removal",
 			"retry": "Retry",
 			"discard": "Discard",
-			"syncNow": "Sync now"
+			"syncNow": "Sync now",
+			"unflag": "Fire pond removed",
+			"flag": "Marked as fire pond"
 		},
 		"conflict": {
 			"mine": "Your change",

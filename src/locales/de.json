@@ -38,7 +38,9 @@
 			"osmId": "OSM-ID",
 			"flowCapacity": "Durchfluss",
 			"flowRate": "Durchflussrate",
-			"awwaClass": "AWWA-Klasse"
+			"awwaClass": "AWWA-Klasse",
+			"waterType": "Art des Gewässers",
+			"intermittent": "Trocknet zeitweise aus"
 		},
 		"values": {
 			"fire_hydrant:type": {
@@ -97,6 +99,15 @@
 				"A": "Klasse A — 1000–1500 gal/min (Grün)",
 				"B": "Klasse B — 500–1000 gal/min (Gelb)",
 				"C": "Klasse C — <500 gal/min (Rot)"
+			},
+			"water": {
+				"pond": "Teich",
+				"reservoir": "Speicherbecken",
+				"basin": "Becken"
+			},
+			"intermittent": {
+				"yes": "Ja",
+				"no": "Nein"
 			}
 		},
 		"navigation": {
@@ -231,18 +242,18 @@
 			"addSuctionPoint": "Saugstelle hinzufügen",
 			"editSuctionPoint": "Saugstelle bearbeiten",
 			"addWaterTank": "Wassertank hinzufügen",
-			"editWaterTank": "Wassertank bearbeiten"
+			"editWaterTank": "Wassertank bearbeiten",
+			"addFireWaterPond": "Löschteich hinzufügen",
+			"editFireWaterPond": "Löschteich bearbeiten",
+			"flagFireWaterPond": "Als Löschteich markieren"
 		},
 		"labels": {
-			"markerType": "Art der Wasserentnahmestelle"
+			"markerType": "Art der Wasserentnahmestelle",
+			"natural": "Physisches Objekt"
 		},
 		"authDialog": {
 			"title": "OpenStreetMap-Konto erforderlich",
 			"message": "Sie benötigen ein OpenStreetMap-Konto, um Marker hinzuzufügen oder zu bearbeiten. Möchten Sie sich einloggen?"
-		},
-		"devServerAlert": {
-			"title": "Bearbeiten nicht verfügbar",
-			"message": "Diese Testversion speichert auf dem OpenStreetMap-Testserver, die Karte zeigt aber Produktivdaten. Bestehende Marker können hier daher nicht bearbeitet oder gelöscht werden. Neue Marker hinzufügen funktioniert."
 		},
 		"deleteDialog": {
 			"title": "Von OpenStreetMap entfernen",
@@ -279,14 +290,63 @@
 			"tankLocation": "Ob der Tank ober- oder unterirdisch aufgestellt ist.",
 			"name": "Ein charakteristischer Name für diese Wasserentnahmestelle, falls vorhanden.",
 			"surveyDate": "Datum, an dem diese Wasserentnahmestelle zuletzt vor Ort überprüft wurde.",
-			"awwaClass": "AWWA-Farbklassifizierung basierend auf der Durchflusskapazität. Wird in einigen US-Bezirken verwendet, um die Hydrantenleistung anhand der Farbe von Haube und Kappen anzuzeigen."
+			"awwaClass": "AWWA-Farbklassifizierung basierend auf der Durchflusskapazität. Wird in einigen US-Bezirken verwendet, um die Hydrantenleistung anhand der Farbe von Haube und Kappen anzuzeigen.",
+			"pondArea": "Dieser Teich ist in OpenStreetMap als Wasserfläche eingezeichnet. Seine Form bleibt unverändert – nur die Angaben unten werden geändert.",
+			"waterType": "Um welche Art Gewässer es sich handelt. Teiche sind kleine stehende Gewässer, Speicherbecken und Becken sind künstlich angelegt.",
+			"intermittent": "Ob der Teich austrocknen kann, z. B. im Sommer. Wichtig, bevor man sich im Einsatz darauf verlässt.",
+			"naturalConflict": "Dieser Punkt ist als natural={value} getaggt. Ein Löschteich braucht natural=water – ändere es, wenn der Punkt wirklich der Teich ist."
 		},
 		"messages": {
 			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",
 			"saveError": "Speichern in OpenStreetMap fehlgeschlagen. Bitte versuchen Sie es erneut.",
 			"locationSet": "Position erfolgreich gesetzt.",
 			"deleteSuccess": "Erfolgreich von OpenStreetMap entfernt!",
-			"deleteError": "Entfernen von OpenStreetMap fehlgeschlagen. Bitte versuchen Sie es erneut."
+			"deleteError": "Entfernen von OpenStreetMap fehlgeschlagen. Bitte versuchen Sie es erneut.",
+			"pondNeedsWater": "Ein Löschteich braucht auch die Art des Gewässers. Bitte eine auswählen.",
+			"unflagSuccess": "Löschteich-Angaben aus OpenStreetMap entfernt."
+		},
+		"unflagDialog": {
+			"title": "Löschteich-Angaben entfernen",
+			"message": "Diese Wasserfläche wird nicht mehr als Löschteich markiert. Die Wasserfläche selbst bleibt in OpenStreetMap erhalten.",
+			"confirm": "Entfernen"
+		},
+		"pondAreas": {
+			"waterDetected": "Hier ist Wasser – Löschteich hinzufügen?",
+			"loading": "Suche eingezeichnete Wasserflächen …",
+			"offline": "Offline: Der Löschteich wird als Punkt hinzugefügt.",
+			"offlineWater": "Hier ist Wasser. Mit Internetverbindung kannst du die bestehende Wasserfläche markieren, statt einen Punkt hinzuzufügen.",
+			"failed": "Wasserflächen konnten nicht geladen werden. Du kannst den Löschteich trotzdem als Punkt hinzufügen.",
+			"none": "Keine eingezeichnete Wasserfläche an dieser Stelle – der Löschteich wird als Punkt hinzugefügt.",
+			"intro": "Dieser Teich ist vielleicht schon eingezeichnet. Markiere die bestehende Wasserfläche, statt einen Punkt hinzuzufügen:",
+			"orPoint": "Nichts davon passt? Fülle das Formular unten aus, um den Löschteich als Punkt hinzuzufügen.",
+			"unnamed": "Wasserfläche ohne Namen",
+			"atPin": "An der Markierung",
+			"nextToPin": "Neben der Markierung",
+			"alreadyPond": "Bereits als Löschteich markiert",
+			"largeWater": "Großes oder fließendes Gewässer: Eine Saugstelle passt meist besser.",
+			"editExisting": "Bearbeiten",
+			"useArea": "Diese Fläche verwenden",
+			"useSuctionPoint": "Lieber Saugstelle",
+			"existingIntro": "Hier ist bereits ein Löschteich eingetragen. Bearbeite ihn, statt ihn doppelt anzulegen:",
+			"point": "Punkt",
+			"area": "Wasserfläche",
+			"metersAway": "{m} m entfernt"
+		},
+		"suctionOffer": {
+			"message": "Wo saugt das Fahrzeug an diesem Teich an? Trag die Stelle als Saugstelle ein.",
+			"action": "Eintragen",
+			"button": "Saugstelle hinzufügen"
+		},
+		"dryRun": {
+			"title": "Testversion: nicht hochgeladen",
+			"subtitle": "Diese Änderung würde FireYak an OpenStreetMap senden. Die Karte zeigt sie nur lokal an.",
+			"ok": "OK",
+			"toast": "Testversion: Eine Änderung an einem bestehenden Objekt wurde nicht hochgeladen."
+		},
+		"conflictDialog": {
+			"title": "Inzwischen auf OpenStreetMap geändert",
+			"message": "Jemand anderes hat {keys} an diesem Objekt geändert, seit du es geöffnet hast. Deshalb wurde nichts gespeichert. Das Formular zeigt jetzt deren Werte für diese Felder – prüfe sie und speichere erneut.",
+			"ok": "OK"
 		}
 	},
 	"nativeApp": {
@@ -424,7 +484,9 @@
 			"delete": "Entfernung",
 			"retry": "Erneut versuchen",
 			"discard": "Verwerfen",
-			"syncNow": "Jetzt synchronisieren"
+			"syncNow": "Jetzt synchronisieren",
+			"unflag": "Löschteich entfernt",
+			"flag": "Als Löschteich markiert"
 		},
 		"conflict": {
 			"mine": "Deine Änderung",

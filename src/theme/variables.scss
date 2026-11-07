@@ -97,3 +97,9 @@
 	color-scheme: dark;
 }
 
+/* Preview-build dry-run dialog (src/services/osmWrite.ts): the changeset
+   summary is multi-line plain text with indented tag diffs. */
+ion-alert.dry-run-alert .alert-message {
+	white-space: pre-wrap;
+	text-align: start;
+}

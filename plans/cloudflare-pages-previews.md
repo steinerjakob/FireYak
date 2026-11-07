@@ -100,10 +100,17 @@ preview:
 
 - **Adding** a new marker works and creates a node on the dev server. The node
   will not show up on the preview's map.
-- **Editing or deleting** an existing marker is blocked: the app shows a
-  "not available in this test build" dialog instead of opening the editor
-  (`OSM_EDITS_TARGET_OTHER_SERVER` in `osmConfig.ts`). Otherwise it would
-  modify a missing or unrelated dev-server node.
+- **Editing, deleting, marking or unflagging** an existing marker or water
+  area is a **dry run** (`src/services/osmWrite.ts`). The element is read
+  read-only from the production API, and the changeset is built exactly as it
+  would be uploaded. Instead of being sent, it is shown in a "Preview build: not
+  uploaded" dialog: comment, tag diff and whether the geometry/members are
+  unchanged. The map then updates locally as after a real save, so the whole flow
+  can be reviewed. Nothing reaches either OSM server, so the change can't hit a
+  missing or unrelated dev-server object. Queued offline edits do the same, with
+  a toast instead of a dialog.
+- Markers the preview **created** on the dev server are remembered locally
+  (`localStorage`), and edits to them upload for real.
 - The **view / edit on OpenStreetMap** links of a marker always open
   production osm.org, where that marker actually lives. Only the OSM account
   link in Settings follows `VITE_OSM_URL`.

@@ -180,6 +180,10 @@ import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
+import { detectWaterAt } from '@/mapHandler/waterDetection';
+import { getAreaOutline, cachedOutline } from '@/mapHandler/areaOutline';
+import { toRef } from '@/helper/osmRef';
+import { isAreaType } from '@/helper/osmElement';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
 import { nightFlavor } from '@/map/nightFlavor';
@@ -206,6 +210,14 @@ const LONG_PRESS_MS = 500;
 const LONG_PRESS_MAX_MOVEMENT_PX = 10;
 const USER_ACCURACY_SOURCE = 'user-accuracy';
 const USER_ACCURACY_FILL_LAYER = 'user-accuracy-fill';
+// Outline highlight for pond areas (selected, being edited, or candidates).
+const AREA_OUTLINE_SOURCE = 'area-outline';
+const AREA_OUTLINE_FILL_LAYER = 'area-outline-fill';
+const AREA_OUTLINE_LINE_LAYER = 'area-outline-line';
+const AREA_OUTLINE_CANDIDATE_LAYER = 'area-outline-candidates';
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+/** Last outline data, re-applied when a style reload recreates the source. */
+let areaOutlineData: GeoJSON.FeatureCollection = EMPTY_FC;
 const ACCURACY_CIRCLE_POINTS = 64;
 
 const router = useRouter();
@@ -592,9 +604,94 @@ watch(
 	}
 );
 
+// --- Pond-area outline highlight (plan Phase 3) ------------------------------
+// Shows which water area a pond marker stands for: the area being edited or
+// marked, the selected pond, or (dashed) the candidates while adding a pond.
+
+function setAreaOutline(features: GeoJSON.Feature[]) {
+	areaOutlineData = { type: 'FeatureCollection', features };
+	(rootMap?.getSource(AREA_OUTLINE_SOURCE) as maplibregl.GeoJSONSource | undefined)?.setData(
+		areaOutlineData
+	);
+}
+
+let outlineSequence = 0;
+
+async function updateAreaOutline() {
+	const sequence = ++outlineSequence;
+
+	// Adding: outline every candidate (dashed), straight from the search.
+	if (markerEditStore.isAdding) {
+		const features: GeoJSON.Feature[] = markerEditStore.areaCandidates
+			.map((c) => cachedOutline(toRef(c.element.type, c.element.id)))
+			.filter((g): g is GeoJSON.Geometry => g != null)
+			.map((geometry) => ({ type: 'Feature', geometry, properties: { primary: false } }));
+		setAreaOutline(features);
+		return;
+	}
+
+	// Editing/marking an area, else the selected pond area.
+	const target =
+		markerEditStore.isEditing && markerEditStore.isArea
+			? markerEditStore.originalMarker
+			: !markerEditStore.isActive &&
+				  markerStore.selectedMarker?.tags?.emergency === 'fire_water_pond' &&
+				  isAreaType(markerStore.selectedMarker.type)
+				? markerStore.selectedMarker
+				: null;
+	if (!target) {
+		setAreaOutline([]);
+		return;
+	}
+	const geometry = await getAreaOutline(target);
+	if (sequence !== outlineSequence) return; // superseded meanwhile
+	setAreaOutline(geometry ? [{ type: 'Feature', geometry, properties: { primary: true } }] : []);
+}
+
+watch(
+	() => [
+		markerEditStore.isAdding,
+		markerEditStore.isEditing,
+		markerEditStore.originalMarker,
+		markerEditStore.areaCandidates,
+		markerStore.selectedMarker?.ref
+	],
+	() => void updateAreaOutline()
+);
+
+// Protomaps "water under the pin?" pre-check for the pond flow (plan §B2). The
+// map lives here, so this component feeds the result to the edit store; the
+// store decides whether the Overpass water-area lookup is worth running.
+watch(
+	() => [markerEditStore.pendingLocation, markerEditStore.isAdding] as const,
+	([loc, adding]) => {
+		if (!adding || !loc || !rootMap) {
+			markerEditStore.detectedWater = null;
+			return;
+		}
+		const map = rootMap;
+		const detect = () => {
+			// A deferred check can fire after the pin moved or the edit ended —
+			// only the current pin may write its result.
+			if (markerEditStore.pendingLocation !== loc || !markerEditStore.isAdding) return;
+			markerEditStore.detectedWater = detectWaterAt(map, loc);
+		};
+		// The pin may have just been placed by a pan/ease — query once the
+		// tiles under it are rendered.
+		if (map.loaded()) detect();
+		else map.once('idle', detect);
+	},
+	{ immediate: true }
+);
+
 watch(
 	() => markerEditStore.pendingLocation,
 	(loc) => {
+		// Pond areas keep their geometry: no draggable pin, nothing to move.
+		if (markerEditStore.isArea) {
+			ghostMarker?.remove();
+			return;
+		}
 		if (loc && rootMap && markerEditStore.isActive) {
 			if (!ghostMarker) {
 				ghostMarker = createGhostMarker();
@@ -670,13 +767,22 @@ function fitMapToLayer() {
 		// maxZoom keeps very short paths from zooming in to house-number level.
 		rootMap.fitBounds(bounds, { padding, maxZoom: 17 });
 	} else {
-		// Center on the ghost marker (editing) or the selected marker
+		// Center on the ghost marker (editing) or the selected marker. Area edits
+		// have no ghost marker (or a stale one from an earlier node edit), so
+		// they center on the area's own position.
+		const areaTarget =
+			markerEditStore.isActive && markerEditStore.isArea && markerEditStore.pendingLocation
+				? new maplibregl.LngLat(
+						markerEditStore.pendingLocation.lng,
+						markerEditStore.pendingLocation.lat
+					)
+				: null;
 		const marker = markerEditStore.isActive ? ghostMarker : selectedMarker;
-		if (marker) {
+		if (areaTarget || marker) {
 			const centerOffsetX = (padding.left - padding.right) / 2;
 			const centerOffsetY = (padding.top - padding.bottom) / 2;
 
-			const markerLngLat = marker.getLngLat();
+			const markerLngLat = areaTarget ?? marker!.getLngLat();
 			const markerPoint = rootMap.project(markerLngLat);
 
 			const adjustedPoint = new maplibregl.Point(
@@ -807,8 +913,9 @@ function restoreDomMarkers() {
 		selectedMarker.addTo(rootMap);
 	}
 
-	// Re-add ghost marker (editing mode)
-	if (ghostMarker && markerEditStore.isActive) {
+	// Re-add ghost marker (editing mode) — never during area edits, whose
+	// geometry is fixed (a restored pin could move the cached position).
+	if (ghostMarker && markerEditStore.isActive && !markerEditStore.isArea) {
 		ghostMarker.addTo(rootMap);
 	}
 
@@ -1244,6 +1351,33 @@ function addMapLayers(map: maplibregl.Map) {
 		}
 	});
 
+	// Pond-area outline — below the markers so the pond icon stays on top.
+	map.addSource(AREA_OUTLINE_SOURCE, { type: 'geojson', data: areaOutlineData });
+	map.addLayer({
+		id: AREA_OUTLINE_FILL_LAYER,
+		type: 'fill',
+		source: AREA_OUTLINE_SOURCE,
+		filter: ['in', ['geometry-type'], ['literal', ['Polygon', 'MultiPolygon']]],
+		paint: { 'fill-color': '#d32f2f', 'fill-opacity': 0.12 }
+	});
+	// Solid line for the pond in focus, dashed for candidates while adding.
+	// (Two layers: `line-dasharray` is not reliably data-driven.)
+	map.addLayer({
+		id: AREA_OUTLINE_LINE_LAYER,
+		type: 'line',
+		source: AREA_OUTLINE_SOURCE,
+		filter: ['==', ['get', 'primary'], true],
+		layout: { 'line-join': 'round', 'line-cap': 'round' },
+		paint: { 'line-color': '#d32f2f', 'line-width': 3 }
+	});
+	map.addLayer({
+		id: AREA_OUTLINE_CANDIDATE_LAYER,
+		type: 'line',
+		source: AREA_OUTLINE_SOURCE,
+		filter: ['!=', ['get', 'primary'], true],
+		paint: { 'line-color': '#d32f2f', 'line-width': 2, 'line-dasharray': [2, 2] }
+	});
+
 	// Marker source with clustering
 	map.addSource(MARKER_SOURCE_ID, {
 		type: 'geojson',
@@ -1451,6 +1585,7 @@ function setupMapEventListeners(map: maplibregl.Map) {
 
 			// Individual marker click
 			if (markerEditStore.isActive) {
+				if (markerEditStore.isArea) return;
 				// In edit mode, clicking a marker updates pending location
 				markerEditStore.pendingLocation = { lat: e.lngLat.lat, lng: e.lngLat.lng };
 				return;
@@ -1480,6 +1615,7 @@ function setupMapEventListeners(map: maplibregl.Map) {
 
 		// Click on empty map area
 		if (markerEditStore.isActive) {
+			if (markerEditStore.isArea) return;
 			markerEditStore.pendingLocation = { lat: e.lngLat.lat, lng: e.lngLat.lng };
 			return;
 		}

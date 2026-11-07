@@ -1,15 +1,28 @@
 <script setup lang="ts">
 import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote } from '@ionic/vue';
-import { openOutline, createOutline } from 'ionicons/icons';
+import { openOutline, createOutline, addCircleOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
+import { useMarkerEditStore } from '@/store/markerEditStore';
+import { elementPosition } from '@/helper/osmElement';
 import { OSM_DATA_WEB_URL } from '@/services/osmConfig';
 
 const markerStore = useMapMarkerStore();
 
 const { t, te, locale } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
+const markerEditStore = useMarkerEditStore();
+
+/** Ponds get a quick action for their pumping spot (a suction point at the shore). */
+const isPond = computed(() => markerData.value?.tags?.emergency === 'fire_water_pond');
+
+const addPumpingSpot = () => {
+	const position = markerData.value ? elementPosition(markerData.value) : null;
+	if (position) {
+		markerEditStore.requestAddSuctionPoint({ lat: position.lat, lng: position.lon });
+	}
+};
 
 /**
  * Formats a timestamp as a locale-aware relative string ("2 hours ago"),
@@ -76,7 +89,9 @@ const tagTranslationKeys: Record<string, string> = {
 	note: 'markerInfo.tags.note',
 	'survey:date': 'markerInfo.tags.surveyDate',
 	access: 'markerInfo.tags.access',
-	location: 'markerInfo.tags.location'
+	location: 'markerInfo.tags.location',
+	water: 'markerInfo.tags.waterType',
+	intermittent: 'markerInfo.tags.intermittent'
 };
 
 // Tags that are relevant for fire brigades
@@ -110,13 +125,18 @@ const relevantTags = [
 	'note',
 	'survey:date',
 	'access',
-	'location'
+	'location',
+	'water',
+	'intermittent'
 ];
 
 // Translate value if translation exists
 const translateValue = (key: string, value: string): string => {
 	// Check if this is a fire_hydrant field or water_source
-	if (key.startsWith('fire_hydrant:') || key === 'water_source' || key === 'pillar:type') {
+	if (
+		key.startsWith('fire_hydrant:') ||
+		['water_source', 'pillar:type', 'water', 'intermittent'].includes(key)
+	) {
 		const translationKey = `markerInfo.values.${key}.${value}`;
 		// Check if translation exists
 		if (te(translationKey)) {
@@ -184,6 +204,14 @@ const openOsmEditUrl = () => {
 				<h3>{{ tag.label }}</h3>
 				<p>{{ tag.value }}</p>
 			</ion-label>
+		</ion-item>
+
+		<!-- Pond: add its pumping spot as a suction point -->
+		<ion-item v-if="isPond" lines="none">
+			<ion-button fill="outline" size="default" @click="addPumpingSpot">
+				<ion-icon slot="start" :icon="addCircleOutline" />
+				{{ t('markerEdit.suctionOffer.button') }}
+			</ion-button>
 		</ion-item>
 
 		<!-- Coordinates -->

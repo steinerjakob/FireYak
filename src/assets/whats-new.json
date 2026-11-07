@@ -1,6 +1,11 @@
 {
 	"unreleased": [
 		{
+			"type": "feature",
+			"en": "Fire water ponds can now be added and edited, and existing ponds on the map can be marked as fire water ponds.",
+			"de": "Löschteiche lassen sich jetzt hinzufügen, bearbeiten und an bestehenden Teichen auf der Karte markieren."
+		},
+		{
 			"type": "fix",
 			"en": "Offline map downloads no longer stop when the map server is busy – they pause briefly and carry on.",
 			"de": "Offline-Kartendownloads brechen nicht mehr ab, wenn der Kartenserver ausgelastet ist – sie pausieren kurz und laufen weiter."

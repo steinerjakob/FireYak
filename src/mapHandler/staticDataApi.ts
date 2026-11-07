@@ -184,9 +184,33 @@ export function toOverPassElement(feature: GeoJSON.Feature): OverPassElement | n
 		element.lon = point.lon;
 	} else {
 		element.center = point;
+		// Keep the polygon of pond areas for the outline highlight. Other areas
+		// (fire stations, tanks) don't need it, and huge water bodies are left
+		// to the on-demand lookup so the marker cache stays small.
+		if (
+			tags['emergency'] === 'fire_water_pond' &&
+			positionCount(geometry) <= MAX_OUTLINE_POSITIONS
+		) {
+			element.outline = geometry;
+		}
 	}
 
 	return element;
+}
+
+/** Above this many vertices an outline is not stored with the marker. */
+const MAX_OUTLINE_POSITIONS = 2000;
+
+/** Number of vertices in a geometry (nested coordinate arrays of any depth). */
+function positionCount(geometry: GeoJSON.Geometry): number {
+	if (!('coordinates' in geometry)) return Infinity;
+	const count = (value: unknown): number =>
+		Array.isArray(value) && typeof value[0] === 'number'
+			? 1
+			: Array.isArray(value)
+				? value.reduce((sum: number, v) => sum + count(v), 0)
+				: 0;
+	return count(geometry.coordinates);
 }
 
 // ---------------------------------------------------------------------------
