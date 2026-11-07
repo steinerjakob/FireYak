@@ -83,6 +83,16 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		originalMarker.value = marker;
 		editableTags.value = { ...marker.tags };
 		autoAddedTags.value = [];
+		// Older pond nodes often carry only the flag. The wiki requires the
+		// physical water feature too, so a node edit adds `natural=water`.
+		// Areas are left alone: their physical tagging is not ours to change.
+		if (
+			marker.tags?.['emergency'] === 'fire_water_pond' &&
+			!isAreaType(marker.type) &&
+			!hasPhysicalWaterTag(marker.tags)
+		) {
+			addTagIfMissing('natural', 'water');
+		}
 		// Areas show their center for orientation only; it is never uploaded.
 		const position = elementPosition(marker);
 		pendingLocation.value = position ? { lat: position.lat, lng: position.lon } : null;
@@ -219,8 +229,14 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		);
 
 		// The OSM wiki requires `emergency=fire_water_pond` to sit on a physical
-		// water feature (`natural=water` or similar) — never save a bare flag.
-		if (finalTags['emergency'] === 'fire_water_pond' && !hasPhysicalWaterTag(finalTags)) {
+		// water feature (`natural=water` or similar) — never save a bare pond
+		// node. Existing areas are not blocked: FireYak does not change their
+		// physical tagging, and some valid-looking ponds carry only `water=pond`.
+		if (
+			!isArea.value &&
+			finalTags['emergency'] === 'fire_water_pond' &&
+			!hasPhysicalWaterTag(finalTags)
+		) {
 			const toast = await toastController.create({
 				message: t('markerEdit.messages.pondNeedsWater'),
 				duration: 3000,
