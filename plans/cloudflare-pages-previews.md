@@ -38,8 +38,9 @@ Settings → **Builds & deployments → Branch control**:
 - **Production branch:** `main`. You can also turn off automatic production
   deployments, because app.fireyak.org is the real production site and the
   Cloudflare "production" deployment is just another preview.
-- **Preview branches:** *All non-production branches*, or *Custom* (e.g.
-  include `claude/*`, `feat/*`, `fix/*`; exclude `dependabot/*`).
+- **Preview branches:** *Custom branches*, with include `*` and exclude
+  `dependabot/*`. Dependabot (`.github/dependabot.yml`) opens many short-lived
+  branches that would each use up a build.
 - Release commits are tagged `[skip ci]`. Cloudflare Pages honours `[skip ci]`
   / `[CI SKIP]` in the commit message, so those are not built.
 
