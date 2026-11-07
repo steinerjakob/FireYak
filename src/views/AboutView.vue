@@ -33,8 +33,8 @@
 					</ion-card-content>
 				</ion-card>
 
-				<!-- Combined Support Card (Buy Me a Coffee + Support) -->
-				<ion-card>
+				<!-- Support card: hidden on Android, Ko-fi web-only — see DONATION_URL -->
+				<ion-card v-if="showSupportCard">
 					<ion-card-header>
 						<ion-card-title>
 							<ion-icon :icon="heart" style="vertical-align: middle; margin-right: 8px"></ion-icon>
@@ -144,8 +144,9 @@ import { DONATION_URL, GITHUB_URL } from '@/helper/appStoreInfos';
 const { openHistory } = useWhatsNew();
 const { planetTimestamp, load: loadDataFreshness, formatted } = useDataFreshness();
 
-/** Donation links are web-only — see DONATION_URL for the store-policy reason. */
+/** Ko-fi is web-only; the whole support card is hidden on Android — see DONATION_URL. */
 const showDonation = !Capacitor.isNativePlatform();
+const showSupportCard = Capacitor.getPlatform() !== 'android';
 
 const appInfo = ref<Partial<AppInfo> | null>(null);
 

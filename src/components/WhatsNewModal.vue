@@ -15,7 +15,11 @@ import {
 const { t, locale } = useI18n();
 const { isOpen, visibleReleases, dismiss } = useWhatsNew();
 
-/** Donation links are web-only — see DONATION_URL for the store-policy reason. */
+/**
+ * Support button: Ko-fi on the web, GitHub on iOS, hidden on Android — see
+ * DONATION_URL for the store-policy reason.
+ */
+const showSupport = Capacitor.getPlatform() !== 'android';
 const supportUrl = Capacitor.isNativePlatform() ? GITHUB_URL : DONATION_URL;
 
 /** Display order and icon for each entry type; only non-empty groups are rendered. */
@@ -74,7 +78,13 @@ const groupedEntries = (release: WhatsNewRelease) => {
 			</div>
 
 			<div class="whats-new-actions">
-				<ion-button expand="block" fill="outline" :href="supportUrl" target="_blank">
+				<ion-button
+					v-if="showSupport"
+					expand="block"
+					fill="outline"
+					:href="supportUrl"
+					target="_blank"
+				>
 					<ion-icon :icon="heart" slot="start"></ion-icon>
 					{{ t('whatsNew.support') }}
 				</ion-button>
