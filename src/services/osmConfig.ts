@@ -35,6 +35,13 @@ export const OSM_WEB_URL = urlOverride || PRODUCTION_OSM_URL;
 export const OSM_DATA_WEB_URL = PRODUCTION_OSM_URL;
 
 /**
+ * Production OSM API, used read-only to look up single objects (e.g. a marker
+ * opened from a shared link that is not cached yet). Like the map data, it is
+ * always production — never the preview dev server.
+ */
+export const OSM_DATA_API_URL = 'https://api.openstreetmap.org';
+
+/**
  * True when edits go to a different OSM server (e.g. the dev server) than the
  * map data comes from. Existing markers' IDs are then meaningless on the target
  * server, so only adding new markers is allowed.

@@ -2,6 +2,11 @@
 	"unreleased": [
 		{
 			"type": "fix",
+			"en": "Shared links to a water source now open it reliably, even on a device that hasn't loaded that area yet.",
+			"de": "Geteilte Links zu einer Wasserentnahmestelle öffnen sie jetzt zuverlässig, auch auf Geräten, die das Gebiet noch nicht geladen haben."
+		},
+		{
+			"type": "fix",
 			"en": "Suction points show up on the map again.",
 			"de": "Saugstellen werden wieder auf der Karte angezeigt."
 		},

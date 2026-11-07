@@ -113,7 +113,8 @@
 			"noAdditionalInfo": "Keine zusätzlichen Informationen verfügbar",
 			"loading": "Lade Marker-Informationen...",
 			"dataUpdated": "Daten aktualisiert {time}",
-			"photosOfflineHint": "Fotos sind offline nicht verfügbar."
+			"photosOfflineHint": "Fotos sind offline nicht verfügbar.",
+			"notFound": "Diese Wasserentnahmestelle konnte nicht geladen werden. Sie wurde vielleicht aus OpenStreetMap entfernt, oder die Verbindung ist fehlgeschlagen – versuche es später noch einmal."
 		},
 		"images": {
 			"alt": "Foto der Wasserentnahmestelle",
