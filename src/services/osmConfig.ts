@@ -28,6 +28,19 @@ const clientIdOverride = allowOverrides ? import.meta.env.VITE_OSM_CLIENT_ID?.tr
 /** Website base URL (OAuth endpoints, object pages, editor, account settings). */
 export const OSM_WEB_URL = urlOverride || PRODUCTION_OSM_URL;
 
+/**
+ * Where the map data (Overpass / data.fireyak.org) comes from: always production
+ * OSM. Links to an existing marker must use this, not {@link OSM_WEB_URL}.
+ */
+export const OSM_DATA_WEB_URL = PRODUCTION_OSM_URL;
+
+/**
+ * True when edits go to a different OSM server (e.g. the dev server) than the
+ * map data comes from. Existing markers' IDs are then meaningless on the target
+ * server, so only adding new markers is allowed.
+ */
+export const OSM_EDITS_TARGET_OTHER_SERVER = !!urlOverride && urlOverride !== PRODUCTION_OSM_URL;
+
 /** OAuth2 client ID registered on {@link OSM_WEB_URL}. */
 export const OSM_CLIENT_ID = clientIdOverride || PRODUCTION_CLIENT_ID;
 

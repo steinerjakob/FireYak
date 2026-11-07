@@ -240,6 +240,10 @@
 			"title": "OpenStreetMap Account Required",
 			"message": "You need an OpenStreetMap account to add or edit markers. Do you want to log in?"
 		},
+		"devServerAlert": {
+			"title": "Editing not available",
+			"message": "This test build saves to the OpenStreetMap dev server, but the map shows production data, so existing markers can't be edited or deleted here. Adding new markers works."
+		},
 		"deleteDialog": {
 			"title": "Remove from OpenStreetMap",
 			"message": "Are you sure you want to permanently remove this marker from OpenStreetMap? This action cannot be undone.",

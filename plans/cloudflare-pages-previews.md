@@ -71,7 +71,7 @@ edits never touch real OSM data.
      https://<branch-alias>.fireyak.pages.dev/land.html
      http://localhost:5173/land.html
      ```
-3. Copy the Client ID into `VITE_OSM_CLIENT_ID` (Preview).
+3. Copy the Client ID into `VITE_OSM_CLIENT_ID` (Production **and** Preview, see the table in §1).
 
 OSM compares redirect URIs exactly and does not accept wildcards. Login
 therefore only works on hosts listed above. The per-commit `<sha8>.` URLs
@@ -100,9 +100,13 @@ preview:
 
 - **Adding** a new marker works and creates a node on the dev server. The node
   will not show up on the preview's map.
-- **Editing or deleting** an existing marker targets an ID that is missing on
-  the dev server, so it fails (or hits an unrelated node). Treat preview edits
-  as login/flow testing only.
+- **Editing or deleting** an existing marker is blocked: the app shows a
+  "not available in this test build" dialog instead of opening the editor
+  (`OSM_EDITS_TARGET_OTHER_SERVER` in `osmConfig.ts`). Otherwise it would
+  modify a missing or unrelated dev-server node.
+- The **view / edit on OpenStreetMap** links of a marker always open
+  production osm.org, where that marker actually lives. Only the OSM account
+  link in Settings follows `VITE_OSM_URL`.
 
 ## 4. Other hostname-dependent parts (checked)
 

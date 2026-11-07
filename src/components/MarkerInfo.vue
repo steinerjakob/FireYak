@@ -4,7 +4,7 @@ import { openOutline, createOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
-import { OSM_WEB_URL } from '@/services/osmConfig';
+import { OSM_DATA_WEB_URL } from '@/services/osmConfig';
 
 const markerStore = useMapMarkerStore();
 
@@ -167,12 +167,12 @@ const getCoordinates = () => {
 
 const openOsmUrl = () => {
 	if (!markerData.value) return '';
-	window.open(`${OSM_WEB_URL}/${markerData.value.type}/${markerData.value.id}`, '_blank');
+	window.open(`${OSM_DATA_WEB_URL}/${markerData.value.type}/${markerData.value.id}`, '_blank');
 };
 
 const openOsmEditUrl = () => {
 	if (!markerData.value) return '';
-	window.open(`${OSM_WEB_URL}/edit?${markerData.value.type}=${markerData.value.id}`, '_blank');
+	window.open(`${OSM_DATA_WEB_URL}/edit?${markerData.value.type}=${markerData.value.id}`, '_blank');
 };
 </script>
 
