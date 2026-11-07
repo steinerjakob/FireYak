@@ -19,7 +19,13 @@ import {
 import { markerCacheVersion } from '@/mapHandler/markerHandler';
 import { toRef, type OsmType } from '@/helper/osmRef';
 import { getFeatureForEdit, rememberDevServerCreate, uploadChange } from '@/services/osmWrite';
-import { describeEdit, isAreaType, isMarkerTags, toCacheElement } from '@/helper/osmElement';
+import {
+	describeEdit,
+	isAreaType,
+	isMarkerTags,
+	mergeTagEdit,
+	toCacheElement
+} from '@/helper/osmElement';
 
 // ---------------------------------------------------------------------------
 // Offline edit queue + sync engine (§1.3)
@@ -54,14 +60,6 @@ function typeOf(edit: Pick<PendingEdit, 'elementType'>): OsmType {
 	return edit.elementType ?? 'node';
 }
 
-/** Shallow, order-independent equality of two tag maps. */
-function tagsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
-	const aKeys = Object.keys(a);
-	const bKeys = Object.keys(b);
-	if (aKeys.length !== bKeys.length) return false;
-	return aKeys.every((k) => a[k] === b[k]);
-}
-
 /**
  * Heuristic: did this error come from the network being down rather than from a
  * genuine server rejection? `fetch()` rejects with a `TypeError` ("Failed to
@@ -84,7 +82,9 @@ export function isNetworkError(e: unknown): boolean {
 
 /** True if a delete failed only because the node was already gone on the server. */
 function isAlreadyDeleted(e: unknown): boolean {
-	const status = (e as { status?: number })?.status;
+	// osm-api puts the HTTP status in `cause`; our production read in `status`.
+	const status =
+		(e as { status?: number; cause?: unknown })?.status ?? (e as { cause?: unknown })?.cause;
 	if (status === 410 || status === 404) return true;
 	const msg = String((e as { message?: string })?.message ?? e).toLowerCase();
 	return msg.includes('410') || msg.includes('gone') || msg.includes('already deleted');
@@ -214,16 +214,33 @@ async function uploadCreate(edit: PendingEdit): Promise<number> {
 	return newId;
 }
 
-async function uploadUpdate(edit: PendingEdit): Promise<void> {
-	const type = typeOf(edit);
-	const element = await getFeatureForEdit(type, edit.osmId);
+/**
+ * Reads the element a queued edit targets from the OSM API — the same source
+ * the upload is built from, so the conflict check can't be fooled by a lagging
+ * Overpass replica. `null` when it no longer exists (404/410).
+ */
+async function fetchServerElement(edit: PendingEdit): Promise<OSM.OsmFeature | null> {
+	try {
+		return await getFeatureForEdit(typeOf(edit), edit.osmId);
+	} catch (e) {
+		if (isAlreadyDeleted(e)) return null;
+		throw e;
+	}
+}
+
+/** Uploads `tags` onto `element` (the server version just read). */
+async function uploadUpdate(
+	edit: PendingEdit,
+	element: OSM.OsmFeature,
+	tags: Record<string, string>
+): Promise<void> {
 	// Areas keep their geometry (way nodes / relation members) untouched; only
 	// nodes are moved.
 	if (element.type === 'node') {
 		element.lat = edit.lat;
 		element.lon = edit.lon;
 	}
-	element.tags = edit.tags;
+	element.tags = tags;
 	const change: OSM.OsmChange = { create: [], modify: [element], delete: [] };
 	await uploadChange({ comment: commentFor(edit) }, change, { interactive: false });
 }
@@ -288,14 +305,24 @@ export async function processQueue(): Promise<number> {
 						break;
 					}
 					case 'update': {
-						const server = await fetchElementById(typeOf(edit), edit.osmId);
-						// Missing/deleted server node, or tags changed since our snapshot →
-						// conflict. Never silently clobber a concurrent edit.
-						if (!server || (edit.baseTags && !tagsEqual(server.tags, edit.baseTags))) {
+						// Compare against the element the upload is built from (OSM API),
+						// not Overpass, which can lag behind another mapper's edit.
+						const server = await fetchServerElement(edit);
+						if (!server) {
 							await updatePendingEdit(edit.localId, { status: 'conflict' });
 							continue;
 						}
-						await uploadUpdate(edit);
+						// Apply only our own changes on top of the current tags; a key
+						// someone else changed differently is a conflict. Never silently
+						// clobber a concurrent edit.
+						const merged = edit.baseTags
+							? mergeTagEdit(edit.baseTags, edit.tags, server.tags ?? {})
+							: { tags: edit.tags };
+						if ('conflicts' in merged) {
+							await updatePendingEdit(edit.localId, { status: 'conflict' });
+							continue;
+						}
+						await uploadUpdate(edit, server, merged.tags);
 						break;
 					}
 					case 'delete': {
@@ -332,7 +359,7 @@ export async function processQueue(): Promise<number> {
 export async function applyMineAnyway(localId: number): Promise<void> {
 	const edit = await getPendingEdit(localId);
 	if (!edit) return;
-	const server = await fetchElementById(typeOf(edit), edit.osmId);
+	const server = await fetchServerElement(edit);
 	await updatePendingEdit(localId, {
 		status: 'pending',
 		baseTags: server?.tags ?? null,
@@ -357,11 +384,15 @@ export async function discardEdit(localId: number): Promise<void> {
 		return;
 	}
 
-	const server = await fetchElementById(typeOf(edit), edit.osmId);
+	// A discarded delete/unflag tombstoned the element. Lift the tombstone
+	// first and unconditionally: even if the lookup below fails (offline), the
+	// next normal data load then restores the element instead of it staying
+	// hidden for good.
+	await clearDeletedMapNode(toRef(typeOf(edit), edit.osmId));
+	markerCacheVersion.value++;
+
+	const server = await fetchElementById(typeOf(edit), edit.osmId).catch(() => null);
 	if (server) {
-		// A discarded delete/unflag tombstoned the element; lift it so the
-		// restored server version shows again.
-		await clearDeletedMapNode(toRef(typeOf(edit), edit.osmId));
 		await storeMapNodes([server]);
 		markerCacheVersion.value++;
 	}
@@ -377,6 +408,10 @@ export async function fetchServerTags(
 	osmId: number,
 	elementType: OsmType = 'node'
 ): Promise<Record<string, string> | null> {
-	const server = await fetchElementById(elementType, osmId);
-	return server?.tags ?? null;
+	try {
+		const server = await getFeatureForEdit(elementType, osmId);
+		return server.tags ?? null;
+	} catch {
+		return null;
+	}
 }

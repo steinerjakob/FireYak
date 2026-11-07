@@ -770,7 +770,15 @@ export async function fetchWaterAreasAt(
 	const p = `${lat.toFixed(7)},${lon.toFixed(7)}`;
 	const r = WATER_AREA_NEAR_RADIUS_M;
 	const clip = clipWindow(lat, lon);
-	const filters = ['[natural=water]', '[landuse~"^(reservoir|basin)$"]'];
+	// Areas tagged with another `emergency=*` (e.g. a tank) are never offered,
+	// and filtering them here — before the result limit — keeps them from
+	// crowding out the ponds that should be listed. Existing fire ponds stay in
+	// for the duplicate guard.
+	const pondOrUnflagged = '(if: !is_tag("emergency") || t["emergency"] == "fire_water_pond")';
+	const filters = [
+		`[natural=water]${pondOrUnflagged}`,
+		`[landuse~"^(reservoir|basin)$"]${pondOrUnflagged}`
+	];
 	const inside = filters
 		.flatMap((f) => [`way(pivot.a)${f};`, `rel(pivot.a)[type=multipolygon]${f};`])
 		.join('');

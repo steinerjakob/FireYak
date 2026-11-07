@@ -248,7 +248,8 @@
 			"flagFireWaterPond": "Als Löschteich markieren"
 		},
 		"labels": {
-			"markerType": "Art der Wasserentnahmestelle"
+			"markerType": "Art der Wasserentnahmestelle",
+			"natural": "Physisches Objekt"
 		},
 		"authDialog": {
 			"title": "OpenStreetMap-Konto erforderlich",
@@ -292,7 +293,8 @@
 			"awwaClass": "AWWA-Farbklassifizierung basierend auf der Durchflusskapazität. Wird in einigen US-Bezirken verwendet, um die Hydrantenleistung anhand der Farbe von Haube und Kappen anzuzeigen.",
 			"pondArea": "Dieser Teich ist in OpenStreetMap als Wasserfläche eingezeichnet. Seine Form bleibt unverändert – nur die Angaben unten werden geändert.",
 			"waterType": "Um welche Art Gewässer es sich handelt. Teiche sind kleine stehende Gewässer, Speicherbecken und Becken sind künstlich angelegt.",
-			"intermittent": "Ob der Teich austrocknen kann, z. B. im Sommer. Wichtig, bevor man sich im Einsatz darauf verlässt."
+			"intermittent": "Ob der Teich austrocknen kann, z. B. im Sommer. Wichtig, bevor man sich im Einsatz darauf verlässt.",
+			"naturalConflict": "Dieser Punkt ist als natural={value} getaggt. Ein Löschteich braucht natural=water – ändere es, wenn der Punkt wirklich der Teich ist."
 		},
 		"messages": {
 			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",
@@ -340,6 +342,11 @@
 			"subtitle": "Diese Änderung würde FireYak an OpenStreetMap senden. Die Karte zeigt sie nur lokal an.",
 			"ok": "OK",
 			"toast": "Testversion: Eine Änderung an einem bestehenden Objekt wurde nicht hochgeladen."
+		},
+		"conflictDialog": {
+			"title": "Inzwischen auf OpenStreetMap geändert",
+			"message": "Jemand anderes hat {keys} an diesem Objekt geändert, seit du es geöffnet hast. Deshalb wurde nichts gespeichert. Das Formular zeigt jetzt deren Werte für diese Felder – prüfe sie und speichere erneut.",
+			"ok": "OK"
 		}
 	},
 	"nativeApp": {

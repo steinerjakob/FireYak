@@ -248,7 +248,8 @@
 			"flagFireWaterPond": "Mark as Fire Water Pond"
 		},
 		"labels": {
-			"markerType": "Water Source Type"
+			"markerType": "Water Source Type",
+			"natural": "Physical feature"
 		},
 		"authDialog": {
 			"title": "OpenStreetMap Account Required",
@@ -292,7 +293,8 @@
 			"awwaClass": "AWWA colour classification based on flow capacity. Used in some US jurisdictions to indicate hydrant performance by bonnet/cap colour.",
 			"pondArea": "This pond is mapped as a water area in OpenStreetMap. Its shape stays as it is — only the details below are changed.",
 			"waterType": "What kind of water body this is. Ponds are small standing waters, reservoirs and basins are man-made.",
-			"intermittent": "Whether the pond can run dry, e.g. in summer. Important to know before relying on it."
+			"intermittent": "Whether the pond can run dry, e.g. in summer. Important to know before relying on it.",
+			"naturalConflict": "This point is tagged natural={value}. A fire water pond needs natural=water — change it if the point really is the pond."
 		},
 		"messages": {
 			"saveSuccess": "Successfully saved to OpenStreetMap!",
@@ -340,6 +342,11 @@
 			"subtitle": "This is the change FireYak would send to OpenStreetMap. The map shows it locally.",
 			"ok": "OK",
 			"toast": "Preview build: a queued change to an existing object was not uploaded."
+		},
+		"conflictDialog": {
+			"title": "Changed on OpenStreetMap meanwhile",
+			"message": "Someone else changed {keys} on this object since you opened it, so nothing was saved. The form now shows their values for those fields — check them and save again.",
+			"ok": "OK"
 		}
 	},
 	"nativeApp": {

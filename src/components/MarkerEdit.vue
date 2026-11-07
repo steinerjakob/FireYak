@@ -592,6 +592,35 @@ const login = () => {
 				</ion-select>
 			</ion-item>
 
+			<!-- A pond point with a conflicting natural=* (e.g. natural=scrub) can't be
+			     saved (the wiki requires natural=water or similar). Let the user fix
+			     it explicitly instead of rewriting it silently. -->
+			<ion-item
+				v-if="
+					!markerEditStore.isArea &&
+					markerEditStore.editableTags['natural'] &&
+					markerEditStore.editableTags['natural'] !== 'water'
+				"
+				lines="none"
+			>
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerEdit.labels.natural')"
+					v-model="markerEditStore.editableTags['natural']"
+					:helper-text="
+						t('markerEdit.hints.naturalConflict', {
+							value: markerEditStore.editableTags['natural']
+						})
+					"
+				>
+					<ion-select-option value="water">natural=water</ion-select-option>
+					<ion-select-option :value="markerEditStore.editableTags['natural']"
+						>natural={{ markerEditStore.editableTags['natural'] }}</ion-select-option
+					>
+				</ion-select>
+			</ion-item>
+
 			<!-- Intermittent -->
 			<ion-item lines="none">
 				<ion-select

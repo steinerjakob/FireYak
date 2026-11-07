@@ -64,8 +64,12 @@ export function elementPosition(
  */
 export const FIRE_POND_ONLY_TAGS = ['emergency'];
 
-/** Returns `tags` with the fire-pond flag and its pond-only sub-tags removed. */
+/**
+ * Returns `tags` with the fire-pond flag removed. Tags of anything that is not
+ * a fire pond (e.g. `emergency=water_tank`) are returned unchanged.
+ */
 export function withoutFirePondFlag(tags: Record<string, string>): Record<string, string> {
+	if (tags['emergency'] !== 'fire_water_pond') return { ...tags };
 	return Object.fromEntries(
 		Object.entries(tags).filter(([key]) => !FIRE_POND_ONLY_TAGS.includes(key))
 	);
@@ -126,4 +130,37 @@ export function describeEdit(
 	if (isUnflagEdit(baseTags, tags)) return `Remove fire_water_pond tag from water area${area}`;
 	if (isFlagEdit(baseTags, tags)) return `Tag water area as fire_water_pond${area}`;
 	return `Update ${markerType}${area}`;
+}
+
+/** Result of {@link mergeTagEdit}: the tags to upload, or the conflicting keys. */
+export type TagMergeResult = { tags: Record<string, string> } | { conflicts: string[] };
+
+/**
+ * Three-way tag merge for uploads. `base` is what the user started editing,
+ * `mine` what they want to save, `server` the element's current tags as just
+ * fetched for the upload. Only the keys the user actually changed are applied
+ * on top of `server`, so a concurrent edit by another mapper to other keys is
+ * kept instead of silently overwritten. A key both sides changed to different
+ * values is a conflict — the caller must not upload then.
+ */
+export function mergeTagEdit(
+	base: Record<string, string>,
+	mine: Record<string, string>,
+	server: Record<string, string>
+): TagMergeResult {
+	const changed = [...new Set([...Object.keys(base), ...Object.keys(mine)])].filter(
+		(key) => base[key] !== mine[key]
+	);
+	const tags = { ...server };
+	const conflicts: string[] = [];
+	for (const key of changed) {
+		if (server[key] !== base[key] && server[key] !== mine[key]) {
+			conflicts.push(key);
+		} else if (mine[key] === undefined) {
+			delete tags[key];
+		} else {
+			tags[key] = mine[key];
+		}
+	}
+	return conflicts.length ? { conflicts } : { tags };
 }

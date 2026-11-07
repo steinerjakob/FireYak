@@ -35,6 +35,7 @@ import {
 	hasPhysicalWaterTag,
 	isAreaType,
 	isMarkerTags,
+	mergeTagEdit,
 	toCacheElement,
 	withoutFirePondFlag
 } from '@/helper/osmElement';
@@ -78,11 +79,23 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	 */
 	const isArea = computed(() => isAreaType(elementType.value));
 	/**
-	 * True while marking an existing water area as a fire pond: the area is
-	 * not a pond on the server yet, so there is nothing to remove.
+	 * True while marking an existing water area as a fire pond (entered only
+	 * through {@link startFlagging}): the area is not a pond on the server yet,
+	 * so there is nothing to remove. Tracked explicitly — editing some other
+	 * area (e.g. a water tank mapped as a way) is not flagging.
 	 */
-	const isFlagging = computed(
-		() => isArea.value && originalMarker.value?.tags?.['emergency'] !== 'fire_water_pond'
+	const flagging = ref(false);
+	const isFlagging = computed(() => isEditing.value && flagging.value);
+	/** True while editing an area that already is a fire pond on the server. */
+	const isPondArea = computed(
+		() => isArea.value && originalMarker.value?.tags?.['emergency'] === 'fire_water_pond'
+	);
+	/**
+	 * Whether the edit sheet offers a delete action: nodes are deleted, pond
+	 * areas are unflagged, any other area (and a flag in progress) has none.
+	 */
+	const canDelete = computed(
+		() => isEditing.value && !isFlagging.value && (!isArea.value || isPondArea.value)
 	);
 
 	// --- Water areas at the pin (flagging an existing pond, plan §2.1/§2.5) ---
@@ -149,13 +162,9 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			areaLookupState.value = 'offline';
 			return;
 		}
-		// Protomaps says there is no water near the pin → skip Overpass. An
-		// `unknown` result (layer not loaded) never skips.
-		if (detectedWater.value?.status === 'none') {
-			areaCandidates.value = [];
-			areaLookupState.value = 'skipped';
-			return;
-		}
+		// No skip on "no water in the tiles": the lookup only runs once the user
+		// chose the pond type, and the tiles can miss small or new ponds. The
+		// Protomaps check only drives the suggestion chip and hints (plan §B2).
 
 		areaLookupController?.abort();
 		const controller = new AbortController();
@@ -170,11 +179,16 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		areaLookupState.value = result ? 'done' : 'failed';
 	}, AREA_LOOKUP_DEBOUNCE_MS);
 
-	watch([wantsAreaLookup, pendingLocation, isOnline, () => detectedWater.value?.status], () => {
+	watch([wantsAreaLookup, pendingLocation, isOnline], () => {
 		if (!wantsAreaLookup.value) {
 			resetAreaLookup();
 			return;
 		}
+		// Drop a lookup still running for the previous pin, so its result can
+		// never be shown (and flagged) for the new position.
+		areaLookupController?.abort();
+		areaLookupController = null;
+		areaCandidates.value = [];
 		areaLookupState.value = 'loading';
 		runAreaLookup();
 	});
@@ -194,6 +208,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	function startEditing(marker: OverPassElement) {
 		isEditing.value = true;
 		isAdding.value = false;
+		flagging.value = false;
 		originalMarker.value = marker;
 		editableTags.value = { ...marker.tags };
 		autoAddedTags.value = [];
@@ -215,6 +230,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	function startAdding(location: GeoPoint) {
 		isAdding.value = true;
 		isEditing.value = false;
+		flagging.value = false;
 		originalMarker.value = null;
 		editableTags.value = {
 			emergency: 'fire_hydrant',
@@ -273,6 +289,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		const element = candidate.element;
 		resetAreaLookup();
 		startEditing(element);
+		flagging.value = true;
 		editableTags.value = { ...element.tags, emergency: 'fire_water_pond' };
 	}
 
@@ -310,6 +327,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	function cancelEdit() {
 		resetAreaLookup();
 		detectedWater.value = null;
+		flagging.value = false;
 		isEditing.value = false;
 		isAdding.value = false;
 		pendingLocation.value = null;
@@ -425,6 +443,30 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	 * updates the local cache. For areas only the tags change: the element is
 	 * re-fetched from OSM and uploaded with its own nodes/members untouched.
 	 */
+	/**
+	 * After a conflict: make the server's current tags the new edit base and
+	 * show the other mapper's values in the conflicting fields, keeping the
+	 * user's other changes. A second save then merges cleanly.
+	 */
+	function rebaseOnServer(serverTags: Record<string, string>, conflicts: string[]) {
+		if (!originalMarker.value) return;
+		originalMarker.value = { ...originalMarker.value, tags: { ...serverTags } };
+		for (const key of conflicts) {
+			if (serverTags[key] === undefined) delete editableTags.value[key];
+			else editableTags.value[key] = serverTags[key];
+		}
+	}
+
+	/** Another mapper changed the same keys since the edit started — don't upload. */
+	async function showConflictAlert(keys: string[]) {
+		const alert = await alertController.create({
+			header: t('markerEdit.conflictDialog.title'),
+			message: t('markerEdit.conflictDialog.message', { keys: keys.join(', ') }),
+			buttons: [t('markerEdit.conflictDialog.ok')]
+		});
+		await alert.present();
+	}
+
 	async function commitTags(finalTags: Record<string, string>, successMessage: string) {
 		const lat = pendingLocation.value?.lat || 0;
 		const lon = pendingLocation.value?.lng || 0;
@@ -462,12 +504,21 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				);
 			} else if (isEditing.value && originalMarker.value) {
 				const element = await getFeatureForEdit(elementType.value, originalMarker.value.id);
+				// Apply only what the user changed on top of the element's current
+				// tags, so a concurrent edit by another mapper is not overwritten.
+				const merged = mergeTagEdit(originalMarker.value.tags ?? {}, finalTags, element.tags ?? {});
+				if ('conflicts' in merged) {
+					rebaseOnServer(element.tags ?? {}, merged.conflicts);
+					await showConflictAlert(merged.conflicts);
+					return;
+				}
+				finalTags = merged.tags;
 				// Only nodes move. Ways/relations keep their geometry untouched.
 				if (element.type === 'node') {
 					element.lat = lat;
 					element.lon = lon;
 				}
-				// Replace tags entirely so cleared fields are removed from OSM
+				// The merged tag set: cleared fields are removed from OSM too.
 				element.tags = finalTags;
 
 				const change: OSM.OsmChange = {
@@ -564,9 +615,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		}
 
 		// Areas are never deleted — that would remove the water body itself.
-		// "Delete" on a pond area removes only the fire-pond information.
+		// "Delete" on a pond area removes only the fire-pond information; other
+		// areas (e.g. a tank mapped as a way) have no delete action at all.
 		if (isArea.value) {
-			await requestUnflag();
+			if (isPondArea.value) await requestUnflag();
 			return;
 		}
 
@@ -635,7 +687,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	 * dropped. The water body and its physical tags stay in OSM.
 	 */
 	async function unflagMarker() {
-		if (!osmAuthStore.isAuthenticated || !originalMarker.value || !isArea.value) {
+		if (!osmAuthStore.isAuthenticated || !originalMarker.value || !isPondArea.value) {
 			return;
 		}
 		const tags = withoutFirePondFlag(originalMarker.value.tags ?? {});
@@ -712,6 +764,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		addTagIfMissing,
 		removeAutoAddedTags,
 		isFlagging,
+		isPondArea,
+		canDelete,
 		nearbyPonds,
 		requestAddSuctionPoint,
 		detectedWater,

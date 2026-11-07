@@ -25,7 +25,7 @@ shared nodes, and keeps the risk to OSM data low.
 
 ---
 
-## Current state (what already works and what is missing)
+## State before this work (historical; all ❌ rows are now done, see "Implementation status")
 
 | Area | State | File |
 |---|---|---|
@@ -130,8 +130,10 @@ before that lookup:
    - **Suggest the type:** if `kind_detail ∈ {pond, reservoir, basin}` or
      `kind = basin`, show a chip *"Water detected: add as fire water pond?"*. Do not
      switch the type automatically, because the same spot may be a suction point.
-   - **Skip Overpass** when there is no water under or near the pin. This saves
-     rate-limit budget and goes straight to "add as point".
+   - **No skip.** Overpass still runs when the tiles show no water. The lookup only
+     starts once the user picked the pond type, and the tiles can miss small or
+     new ponds. (An earlier version skipped it, which could hide an existing area
+     and lead to a duplicate point.)
    - **Show the large-water hint (§D) early** for `kind = lake|ocean|river`. Use the
      tile polygon area as a rough size.
    - **Highlight right away:** draw the tile polygon as a temporary outline until the
@@ -274,8 +276,12 @@ Add `'fire_water_pond'` to `editAllowed`.
   - Switching **away**: remove `emergency`-specific pond fields. Also remove
     `natural`/`water`, but **only if FireYak added them in this session**. Track this
     with a flag, so physical tags that were already on the object are never removed.
-- Save validation: a pond must have `natural=water`, `landuse=reservoir|basin` or a
-  similar physical tag. Otherwise block the save. The wiki says the physical tag is required.
+- Save validation (**nodes only**): a pond node must have `natural=water`,
+  `landuse=reservoir|basin` or a similar physical tag. Otherwise block the save, as
+  the wiki requires the physical tag. Existing **areas** are never blocked (some carry
+  only `water=pond`), because FireYak doesn't change their physical tagging. A pond
+  node with a conflicting `natural=*` (e.g. `scrub`) gets an explicit
+  `natural=water` choice in the form, never a silent rewrite.
 - Add any new keys to `relevantTags`. Make sure tags that are not shown
   (`natural`, `water`, …) are **not removed** from `editableTags`. Today this works
   because `editableTags` starts as a copy of all tags. Keep it that way.
@@ -299,8 +305,11 @@ is_in(LAT,LON)->.a;
 out tags center bb 10;
 ```
 - Use the existing instance pool, timeouts and the native transport (`fetchSingleElement`'s runner).
-- Leave out candidates that already have `emergency=*`. Those are already markers,
-  and the duplicate guard handles them.
+- Keep areas tagged `emergency=fire_water_pond` in the results. The duplicate guard
+  in `PondAreaCandidates.vue` needs them, because the local cache search only covers
+  nearby marker centers and can miss a containing area. Areas with any **other**
+  `emergency=*` value are dropped **inside the query**, with an `(if: …)` filter
+  applied before the result limit, so they can't crowd out ponds.
 - Approximate the area from `bounds` with a cos(lat) correction. This is enough for
   the "≈ m²" label and the large-water warning.
 - Prefer the **relation** over its member way. `is_in` / `pivot` already returns the
@@ -321,9 +330,11 @@ originalMarker.value = candidate;      // baseTags = the real server tags, witho
 **2.3 Unflag instead of delete for areas**
 - `requestDeleteMarker`: if `isArea`, show a different dialog: *"Remove the fire pond
   information? The water area itself stays in OpenStreetMap."*
-- Implementation: an `update` with the tags minus `emergency` and `water_volume`.
-  The physical tags (`natural=water`, `water=*`, `intermittent`) and `name`, `access`,
-  `operator` stay. They describe the water body and are valid without the flag.
+- Implementation: an `update` that removes **only** `emergency=fire_water_pond`.
+  Everything else stays, including `water_volume`, the physical tags
+  (`natural=water`, `water=*`, `intermittent`) and `name`, `access`, `operator`.
+  They describe the water body and are valid without the flag. Other areas (e.g. a
+  tank mapped as a way) have no delete/unflag action at all.
 - Node ponds: unflagging would leave a bare `natural=water` node. So for nodes, keep
   today's **delete** behaviour, and also offer "Keep as plain water (remove fire pond
   only)" for the case where the pond really exists but the fire service no longer uses it.
@@ -433,8 +444,16 @@ worldwide, so it is not recommended for now.
 
 ## Verification (there is no test suite, so test manually or with `/verify`)
 
-Use the OSM **dev API** (`master.apis.dev.openstreetmap.org`) if it can be configured.
-Otherwise, review the changesets carefully.
+**Two kinds of check, don't mix them up:**
+- **Preview builds (Cloudflare Pages, OSM dev server):** edits to existing
+  production objects are **dry runs** (`src/services/osmWrite.ts`). They show the
+  changeset that *would* be sent: comment, tag diff, geometry unchanged. Nothing is
+  uploaded, so they verify the UI flow and the changeset contents, **not** a
+  server-side edit. Steps 2–4, 7 and 8 below are dry-run checks there.
+- **Real uploads:** use controlled test data. Create a pond area on the OSM dev
+  server and edit it from a build that both reads from and writes to that server,
+  or use a production build on a throwaway object you then restore. If neither is
+  possible, review the resulting changesets carefully.
 
 1. A way pond in the view appears as a marker through both the live layer and the static extract.
 2. Edit a way pond: the changeset contains only `modify way` with the same `nodes`,
@@ -445,8 +464,7 @@ Otherwise, review the changesets carefully.
 4b. Same check through the **add button**: pan the map so the crosshair is on the pond,
    then press add and pick the pond type. The same candidate appears.
 4c. With the pin on the water, the "Water detected" chip appears, also in flight mode.
-   With the pin on dry land, Overpass is not called for the candidate search (check
-   the network log).
+   With the pond type chosen on dry land, the candidate search still runs.
 5. Same place, "As point": a node is created with `emergency=fire_water_pond`,
    `natural=water` and `water=pond`.
 6. Offline: node creation goes into the queue. A way pond edit goes into the queue

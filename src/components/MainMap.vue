@@ -671,6 +671,9 @@ watch(
 		}
 		const map = rootMap;
 		const detect = () => {
+			// A deferred check can fire after the pin moved or the edit ended —
+			// only the current pin may write its result.
+			if (markerEditStore.pendingLocation !== loc || !markerEditStore.isAdding) return;
 			markerEditStore.detectedWater = detectWaterAt(map, loc);
 		};
 		// The pin may have just been placed by a pan/ease — query once the
@@ -764,13 +767,22 @@ function fitMapToLayer() {
 		// maxZoom keeps very short paths from zooming in to house-number level.
 		rootMap.fitBounds(bounds, { padding, maxZoom: 17 });
 	} else {
-		// Center on the ghost marker (editing) or the selected marker
+		// Center on the ghost marker (editing) or the selected marker. Area edits
+		// have no ghost marker (or a stale one from an earlier node edit), so
+		// they center on the area's own position.
+		const areaTarget =
+			markerEditStore.isActive && markerEditStore.isArea && markerEditStore.pendingLocation
+				? new maplibregl.LngLat(
+						markerEditStore.pendingLocation.lng,
+						markerEditStore.pendingLocation.lat
+					)
+				: null;
 		const marker = markerEditStore.isActive ? ghostMarker : selectedMarker;
-		if (marker) {
+		if (areaTarget || marker) {
 			const centerOffsetX = (padding.left - padding.right) / 2;
 			const centerOffsetY = (padding.top - padding.bottom) / 2;
 
-			const markerLngLat = marker.getLngLat();
+			const markerLngLat = areaTarget ?? marker!.getLngLat();
 			const markerPoint = rootMap.project(markerLngLat);
 
 			const adjustedPoint = new maplibregl.Point(
@@ -901,8 +913,9 @@ function restoreDomMarkers() {
 		selectedMarker.addTo(rootMap);
 	}
 
-	// Re-add ghost marker (editing mode)
-	if (ghostMarker && markerEditStore.isActive) {
+	// Re-add ghost marker (editing mode) — never during area edits, whose
+	// geometry is fixed (a restored pin could move the cached position).
+	if (ghostMarker && markerEditStore.isActive && !markerEditStore.isArea) {
 		ghostMarker.addTo(rootMap);
 	}
 
