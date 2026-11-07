@@ -16,6 +16,7 @@ const typeMap: Record<string, string> = {
 };
 
 const titleKey = computed(() => {
+	if (markerEditStore.isFlagging) return 'markerEdit.title.flagFireWaterPond';
 	const type = markerEditStore.editableTags['emergency'] || 'fire_hydrant';
 	const mode = markerEditStore.isAdding ? 'add' : 'edit';
 	const suffix = typeMap[type] ?? 'FireHydrant';
@@ -36,7 +37,7 @@ const closePanel = () => {
 				<!-- Pond areas are never deleted: the button only removes the
 				     fire-pond information and keeps the water body. -->
 				<ion-button
-					v-if="markerEditStore.isEditing"
+					v-if="markerEditStore.isEditing && !markerEditStore.isFlagging"
 					@click="markerEditStore.requestDeleteMarker()"
 					color="danger"
 					:aria-label="

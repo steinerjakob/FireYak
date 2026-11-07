@@ -161,7 +161,7 @@ import { fetchServerTags } from '@/offline/editQueue';
 import { getIconUrlForNode } from '@/mapHandler/markerHandler';
 import type { PendingEdit } from '@/mapHandler/databaseHandler';
 import type { OsmType } from '@/helper/osmRef';
-import { isUnflagEdit } from '@/helper/osmElement';
+import { isFlagEdit, isUnflagEdit } from '@/helper/osmElement';
 
 /**
  * Tags that identify what an edit is about. An unflag removes `emergency`, so
@@ -243,6 +243,7 @@ function titleFor(edit: PendingEdit): string {
 
 function actionLabel(edit: PendingEdit): string {
 	if (isUnflagEdit(edit.baseTags, edit.tags)) return t('pendingEdits.actions.unflag');
+	if (isFlagEdit(edit.baseTags, edit.tags)) return t('pendingEdits.actions.flag');
 	return t(`pendingEdits.actions.${edit.action}`);
 }
 

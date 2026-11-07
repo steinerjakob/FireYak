@@ -114,6 +114,7 @@ src/
 | `obstacleGeometry.ts` | Decodes building footprints and road centerlines from Protomaps vector tiles for routing |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker |
+| `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
 
 ### Offline mode (`src/offline/`)
 
@@ -143,6 +144,7 @@ src/
 | `NearbyMarker.vue` | List item showing nearby source with distance + B-tube count |
 | `NearbyMarkerHeader.vue` | Header for nearby markers section |
 | `NearbyMarkerPanel.vue` | Bottom sheet listing nearby water sources within radius |
+| `PondAreaCandidates.vue` | Add-mode list of OSM water areas at the pin: mark an existing pond, edit an existing fire pond, or suggest a suction point |
 | `ReloadPrompt.vue` | PWA update notification with reload button |
 | `SupplyPipeCalculation.vue` | Pump supply line UI (suction/fire points, waypoints, profile) |
 | `SupplyPipeCalculationHeader.vue` | Header for pump calculation panel |

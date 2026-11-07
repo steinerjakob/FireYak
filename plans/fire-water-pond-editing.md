@@ -169,6 +169,27 @@ parks and pumps).
 
 ---
 
+## Implementation status
+
+- **Phase 1: done.** Way and relation ponds load and can be edited with tag-only
+  changes. Areas are unflagged instead of deleted. New pond nodes get
+  `natural=water` + `water=pond`.
+- **Phase 2: done.** Protomaps pre-check (`waterDetection.ts`), Overpass water-area
+  search (`fetchWaterAreasAt`), the candidate list (`PondAreaCandidates.vue`),
+  flagging (`startFlagging`), the duplicate guard for areas that are already ponds,
+  and the large-water hint.
+- Not done yet: the outline highlight, the suction-point quick action (flow E) and
+  a duplicate guard for nearby pond **nodes** (Phase 3).
+
+Lessons from the implementation:
+- Protomaps writes `kind_detail=lake` for `water=pond|reservoir|lake`, so the
+  pre-check decides pond vs. lake by **polygon area** (≈ 2 ha), not by kind.
+- Overpass `out … center bb` returns only one of the two. The search asks for
+  `bb` and derives the center.
+- Existing pond data is often incomplete: nodes with only the flag, and areas
+  with only `water=pond`. Area edits are never blocked. Node edits add
+  `natural=water` automatically.
+
 ## Implementation steps
 
 ### Phase 1: Load and edit existing way and relation ponds

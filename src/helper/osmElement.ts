@@ -75,6 +75,16 @@ export function hasPhysicalWaterTag(tags: Record<string, string>): boolean {
 	);
 }
 
+/** True when an edit adds the fire-pond flag to an existing water area. */
+export function isFlagEdit(
+	baseTags: Record<string, string> | null | undefined,
+	tags: Record<string, string>
+): boolean {
+	return (
+		baseTags != null && baseTags['emergency'] == null && tags['emergency'] === 'fire_water_pond'
+	);
+}
+
 /** True when an edit removes the fire-pond flag from an element that had it. */
 export function isUnflagEdit(
 	baseTags: Record<string, string> | null | undefined,
@@ -108,5 +118,6 @@ export function describeEdit(
 	if (action === 'create') return `Add ${markerType}`;
 	if (action === 'delete') return `Remove ${markerType}`;
 	if (isUnflagEdit(baseTags, tags)) return `Remove fire_water_pond tag from water area${area}`;
+	if (isFlagEdit(baseTags, tags)) return `Tag water area as fire_water_pond${area}`;
 	return `Update ${markerType}${area}`;
 }

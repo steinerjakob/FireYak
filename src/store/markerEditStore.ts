@@ -1,11 +1,17 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { GeoPoint } from '@/types/geo';
-import { OverPassElement } from '@/mapHandler/overPassApi';
+import {
+	OverPassElement,
+	fetchWaterAreasAt,
+	type WaterAreaCandidate
+} from '@/mapHandler/overPassApi';
+import type { WaterDetection } from '@/mapHandler/waterDetection';
+import { debounce } from '@/helper/helper';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
-import { storeMapNodes, deleteMapNode } from '@/mapHandler/databaseHandler';
+import { storeMapNodes, deleteMapNode, clearDeletedMapNode } from '@/mapHandler/databaseHandler';
 import { markerCacheVersion } from '@/mapHandler/markerHandler';
 import { toastController, alertController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
@@ -64,6 +70,81 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	 * its tags can change: no moving, no type switch, no delete.
 	 */
 	const isArea = computed(() => isAreaType(elementType.value));
+	/**
+	 * True while marking an existing water area as a fire pond: the area is
+	 * not a pond on the server yet, so there is nothing to remove.
+	 */
+	const isFlagging = computed(
+		() => isArea.value && originalMarker.value?.tags?.['emergency'] !== 'fire_water_pond'
+	);
+
+	// --- Water areas at the pin (flagging an existing pond, plan §2.1/§2.5) ---
+
+	/**
+	 * Protomaps "is there water under the pin?" result. Written by `MainMap`,
+	 * which owns the map instance, whenever the pin moves in add mode.
+	 */
+	const detectedWater = ref<WaterDetection | null>(null);
+	/** OSM water areas at/next to the pin, from the Overpass lookup. */
+	const areaCandidates = ref<WaterAreaCandidate[]>([]);
+	/**
+	 * `skipped`: Protomaps sees no water here, so Overpass was not asked.
+	 * `offline`: no network — existing areas cannot be looked up.
+	 */
+	const areaLookupState = ref<'idle' | 'loading' | 'done' | 'failed' | 'offline' | 'skipped'>(
+		'idle'
+	);
+	let areaLookupController: AbortController | null = null;
+	/** Debounce for the Overpass lookup — pin drags must not burn rate limit. */
+	const AREA_LOOKUP_DEBOUNCE_MS = 700;
+
+	const wantsAreaLookup = computed(
+		() => isAdding.value && markerType.value === 'fire_water_pond' && pendingLocation.value != null
+	);
+
+	function resetAreaLookup() {
+		areaLookupController?.abort();
+		areaLookupController = null;
+		areaCandidates.value = [];
+		areaLookupState.value = 'idle';
+	}
+
+	const runAreaLookup = debounce(async () => {
+		const location = pendingLocation.value;
+		if (!wantsAreaLookup.value || !location) return;
+		if (!isOnline.value) {
+			areaCandidates.value = [];
+			areaLookupState.value = 'offline';
+			return;
+		}
+		// Protomaps says there is no water near the pin → skip Overpass. An
+		// `unknown` result (layer not loaded) never skips.
+		if (detectedWater.value?.status === 'none') {
+			areaCandidates.value = [];
+			areaLookupState.value = 'skipped';
+			return;
+		}
+
+		areaLookupController?.abort();
+		const controller = new AbortController();
+		areaLookupController = controller;
+		areaLookupState.value = 'loading';
+
+		const result = await fetchWaterAreasAt(location.lat, location.lng, controller.signal);
+		if (controller.signal.aborted || areaLookupController !== controller) return;
+		areaLookupController = null;
+		areaCandidates.value = result ?? [];
+		areaLookupState.value = result ? 'done' : 'failed';
+	}, AREA_LOOKUP_DEBOUNCE_MS);
+
+	watch([wantsAreaLookup, pendingLocation, isOnline, () => detectedWater.value?.status], () => {
+		if (!wantsAreaLookup.value) {
+			resetAreaLookup();
+			return;
+		}
+		areaLookupState.value = 'loading';
+		runAreaLookup();
+	});
 
 	watch(isActive, (isActive) => {
 		if (isActive) {
@@ -146,7 +227,22 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		startAdding(location);
 	}
 
+	/**
+	 * Switches from "add a pond node" to "mark this existing water area as a
+	 * fire water pond". The area's real server tags become the edit's base
+	 * (conflict snapshot) and only `emergency=fire_water_pond` is added; the
+	 * user can then fill in the remaining fields and save as a tag-only edit.
+	 */
+	function startFlagging(candidate: WaterAreaCandidate) {
+		const element = candidate.element;
+		resetAreaLookup();
+		startEditing(element);
+		editableTags.value = { ...element.tags, emergency: 'fire_water_pond' };
+	}
+
 	function cancelEdit() {
+		resetAreaLookup();
+		detectedWater.value = null;
 		isEditing.value = false;
 		isAdding.value = false;
 		pendingLocation.value = null;
@@ -329,6 +425,9 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				// Update local cache
 				const type = isAdding.value ? 'node' : elementType.value;
 				if (isMarkerTags(finalTags)) {
+					// A freshly flagged area may carry a tombstone from an earlier
+					// local unflag — lift it so the stored marker is visible.
+					if (isAreaType(type)) await clearDeletedMapNode(toRef(type, finalId));
 					const updatedMarker: OverPassElement = toCacheElement(type, finalId, lat, lon, finalTags);
 					await storeMapNodes([updatedMarker]);
 					markerStore.updateSelectedMarker(updatedMarker);
@@ -523,6 +622,11 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		isArea,
 		addTagIfMissing,
 		removeAutoAddedTags,
+		isFlagging,
+		detectedWater,
+		areaCandidates,
+		areaLookupState,
+		startFlagging,
 		pendingLocation,
 		editableTags,
 		originalMarker,

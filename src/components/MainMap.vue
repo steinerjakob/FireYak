@@ -180,6 +180,7 @@ import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
+import { detectWaterAt } from '@/mapHandler/waterDetection';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { outdoorsFlavor } from '@/map/outdoorsFlavor';
 import { nightFlavor } from '@/map/nightFlavor';
@@ -590,6 +591,28 @@ watch(
 			ghostMarker.remove();
 		}
 	}
+);
+
+// Protomaps "water under the pin?" pre-check for the pond flow (plan §B2). The
+// map lives here, so this component feeds the result to the edit store; the
+// store decides whether the Overpass water-area lookup is worth running.
+watch(
+	() => [markerEditStore.pendingLocation, markerEditStore.isAdding] as const,
+	([loc, adding]) => {
+		if (!adding || !loc || !rootMap) {
+			markerEditStore.detectedWater = null;
+			return;
+		}
+		const map = rootMap;
+		const detect = () => {
+			markerEditStore.detectedWater = detectWaterAt(map, loc);
+		};
+		// The pin may have just been placed by a pan/ease — query once the
+		// tiles under it are rendered.
+		if (map.loaded()) detect();
+		else map.once('idle', detect);
+	},
+	{ immediate: true }
 );
 
 watch(

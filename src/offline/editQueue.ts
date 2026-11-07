@@ -178,6 +178,9 @@ export async function enqueueEdit(input: EnqueueInput): Promise<void> {
 	if (input.action === 'delete' || !isMarkerTags(input.tags)) {
 		await deleteMapNode(toRef(elementType, osmId));
 	} else {
+		// A water area flagged as fire pond may carry a tombstone from an
+		// earlier local unflag — lift it, or the store below stays hidden.
+		if (isAreaType(elementType)) await clearDeletedMapNode(toRef(elementType, osmId));
 		await storeMapNodes([toCacheElement(elementType, osmId, input.lat, input.lon, input.tags)]);
 	}
 	markerCacheVersion.value++;

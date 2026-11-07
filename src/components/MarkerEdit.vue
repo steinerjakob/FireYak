@@ -17,11 +17,12 @@ import {
 	IonModal,
 	IonChip
 } from '@ionic/vue';
-import { saveOutline, closeOutline, logInOutline } from 'ionicons/icons';
+import { saveOutline, closeOutline, logInOutline, waterOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
+import PondAreaCandidates from '@/components/PondAreaCandidates.vue';
 
 const markerEditStore = useMarkerEditStore();
 const osmAuthStore = useOsmAuthStore();
@@ -135,6 +136,20 @@ const onPondWaterTypeChange = () => {
 	}
 };
 
+/** Switches the add form to another type, with the same clean-up as the select. */
+const switchType = (type: string) => {
+	markerEditStore.editableTags['emergency'] = type;
+	onTypeChange();
+};
+
+/** Protomaps sees a pond-sized water body under the pin (plan §B2). */
+const suggestPond = computed(
+	() =>
+		markerEditStore.isAdding &&
+		emergencyType.value !== 'fire_water_pond' &&
+		markerEditStore.detectedWater?.pondLike === true
+);
+
 const onHydrantTypeChange = () => {
 	if (markerEditStore.editableTags['fire_hydrant:type'] !== 'pillar') {
 		delete markerEditStore.editableTags['pillar:type'];
@@ -222,6 +237,15 @@ const login = () => {
 					}}</ion-select-option>
 				</ion-select>
 			</ion-item>
+			<!-- Water under the pin: suggest the pond type, never switch silently -->
+			<div v-if="suggestPond" class="suggestion-chips">
+				<ion-chip @click="switchType('fire_water_pond')">
+					<ion-icon :icon="waterOutline" />
+					<ion-label>{{ t('markerEdit.pondAreas.waterDetected') }}</ion-label>
+				</ion-chip>
+			</div>
+			<!-- Existing water areas at the pin (mark instead of adding a point) -->
+			<pond-area-candidates v-if="emergencyType === 'fire_water_pond'" @switch-type="switchType" />
 		</ion-item-group>
 
 		<!-- ==================== FIRE HYDRANT FIELDS ==================== -->

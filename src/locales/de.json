@@ -244,7 +244,8 @@
 			"addWaterTank": "Wassertank hinzufügen",
 			"editWaterTank": "Wassertank bearbeiten",
 			"addFireWaterPond": "Löschteich hinzufügen",
-			"editFireWaterPond": "Löschteich bearbeiten"
+			"editFireWaterPond": "Löschteich bearbeiten",
+			"flagFireWaterPond": "Als Löschteich markieren"
 		},
 		"labels": {
 			"markerType": "Art der Wasserentnahmestelle"
@@ -306,6 +307,24 @@
 			"title": "Löschteich-Angaben entfernen",
 			"message": "Diese Wasserfläche wird nicht mehr als Löschteich markiert. Die Wasserfläche selbst bleibt in OpenStreetMap erhalten.",
 			"confirm": "Entfernen"
+		},
+		"pondAreas": {
+			"waterDetected": "Hier ist Wasser – Löschteich hinzufügen?",
+			"loading": "Suche eingezeichnete Wasserflächen …",
+			"offline": "Offline: Der Löschteich wird als Punkt hinzugefügt.",
+			"offlineWater": "Hier ist Wasser. Mit Internetverbindung kannst du die bestehende Wasserfläche markieren, statt einen Punkt hinzuzufügen.",
+			"failed": "Wasserflächen konnten nicht geladen werden. Du kannst den Löschteich trotzdem als Punkt hinzufügen.",
+			"none": "Keine eingezeichnete Wasserfläche an dieser Stelle – der Löschteich wird als Punkt hinzugefügt.",
+			"intro": "Dieser Teich ist vielleicht schon eingezeichnet. Markiere die bestehende Wasserfläche, statt einen Punkt hinzuzufügen:",
+			"orPoint": "Nichts davon passt? Fülle das Formular unten aus, um den Löschteich als Punkt hinzuzufügen.",
+			"unnamed": "Wasserfläche ohne Namen",
+			"atPin": "An der Markierung",
+			"nextToPin": "Neben der Markierung",
+			"alreadyPond": "Bereits als Löschteich markiert",
+			"largeWater": "Großes oder fließendes Gewässer: Eine Saugstelle passt meist besser.",
+			"editExisting": "Bearbeiten",
+			"useArea": "Diese Fläche verwenden",
+			"useSuctionPoint": "Lieber Saugstelle"
 		}
 	},
 	"nativeApp": {
@@ -444,7 +463,8 @@
 			"retry": "Erneut versuchen",
 			"discard": "Verwerfen",
 			"syncNow": "Jetzt synchronisieren",
-			"unflag": "Löschteich entfernt"
+			"unflag": "Löschteich entfernt",
+			"flag": "Als Löschteich markiert"
 		},
 		"conflict": {
 			"mine": "Deine Änderung",

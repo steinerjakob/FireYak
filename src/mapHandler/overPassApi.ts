@@ -598,3 +598,130 @@ export async function fetchElementById(type: OsmType, id: number): Promise<OverP
 	if (!keyword) return null;
 	return fetchSingleElement(`${keyword}(${id});`, `${type} ${id}`);
 }
+
+// ---------------------------------------------------------------------------
+// Water areas at a point (fire-pond flagging, plan §2.1)
+// ---------------------------------------------------------------------------
+
+/** Search radius (m) for water areas whose outline is next to the pin. */
+const WATER_AREA_NEAR_RADIUS_M = 30;
+/** Hard cap on returned areas — the UI lists a handful, never a long list. */
+const WATER_AREA_MAX_RESULTS = 10;
+/** Separator element emitted between the "inside" and "near" result sets. */
+const WATER_AREA_SEPARATOR = 'fireyak_sep';
+
+/** A water area that could carry `emergency=fire_water_pond`. */
+export interface WaterAreaCandidate {
+	/** The OSM way or multipolygon relation, with its full current tags. */
+	element: OverPassElement;
+	/** True when the pin lies inside the area (else it is only nearby). */
+	inside: boolean;
+	/** Rough area in m² from the bounding box — for labels and the large-water hint. */
+	approxAreaM2: number;
+	/** Distance (m) from the pin to the area's center, for ordering. */
+	distanceM: number;
+}
+
+interface OverpassBounds {
+	minlat: number;
+	minlon: number;
+	maxlat: number;
+	maxlon: number;
+}
+
+function boundsAreaM2(b: OverpassBounds | undefined): number {
+	if (!b) return 0;
+	const midLat = ((b.minlat + b.maxlat) / 2) * (Math.PI / 180);
+	const width = (b.maxlon - b.minlon) * 111_320 * Math.cos(midLat);
+	const height = (b.maxlat - b.minlat) * 110_540;
+	// A pond rarely fills its bounding box; ~70 % is a fair average for a label.
+	return Math.max(0, width * height * 0.7);
+}
+
+function distanceM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+	const rad = Math.PI / 180;
+	const x = (lon2 - lon1) * rad * Math.cos(((lat1 + lat2) / 2) * rad);
+	const y = (lat2 - lat1) * rad;
+	return Math.sqrt(x * x + y * y) * 6_371_000;
+}
+
+/**
+ * Finds water areas (closed ways and multipolygons tagged `natural=water`,
+ * `landuse=reservoir` or `landuse=basin`) that contain the given point or whose
+ * outline is within {@link WATER_AREA_NEAR_RADIUS_M} of it.
+ *
+ * Used to mark an existing pond as a fire water pond instead of adding a
+ * duplicate node. Protomaps vector tiles carry no OSM ids for water polygons,
+ * so this is the only way to learn *which* OSM object to tag.
+ *
+ * - `is_in` finds the areas the point lies in; the `around` part finds small
+ *   ponds next to it and still works on an instance without an area index.
+ * - Untagged multipolygon member ways never match (they carry no water tag).
+ * - Areas that already carry `emergency=*` are returned too, so the UI can
+ *   offer "edit the existing pond" instead of creating a duplicate.
+ *
+ * @returns candidates (inside first, then by distance), or `null` when the
+ *          lookup failed — callers then fall back to adding a point.
+ */
+export async function fetchWaterAreasAt(
+	lat: number,
+	lon: number,
+	signal?: AbortSignal
+): Promise<WaterAreaCandidate[] | null> {
+	const p = `${lat.toFixed(7)},${lon.toFixed(7)}`;
+	const r = WATER_AREA_NEAR_RADIUS_M;
+	const filters = ['[natural=water]', '[landuse~"^(reservoir|basin)$"]'];
+	const inside = filters
+		.flatMap((f) => [`way(pivot.a)${f};`, `rel(pivot.a)[type=multipolygon]${f};`])
+		.join('');
+	const near = filters
+		.flatMap((f) => [`way(around:${r},${p})${f};`, `rel(around:${r},${p})[type=multipolygon]${f};`])
+		.join('');
+	const query =
+		`[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];` +
+		`is_in(${p})->.a;(${inside})->.inside;(${near})->.near;` +
+		// `bb` and `center` are mutually exclusive output modes (Overpass keeps
+		// only one), so ask for the bounds and derive the center from them.
+		`.inside out tags bb ${WATER_AREA_MAX_RESULTS};` +
+		`make ${WATER_AREA_SEPARATOR};out;` +
+		`(.near; - .inside;)->.nearOnly;.nearOnly out tags bb ${WATER_AREA_MAX_RESULTS};`;
+
+	const outerSignal = signal
+		? AbortSignal.any([signal, AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS)])
+		: AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS);
+
+	let elements: OverPassElement[];
+	try {
+		elements = await fetchFromPool(query, outerSignal);
+	} catch (e) {
+		if (!signal?.aborted) console.warn('Water area lookup failed:', e);
+		return null;
+	}
+
+	const candidates: WaterAreaCandidate[] = [];
+	let isInside = true;
+	for (const element of elements) {
+		if ((element.type as string) === WATER_AREA_SEPARATOR) {
+			isInside = false;
+			continue;
+		}
+		if (element.type !== 'way' && element.type !== 'relation') continue;
+		const bounds = (element as { bounds?: OverpassBounds }).bounds;
+		const center =
+			element.center ??
+			(bounds
+				? { lat: (bounds.minlat + bounds.maxlat) / 2, lon: (bounds.minlon + bounds.maxlon) / 2 }
+				: undefined);
+		if (!center) continue;
+		candidates.push({
+			element: { id: element.id, type: element.type, center, tags: element.tags ?? {} },
+			inside: isInside,
+			approxAreaM2: boundsAreaM2(bounds),
+			distanceM: distanceM(lat, lon, center.lat, center.lon)
+		});
+	}
+
+	return candidates
+		.sort((a, b) => Number(b.inside) - Number(a.inside) || a.distanceM - b.distanceM)
+		.slice(0, WATER_AREA_MAX_RESULTS);
+}

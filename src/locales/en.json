@@ -244,7 +244,8 @@
 			"addWaterTank": "Add Water Tank",
 			"editWaterTank": "Edit Water Tank",
 			"addFireWaterPond": "Add Fire Water Pond",
-			"editFireWaterPond": "Edit Fire Water Pond"
+			"editFireWaterPond": "Edit Fire Water Pond",
+			"flagFireWaterPond": "Mark as Fire Water Pond"
 		},
 		"labels": {
 			"markerType": "Water Source Type"
@@ -306,6 +307,24 @@
 			"title": "Remove fire pond information",
 			"message": "This water area will no longer be marked as a fire water pond. The water area itself stays in OpenStreetMap.",
 			"confirm": "Remove"
+		},
+		"pondAreas": {
+			"waterDetected": "Water detected here — add a fire water pond?",
+			"loading": "Looking for mapped water areas here…",
+			"offline": "Offline: the pond will be added as a point.",
+			"offlineWater": "Water detected here. Connect to the internet to mark the existing water area instead of adding a point.",
+			"failed": "Mapped water areas could not be loaded. You can still add the pond as a point.",
+			"none": "No mapped water area at the pin — the pond will be added as a point.",
+			"intro": "This pond may already be on the map. Mark the existing water area instead of adding a point:",
+			"orPoint": "None of these? Fill in the form below to add the pond as a point.",
+			"unnamed": "Unnamed water area",
+			"atPin": "At the pin",
+			"nextToPin": "Next to the pin",
+			"alreadyPond": "Already marked as a fire water pond",
+			"largeWater": "Large or flowing water: a suction point is usually the better choice.",
+			"editExisting": "Edit",
+			"useArea": "Use this area",
+			"useSuctionPoint": "Suction point instead"
 		}
 	},
 	"nativeApp": {
@@ -444,7 +463,8 @@
 			"retry": "Retry",
 			"discard": "Discard",
 			"syncNow": "Sync now",
-			"unflag": "Fire pond removed"
+			"unflag": "Fire pond removed",
+			"flag": "Marked as fire pond"
 		},
 		"conflict": {
 			"mine": "Your change",
