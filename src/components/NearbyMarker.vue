@@ -8,6 +8,7 @@ import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { coerceRef, toRef } from '@/helper/osmRef';
+import { markerTitleKey } from '@/helper/markerTitle';
 
 const { list } = useNearbyWaterSource();
 const router = useRouter();
@@ -18,18 +19,9 @@ const pumpCalculationStore = usePumpCalculationStore();
 const getTitle = (markerData: OverPassElement) => {
 	if (!markerData) return t('markerInfo.title.locationInfo');
 
-	const emergency = markerData.tags?.emergency;
-	const amenity = markerData.tags?.amenity;
 	const name = markerData.tags?.name;
-
 	if (name) return name;
-	if (emergency === 'fire_hydrant') return t('markerInfo.title.fireHydrant');
-	if (emergency === 'water_tank') return t('markerInfo.title.waterTank');
-	if (emergency === 'suction_point') return t('markerInfo.title.suctionPoint');
-	if (emergency === 'fire_water_pond') return t('markerInfo.title.fireWaterPond');
-	if (amenity === 'fire_station') return t('markerInfo.title.fireStation');
-
-	return t('markerInfo.title.locationInfo');
+	return t(markerTitleKey(markerData.tags));
 };
 
 const getBTubes = (distance: number) => {

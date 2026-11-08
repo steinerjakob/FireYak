@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { fetchElementById } from '@/mapHandler/overPassApi';
+import { fetchElementFromOsmApi } from '@/mapHandler/osmApiElement';
 import { CachedMapNode, getMapNodeById, storeMapNodes } from '@/mapHandler/databaseHandler';
 import {
 	fetchMediaWikiFiles,
@@ -17,6 +18,11 @@ export const useMapMarkerStore = defineStore('marker', () => {
 	// State
 	const fetchPromises = ref<Map<OsmRef, Promise<CachedMapNode | null>>>(new Map());
 	const selectedMarker = ref<CachedMapNode | null>(null);
+	/**
+	 * Lookup state of the marker being selected, so the info panel can tell
+	 * "still loading" from "could not be loaded" instead of spinning forever.
+	 */
+	const selectedMarkerStatus = ref<'idle' | 'loading' | 'notFound'>('idle');
 	const selectedMarkerImages = ref<ImageInfo[]>([]);
 
 	// Actions
@@ -39,8 +45,16 @@ export const useMapMarkerStore = defineStore('marker', () => {
 					// relation-typed ponds and tanks, and a bare `node(id);way(id)`
 					// lookup would never find them — an `r…` marker opened from a
 					// shared link or a cache miss would resolve to nothing.
+					//
+					// The OSM API answers first: a single-object read is fast and
+					// authoritative, while Overpass can be slow, rate-limited or down —
+					// and a shared link on a fresh device then opened nothing at all.
+					// Overpass remains the fallback (and serves relations).
 					const parsed = parseRef(ref);
-					const fetched = parsed ? await fetchElementById(parsed.type, parsed.id) : null;
+					const fetched = parsed
+						? ((await fetchElementFromOsmApi(parsed.type, parsed.id)) ??
+							(await fetchElementById(parsed.type, parsed.id)))
+						: null;
 					if (fetched) {
 						// Store in database for future use — the element is valid data
 						// regardless of whether it is the one that was asked for.
@@ -130,13 +144,22 @@ export const useMapMarkerStore = defineStore('marker', () => {
 		return imageDataList;
 	}
 
+	/** Increments per selection; an older lookup must not overwrite a newer one. */
+	let selectSequence = 0;
+
 	async function selectMarker(ref: OsmRef | null) {
+		const sequence = ++selectSequence;
 		selectedMarker.value = null;
 		selectedMarkerImages.value.length = 0;
+		selectedMarkerStatus.value = ref ? 'loading' : 'idle';
 
 		if (ref) {
 			selectedMarkerImages.value.length = 0;
 			const marker = await fetchMarkerById(ref);
+			// A newer selection (or a deselect) happened meanwhile — don't let this
+			// older lookup overwrite it.
+			if (sequence !== selectSequence) return;
+			selectedMarkerStatus.value = marker ? 'idle' : 'notFound';
 			if (marker) {
 				selectedMarker.value = marker;
 				// Pass the tags we already hold so the Panoramax id doesn't cost
@@ -157,6 +180,7 @@ export const useMapMarkerStore = defineStore('marker', () => {
 		// State
 		fetchPromises,
 		selectedMarker,
+		selectedMarkerStatus,
 		selectedMarkerImages,
 		// Actions
 		fetchMarkerById,

@@ -4,7 +4,6 @@ import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
 import iconPump from '../assets/markers/pump.png';
-import iconSuctionPoint from '../assets/markers/suctionpoint.png';
 import iconUnderground from '../assets/markers/underground.png';
 import iconWall from '../assets/markers/wall.png';
 import iconWater from '../assets/markers/water.png';
@@ -22,18 +21,20 @@ import {
 } from '@/mapHandler/databaseHandler';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
+import { isSuctionHydrant } from '@/helper/markerTitle';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
 
-// Map icon keys to URLs for use in MapLibre image loading
+// Map icon keys to URLs for use in MapLibre image loading. Suction points and
+// suction hydrants use the blue/white `pump` icon on the map; `suctionpoint.png`
+// is reserved for the pump (supply pipe) calculation UI.
 export const markerIconUrls: Record<string, string> = {
 	hydrant: iconHydrant,
 	underground: iconUnderground,
 	wall: iconWall,
 	pump: iconPump,
-	suctionpoint: iconSuctionPoint,
 	water: iconWater,
 	watertank: iconWaterTank,
 	firestation: iconFirestation
@@ -51,7 +52,7 @@ function getIconKeyForNode(element: OverPassElement): string {
 		case 'fire_hydrant': {
 			// Fixed suction pipes are tagged as hydrants in OSM, but need
 			// the same map symbol as dedicated suction points.
-			if (element.tags?.['fire_hydrant:pressure'] === 'suction') return 'pump';
+			if (isSuctionHydrant(element.tags)) return 'pump';
 			const type = element.tags?.['fire_hydrant:type'];
 			return (
 				({ pillar: 'hydrant', underground: 'underground', wall: 'wall' } as Record<string, string>)[
@@ -81,9 +82,13 @@ function categoryForNode(element: OverPassElement): MarkerFilterKey {
 	const emergency = element.tags?.emergency;
 	switch (emergency) {
 		case 'fire_hydrant':
-			return 'fireHydrant';
+			// Suction pipes share the suction-point symbol, so they belong to the
+			// same filter: hiding suction points must hide them too.
+			return isSuctionHydrant(element.tags) ? 'suctionPoint' : 'fireHydrant';
 		case 'suction_point':
-			return 'pump';
+			// Must be a MarkerFilterKey: an unknown key reads as "filtered out"
+			// and hid every suction point (regression in 2.19.0).
+			return 'suctionPoint';
 		case 'water_tank':
 			return 'waterTank';
 		case 'fire_water_pond':
