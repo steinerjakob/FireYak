@@ -83,7 +83,9 @@ function categoryForNode(element: OverPassElement): MarkerFilterKey {
 		case 'fire_hydrant':
 			return 'fireHydrant';
 		case 'suction_point':
-			return 'pump';
+			// Must be a MarkerFilterKey: an unknown key reads as "filtered out"
+			// and hid every suction point (regression in 2.19.0, see #112).
+			return 'suctionPoint';
 		case 'water_tank':
 			return 'waterTank';
 		case 'fire_water_pond':
