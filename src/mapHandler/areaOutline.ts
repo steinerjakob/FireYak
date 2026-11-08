@@ -1,6 +1,7 @@
 import { fetchElementOutline, type OverPassElement } from '@/mapHandler/overPassApi';
 import { toRef, type OsmRef } from '@/helper/osmRef';
 import { elementPosition, elementTypeOf, isAreaType } from '@/helper/osmElement';
+import { fetchWaterAreasViaApi } from '@/mapHandler/waterAreaLookup';
 
 /**
  * In-memory cache of pond-area outlines for the map highlight (plan Phase 3).
@@ -42,5 +43,36 @@ export async function getAreaOutline(element: OverPassElement): Promise<GeoJSON.
 	}
 	const geometry = await pending;
 	if (geometry) outlines.set(ref, geometry);
+	return geometry;
+}
+
+/**
+ * Outlines of the water area a pond **point** lies in, per point (`null` =
+ * looked up, none found). Many ponds are mapped only as a node, sometimes
+ * inside an unmarked water area; highlighting that area shows which water the
+ * point stands for.
+ */
+const containing = new Map<OsmRef, GeoJSON.Geometry | null>();
+
+/**
+ * Outline of the water area that contains a pond node, via the quick OSM API
+ * search around it (the same one the add flow uses). Cached per node for the
+ * session; a failed lookup is not cached. `null` for non-nodes or when the
+ * point lies in no mapped water area.
+ */
+export async function getContainingWaterOutline(
+	element: OverPassElement
+): Promise<GeoJSON.Geometry | null> {
+	if (elementTypeOf(element) !== 'node') return null;
+	const ref = toRef('node', element.id);
+	if (containing.has(ref)) return containing.get(ref) ?? null;
+	const position = elementPosition(element);
+	if (!position) return null;
+
+	const candidates = await fetchWaterAreasViaApi(position.lat, position.lon);
+	if (candidates === null) return null; // lookup failed — try again next time
+	const inside = candidates.find((c) => c.inside && c.outline);
+	const geometry = inside?.outline ?? null;
+	containing.set(ref, geometry);
 	return geometry;
 }

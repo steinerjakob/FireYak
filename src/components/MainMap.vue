@@ -181,7 +181,7 @@ import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
 import { detectWaterAt } from '@/mapHandler/waterDetection';
-import { getAreaOutline, cachedOutline } from '@/mapHandler/areaOutline';
+import { getAreaOutline, cachedOutline, getContainingWaterOutline } from '@/mapHandler/areaOutline';
 import { toRef } from '@/helper/osmRef';
 import { isAreaType } from '@/helper/osmElement';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
@@ -630,22 +630,33 @@ async function updateAreaOutline() {
 		return;
 	}
 
-	// Editing/marking an area, else the selected pond area.
-	const target =
-		markerEditStore.isEditing && markerEditStore.isArea
-			? markerEditStore.originalMarker
-			: !markerEditStore.isActive &&
-				  markerStore.selectedMarker?.tags?.emergency === 'fire_water_pond' &&
-				  isAreaType(markerStore.selectedMarker.type)
-				? markerStore.selectedMarker
-				: null;
-	if (!target) {
+	// The element being edited/marked, else the selected marker.
+	const target = markerEditStore.isEditing
+		? markerEditStore.originalMarker
+		: !markerEditStore.isActive
+			? markerStore.selectedMarker
+			: null;
+	const isPond = target?.tags?.emergency === 'fire_water_pond';
+	// Marking a water area is a pond-to-be, so it is outlined too.
+	if (!target || (!isPond && !(markerEditStore.isEditing && markerEditStore.isArea))) {
 		setAreaOutline([]);
 		return;
 	}
-	const geometry = await getAreaOutline(target);
-	if (sequence !== outlineSequence) return; // superseded meanwhile
-	setAreaOutline(geometry ? [{ type: 'Feature', geometry, properties: { primary: true } }] : []);
+
+	if (isAreaType(target.type)) {
+		// Pond mapped as an area: its own outline, solid.
+		const geometry = await getAreaOutline(target);
+		if (sequence !== outlineSequence) return; // superseded meanwhile
+		setAreaOutline(geometry ? [{ type: 'Feature', geometry, properties: { primary: true } }] : []);
+		return;
+	}
+
+	// Pond mapped as a point: dashed outline of the water area it lies in, if
+	// any — "the water this point probably stands for".
+	setAreaOutline([]);
+	const geometry = await getContainingWaterOutline(target);
+	if (sequence !== outlineSequence) return;
+	setAreaOutline(geometry ? [{ type: 'Feature', geometry, properties: { primary: false } }] : []);
 }
 
 watch(

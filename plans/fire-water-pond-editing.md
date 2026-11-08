@@ -186,6 +186,10 @@ parks and pumps).
   elements without either fall back to a one-off Overpass `out geom`. the "Add pumping spot" quick action (info panel + offer after
   saving a pond, flow E), and a duplicate guard for nearby pond nodes from the
   local marker cache (60 m, works offline).
+- Pond **points** get a **dashed** outline of the water area they lie in
+  (`getContainingWaterOutline`, OSM API `map` call, cached per point). This shows
+  which water a point probably stands for, and is the first step towards the
+  node → area upgrade.
 - Left open: "tap water to mark it" outside add mode, and node → area upgrade
   (both optional).
 

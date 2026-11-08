@@ -126,7 +126,7 @@ function shoelace(ring: [number, number][]): number {
  * the request fails (caller falls back to Overpass), `[]` when it answered
  * but nothing qualifies.
  */
-async function fetchWaterAreasViaApi(
+export async function fetchWaterAreasViaApi(
 	lat: number,
 	lon: number,
 	signal?: AbortSignal
