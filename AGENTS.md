@@ -241,6 +241,27 @@ npm run generate:assets
 - **Material Design 3 Theming**: Custom MD3 CSS overrides for all Ionic components live in `src/theme/md3/`.
 - **Conventional Commits**: Enforced via Commitlint + Husky pre-commit hooks.
 
+### Branch naming (REQUIRED)
+
+Name every new branch `<type>/<short-kebab-slug>`. Do **not** use tool-generated
+names such as `claude/…`, `codex/…` or `copilot/…`. If your environment hands you
+such a branch, create a properly named branch for the work and push that instead.
+
+| Prefix | Use for | Commit type |
+|---|---|---|
+| `feature/` | New user-facing functionality | `feat:` |
+| `bugfix/` | Fixing broken behaviour | `fix:` |
+| `docs/` | Documentation and plans only (`AGENTS.md`, `README.md`, `plans/`) | `docs:` |
+| `refactor/` | Code restructuring without behaviour change | `refactor:` |
+| `chore/` | CI, build, tooling, dependencies, releases | `chore:` / `ci:` / `build:` |
+
+- Add the issue number when there is one: `bugfix/101-suction-points`.
+- Keep the whole name short, **at most ~28 characters**. Cloudflare Pages builds
+  the branch preview URL from it (`/` → `-`) and cuts it at 28 characters,
+  e.g. `claude/issue-101-suction-pipes` became `claude-issue-101-suction-pip`.
+- One branch per PR. Don't stack unrelated changes on a branch that already has
+  an open PR.
+
 ## 6. What's New Maintenance (REQUIRED)
 
 Every **user-facing change** MUST add an entry to the `unreleased` array in
