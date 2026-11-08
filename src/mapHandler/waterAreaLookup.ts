@@ -28,11 +28,28 @@ import {
 export async function fetchWaterAreasAt(
 	lat: number,
 	lon: number,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	onMore?: (candidates: WaterAreaCandidate[]) => void
 ): Promise<WaterAreaCandidate[] | null> {
 	const viaApi = await fetchWaterAreasViaApi(lat, lon, signal);
 	if (signal?.aborted) return null;
-	if (viaApi && viaApi.length > 0) return viaApi;
+	if (viaApi && viaApi.length > 0) {
+		// The API box only sees shores near the pin. If nothing contains the pin,
+		// it may still sit inside a larger area (only Overpass `is_in` can tell).
+		// Return the nearby results right away and add containing areas in the
+		// background, so the common "pin at the shore" case never waits for
+		// Overpass.
+		if (onMore && !viaApi.some((c) => c.inside)) {
+			void fetchWaterAreasViaOverpass(lat, lon, signal, OVERPASS_FALLBACK_TIMEOUT_MS).then(
+				(viaOverpass) => {
+					if (!viaOverpass || signal?.aborted) return;
+					const merged = mergeCandidates(viaApi, viaOverpass);
+					if (merged.length > viaApi.length) onMore(merged);
+				}
+			);
+		}
+		return viaApi;
+	}
 
 	const viaOverpass = await fetchWaterAreasViaOverpass(
 		lat,
@@ -44,6 +61,17 @@ export async function fetchWaterAreasAt(
 	// Overpass failed, but the API answered (with nothing): that is a valid
 	// "no water area here", not an error.
 	return viaApi;
+}
+
+/** Merges two candidate lists (same element once, the first list wins), inside first. */
+function mergeCandidates(
+	first: WaterAreaCandidate[],
+	second: WaterAreaCandidate[]
+): WaterAreaCandidate[] {
+	const seen = new Set(first.map((c) => `${c.element.type}${c.element.id}`));
+	return [...first, ...second.filter((c) => !seen.has(`${c.element.type}${c.element.id}`))]
+		.sort((a, b) => Number(b.inside) - Number(a.inside) || a.distanceM - b.distanceM)
+		.slice(0, WATER_AREA_MAX_RESULTS);
 }
 
 /** Half-size of the API box around the pin (m). Covers the "near" radius with margin. */

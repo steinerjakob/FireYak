@@ -168,11 +168,24 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		areaLookupController = controller;
 		areaLookupState.value = 'loading';
 
-		const result = await fetchWaterAreasAt(location.lat, location.lng, controller.signal);
-		if (controller.signal.aborted || areaLookupController !== controller) return;
-		areaLookupController = null;
-		for (const c of result ?? []) rememberOutline(toRef(c.element.type, c.element.id), c.outline);
-		areaCandidates.value = result ?? [];
+		const isCurrent = () => !controller.signal.aborted && areaLookupController === controller;
+		const show = (candidates: WaterAreaCandidate[]) => {
+			for (const c of candidates) rememberOutline(toRef(c.element.type, c.element.id), c.outline);
+			areaCandidates.value = candidates;
+		};
+		// The controller stays registered after the first answer: a background
+		// "containing area" lookup may still add results, and moving the pin must
+		// be able to cancel it.
+		const result = await fetchWaterAreasAt(
+			location.lat,
+			location.lng,
+			controller.signal,
+			(more) => {
+				if (isCurrent()) show(more);
+			}
+		);
+		if (!isCurrent()) return;
+		show(result ?? []);
 		areaLookupState.value = result ? 'done' : 'failed';
 	}, AREA_LOOKUP_DEBOUNCE_MS);
 

@@ -245,7 +245,11 @@ npm run generate:assets
 
 Name every new branch `<type>/<short-kebab-slug>`. Do **not** use tool-generated
 names such as `claude/…`, `codex/…` or `copilot/…`. If your environment hands you
-such a branch, create a properly named branch for the work and push that instead.
+such a branch for **new** work, create a properly named branch and push that instead.
+
+**Exception — follow-ups on an existing PR:** keep pushing to that PR's head branch,
+whatever its name, so the commits land in the PR. Don't open a replacement branch
+or PR just to fix the name.
 
 | Prefix | Use for | Commit type |
 |---|---|---|
