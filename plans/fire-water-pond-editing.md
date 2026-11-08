@@ -192,6 +192,14 @@ parks and pumps).
 Lessons from the implementation:
 - Protomaps writes `kind_detail=lake` for `water=pond|reservoir|lake`, so the
   pre-check decides pond vs. lake by **polygon area** (≈ 2 ha), not by kind.
+- The water-area search asks the **OSM API `map` call** for a ~120 m box around the
+  pin first (`src/mapHandler/waterAreaLookup.ts`). It answers in under a second,
+  returns complete ways, and FireYak decides "inside" vs "next to" itself. On the
+  public Overpass servers the `is_in` + `around` query regularly ran into the
+  client timeouts, so no candidates were ever shown. Overpass, with a slimmer
+  query (`way(around)` + `rel(bw)` instead of `rel(around)`) and a 12 s limit, is
+  now only the fallback: when the API fails, or finds nothing although the pin may
+  sit inside an area larger than the box.
 - Overpass `out … center bb` returns only one of the two. The search asks for
   `bb` and derives the center.
 - Existing pond data is often incomplete: nodes with only the flag, and areas

@@ -610,9 +610,9 @@ export async function fetchElementById(type: OsmType, id: number): Promise<OverP
 // ---------------------------------------------------------------------------
 
 /** Search radius (m) for water areas whose outline is next to the pin. */
-const WATER_AREA_NEAR_RADIUS_M = 30;
+export const WATER_AREA_NEAR_RADIUS_M = 30;
 /** Hard cap on returned areas — the UI lists a handful, never a long list. */
-const WATER_AREA_MAX_RESULTS = 10;
+export const WATER_AREA_MAX_RESULTS = 10;
 /** Separator element emitted between the "inside" and "near" result sets. */
 const WATER_AREA_SEPARATOR = 'fireyak_sep';
 
@@ -721,14 +721,14 @@ export async function fetchElementOutline(
 	}
 }
 
-interface OverpassBounds {
+export interface OverpassBounds {
 	minlat: number;
 	minlon: number;
 	maxlat: number;
 	maxlon: number;
 }
 
-function boundsAreaM2(b: OverpassBounds | undefined): number {
+export function boundsAreaM2(b: OverpassBounds | undefined): number {
 	if (!b) return 0;
 	const midLat = ((b.minlat + b.maxlat) / 2) * (Math.PI / 180);
 	const width = (b.maxlon - b.minlon) * 111_320 * Math.cos(midLat);
@@ -745,7 +745,8 @@ function distanceM(lat1: number, lon1: number, lat2: number, lon2: number): numb
 }
 
 /**
- * Finds water areas (closed ways and multipolygons tagged `natural=water`,
+ * Overpass variant of the water-area search (see `waterAreaLookup.ts`, which
+ * tries the OSM API first). Finds water areas (closed ways and multipolygons tagged `natural=water`,
  * `landuse=reservoir` or `landuse=basin`) that contain the given point or whose
  * outline is within {@link WATER_AREA_NEAR_RADIUS_M} of it.
  *
@@ -762,10 +763,11 @@ function distanceM(lat1: number, lon1: number, lat2: number, lon2: number): numb
  * @returns candidates (inside first, then by distance), or `null` when the
  *          lookup failed — callers then fall back to adding a point.
  */
-export async function fetchWaterAreasAt(
+export async function fetchWaterAreasViaOverpass(
 	lat: number,
 	lon: number,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	timeoutMs: number = NODE_QUERY_TIMEOUT_MS
 ): Promise<WaterAreaCandidate[] | null> {
 	const p = `${lat.toFixed(7)},${lon.toFixed(7)}`;
 	const r = WATER_AREA_NEAR_RADIUS_M;
@@ -782,12 +784,14 @@ export async function fetchWaterAreasAt(
 	const inside = filters
 		.flatMap((f) => [`way(pivot.a)${f};`, `rel(pivot.a)[type=multipolygon]${f};`])
 		.join('');
-	const near = filters
-		.flatMap((f) => [`way(around:${r},${p})${f};`, `rel(around:${r},${p})[type=multipolygon]${f};`])
-		.join('');
+	// `rel(around:…)` is expensive on the public servers (it has to build
+	// relation geometry). Instead take the few ways near the pin and walk up to
+	// the multipolygons they belong to (`rel(bw)`), which is cheap.
+	const near = filters.flatMap((f) => [`way.w${f};`, `rel(bw.w)[type=multipolygon]${f};`]).join('');
 	const query =
 		`[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];` +
-		`is_in(${p})->.a;(${inside})->.inside;(${near})->.near;` +
+		`is_in(${p})->.a;(${inside})->.inside;` +
+		`way(around:${r},${p})->.w;(${near})->.near;` +
 		// `out geom` also returns each element's bounds (`center` and `bb`/`geom`
 		// are mutually exclusive, so the center is derived from the bounds). The
 		// geometry is clipped to a window around the pin so a huge lake the pin
@@ -797,14 +801,14 @@ export async function fetchWaterAreasAt(
 		`(.near; - .inside;)->.nearOnly;.nearOnly out tags geom(${clip}) ${WATER_AREA_MAX_RESULTS};`;
 
 	const outerSignal = signal
-		? AbortSignal.any([signal, AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS)])
-		: AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS);
+		? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+		: AbortSignal.timeout(timeoutMs);
 
 	let elements: OverPassElement[];
 	try {
 		elements = await fetchFromPool(query, outerSignal);
 	} catch (e) {
-		if (!signal?.aborted) console.warn('Water area lookup failed:', e);
+		if (!signal?.aborted) console.warn('Water area lookup (Overpass) failed:', e);
 		return null;
 	}
 

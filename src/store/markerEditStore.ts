@@ -1,11 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { GeoPoint, distanceTo } from '@/types/geo';
-import {
-	OverPassElement,
-	fetchWaterAreasAt,
-	type WaterAreaCandidate
-} from '@/mapHandler/overPassApi';
+import { OverPassElement, type WaterAreaCandidate } from '@/mapHandler/overPassApi';
+import { fetchWaterAreasAt } from '@/mapHandler/waterAreaLookup';
 import type { WaterDetection } from '@/mapHandler/waterDetection';
 import { debounce } from '@/helper/helper';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
