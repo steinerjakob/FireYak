@@ -160,6 +160,7 @@ import { usePendingEditsStore } from '@/store/pendingEditsStore';
 import { fetchServerTags } from '@/offline/editQueue';
 import { getIconUrlForNode } from '@/mapHandler/markerHandler';
 import type { PendingEdit } from '@/mapHandler/databaseHandler';
+import { markerTitleKey } from '@/helper/markerTitle';
 import type { OsmType } from '@/helper/osmRef';
 import { isFlagEdit, isUnflagEdit } from '@/helper/osmElement';
 
@@ -227,18 +228,7 @@ function iconFor(edit: PendingEdit): string {
 function titleFor(edit: PendingEdit): string {
 	const tags = displayTags(edit);
 	if (tags.name) return tags.name;
-	switch (tags.emergency) {
-		case 'fire_hydrant':
-			return t('markerInfo.title.fireHydrant');
-		case 'water_tank':
-			return t('markerInfo.title.waterTank');
-		case 'suction_point':
-			return t('markerInfo.title.suctionPoint');
-		case 'fire_water_pond':
-			return t('markerInfo.title.fireWaterPond');
-		default:
-			return t('markerInfo.title.locationInfo');
-	}
+	return t(markerTitleKey(tags));
 }
 
 function actionLabel(edit: PendingEdit): string {

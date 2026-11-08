@@ -250,6 +250,9 @@ const openOsmEditUrl = () => {
 			<ion-note class="data-age">{{ dataAge }}</ion-note>
 		</ion-item>
 	</ion-list>
+	<ion-note v-else-if="markerStore.selectedMarkerStatus === 'notFound'" class="loading-note">{{
+		t('markerInfo.messages.notFound')
+	}}</ion-note>
 	<ion-note v-else class="loading-note">{{ t('markerInfo.messages.loading') }}</ion-note>
 </template>
 

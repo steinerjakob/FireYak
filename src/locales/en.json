@@ -6,7 +6,9 @@
 			"waterTank": "Water Tank",
 			"suctionPoint": "Suction Point",
 			"fireWaterPond": "Fire Water Pond",
-			"fireStation": "Fire Station"
+			"fireStation": "Fire Station",
+			"suctionPipe": "Suction Pipe",
+			"suctionHydrant": "Suction Hydrant"
 		},
 		"tags": {
 			"emergencyType": "Emergency Type",
@@ -122,7 +124,8 @@
 			"noAdditionalInfo": "No additional information available",
 			"loading": "Loading marker information...",
 			"dataUpdated": "Data updated {time}",
-			"photosOfflineHint": "Photos are unavailable offline."
+			"photosOfflineHint": "Photos are unavailable offline.",
+			"notFound": "This water source could not be loaded. It may have been removed from OpenStreetMap, or the connection failed — try again later."
 		},
 		"images": {
 			"alt": "Water source photo",

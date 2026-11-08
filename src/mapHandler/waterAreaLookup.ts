@@ -1,4 +1,4 @@
-import { OSM_PRODUCTION_API_URL } from '@/services/osmConfig';
+import { OSM_DATA_API_URL } from '@/services/osmConfig';
 import {
 	fetchWaterAreasViaOverpass,
 	WATER_AREA_MAX_RESULTS,
@@ -138,7 +138,7 @@ async function fetchWaterAreasViaApi(
 	let elements: ApiElement[];
 	try {
 		const timeout = AbortSignal.timeout(API_TIMEOUT_MS);
-		const response = await fetch(`${OSM_PRODUCTION_API_URL}/api/0.6/map.json?bbox=${bbox}`, {
+		const response = await fetch(`${OSM_DATA_API_URL}/api/0.6/map.json?bbox=${bbox}`, {
 			signal: signal ? AbortSignal.any([signal, timeout]) : timeout
 		});
 		if (!response.ok) return null;

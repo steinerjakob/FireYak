@@ -1,6 +1,6 @@
 import * as OSM from 'osm-api';
 import { alertController, toastController } from '@ionic/vue';
-import { OSM_EDITS_TARGET_OTHER_SERVER, OSM_PRODUCTION_API_URL } from '@/services/osmConfig';
+import { OSM_EDITS_TARGET_OTHER_SERVER, OSM_DATA_API_URL } from '@/services/osmConfig';
 import { toRef, type OsmRef, type OsmType } from '@/helper/osmRef';
 import i18n from '@/plugins/i18n';
 
@@ -66,7 +66,7 @@ const readSnapshots = new Map<OsmRef, OSM.OsmFeature>();
 export async function getFeatureForEdit(type: OsmType, id: number): Promise<OSM.OsmFeature> {
 	let feature: OSM.OsmFeature;
 	if (isProductionObject(type, id)) {
-		const response = await fetch(`${OSM_PRODUCTION_API_URL}/api/0.6/${type}/${id}.json`);
+		const response = await fetch(`${OSM_DATA_API_URL}/api/0.6/${type}/${id}.json`);
 		if (!response.ok) {
 			const error = new Error(`OSM API ${response.status} reading ${type}/${id}`);
 			(error as Error & { status?: number }).status = response.status;
