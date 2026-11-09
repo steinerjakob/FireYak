@@ -47,6 +47,7 @@ jobs:
     env:
       VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY_IOS }}
       APP_BUILD_LABEL: ${{ inputs.build_label }}
+      SPM_PACKAGES_DIR: ${{ github.workspace }}/.spm-packages
     steps:
       - name: Checkout Code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -70,6 +71,23 @@ jobs:
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
+
+      - name: Resolve Swift packages (with retries)
+        # GitHub release downloads of binary targets (e.g. Cordova.xcframework.zip)
+        # fail now and then with 5xx errors; retry them here so build_app finds
+        # everything in SPM_PACKAGES_DIR and does not have to download again.
+        run: |
+          for attempt in 1 2 3 4; do
+            if xcodebuild -resolvePackageDependencies \
+                -project ios/App/App.xcodeproj -scheme App \
+                -clonedSourcePackagesDirPath "$SPM_PACKAGES_DIR"; then
+              exit 0
+            fi
+            echo "::warning::Swift package resolution failed (attempt $attempt), retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          echo "::error::Swift package resolution failed after 4 attempts"
+          exit 1
 
       - name: Install SSH key
         env:

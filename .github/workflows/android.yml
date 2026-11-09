@@ -113,6 +113,21 @@ jobs:
         working-directory: ./android
         run: chmod +x gradlew
 
+      - name: Download Gradle (with retries)
+        # services.gradle.org times out now and then; fetch the wrapper
+        # distribution up front so the build steps find it cached.
+        working-directory: ./android
+        run: |
+          for attempt in 1 2 3 4; do
+            if ./gradlew --version; then
+              exit 0
+            fi
+            echo "::warning::Gradle download failed (attempt $attempt), retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          echo "::error::Gradle download failed after 4 attempts"
+          exit 1
+
       - name: Build Unsigned Release AAB
         working-directory: ./android
         run: ./gradlew bundleRelease

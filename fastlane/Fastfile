@@ -73,7 +73,13 @@ platform :ios do
     # `build_number` sets CFBundleVersion (Info.plist reads CURRENT_PROJECT_VERSION).
     # It must grow across dev and release uploads of the same version.
     xcargs = options[:build_number] ? "CURRENT_PROJECT_VERSION=#{options[:build_number]}" : nil
-		build_app(project: File.join(ios_dir, "App/App.xcodeproj"), scheme: "App", xcargs: xcargs)
+    # CI pre-resolves Swift packages with retries into SPM_PACKAGES_DIR (ios.yml).
+		build_app(
+      project: File.join(ios_dir, "App/App.xcodeproj"),
+      scheme: "App",
+      xcargs: xcargs,
+      cloned_source_packages_path: ENV["SPM_PACKAGES_DIR"]
+    )
 
   end
 
