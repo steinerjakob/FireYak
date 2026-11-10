@@ -1,9 +1,15 @@
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { OverPassElement } from '@/mapHandler/overPassApi';
+import { GeoPoint } from '@/types/geo';
 
 export interface NearbyMarker {
 	element: OverPassElement;
+	/**
+	 * Point the distances are measured to: the marker position, or for a pond
+	 * area its nearest shore point / mapped suction point.
+	 */
+	target: GeoPoint;
 	/** Straight-line (haversine) distance in meters. */
 	distance: number;
 	/** Distance along the road network in meters, when routable. */

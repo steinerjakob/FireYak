@@ -180,6 +180,7 @@ import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
+import { resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
 import { detectWaterAt } from '@/mapHandler/waterDetection';
 import { getAreaOutline, cachedOutline, getContainingWaterOutline } from '@/mapHandler/areaOutline';
 import { toRef } from '@/helper/osmRef';
@@ -1012,7 +1013,15 @@ const showPathToSelectedMarker = async () => {
 		return;
 	}
 	const markerLngLat = selectedMarker.getLngLat();
-	const target: GeoPoint = { lat: markerLngLat.lat, lng: markerLngLat.lng };
+	let target: GeoPoint = { lat: markerLngLat.lat, lng: markerLngLat.lng };
+	// A pond area is reached at its shore (or its mapped suction point), not
+	// at the center the marker sits on.
+	const element = markerStore.selectedMarker;
+	if (element) {
+		const access = await resolveAccessPoint(element, currentLocation);
+		if (requestId !== pathRequestSeq) return;
+		if (access) target = access;
+	}
 	// A marker far from the user would draw a long, useless line across the
 	// map (and cost a routing request) — skip it. The nearby view is exempt:
 	// its results are distance-ordered and the line is its core feature.

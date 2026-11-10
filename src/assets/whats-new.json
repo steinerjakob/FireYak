@@ -24,6 +24,11 @@
 			"type": "fix",
 			"en": "Offline map downloads no longer stop when the map server is busy – they pause briefly and carry on.",
 			"de": "Offline-Kartendownloads brechen nicht mehr ab, wenn der Kartenserver ausgelastet ist – sie pausieren kurz und laufen weiter."
+		},
+		{
+			"type": "improvement",
+			"en": "Distances to large fire water ponds are now measured to the shore or its suction point, not to the middle of the water.",
+			"de": "Entfernungen zu großen Löschteichen werden jetzt bis zum Ufer oder zur Saugstelle gemessen, nicht bis zur Teichmitte."
 		}
 	],
 	"releases": [
