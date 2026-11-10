@@ -1,5 +1,13 @@
 # Offline-ready pump calculation: DEM elevation, routed supply line, hose-count labels
 
+> **Status: partly stale.** Routing and elevation for hoses continue in `plans/hose-routing-optimized.md`.
+> The following no longer holds (line references are to `origin/feature/110-pond-shore` at commit `558308a`):
+> - §B assumes the boolean setting `clampHosesToRoads`. The new plan replaces it with `hoseRouting: 'optimized' | 'roads' | 'direct'`.
+> - "Routed grid legs are ~8 m spaced" is no longer true. String pulling now reduces grid paths to a few vertices (`gridRouting.ts:367-391`).
+> - Two fallbacks are not mentioned. When the grid exceeds its cell cap, routing silently falls back to the road graph (`nearbyRouting.ts:216-221`). Beyond 3 km, it draws a straight line (`nearbyRouting.ts:211`).
+> - In §A, "~19 m/px" for z12 is wrong. At 48°N it is ≈ 12.8 m/px.
+> - Line references have moved: `settingsStore.ts:49` → `:61`, `MainMap.vue:795` → `:1033`, and `MainMap.vue:1134` → `:1467` (path label layer).
+
 ## Context
 
 The supply-pipe (pump) calculation currently depends on two things that break or degrade offline, and its polyline ignores the routing work already shipped on this branch:
