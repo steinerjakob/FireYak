@@ -143,7 +143,7 @@
 				</ion-item>
 
 				<ion-item v-if="osmAuthStore.isAuthenticated" lines="none">
-					<ion-button fill="primary" @click="openOsmProfile()">
+					<ion-button fill="solid" @click="openOsmProfile()">
 						<ion-icon slot="start" :icon="openOutline"></ion-icon>
 						{{ $t('settings.account.manageAccount') }}
 					</ion-button>

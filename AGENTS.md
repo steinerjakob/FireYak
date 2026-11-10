@@ -28,7 +28,8 @@ FireYak is a hybrid mobile and web application designed for firefighters and eme
 - **OSM Editing**: osm-api with OAuth2 PKCE; edits queue offline and sync when back online
 - **In-App Review**: `@capacitor-community/in-app-review`, gated by a usage-based composable
 - **Styling**: SCSS, Material Design 3 custom theme
-- **Code Quality**: ESLint, Prettier, Stylelint, Commitlint (Conventional Commits), Husky + lint-staged
+- **Code Quality**: ESLint, Prettier, Stylelint, Commitlint (Conventional Commits), Husky + lint-staged, `vue-tsc` type check
+- **Testing**: Vitest (Node environment) for pure modules; routing scene specs read real map tiles from `src/mapHandler/__fixtures__/routing/`
 - **Changelog/Release Tooling**: git-cliff (CHANGELOG.md generation), custom `scripts/stamp-whats-new.mjs`
 - **CI/CD**: GitHub Actions (GitHub Pages deploy, Google Play via Fastlane, TestFlight via Fastlane, unified release pipeline)
 
@@ -50,6 +51,7 @@ src/
 ├── router/          # Route definitions
 ├── services/        # External auth service integration (OSM OAuth) and OSM endpoint config (`osmConfig.ts`)
 ├── store/           # Pinia stores
+├── testing/         # Test-only helpers for specs (fixture loading, tile decoding); never imported by app code
 ├── theme/           # SCSS variables and Material Design 3 CSS overrides
 ├── types/           # Shared TypeScript types (geo, obstacles)
 ├── views/           # Top-level page components
@@ -115,6 +117,8 @@ src/
 | `obstacleGeometry.ts` | Decodes building footprints and road centerlines from Protomaps vector tiles for routing |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker |
+| `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster) for the dev-only routing debug view |
+| `__fixtures__/routing/` | Test data for the routing specs: five real scenes (`scene.json` committed, tiles gitignored and fetched locally, README there). Never import from app code |
 | `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
 | `areaOutline.ts` | Session cache + Overpass `out geom` lookup for pond-area outlines (map highlight) |
 | `waterSourceAccess.ts` | Where a hose reaches a water source: pond areas use a mapped suction point at the pond or the nearest shore point instead of the center (nearby list, path, pump calculation) |
@@ -165,6 +169,7 @@ src/
 | `OfflineAreasView.vue` | Manage downloaded offline map areas (add/refresh/delete, size, online-only gating) |
 | `PendingEditsView.vue` | List queued offline edits and trigger manual sync |
 | `SettingsView.vue` | Theme selector, map layer/terrain, zoom toggle, OSM account login/logout |
+| `RoutingDebugView.vue` | Dev-only routing tuning view (scene picker, draggable origin/target, per-mode length/timing, cost raster, ring simulation); registered only in dev builds or with `VITE_ROUTING_DEBUG=1` |
 
 ### Routes
 
@@ -181,6 +186,7 @@ src/
 | `/settings/pending-edits` | PendingEditsView | Offline edit queue |
 | `/markerimages/:relatedId` | MarkerImageViewer | Image gallery |
 | `/osm-callback` | - | OAuth callback handler |
+| `/debug/routing` | RoutingDebugView | Dev-only routing tuning view (`import.meta.env.DEV` or `VITE_ROUTING_DEBUG=1`) |
 
 ### Public Assets (`public/`)
 
@@ -193,7 +199,8 @@ src/
 
 | Workflow | Trigger | Description |
 |---|---|---|
-| `release.yml` | Manual (`workflow_dispatch`) | Unified release pipeline. `prepare` job computes the next semver from Conventional Commits, bumps `package.json`/Android version, generates `CHANGELOG.md` via git-cliff, stamps `src/assets/whats-new.json`, commits, tags `v<version>`, and creates the GitHub Release; then fans out to `main.yml`/`android.yml`/`ios.yml` (each checks out that tag, read-only). **A release publishes to production**: GitHub Pages, Google Play production, and App Store review with automatic release on approval. Test builds are reviewed beforehand via `dev-builds.yml` |
+| `ci.yml` | Pull requests and pushes to `main` | Quality gate: `npm ci`, `npx eslint .`, `npm run typecheck`, `npm test` |
+| `release.yml` | Manual (`workflow_dispatch`) | Unified release pipeline. `prepare` job runs `npm test`, then computes the next semver from Conventional Commits, bumps `package.json`/Android version, generates `CHANGELOG.md` via git-cliff, stamps `src/assets/whats-new.json`, commits, tags `v<version>`, and creates the GitHub Release; then fans out to `main.yml`/`android.yml`/`ios.yml` (each checks out that tag, read-only). **A release publishes to production**: GitHub Pages, Google Play production, and App Store review with automatic release on approval. Test builds are reviewed beforehand via `dev-builds.yml` |
 | `main.yml` | `workflow_call` (from `release.yml`) or manual | Builds the web app and deploys to GitHub Pages |
 | `android.yml` | `workflow_call` or manual | Two-job pipeline: `build` runs `npm ci`/Gradle to produce an **unsigned** AAB+APK (no secrets); `deploy` downloads those artifacts, signs them with the keystore, uploads the signed APK to the GitHub Release, and pushes the AAB via Fastlane: tagged versions (`version` input set) to the **production** track (`android production` lane), everything else to the **internal** track |
 | `ios.yml` | `workflow_call` or manual | Builds and archives via Xcode/Fastlane. Tagged versions run the `ios release` lane (upload, wait for processing, submit for App Store review with automatic release, only `release_notes.txt` from `fastlane/metadata/ios` sent); everything else runs `ios beta` (TestFlight internal only) |
@@ -227,6 +234,17 @@ npm run buildAndSync
 
 # Lint and auto-fix
 npm run lint
+
+# Type check (vue-tsc; the build does not type-check)
+npm run typecheck
+
+# Run the unit tests once / in watch mode
+npm test
+npm run test:watch
+
+# Fetch the (gitignored) routing fixture tiles locally; the key comes from the
+# environment only and must never be written to a file
+VITE_PROTOMAPS_API_KEY=<key> node scripts/fetch-routing-fixtures.mjs [--scene <id>]
 
 # Generate native app icons and splash screens
 npm run generate:assets
@@ -298,7 +316,9 @@ Rules:
 
 ## 7. Important Notes for AI Agents
 
-- **No test suite exists.** There are no unit or integration tests.
+- **Tests run with Vitest** (`npm test`, Node environment). Spec files sit next to the source they test (`foo.ts` → `foo.spec.ts`) and cover pure modules; modules under test import only pure modules and take I/O through injectable fetchers. Scene specs over real map tiles are named `*.scenes.spec.ts`. Shared test-only helpers live in `src/testing/` (eslint forbids importing it, `vitest` or any `__fixtures__` path from app code). Import `describe`, `it`, `expect`, `vi` from `'vitest'` explicitly.
+- **Routing fixtures** live in `src/mapHandler/__fixtures__/routing/` (see the README there): `scene.json` and the README are committed, the tile files are gitignored and fetched with `scripts/fetch-routing-fixtures.mjs`. Scene specs skip cleanly (`describe.skipIf(!fixturesPresent)`) when the tiles are absent, so in a fresh checkout a green `npm test` does not exercise them: fetch the fixtures first when you change routing code. Expected values in specs are tolerant ranges.
+- **Run `npm test` and `npm run typecheck` before committing** changes to tested modules (CI runs eslint, typecheck and tests on every PR; `release.yml` runs the tests before tagging).
 - **Areas get tag-only edits.** Fire water ponds can be ways or multipolygon relations. For those, FireYak only changes tags: never coordinates, member nodes or members, and it never deletes them (that would remove the water body). "Delete" on a pond area removes only the `emergency=fire_water_pond` flag. Helpers live in `src/helper/osmElement.ts`; the edit queue rejects area deletes.
 - **OSM OAuth2 uses PKCE flow** — see `osmAuthStore.ts` for the implementation. Never hard-code `www.openstreetmap.org` or the client ID; use `OSM_WEB_URL`/`OSM_CLIENT_ID` from `src/services/osmConfig.ts` so preview builds hit the OSM dev server.
 - **Web changes get a Cloudflare Pages preview per branch** (see §3 "Preview deployments"); point reviewers to the PR's preview link for UI checks.

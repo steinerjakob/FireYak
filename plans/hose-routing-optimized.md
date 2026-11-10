@@ -1086,8 +1086,11 @@ modules. I/O goes through injected fetchers (§6.2). Scene specs that drive
 `vi.mock`, so `maplibre-gl` and the Capacitor tile store are never loaded.
 
 **DEM in Node.** `createImageBitmap` and canvas are missing in Node, so specs
-decode the WebP fixtures with a WASM decoder dev dependency. The proposal is
-`@jsquash/webp`, **not tried**. It feeds the pure `terrariumToElevations`. If
+decode the WebP fixtures with a WASM decoder dev dependency. `@jsquash/webp` **works** (tried in phase 0, 14 ms per tile),
+with one catch: its package entry also loads the encoder, which pulls
+`wasm-feature-detect` 1.10 (uses `import.source`, a syntax error on Node 22).
+`src/testing/routingFixtures.ts` therefore imports `@jsquash/webp/decode.js`
+directly and passes the WASM from disk to `init`. It feeds the pure `terrariumToElevations`. If
 that does not work, the fetch script stores the DEM fixtures re-encoded as
 lossless PNG, decoded with `pngjs`, at a larger size.
 
@@ -1246,8 +1249,16 @@ copy of `558308a` (Node 22, vitest 5.1.0). In that trial:
     ```json
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "vue-tsc --noEmit --skipLibCheck -p tsconfig.json"
+    "typecheck": "vue-tsc --noEmit --skipLibCheck --composite false -p tsconfig.json"
     ```
+
+    **Implemented with `--composite false`:** `tsconfig.json` sets `composite: true`,
+    and once the two errors below are fixed, `vue-tsc` then reports ten
+    declaration-emit errors (TS2742/TS4058/TS4094/TS7056 in
+    `pumpCalculation.ts` and `pumpCalculationSettings.ts`, about inferred types
+    from `maplibre-gl`). They are masked while other errors exist. `--noEmit`
+    does not need declaration output, so the flag removes them without touching
+    app code.
 
     `vue-tsc` is already a dev dependency, but no script runs it today, and
     `vite build` does not type-check.
@@ -1386,6 +1397,10 @@ release or by hand, and `dev-builds.yml` builds native apps on pushes to
 - `src/testing/routingFixtures.ts` (helper, not a spec): `loadScene(id)`,
   `fixtureFetcher(scene)` (a `TileFetcher` reading `node:fs`), and
   `fixturesPresent`.
+- Phase 0 also added `src/mapHandler/routingDebug.ts` (+ spec): pure helpers
+  of the debug view. The debug view reads the app's live/offline tile pipeline,
+  not the fixture tiles (that needs the injectable fetchers of phase 2). It
+  loads `scene.json` files through `import.meta.glob`.
 - `src/testing/routingFixtures.spec.ts`:
   - every tile listed in each `scene.json` exists and decodes (MVT layers
     present; DEM decodes to 512×512);
@@ -1414,9 +1429,9 @@ release or by hand, and `dev-builds.yml` builds native apps on pushes to
     | Case | Expected |
     |---|---|
     | scene 1 pond, road | 1,600–1,850 m |
-    | scene 1 pond, terrain | 500–560 m |
-    | scene 1 hydrant, road | 280–310 m |
-    | scene 1 hydrant, terrain | 220–245 m |
+    | scene 1 pond, terrain | 680–740 m (measured 708 m; the screenshot's 528 m cannot be reproduced: the shore is 645 m from the research vehicle) |
+    | scene 1 hydrant node 4477703437 (300 m), road | 430–490 m (measured 462 m) |
+    | scene 1 hydrant node 4477703437 (300 m), terrain | 350–410 m (measured 381 m); the screenshot's 295 m / 232 m used an unrecorded vehicle position |
     | scene 2 ring medians at 150 / 300 m | within ±10 % of §5 |
 
 **Manual:** `npm run build`, then check that `dist/` contains no `__fixtures__`

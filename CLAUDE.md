@@ -8,7 +8,8 @@ never drift apart between tools.
 tech stack, directory and store layout, key commands, architectural patterns,
 and the repo's hard requirements — including §6, which makes a
 `src/assets/whats-new.json` entry mandatory for every user-facing change, and
-§7's note that there is no test suite.
+§7's notes on the Vitest suite (`npm test`, spec files next to the source,
+routing fixtures that must be fetched locally).
 
 Put new agent guidance in `AGENTS.md`, not here. This file exists only to point
 at it.

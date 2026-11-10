@@ -1,15 +1,22 @@
 import { onMounted, onUnmounted, type Ref } from 'vue';
 import type { IonModal } from '@ionic/vue';
+
+/** Template ref of an `<ion-modal>`: the component instance exposes its root element as `$el`. */
+type IonModalElement = {
+	addEventListener(type: string, listener: (event: CustomEvent<any>) => void): void;
+	removeEventListener(type: string, listener: (event: CustomEvent<any>) => void): void;
+};
+type IonModalRef = { $el?: IonModalElement } | undefined;
 import { useDefaultStore } from '@/store/defaultStore';
 
 export function useIonModalBreakpoint(
-	modalRef: Ref<typeof IonModal | undefined>,
+	modalRef: Ref<typeof IonModal | IonModalRef>,
 	initialBreakpoint = 0.4
 ) {
 	const defaultStore = useDefaultStore();
 
 	const attachListeners = () => {
-		const el = modalRef.value?.$el;
+		const el = (modalRef.value as IonModalRef)?.$el;
 		if (!el) return;
 
 		const handleDidPresent = () => {

@@ -15,6 +15,8 @@ interface ImportMetaEnv {
 	/** OAuth2 client ID registered on `VITE_OSM_URL`. Defaults to the production
 	 * client; ignored on native — see `osmConfig.ts`. */
 	readonly VITE_OSM_CLIENT_ID?: string;
+	/** `1` registers the dev-only `/debug/routing` view in non-dev builds too. */
+	readonly VITE_ROUTING_DEBUG?: string;
 }
 
 interface ImportMeta {

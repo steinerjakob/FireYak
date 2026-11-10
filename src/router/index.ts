@@ -69,6 +69,15 @@ const routes = [
 	}
 ];
 
+// Dev-only routing tuning view; never part of release builds.
+if (import.meta.env.DEV || import.meta.env.VITE_ROUTING_DEBUG === '1') {
+	routes.push({
+		path: '/debug/routing',
+		name: 'Routing debug',
+		component: () => import('@/views/RoutingDebugView.vue')
+	});
+}
+
 const router = createRouter({
 	history: createWebHashHistory(process.env.BASE_URL),
 	routes
