@@ -478,7 +478,7 @@ export interface LinearFeature { bbox: FeatureBBox; points: [number, number][]; 
 export interface TileCoverage { requested: number; decoded: number; missing: number; truncated: number }
 export interface ObstacleData {
   buildings: BuildingPolygon[];
-  roads: RoadLine[];          // as today: rail and ferry excluded; path/corridor excluded from phase 2
+  roads: RoadLine[];          // as today: rail and ferry excluded; path/corridor filtered by classifyRoad from phase 3 (kept by the decoder in phase 2)
   rails: LinearFeature[];     // kind=rail, every kind_detail
   landuse: AreaPolygon[];
   waterAreas: AreaPolygon[];
@@ -1662,6 +1662,49 @@ single cost grid that remains after phase 5.
   equal the phase-1 values (stored as an inline snapshot rounded to 1 m). The
   only allowed difference is a listed set of scene-4 cases affected by
   removing `path/corridor`.
+
+**Implemented (phase 2 notes).** Where the code differs from the text above:
+
+- `path/corridor` stays in `roads` for now. Dropping it in the decoder moved two
+  scene-4 road-mode ring cases (487 to 483 m and 569 to 565 m), and phase 2 must not change
+  any route. `classifyRoad` already returns `'excluded'` for it, as it does for
+  tunnelled `kind=path` and `access=military`; **phase 3 filters `roads` with
+  `classifyRoad` when it builds the graph and the grid**, which is where the scene-4 change
+  then lands (the lengths are pinned in `nearbyRouting.scenes.spec.ts`, "lengths as after
+  phase 1": 5 scenes x road/terrain x every ring and case, rounded to 1 m, unchanged).
+- `ObstacleData.water` is now `waterAreas: WaterPolygon[]`, where `WaterPolygon`
+  extends `AreaPolygon` with the `tile` id the outline merge needs. `RoadLine` also has
+  `access` (optional), needed for the military rule. `LinearFeature` is also what rails,
+  water lines and cliffs use.
+- Coverage: `BasemapCoverage` keeps its phase-1 shape and gains
+  `layers: Record<'buildings'|'roads'|'landuse'|'water'|'earth', { tiles, features }>`
+  (tiles of the decoded ones that had the layer, and raw features read). Protomaps omits
+  empty layers, so `tiles` below the decoded count is normal. `TileCoverage` from the sketch
+  was not needed.
+- Water lines carry the water kind in `kind` (`river`, `stream`, `drain`), not in
+  `kind_detail` as §4.1 says; `classifyWaterLine(kind, kindDetail)` reads both. `kind_detail`
+  of a water polygon (`lake`, `river`, `basin`) is not used. Water points (fountains)
+  are dropped.
+- `hoseCostModel.ts` also exports `classifyRail`, `classifyWaterArea`, `CELL_CLASS`
+  (stable numeric ids), `CLASS_FACTOR`, `isPassable`, `isOnRoadClass`, the landuse and water
+  tables, `BUILDING_CORE_ESCAPE_FACTOR` (30) and `ESCAPE_RADIUS_M` (12). A classifier
+  returns a class, `'excluded'` (not in graph or grid) or `'none'` (draws nothing, blocks
+  nothing: tram, subway, bridged or tunnelled heavy rail, bridged or tunnelled motorway).
+  `path/*` details other than the §6.3 list (`bridleway`, `pier`) are `PATH`. A bridged
+  `path/steps` is `BRIDGE`. `slopeFactor(grade, cellClass?)` takes the class that governs the step.
+  The warning thresholds are re-exported as `WARNING_THRESHOLDS` from the constants that
+  `routeProfile.ts` and `hosePressure.ts` already own, so there is one value each.
+- Landuse kinds seen in the scenes without a factor yet (`UNTUNED_LANDUSE_KINDS`, priced
+  `UNKNOWN_OPEN`): dam, dog_park, grassland, hospital, kindergarten, pier, platform,
+  playground, sand, school, university. Biggest by area: hospital, university, school.
+- Debug view: `classSummary` (in `routingDebug.ts`) sums area per class for landuse and
+  water, length per class for roads, rail, water lines and cliffs, and lists unknown
+  landuse kinds (new ones marked NEW). The view shows it for the window around the
+  markers.
+- Specs: `hoseCostModel.spec.ts` (92), `obstacleDecode.spec.ts` (19),
+  `hoseCostModel.scenes.spec.ts` (9, fixtures: every road/rail/landuse/water kind
+  seen must be listed in the spec's tables), plus the lengths snapshot above. The test MVT
+  encoder now writes boolean property values.
 
 **Manual:** none.
 

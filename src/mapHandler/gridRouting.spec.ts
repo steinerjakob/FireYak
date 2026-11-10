@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { distanceTo } from '@/types/geo';
+import { emptyObstacleData } from '@/mapHandler/obstacleDecode';
 import type { BuildingPolygon, ObstacleData, RoadLine } from '@/types/obstacles';
 import { segmentIntersectsPolygon } from '@/helper/polygonGeometry';
 import { distanceToOutline } from '@/helper/areaShore';
@@ -54,7 +55,10 @@ function roadLine(...points: [number, number][]): RoadLine {
 	return {
 		bbox: [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), 0, 0],
 		points: pts,
-		kind: 'minor_road'
+		kind: 'minor_road',
+		kindDetail: 'residential',
+		isBridge: false,
+		isTunnel: false
 	};
 }
 
@@ -67,7 +71,7 @@ function centreOf(grid: TerrainGrid, col: number, row: number) {
 }
 
 function build(obstacles: Partial<ObstacleData>): TerrainGrid {
-	const grid = buildTerrainGrid({ buildings: [], roads: [], ...obstacles }, BOUNDS);
+	const grid = buildTerrainGrid({ ...emptyObstacleData(), ...obstacles }, BOUNDS);
 	if (!grid) throw new Error('grid not built');
 	return grid;
 }

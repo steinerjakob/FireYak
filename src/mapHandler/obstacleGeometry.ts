@@ -1,35 +1,22 @@
-import { VectorTile } from '@mapbox/vector-tile';
-import { PbfReader } from 'pbf';
-import type { Feature, Position } from 'geojson';
 import { GeoBounds, GeoPoint } from '@/types/geo';
 import { fetchTileCacheFirst } from '@/offline/offlineProtocol';
 import { PROTOMAPS_MAX_ZOOM, lngLatToTile, tileToBounds, tilesForBounds } from '@/offline/tileMath';
 import { pointInPolygon } from '@/helper/polygonGeometry';
-import type {
-	BuildingPolygon,
-	FeatureBBox,
-	ObstacleData,
-	ObstacleResult,
-	RoadLine,
-	WaterPolygon
-} from '@/types/obstacles';
+import {
+	decodeObstacleTile,
+	emptyTileObstacles,
+	mergeTileObstacles,
+	type TileObstacles
+} from '@/mapHandler/obstacleDecode';
+import type { FeatureBBox, ObstacleResult, WaterPolygon } from '@/types/obstacles';
 
 /**
- * Decodes building footprints and road centerlines from the Protomaps basemap
- * vector tiles (z15) that back the road-aware distance ranking. Tiles come from
- * the same cache-first `offline://` pipeline the map renders from. An offline
- * gap yields no obstacles for that tile and is reported in the coverage, so
- * callers can say the map data was incomplete.
+ * Fetches the Protomaps basemap vector tiles (z15) that back hose routing and
+ * decodes them into obstacles (`obstacleDecode.ts` holds the pure decoder).
+ * Tiles come from the same cache-first `offline://` pipeline the map renders
+ * from. An offline gap yields no obstacles for that tile and is reported in the
+ * coverage, so callers can say the map data was incomplete.
  */
-
-/** Protomaps source layer holding building footprints. */
-const BUILDINGS_LAYER = 'buildings';
-/** Protomaps source layer holding road centerlines. */
-const ROADS_LAYER = 'roads';
-/** Protomaps source layer holding water polygons and lines. */
-const WATER_LAYER = 'water';
-/** Road `kind`s that are not drivable/walkable barriers and are dropped. */
-const EXCLUDED_ROAD_KINDS = new Set(['rail', 'ferry']);
 
 /**
  * Upper bound on tiles decoded per call. The nearby-sources search re-runs on
@@ -57,7 +44,7 @@ export type TileFetcher = (
  */
 export interface DecodedTile {
 	status: 'ok' | 'missing';
-	data: Required<ObstacleData>;
+	data: TileObstacles;
 }
 
 /**
@@ -97,24 +84,11 @@ export async function getObstaclesForBounds(
 
 	const results = await Promise.all(tiles.map((t) => getTileObstacles(t.x, t.y, fetcher)));
 
-	const buildings: BuildingPolygon[] = [];
-	const roads: RoadLine[] = [];
-	const water: WaterPolygon[] = [];
-	let missingTiles = 0;
-	for (const result of results) {
-		if (result.status === 'missing') missingTiles++;
-		buildings.push(...result.data.buildings);
-		roads.push(...result.data.roads);
-		water.push(...result.data.water);
-	}
+	const missingTiles = results.filter((result) => result.status === 'missing').length;
+	const { data, layers } = mergeTileObstacles(results.map((result) => result.data));
 	const decoded = tiles.length - missingTiles;
 	const basemap = decoded === 0 ? 'none' : missingTiles > 0 || truncated ? 'partial' : 'full';
-	return {
-		buildings,
-		roads,
-		water,
-		coverage: { basemap, truncated, missingTiles, totalTiles }
-	};
+	return { ...data, coverage: { basemap, truncated, missingTiles, totalTiles, layers } };
 }
 
 /** Cache-aware accessor for a single z15 tile's obstacles (LRU + in-flight dedupe). */
@@ -151,50 +125,11 @@ function getTileObstacles(x: number, y: number, fetcher: TileFetcher): Promise<D
 
 /** Fetches and decodes a single z15 tile; unavailable tiles come back as `missing`. */
 async function decodeTile(x: number, y: number, fetcher: TileFetcher): Promise<DecodedTile> {
-	const z = PROTOMAPS_MAX_ZOOM;
-	const buildings: BuildingPolygon[] = [];
-	const roads: RoadLine[] = [];
-	const water: WaterPolygon[] = [];
-
-	const buffer = await fetcher('protomaps', z, x, y);
+	const buffer = await fetcher('protomaps', PROTOMAPS_MAX_ZOOM, x, y);
 	if (!buffer || buffer.byteLength === 0) {
-		return { status: 'missing', data: { buildings, roads, water } };
+		return { status: 'missing', data: emptyTileObstacles() };
 	}
-
-	const tile = new VectorTile(new PbfReader(buffer));
-
-	const buildingLayer = tile.layers[BUILDINGS_LAYER];
-	if (buildingLayer) {
-		for (let i = 0; i < buildingLayer.length; i++) {
-			collectBuildings(buildingLayer.feature(i).toGeoJSON(x, y, z), buildings);
-		}
-	}
-
-	const roadLayer = tile.layers[ROADS_LAYER];
-	if (roadLayer) {
-		for (let i = 0; i < roadLayer.length; i++) {
-			const feature = roadLayer.feature(i);
-			const kindRaw = feature.properties.kind;
-			const kind = typeof kindRaw === 'string' ? kindRaw : 'unknown';
-			if (EXCLUDED_ROAD_KINDS.has(kind)) continue;
-			collectRoads(feature.toGeoJSON(x, y, z), kind, roads);
-		}
-	}
-
-	const waterLayer = tile.layers[WATER_LAYER];
-	if (waterLayer) {
-		const tileId = `${z}/${x}/${y}`;
-		for (let i = 0; i < waterLayer.length; i++) {
-			const feature = waterLayer.feature(i);
-			// 3 = polygon in the MVT spec; lines (streams) are not outlines.
-			if (feature.type !== 3) continue;
-			const kindRaw = feature.properties.kind;
-			const kind = typeof kindRaw === 'string' ? kindRaw : 'water';
-			collectWater(feature.toGeoJSON(x, y, z), kind, tileId, water);
-		}
-	}
-
-	return { status: 'ok', data: { buildings, roads, water } };
+	return { status: 'ok', data: decodeObstacleTile(buffer, x, y, PROTOMAPS_MAX_ZOOM) };
 }
 
 /**
@@ -211,7 +146,7 @@ export async function waterOutlineAt(
 	const z = PROTOMAPS_MAX_ZOOM;
 	const { x, y } = lngLatToTile(point.lng, point.lat, z);
 	const home = await getTileObstacles(x, y, fetcher);
-	const containing = home.data.water.find((w) => pointInPolygon(point.lng, point.lat, w));
+	const containing = home.data.waterAreas.find((w) => pointInPolygon(point.lng, point.lat, w));
 	if (!containing) return null;
 
 	const pieces: WaterPolygon[] = [containing];
@@ -224,7 +159,7 @@ export async function waterOutlineAt(
 		north >= tileBounds.north;
 	if (clipped) {
 		const around = await getObstaclesForBounds({ west, south, east, north }, fetcher);
-		for (const piece of around.water) {
+		for (const piece of around.waterAreas) {
 			if (piece.tile === containing.tile) continue;
 			if (!bboxesOverlap(piece.bbox, containing.bbox)) continue;
 			// Clipped pieces of one polygon overlap in the tile buffer, so a vertex
@@ -241,77 +176,4 @@ export async function waterOutlineAt(
 
 function bboxesOverlap(a: FeatureBBox, b: FeatureBBox): boolean {
 	return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
-}
-
-/** Appends each polygon of a (Multi)Polygon water feature to `out`. */
-function collectWater(feature: Feature, kind: string, tile: string, out: WaterPolygon[]): void {
-	const geometry = feature.geometry;
-	const push = (coordinates: Position[][]) => {
-		const rings = coordinates.map((ring) => ring.map(toLngLat));
-		out.push({ bbox: bboxOfRings(rings), rings, kind, tile });
-	};
-	if (geometry.type === 'Polygon') {
-		push(geometry.coordinates);
-	} else if (geometry.type === 'MultiPolygon') {
-		for (const polygon of geometry.coordinates) push(polygon);
-	}
-}
-
-/** Appends each polygon of a (Multi)Polygon building feature to `out`. */
-function collectBuildings(feature: Feature, out: BuildingPolygon[]): void {
-	const geometry = feature.geometry;
-	if (geometry.type === 'Polygon') {
-		out.push(polygonToBuilding(geometry.coordinates));
-	} else if (geometry.type === 'MultiPolygon') {
-		for (const polygon of geometry.coordinates) out.push(polygonToBuilding(polygon));
-	}
-}
-
-/** Appends each linestring of a (Multi)LineString road feature to `out`. */
-function collectRoads(feature: Feature, kind: string, out: RoadLine[]): void {
-	const geometry = feature.geometry;
-	if (geometry.type === 'LineString') {
-		out.push(lineToRoad(geometry.coordinates, kind));
-	} else if (geometry.type === 'MultiLineString') {
-		for (const line of geometry.coordinates) out.push(lineToRoad(line, kind));
-	}
-}
-
-/** Builds a `BuildingPolygon` (outer ring first) with its computed bbox. */
-function polygonToBuilding(coordinates: Position[][]): BuildingPolygon {
-	const rings = coordinates.map((ring) => ring.map(toLngLat));
-	return { bbox: bboxOfRings(rings), rings };
-}
-
-/** Builds a `RoadLine` with its computed bbox. */
-function lineToRoad(coordinates: Position[], kind: string): RoadLine {
-	const points = coordinates.map(toLngLat);
-	return { bbox: bboxOfPoints(points), points, kind };
-}
-
-/** Narrows a GeoJSON `Position` to a `[lng, lat]` tuple (drops any elevation). */
-function toLngLat(position: Position): [number, number] {
-	return [position[0], position[1]];
-}
-
-/** [west, south, east, north] bbox spanning every vertex of every ring. */
-function bboxOfRings(rings: [number, number][][]): FeatureBBox {
-	const bbox: FeatureBBox = [Infinity, Infinity, -Infinity, -Infinity];
-	for (const ring of rings) for (const point of ring) extendBBox(bbox, point);
-	return bbox;
-}
-
-/** [west, south, east, north] bbox spanning every vertex. */
-function bboxOfPoints(points: [number, number][]): FeatureBBox {
-	const bbox: FeatureBBox = [Infinity, Infinity, -Infinity, -Infinity];
-	for (const point of points) extendBBox(bbox, point);
-	return bbox;
-}
-
-/** Grows `bbox` ([west, south, east, north]) in place to include `[lng, lat]`. */
-function extendBBox(bbox: FeatureBBox, [lng, lat]: [number, number]): void {
-	if (lng < bbox[0]) bbox[0] = lng;
-	if (lat < bbox[1]) bbox[1] = lat;
-	if (lng > bbox[2]) bbox[2] = lng;
-	if (lat > bbox[3]) bbox[3] = lat;
 }

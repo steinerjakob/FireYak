@@ -1,5 +1,17 @@
 import { GeoPoint, distanceTo } from '@/types/geo';
-import type { RoadLine } from '@/types/obstacles';
+import type { LinearFeature, ObstacleData, RoadLine } from '@/types/obstacles';
+import {
+	CELL_CLASS,
+	CELL_CLASS_NAME,
+	CLIFF_CLASS,
+	classifyLanduse,
+	classifyRail,
+	classifyRoad,
+	classifyWaterArea,
+	classifyWaterLine,
+	isKnownLanduseKind,
+	type FeatureEffect
+} from '@/mapHandler/hoseCostModel';
 import type { TerrainGrid } from '@/mapHandler/gridRouting';
 
 /**
@@ -136,4 +148,86 @@ export function costRaster(grid: TerrainGrid): {
 		}
 	}
 	return { width: grid.cols, height: grid.rows, data };
+}
+
+/** Length in meters of a `[lng, lat]` polyline (local equirectangular frame). */
+export function lineLengthM(points: [number, number][]): number {
+	if (points.length < 2) return 0;
+	const mPerDegLng = Math.cos((points[0][1] * Math.PI) / 180) * M_PER_DEG_LNG_EQUATOR;
+	let total = 0;
+	for (let i = 0; i + 1 < points.length; i++) {
+		total += Math.hypot(
+			(points[i + 1][0] - points[i][0]) * mPerDegLng,
+			(points[i + 1][1] - points[i][1]) * M_PER_DEG_LAT
+		);
+	}
+	return total;
+}
+
+/** A landuse kind that the cost model prices as `UNKNOWN_OPEN`. */
+export interface UnknownLanduse {
+	kind: string;
+	areaM2: number;
+	/** On the untuned list (seen before, waiting for a factor) rather than new. */
+	listed: boolean;
+}
+
+/** What the decoded features of a window add up to per cost-model class. */
+export interface ClassSummary {
+	/** Landuse and water polygons: area in m² per class name (pieces are tile-clipped, so edges add up). */
+	areaM2: Record<string, number>;
+	/** Roads, rail, water lines and cliffs: length in m per class name, plus `excluded` and `none`. */
+	lengthM: Record<string, number>;
+	/** Landuse kinds priced as `UNKNOWN_OPEN`, largest first. */
+	unknownLanduse: UnknownLanduse[];
+}
+
+const effectName = (effect: FeatureEffect): string =>
+	typeof effect === 'number' ? CELL_CLASS_NAME[effect] : effect;
+
+/**
+ * Sums the decoded obstacles by cost-model class: landuse and water by area,
+ * linear features by length. Used by the debug view to list classes and the
+ * landuse kinds that still have no factor, and by the fixture specs.
+ */
+export function classSummary(data: ObstacleData): ClassSummary {
+	const areaM2: Record<string, number> = {};
+	const lengthM: Record<string, number> = {};
+	const unknown = new Map<string, number>();
+	const addArea = (name: string, value: number) => {
+		areaM2[name] = (areaM2[name] ?? 0) + value;
+	};
+	const addLength = (name: string, value: number) => {
+		lengthM[name] = (lengthM[name] ?? 0) + value;
+	};
+
+	for (const area of data.landuse) {
+		const cell = classifyLanduse(area.kind);
+		addArea(CELL_CLASS_NAME[cell], area.areaM2);
+		if (cell === CELL_CLASS.UNKNOWN_OPEN) {
+			unknown.set(area.kind, (unknown.get(area.kind) ?? 0) + area.areaM2);
+		}
+	}
+	for (const area of data.waterAreas)
+		addArea(CELL_CLASS_NAME[classifyWaterArea(area.kind)], area.areaM2);
+	for (const road of data.roads)
+		addLength(effectName(classifyRoad(road)), lineLengthM(road.points));
+	for (const rail of data.rails)
+		addLength(effectName(classifyRail(rail)), lineLengthM(rail.points));
+	for (const line of data.waterLines as LinearFeature[]) {
+		addLength(
+			CELL_CLASS_NAME[classifyWaterLine(line.kind, line.kindDetail)],
+			lineLengthM(line.points)
+		);
+	}
+	for (const cliff of data.cliffs)
+		addLength(CELL_CLASS_NAME[CLIFF_CLASS], lineLengthM(cliff.points));
+
+	return {
+		areaM2,
+		lengthM,
+		unknownLanduse: [...unknown.entries()]
+			.map(([kind, area]) => ({ kind, areaM2: area, listed: isKnownLanduseKind(kind) }))
+			.sort((a, b) => b.areaM2 - a.areaM2)
+	};
 }

@@ -60,7 +60,7 @@ describe('missing vs empty tiles (plan section 6.9)', () => {
 	it('a fetcher returning null gives a missing tile that is not cached', async () => {
 		const offline: TileFetcher = vi.fn(async () => null);
 		const first = await getObstaclesForBounds(inside, offline);
-		expect(first.coverage).toEqual({
+		expect(first.coverage).toMatchObject({
 			basemap: 'none',
 			truncated: false,
 			missingTiles: 1,
@@ -74,7 +74,10 @@ describe('missing vs empty tiles (plan section 6.9)', () => {
 		expect(online).toHaveBeenCalledTimes(1);
 		expect(second.coverage.basemap).toBe('full');
 		expect(second.buildings).toHaveLength(1);
-		expect(second.water).toHaveLength(1);
+		expect(second.waterAreas).toHaveLength(1);
+		expect(second.coverage.layers.buildings).toEqual({ tiles: 1, features: 1 });
+		expect(second.coverage.layers.water).toEqual({ tiles: 1, features: 1 });
+		expect(second.coverage.layers.roads).toEqual({ tiles: 0, features: 0 });
 	});
 
 	it('an empty tile that did arrive is cached as empty', async () => {
@@ -90,7 +93,7 @@ describe('missing vs empty tiles (plan section 6.9)', () => {
 		const result = await getObstaclesForBounds(bounds, async (_s, _z, x) =>
 			x === X ? emptyTile : null
 		);
-		expect(result.coverage).toEqual({
+		expect(result.coverage).toMatchObject({
 			basemap: 'partial',
 			truncated: false,
 			missingTiles: 1,

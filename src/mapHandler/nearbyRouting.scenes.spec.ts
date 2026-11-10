@@ -30,6 +30,36 @@ vi.mock('@/offline/offlineProtocol', async () => {
 
 type Mode = 'road' | 'terrain';
 
+/**
+ * Routed lengths in meters (rounded) per ring position, then per named case, as the code
+ * produced them at the end of phase 1 (`-` = unrouted).
+ */
+const PHASE1_LENGTHS: Record<string, Record<Mode, string>> = {
+	'1-rural-pond': {
+		road: '790 462',
+		terrain: '680 403'
+	},
+	'2-melk': {
+		road: '555 613 617 712 694 381 340 282 225 227 408 415 644 750 858 1024 870 575 491 422 390 422 454 735 926 1035 1440 1081 1183 867 822 1011 785 614 596 623 694 733',
+		terrain:
+			'271 306 250 166 146 179 152 155 170 172 148 202 392 450 359 330 322 317 262 307 315 314 340 572 607 539 537 540 500 523 468 521 541 484 526 522 531 583'
+	},
+	'3-persenbeug': {
+		road: '130 1063 797 725 667 135 165 297 354 413 471 155 326 864 782 669 551 435 307 317 526 1067 1027 1237 867 741 648 707 813 919 895 1149 851',
+		terrain:
+			'126 192 151 151 178 133 160 168 147 149 180 148 305 324 340 335 324 317 276 257 498 533 515 549 586 526 522 552 521 484 499 563 549'
+	},
+	'4-vienna': {
+		road: '272 269 259 221 240 158 381 249 198 256 223 168 150 168 144 462 420 354 421 351 308 413 413 334 440 487 483 569 620 644',
+		terrain:
+			'255 243 227 201 165 152 220 195 174 223 209 158 143 157 128 446 396 336 398 307 303 360 316 309 367 314 299 339 505 581'
+	},
+	'5-innsbruck': {
+		road: '233 253 181 156 435 327 1503 1604',
+		terrain: '136 155 155 132 349 290 515 502'
+	}
+};
+
 /** Routed length in meters from `from` to `to` in one of today's two modes. */
 async function routedMeters(
 	from: GeoPoint,
@@ -230,6 +260,31 @@ describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () =>
 					expect(compared).toBeGreaterThanOrEqual(5);
 				}
 			);
+		}
+	);
+
+	// Phase 2 changes the decoder, not the routes: the routed length (rounded to 1 m) of
+	// every ring position and named case must stay what phase 1 produced.
+	describe.each(['1-rural-pond', '2-melk', '3-persenbeug', '4-vienna', '5-innsbruck'])(
+		'%s: lengths as after phase 1',
+		(id) => {
+			beforeAll(() => {
+				useScene(id);
+			});
+
+			it.each(['road', 'terrain'] as Mode[])('%s mode: all rings and cases', async (mode) => {
+				const scene = loadScene(id);
+				const lengths: string[] = [];
+				const measure = async (from: GeoPoint, to: RouteTargetInput) => {
+					const meters = await routedMeters(from, to, mode);
+					lengths.push(meters === null ? '-' : String(Math.round(meters)));
+				};
+				for (const ring of scene.rings ?? []) await measure(ring.vehicle, scene.anchor);
+				for (const [name, c] of Object.entries(scene.cases ?? {})) {
+					await measure(c.from, name === 'pond' ? pondShore(scene) : c.to);
+				}
+				expect(lengths.join(' ')).toBe(PHASE1_LENGTHS[id][mode]);
+			});
 		}
 	);
 

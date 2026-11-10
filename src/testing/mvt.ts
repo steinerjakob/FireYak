@@ -10,7 +10,7 @@ export interface MvtFeature {
 	type: 1 | 2 | 3;
 	/** Rings or lines; polygon rings are closed implicitly. */
 	geometry: [number, number][][];
-	properties?: Record<string, string>;
+	properties?: Record<string, string | boolean>;
 }
 
 export interface MvtLayer {
@@ -52,7 +52,7 @@ export function encodeMvt(layers: MvtLayer[]): ArrayBuffer {
 			3,
 			(l: MvtLayer, w: PbfWriter) => {
 				const keys: string[] = [];
-				const values: string[] = [];
+				const values: (string | boolean)[] = [];
 				w.writeVarintField(15, 2);
 				w.writeStringField(1, l.name);
 				for (const feature of l.features) {
@@ -76,7 +76,12 @@ export function encodeMvt(layers: MvtLayer[]): ArrayBuffer {
 				}
 				for (const key of keys) w.writeStringField(3, key);
 				for (const value of values) {
-					w.writeMessage(4, (val: string, vw: PbfWriter) => vw.writeStringField(1, val), value);
+					w.writeMessage(
+						4,
+						(val: string | boolean, vw: PbfWriter) =>
+							typeof val === 'boolean' ? vw.writeBooleanField(7, val) : vw.writeStringField(1, val),
+						value
+					);
 				}
 				w.writeVarintField(5, l.extent ?? 4096);
 			},

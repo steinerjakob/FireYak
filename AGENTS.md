@@ -119,11 +119,13 @@ src/
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
 | `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
 | `nearbyRouting.ts` | Hose routing for the nearby list, marker path and pump line: returns a `HoseRoute` (one length, steep/off-road runs, warnings, surfaced fallbacks, coverage) |
-| `obstacleGeometry.ts` | Decodes building footprints, road centerlines and water polygons from Protomaps vector tiles for routing; missing tiles are reported, never cached as empty |
+| `hoseCostModel.ts` | Pure cost model for hose routing (not used for routing yet): cell classes and factors, `classifyRoad`/`classifyRail`/`classifyLanduse`/`classifyWaterLine`, `slopeFactor`, UI warning thresholds |
+| `obstacleDecode.ts` | Pure decoder (bytes in, data out) of Protomaps tiles: buildings, roads with `kind_detail`/bridge/tunnel/access, rail, landuse, water polygons and lines, cliffs; runs in Node specs and workers |
+| `obstacleGeometry.ts` | Fetches z15 Protomaps tiles and merges `obstacleDecode.ts` results (LRU, per-layer coverage); missing tiles are reported, never cached as empty |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker (shore targets with 250 m final legs) |
 | `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs |
-| `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster) for the dev-only routing debug view |
+| `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster, per-class area/length summary) for the dev-only routing debug view |
 | `__fixtures__/routing/` | Test data for the routing specs: five real scenes (`scene.json` committed, tiles gitignored and fetched locally, README there). Never import from app code |
 | `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
 | `areaOutline.ts` | Session cache + Overpass `out geom` lookup for pond-area outlines (map highlight) |

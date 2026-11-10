@@ -6,6 +6,12 @@ import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
 import decodeWebp, { init as initWebp } from '@jsquash/webp/decode.js';
 import type { GeoPoint } from '@/types/geo';
+import {
+	decodeObstacleTile,
+	mergeTileObstacles,
+	type TileObstacles
+} from '@/mapHandler/obstacleDecode';
+import type { ObstacleData, ObstacleLayer, LayerCoverage } from '@/types/obstacles';
 import { terrariumToElevations } from '@/helper/demRaster';
 
 /**
@@ -176,4 +182,17 @@ export async function decodeDemWebp(buffer: ArrayBuffer): Promise<DecodedDemTile
 	const image = await decodeWebp(buffer);
 	const size = image.width;
 	return { size, elevations: terrariumToElevations(image.data, size * image.height) };
+}
+
+/** Every basemap tile of a scene decoded and merged, with the per-layer coverage. */
+export function decodeSceneObstacles(scene: RoutingScene): {
+	data: ObstacleData;
+	layers: Record<ObstacleLayer, LayerCoverage>;
+	tiles: TileObstacles[];
+} {
+	const tiles = tilesOfRange(scene.tiles.basemap).map((t) => {
+		const bytes = readFileSync(tilePath(scene.id, 'protomaps', t.z, t.x, t.y));
+		return decodeObstacleTile(bytes, t.x, t.y, t.z);
+	});
+	return { ...mergeTileObstacles(tiles), tiles };
 }

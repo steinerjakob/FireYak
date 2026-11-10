@@ -116,7 +116,10 @@ describe('classifyRoute: off-road runs', () => {
 				[at(0, 0).lng, at(0, 0).lat],
 				[at(0, 100).lng, at(0, 100).lat]
 			],
-			kind: 'minor_road'
+			kind: 'minor_road',
+			kindDetail: 'residential',
+			isBridge: false,
+			isTunnel: false
 		};
 		const stations = resampleForProfile([at(0, 0), at(0, 200)]);
 		const p = classifyRoute(stations, null, {

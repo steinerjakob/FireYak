@@ -113,3 +113,27 @@ export function segmentIntersectsAny(a: LngLat, b: LngLat, polygons: PolygonRing
 	}
 	return false;
 }
+
+/**
+ * Area in square meters of a polygon given as rings (outer first, holes after):
+ * shoelace over an equirectangular projection around the first vertex. Planar,
+ * good to well under 1 % at the scale of a tile.
+ */
+export function ringsAreaM2(rings: LngLat[][]): number {
+	const ringArea = (ring: LngLat[]): number => {
+		if (ring.length < 3) return 0;
+		const rad = Math.PI / 180;
+		const kx = 6_371_000 * Math.cos(ring[0][1] * rad) * rad;
+		const ky = 6_371_000 * rad;
+		let sum = 0;
+		for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+			sum += ring[j][0] * kx * (ring[i][1] * ky) - ring[i][0] * kx * (ring[j][1] * ky);
+		}
+		return Math.abs(sum) / 2;
+	};
+	let total = 0;
+	rings.forEach((ring, i) => {
+		total += i === 0 ? ringArea(ring) : -ringArea(ring);
+	});
+	return Math.max(0, total);
+}

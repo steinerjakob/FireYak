@@ -53,6 +53,36 @@
 					</table>
 					<p class="hint">Straight line: {{ formatMeters(straightMeters) }}</p>
 
+					<template v-if="summary">
+						<p class="hint">
+							Classes in the window (area of polygons, length of lines; cost-model classes of phase
+							2, not routed yet)
+						</p>
+						<table class="stats">
+							<tbody>
+								<tr v-for="[name, value] in Object.entries(summary.areaM2)" :key="'a' + name">
+									<td>{{ name }}</td>
+									<td>{{ (value / 10000).toFixed(1) }} ha</td>
+								</tr>
+								<tr v-for="[name, value] in Object.entries(summary.lengthM)" :key="'l' + name">
+									<td>{{ name }}</td>
+									<td>{{ formatMeters(value) }}</td>
+								</tr>
+							</tbody>
+						</table>
+						<p v-if="summary.unknownLanduse.length" class="hint">
+							Landuse without a factor (UNKNOWN_OPEN):
+							{{
+								summary.unknownLanduse
+									.map(
+										(u) =>
+											`${u.kind}${u.listed ? '' : ' (NEW)'} ${(u.areaM2 / 10000).toFixed(1)} ha`
+									)
+									.join(', ')
+							}}
+						</p>
+					</template>
+
 					<label class="check">
 						<input v-model="showCost" type="checkbox" @change="updateCostOverlay" />
 						Cost raster (red building, orange fringe, blue road)
@@ -126,8 +156,10 @@ import { buildTerrainGrid } from '@/mapHandler/gridRouting';
 import {
 	costRaster,
 	onRoadShare,
+	classSummary,
 	pathLength,
 	ratioTable,
+	type ClassSummary,
 	type RatioRow,
 	type RingSample
 } from '@/mapHandler/routingDebug';
@@ -173,6 +205,7 @@ const presets = ref<{ key: string; label: string; from: GeoPoint; to: GeoPoint }
 const results = ref<Record<string, ModeResult>>({});
 const straightMeters = ref(0);
 const busy = ref(false);
+const summary = shallowRef<ClassSummary | null>(null);
 const showCost = ref(false);
 const ringRows = ref<(RatioRow & { mode: string })[]>([]);
 const ringProgress = ref('');
@@ -263,7 +296,9 @@ async function recompute(): Promise<void> {
 	straightMeters.value = distanceTo(origin, target);
 	busy.value = true;
 	invalidateRoutingContext();
-	const roads = (await getObstaclesForBounds(boundsAround([origin, target], MARGIN_M))).roads;
+	const obstacles = await getObstaclesForBounds(boundsAround([origin, target], MARGIN_M));
+	const roads = obstacles.roads;
+	summary.value = classSummary(obstacles);
 	const next: Record<string, ModeResult> = {};
 	for (const mode of MODES) {
 		const t0 = performance.now();

@@ -28,7 +28,10 @@ const road = (...points: [number, number][]): RoadLine => {
 	return {
 		bbox: [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
 		points: pts,
-		kind: 'minor_road'
+		kind: 'minor_road',
+		kindDetail: 'residential',
+		isBridge: false,
+		isTunnel: false
 	};
 };
 const components = (graph: ReturnType<typeof buildRoadGraph>) => new Set(graph.nodeComponent).size;
