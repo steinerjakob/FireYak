@@ -1565,10 +1565,40 @@ single cost grid that remains after phase 5.
   | Case | Expected |
   |---|---|
   | scene 1 pond, road | 750–900 m; ends within 1 m of the outline |
-  | scene 1 hydrant, terrain | 0 building-edge intersections; 232–295 m |
+  | scene 1 hydrant, terrain | 0 building-edge intersections; 300–430 m (see the notes below) |
   | all scenes, every ring target | list metres = polyline metres (±0.5 m) |
   | scene 5 "500 m north", terrain | red run and "not recommended" |
   | scene 5 "500 m north", terrain | pressure `warning` (drop 177–220 m) |
+
+**Implemented (phase 1 notes).** Where the code differs from the text above:
+
+- Scene 1 numbers (research vehicle 48.1300, 15.2725): pond road 790 m (range
+  750–900, via the farm track), pond terrain 680 m (range 645–720, was 708 m as
+  a cell chain), hydrant road 462 m (unchanged), hydrant terrain 403 m with 0
+  building-edge intersections. The hydrant terrain range is **300–430 m**, not
+  232–295 m: the straight line alone is 300 m from this vehicle position. It
+  grew from 381 m because the line no longer squeezes past walls (next point).
+- Grid: fringe cells are now found exactly (cell sides against the outline),
+  and a step whose centre-to-centre segment touches a footprint is priced like a
+  building cell (×30). Without this, the cell chain itself could clip a corner
+  where smoothing has to fall back to single steps, and the "no segment touches
+  a building" property could not hold.
+- Smoothing is the greedy string pulling with the exact test; the extra
+  Douglas–Peucker pass is not needed (the pulled line has no redundant
+  vertices) and was left out.
+- Road mode with shore samples attaches each sample to **every** road within
+  250 m (the three cheapest by network cost + straight leg are priced), not to
+  the nearest edge per component: the farm track and the cycleway are one
+  component, so per-component snapping never reached the track.
+- A late Overpass outline is passed to the caller through an
+  `onOutlineArrived` callback of `resolveAccessPoint` (silent redraw, no refit);
+  the `routingData.ts` event target stays with phase 7. The Protomaps water
+  polygon lookup waits at most 1.5 s; the z14 DEM attempt has its own 1.5 s
+  budget before z12.
+- The pump panel shows every distance along the drawn 2D line (the 3D-based
+  pump placement is mapped onto it), so panel, label and list show one number.
+- Not in phase 1: the "fences unknown" chip and the one-time cross-country
+  note (they belong to `optimized`, phase 5).
 
 **Manual** (needs a real browser):
 
