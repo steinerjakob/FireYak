@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 import { Preferences } from '@capacitor/preferences';
 import type maplibregl from 'maplibre-gl';
+import { DEFAULT_MAX_HOSE_PRESSURE_BAR, parseStoredMaxHosePressure } from '@/helper/hosePressure';
 
 const STORAGE_KEYS = {
 	TUBE_LENGTH: 'pumpCalc_tubeLength',
@@ -10,7 +11,8 @@ const STORAGE_KEYS = {
 	PRESSURE_LOST: 'pumpCalc_pressureLost',
 	TARGET_PRESSURE: 'pumpCalc_targetPressure',
 	TUBE_DIAMETER: 'pumpCalc_tubeDiameter',
-	HOSE_NAME: 'pumpCalc_hoseName'
+	HOSE_NAME: 'pumpCalc_hoseName',
+	MAX_HOSE_PRESSURE: 'pumpCalc_maxHosePressure'
 };
 
 export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
@@ -28,6 +30,9 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 	// informational for now — friction loss is set via the flow-rate value.
 	const tubeDiameter = ref(75); // mm
 	const hoseName = ref('B'); // short designation used in all "B-hoses" texts
+	// Maximum working pressure of the hoses (DIN 14811 pressure hoses: 16 bar);
+	// long downhill lines warn when the static pressure could reach it.
+	const maxHosePressure = ref(DEFAULT_MAX_HOSE_PRESSURE_BAR); // bar
 
 	const suctionPoint = ref<maplibregl.Marker | null>(null);
 	const targetPoint = ref<maplibregl.Marker | null>(null);
@@ -42,7 +47,8 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 				pressureLostResult,
 				targetPressureResult,
 				tubeDiameterResult,
-				hoseNameResult
+				hoseNameResult,
+				maxHosePressureResult
 			] = await Promise.all([
 				Preferences.get({ key: STORAGE_KEYS.TUBE_LENGTH }),
 				Preferences.get({ key: STORAGE_KEYS.INPUT_PRESSURE }),
@@ -50,7 +56,8 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 				Preferences.get({ key: STORAGE_KEYS.PRESSURE_LOST }),
 				Preferences.get({ key: STORAGE_KEYS.TARGET_PRESSURE }),
 				Preferences.get({ key: STORAGE_KEYS.TUBE_DIAMETER }),
-				Preferences.get({ key: STORAGE_KEYS.HOSE_NAME })
+				Preferences.get({ key: STORAGE_KEYS.HOSE_NAME }),
+				Preferences.get({ key: STORAGE_KEYS.MAX_HOSE_PRESSURE })
 			]);
 
 			if (tubeLengthResult.value) {
@@ -74,6 +81,8 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 			if (hoseNameResult.value) {
 				hoseName.value = hoseNameResult.value;
 			}
+			// Installs from before the setting existed have no value: the default applies.
+			maxHosePressure.value = parseStoredMaxHosePressure(maxHosePressureResult.value);
 		} catch (error) {
 			console.error('Failed to load settings from preferences:', error);
 		}
@@ -101,7 +110,11 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 					key: STORAGE_KEYS.TUBE_DIAMETER,
 					value: tubeDiameter.value.toString()
 				}),
-				Preferences.set({ key: STORAGE_KEYS.HOSE_NAME, value: hoseName.value })
+				Preferences.set({ key: STORAGE_KEYS.HOSE_NAME, value: hoseName.value }),
+				Preferences.set({
+					key: STORAGE_KEYS.MAX_HOSE_PRESSURE,
+					value: maxHosePressure.value.toString()
+				})
 			]);
 		} catch (error) {
 			console.error('Failed to save settings to preferences:', error);
@@ -117,7 +130,8 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 			pressureLost,
 			targetPressure,
 			tubeDiameter,
-			hoseName
+			hoseName,
+			maxHosePressure
 		],
 		() => {
 			saveSettings();
@@ -136,6 +150,7 @@ export const usePumpCalculationStore = defineStore('pumpCalculation', () => {
 		targetPressure,
 		tubeDiameter,
 		hoseName,
+		maxHosePressure,
 		suctionPoint,
 		targetPoint,
 		// Methods

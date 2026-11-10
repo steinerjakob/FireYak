@@ -24,13 +24,18 @@ import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
 import { isSuctionHydrant } from '@/helper/markerTitle';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import { parseHydrantPressure } from '@/helper/hosePressure';
 import {
-	accessPointFor,
+	accessTargetFor,
+	accessTargetPoint,
 	isMappedSuctionPoint,
 	isPondArea,
 	knownOutline,
 	markerPoint,
-	preloadPondOutlines
+	preloadPondOutlines,
+	routingOutline,
+	type AccessTarget
 } from '@/mapHandler/waterSourceAccess';
 import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
@@ -577,31 +582,44 @@ export async function getMarkersForView(
  */
 async function sortElementsByDistance(
 	elements: OverPassElement[],
-	points: GeoPoint[],
+	targets: AccessTarget[],
 	latLng: GeoPoint
 ): Promise<NearbyMarker[]> {
+	const points = targets.map(accessTargetPoint);
 	const straightDistances = points.map((point) => distanceTo(latLng, point));
+	const pumpStore = usePumpCalculationStore();
 
 	let ranking: NearbyDistanceResult[];
 	try {
-		ranking = await computeNearbyDistances(latLng, points, straightDistances, {
-			clampToRoads: useSettingsStore().clampHosesToRoads
+		ranking = await computeNearbyDistances(latLng, targets, straightDistances, {
+			clampToRoads: useSettingsStore().clampHosesToRoads,
+			maxHosePressureBar: pumpStore.maxHosePressure,
+			// A pressurised hydrant feeds the line itself; otherwise a pump at the
+			// source does, at its outlet pressure (plan §6.13).
+			sourcePressureBars: elements.map(
+				(element) => parseHydrantPressure(element.tags) ?? pumpStore.outputPressure
+			)
 		});
 	} catch (e) {
 		// computeNearbyDistances fails open internally; this is a last-resort guard.
 		console.warn('Road-aware ranking failed, using straight-line order:', e);
 		ranking = straightDistances.map((distance) => ({
 			routedDistance: null,
-			sortDistance: distance
+			sortDistance: distance,
+			route: null,
+			fallback: null
 		}));
 	}
 
 	const markersWithDistance: NearbyMarker[] = elements.map((element, i) => ({
 		element,
-		target: points[i],
+		// Where the line actually ends: for a pond the shore point routing chose.
+		target: ranking[i].route?.points[ranking[i].route!.points.length - 1] ?? points[i],
 		distance: straightDistances[i],
 		routedDistance: ranking[i].routedDistance,
 		sortDistance: ranking[i].sortDistance,
+		route: ranking[i].route,
+		fallback: ranking[i].fallback,
 		icon: getIconUrlForNode(element)
 	}));
 
@@ -668,24 +686,34 @@ export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise
 		return center !== null && distanceTo(latLng, center) <= radius + POND_OUTLINE_FETCH_MARGIN_M;
 	});
 
-	// Ponds that came without their outline: fetch it (briefly, online only).
+	// Ponds that came without their outline: ask Overpass in the background
+	// (online only) for the next search; this one never waits for it. Routing
+	// uses the Protomaps water polygon under the marker meanwhile.
 	if (useNetworkStatus().isOnline.value) {
-		await preloadPondOutlines(pondCandidates);
+		preloadPondOutlines(pondCandidates);
 	}
+	const pondOutlines = await Promise.all(
+		pondCandidates.map((element) => routingOutline(element).catch(() => null))
+	);
 
 	const suctionPoints = wideCandidates.filter(isMappedSuctionPoint);
 	const elements: OverPassElement[] = [];
-	const points: GeoPoint[] = [];
-	for (const element of [...pointCandidates, ...pondCandidates]) {
-		const point = isPondArea(element)
-			? accessPointFor(element, latLng, knownOutline(element), suctionPoints)
-			: markerPoint(element);
-		if (point && distanceTo(latLng, point) <= radius) {
+	const targets: AccessTarget[] = [];
+	const candidates = [...pointCandidates, ...pondCandidates];
+	candidates.forEach((element, index) => {
+		const pondIndex = index - pointCandidates.length;
+		const target: AccessTarget | null = isPondArea(element)
+			? accessTargetFor(element, latLng, pondOutlines[pondIndex], suctionPoints)
+			: (() => {
+					const point = markerPoint(element);
+					return point ? { kind: 'point' as const, point } : null;
+				})();
+		if (target && distanceTo(latLng, accessTargetPoint(target)) <= radius) {
 			elements.push(element);
-			points.push(point);
+			targets.push(target);
 		}
-	}
-	return sortElementsByDistance(elements, points, latLng);
+	});
+	return sortElementsByDistance(elements, targets, latLng);
 }
 
 export async function getMarkerById(ref: OsmRef) {

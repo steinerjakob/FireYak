@@ -1,6 +1,8 @@
 import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
 import { BuildingPolygon, ObstacleData } from '@/types/obstacles';
 import { RouteResult } from '@/mapHandler/roadRouting';
+import { pointInPolygon, segmentIntersectsPolygon } from '@/helper/polygonGeometry';
+import { nearestPointOnOutline, outlineLines } from '@/helper/areaShore';
 
 /**
  * Terrain routing for hose laying: a cost-grid Dijkstra over the decoded
@@ -30,7 +32,7 @@ export const GRID_BUILDING_FACTOR = 30;
  */
 export const GRID_BUILDING_FRINGE_FACTOR = 4;
 /** Hard cap on grid size; larger windows fall back to graph routing. */
-const MAX_GRID_CELLS = 250_000;
+export const MAX_GRID_CELLS = 250_000;
 
 const M_PER_DEG_LAT = 110540;
 const M_PER_DEG_LNG_EQUATOR = 111320;
@@ -57,30 +59,27 @@ export interface TerrainGrid {
 	cells: Uint8Array;
 	/** Source footprints, kept for exact checks during path smoothing. */
 	buildings: BuildingPolygon[];
+	/** Lazily built bucket index over `buildings` for the exact segment test. */
+	buildingIndex?: {
+		bcols: number;
+		brows: number;
+		buckets: Map<number, number[]>;
+		stamp: Uint32Array;
+		mark: number;
+	};
+	/** Per cell and direction: 0 unknown, 1 clear, 2 the step touches a footprint. */
+	stepClips?: Uint8Array;
+	/** Memoised Dijkstra state of the last origin cell (see {@link solveTerrain}). */
+	solve?: SolveState;
 }
 
 function toRadians(deg: number): number {
 	return (deg * Math.PI) / 180;
 }
 
-/** Ray-casting test of a lng/lat point against one building's rings. */
+/** Point-in-footprint test (outer ring minus holes). */
 function pointInBuilding(lng: number, lat: number, building: BuildingPolygon): boolean {
-	const inRing = (ring: [number, number][]): boolean => {
-		let inside = false;
-		for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-			const xi = ring[i][0];
-			const yi = ring[i][1];
-			const xj = ring[j][0];
-			const yj = ring[j][1];
-			if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-				inside = !inside;
-			}
-		}
-		return inside;
-	};
-	const [outer, ...holes] = building.rings;
-	if (!outer || !inRing(outer)) return false;
-	return !holes.some(inRing);
+	return pointInPolygon(lng, lat, building);
 }
 
 /**
@@ -111,10 +110,12 @@ export function buildTerrainGrid(obstacles: ObstacleData, bounds: GeoBounds): Te
 	const centerLng = (col: number) => grid.west + ((col + 0.5) * GRID_CELL_M) / mPerDegLng;
 	const centerLat = (row: number) => grid.south + ((row + 0.5) * GRID_CELL_M) / M_PER_DEG_LAT;
 
-	// Buildings: center inside the footprint → core (heavily avoided); only a
-	// corner inside → fringe (passable at a squeeze price). Marking everything a
-	// footprint touches as core would dilate houses by ~half a cell per side and
-	// seal the garden gaps between them.
+	// Buildings: center inside the footprint → core (heavily avoided); the
+	// footprint only touching the cell → fringe (passable at a squeeze price).
+	// Marking everything a footprint touches as core would dilate houses by
+	// ~half a cell per side and seal the garden gaps between them. "Touching"
+	// is tested exactly (cell sides against the outline), so a wall running
+	// along a cell edge or a corner poking into a cell is never missed.
 	const halfLng = GRID_CELL_M / 2 / mPerDegLng;
 	const halfLat = GRID_CELL_M / 2 / M_PER_DEG_LAT;
 	for (const building of obstacles.buildings) {
@@ -123,6 +124,7 @@ export function buildTerrainGrid(obstacles: ObstacleData, bounds: GeoBounds): Te
 		const c1 = Math.min(cols - 1, colOf(east));
 		const r0 = Math.max(0, rowOf(south));
 		const r1 = Math.min(rows - 1, rowOf(north));
+		const firstVertex = building.rings[0]?.[0];
 		for (let r = r0; r <= r1; r++) {
 			for (let c = c0; c <= c1; c++) {
 				const idx = r * cols + c;
@@ -131,14 +133,25 @@ export function buildTerrainGrid(obstacles: ObstacleData, bounds: GeoBounds): Te
 				const lat = centerLat(r);
 				if (pointInBuilding(lng, lat, building)) {
 					grid.cells[idx] = CLASS_BUILDING;
-				} else if (
-					pointInBuilding(lng - halfLng, lat - halfLat, building) ||
-					pointInBuilding(lng + halfLng, lat - halfLat, building) ||
-					pointInBuilding(lng - halfLng, lat + halfLat, building) ||
-					pointInBuilding(lng + halfLng, lat + halfLat, building)
-				) {
-					grid.cells[idx] = CLASS_FRINGE;
+					continue;
 				}
+				if (grid.cells[idx] === CLASS_FRINGE) continue;
+				const sw: [number, number] = [lng - halfLng, lat - halfLat];
+				const se: [number, number] = [lng + halfLng, lat - halfLat];
+				const ne: [number, number] = [lng + halfLng, lat + halfLat];
+				const nw: [number, number] = [lng - halfLng, lat + halfLat];
+				const touches =
+					segmentIntersectsPolygon(sw, se, building) ||
+					segmentIntersectsPolygon(se, ne, building) ||
+					segmentIntersectsPolygon(ne, nw, building) ||
+					segmentIntersectsPolygon(nw, sw, building) ||
+					// A footprint smaller than a cell, lying fully inside it.
+					(firstVertex !== undefined &&
+						firstVertex[0] > sw[0] &&
+						firstVertex[0] < ne[0] &&
+						firstVertex[1] > sw[1] &&
+						firstVertex[1] < ne[1]);
+				if (touches) grid.cells[idx] = CLASS_FRINGE;
 			}
 		}
 	}
@@ -215,11 +228,35 @@ class CellHeap {
 	}
 }
 
+/** A grid route target: one point, or a pond shore (every cell next to its outline). */
+export type GridGoal =
+	| { kind: 'point'; point: GeoPoint }
+	| { kind: 'shore'; outline: GeoJSON.Geometry };
+
+/** A smoothed terrain route. `meters` is the length of `points` (the one number shown). */
+export interface GridRoute {
+	points: GeoPoint[];
+	meters: number;
+	/** Priced cost of the cell chain (ranking only). */
+	cost: number;
+	/** Where the route ends: the target point, or the chosen shore point. */
+	endpoint: GeoPoint;
+}
+
 /** Solved single-source terrain field; answers distance/path queries per target. */
 export interface TerrainSolve {
+	/** Cell-chain cost and length to `target` (no smoothing). */
 	distanceTo(target: GeoPoint): RouteResult | null;
+	/** Smoothed display polyline to `target`, from the true origin to the true target. */
 	pathTo(target: GeoPoint): GeoPoint[] | null;
+	/** Smoothed route to a point or shore goal; `null` when unreached or off-grid. */
+	routeTo(goal: GridGoal): GridRoute | null;
+	/** Settles the whole field (no early exit); for the debug view and specs. */
+	solveAll(): void;
 }
+
+/** Counts Dijkstra field set-ups (specs check the memoisation with it). */
+export const terrainSolveStats = { solves: 0 };
 
 function cellOf(grid: TerrainGrid, p: GeoPoint): number | null {
 	const c = Math.floor(((p.lng - grid.west) * grid.mPerDegLng) / GRID_CELL_M);
@@ -278,51 +315,227 @@ function lineOfSight(grid: TerrainGrid, a: number, b: number): boolean {
 	}
 }
 
-/** True when the straight line between two cell centers misses every real footprint. */
-function exactLineOfSight(grid: TerrainGrid, a: number, b: number): boolean {
-	const pa = cellCenter(grid, a);
-	const pb = cellCenter(grid, b);
-	const steps = Math.max(1, Math.ceil(distanceTo(pa, pb) / (GRID_CELL_M / 2)));
-	for (let s = 0; s <= steps; s++) {
-		const f = s / steps;
-		const lng = pa.lng + (pb.lng - pa.lng) * f;
-		const lat = pa.lat + (pb.lat - pa.lat) * f;
-		for (const building of grid.buildings) {
-			const [west, south, east, north] = building.bbox;
-			if (lng < west || lng > east || lat < south || lat > north) continue;
-			if (pointInBuilding(lng, lat, building)) return false;
+/** Bucket edge of the building index used by the exact segment test. */
+const BUCKET_M = 32;
+
+/** Buckets building indexes by the {@link BUCKET_M} squares their bbox touches. */
+function buildBuildingIndex(grid: TerrainGrid): void {
+	const bcols = Math.max(1, Math.ceil((grid.cols * GRID_CELL_M) / BUCKET_M));
+	const brows = Math.max(1, Math.ceil((grid.rows * GRID_CELL_M) / BUCKET_M));
+	const buckets = new Map<number, number[]>();
+	grid.buildings.forEach((building, index) => {
+		const [west, south, east, north] = building.bbox;
+		const [c0, r0] = bucketOf(grid, west, south, bcols, brows);
+		const [c1, r1] = bucketOf(grid, east, north, bcols, brows);
+		for (let r = r0; r <= r1; r++) {
+			for (let c = c0; c <= c1; c++) {
+				const key = r * bcols + c;
+				const list = buckets.get(key);
+				if (list) list.push(index);
+				else buckets.set(key, [index]);
+			}
+		}
+	});
+	grid.buildingIndex = {
+		bcols,
+		brows,
+		buckets,
+		stamp: new Uint32Array(grid.buildings.length),
+		mark: 0
+	};
+}
+
+function bucketOf(
+	grid: TerrainGrid,
+	lng: number,
+	lat: number,
+	bcols: number,
+	brows: number
+): [number, number] {
+	const c = Math.floor(((lng - grid.west) * grid.mPerDegLng) / BUCKET_M);
+	const r = Math.floor(((lat - grid.south) * M_PER_DEG_LAT) / BUCKET_M);
+	return [Math.min(Math.max(c, 0), bcols - 1), Math.min(Math.max(r, 0), brows - 1)];
+}
+
+/**
+ * True when the straight segment a→b touches no real footprint: an exact
+ * segment/edge intersection test plus containment (plan §6.6), over the
+ * buildings bucketed near the segment.
+ */
+function exactLineOfSight(grid: TerrainGrid, a: GeoPoint, b: GeoPoint): boolean {
+	if (!grid.buildingIndex) buildBuildingIndex(grid);
+	const index = grid.buildingIndex!;
+	const [c0, r0] = bucketOf(
+		grid,
+		Math.min(a.lng, b.lng),
+		Math.min(a.lat, b.lat),
+		index.bcols,
+		index.brows
+	);
+	const [c1, r1] = bucketOf(
+		grid,
+		Math.max(a.lng, b.lng),
+		Math.max(a.lat, b.lat),
+		index.bcols,
+		index.brows
+	);
+	index.mark = (index.mark + 1) >>> 0;
+	if (index.mark === 0) {
+		index.stamp.fill(0);
+		index.mark = 1;
+	}
+	const pa: [number, number] = [a.lng, a.lat];
+	const pb: [number, number] = [b.lng, b.lat];
+	for (let r = r0; r <= r1; r++) {
+		for (let c = c0; c <= c1; c++) {
+			const list = index.buckets.get(r * index.bcols + c);
+			if (!list) continue;
+			for (const i of list) {
+				if (index.stamp[i] === index.mark) continue;
+				index.stamp[i] = index.mark;
+				if (segmentIntersectsPolygon(pa, pb, grid.buildings[i])) return false;
+			}
 		}
 	}
 	return true;
 }
 
+/** Length of a polyline in metres. */
+function polylineMeters(points: GeoPoint[]): number {
+	let total = 0;
+	for (let i = 0; i < points.length - 1; i++) total += distanceTo(points[i], points[i + 1]);
+	return total;
+}
+
 /**
- * Single-source Dijkstra over the terrain grid (8-connected). `cost` ranks
- * (cell factors applied), `meters` tracks the plain geometric step length along
- * the same predecessor chain. Returns `null` when the origin is off-grid.
+ * Greedy string pulling over the cell chain, starting from the TRUE origin and
+ * ending at the TRUE target (the chain's first and last cell centres are
+ * replaced before smoothing, so the end segments are checked too). From each
+ * kept vertex it jumps to the farthest later vertex that is visible both on
+ * the raster (no building-core cell) and against the real footprints. When
+ * not even the next vertex is visible (an endpoint inside a footprint), the
+ * step is taken anyway so the path always exists.
  */
-export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve | null {
-	const originCell = cellOf(grid, origin);
-	if (originCell === null) return null;
+function smoothChain(
+	grid: TerrainGrid,
+	chain: number[],
+	start: GeoPoint,
+	end: GeoPoint
+): GeoPoint[] {
+	if (chain.length <= 1) return [start, end];
+	const points = chain.map((cell) => cellCenter(grid, cell));
+	points[0] = start;
+	points[points.length - 1] = end;
+	const visible = (i: number, j: number) =>
+		lineOfSight(grid, chain[i], chain[j]) && exactLineOfSight(grid, points[i], points[j]);
+	const path: GeoPoint[] = [points[0]];
+	let i = 0;
+	while (i < points.length - 1) {
+		let next = i + 1;
+		for (let j = points.length - 1; j > i + 1; j--) {
+			if (visible(i, j)) {
+				next = j;
+				break;
+			}
+		}
+		path.push(points[next]);
+		i = next;
+	}
+	return path;
+}
 
+/** Cells next to (and on) an outline's lines, excluding building cores. */
+function shoreGoalCells(grid: TerrainGrid, outline: GeoJSON.Geometry): Set<number> {
+	const onLine = new Set<number>();
+	for (const line of outlineLines(outline)) {
+		for (let i = 0; i < line.length; i++) {
+			const a = line[i];
+			const b = line[Math.min(i + 1, line.length - 1)];
+			const lengthM = Math.hypot((b[0] - a[0]) * grid.mPerDegLng, (b[1] - a[1]) * M_PER_DEG_LAT);
+			const steps = Math.max(1, Math.ceil(lengthM / (GRID_CELL_M / 4)));
+			for (let s = 0; s <= steps; s++) {
+				const f = s / steps;
+				const cell = cellOf(grid, { lng: a[0] + (b[0] - a[0]) * f, lat: a[1] + (b[1] - a[1]) * f });
+				if (cell !== null) onLine.add(cell);
+			}
+		}
+	}
+	const goals = new Set<number>();
+	for (const cell of onLine) {
+		const cx = cell % grid.cols;
+		const cy = Math.floor(cell / grid.cols);
+		for (let dy = -1; dy <= 1; dy++) {
+			for (let dx = -1; dx <= 1; dx++) {
+				const x = cx + dx;
+				const y = cy + dy;
+				if (x < 0 || x >= grid.cols || y < 0 || y >= grid.rows) continue;
+				const idx = y * grid.cols + x;
+				if (grid.cells[idx] !== CLASS_BUILDING) goals.add(idx);
+			}
+		}
+	}
+	return goals;
+}
+
+/**
+ * True when the straight step between the centres of neighbouring cells `u`
+ * and `v` (direction `k` = (dy+1)*3 + (dx+1)) touches a footprint. Cached per
+ * cell and direction on the grid; both directions of a step share the answer.
+ */
+function stepClipsBuilding(grid: TerrainGrid, u: number, v: number, k: number): boolean {
+	if (!grid.stepClips) grid.stepClips = new Uint8Array(grid.cols * grid.rows * 9);
+	const cache = grid.stepClips;
+	const known = cache[u * 9 + k];
+	if (known !== 0) return known === 2;
+	const clips = !exactLineOfSight(grid, cellCenter(grid, u), cellCenter(grid, v));
+	cache[u * 9 + k] = clips ? 2 : 1;
+	cache[v * 9 + (8 - k)] = clips ? 2 : 1;
+	return clips;
+}
+
+/** Resumable single-source Dijkstra state (early exit + memoisation, plan §6.5). */
+interface SolveState {
+	originCell: number;
+	cost: Float64Array;
+	meters: Float64Array;
+	prev: Int32Array;
+	done: Uint8Array;
+	heap: CellHeap;
+}
+
+function createSolveState(grid: TerrainGrid, origin: GeoPoint, originCell: number): SolveState {
+	terrainSolveStats.solves++;
 	const n = grid.cols * grid.rows;
-	const cost = new Float64Array(n).fill(Infinity);
-	const meters = new Float64Array(n).fill(Infinity);
-	const prev = new Int32Array(n).fill(-1);
-	const done = new Uint8Array(n);
-	const heap = new CellHeap();
-
+	const state: SolveState = {
+		originCell,
+		cost: new Float64Array(n).fill(Infinity),
+		meters: new Float64Array(n).fill(Infinity),
+		prev: new Int32Array(n).fill(-1),
+		done: new Uint8Array(n),
+		heap: new CellHeap()
+	};
 	const originOffset = distanceTo(origin, cellCenter(grid, originCell));
-	cost[originCell] = originOffset * CLASS_FACTOR[grid.cells[originCell]];
-	meters[originCell] = originOffset;
-	heap.push(cost[originCell], originCell);
+	state.cost[originCell] = originOffset * CLASS_FACTOR[grid.cells[originCell]];
+	state.meters[originCell] = originOffset;
+	state.heap.push(state.cost[originCell], originCell);
+	return state;
+}
 
+/**
+ * Pops cells until `stop(cell)` returns true for a settled cell (returned) or
+ * the field is exhausted (`-1`). Settled cells stay valid for later queries.
+ */
+function settleUntil(
+	grid: TerrainGrid,
+	state: SolveState,
+	stop: (cell: number) => boolean
+): number {
+	const { cost, meters, prev, done, heap } = state;
 	const straightStep = GRID_CELL_M;
 	const diagonalStep = GRID_CELL_M * Math.SQRT2;
-
 	for (;;) {
 		const top = heap.pop();
-		if (!top) break;
+		if (!top) return -1;
 		const u = top.cellIdx;
 		if (done[u]) continue;
 		done[u] = 1;
@@ -337,7 +550,18 @@ export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve 
 				const v = vy * grid.cols + vx;
 				if (done[v]) continue;
 				const step = dx !== 0 && dy !== 0 ? diagonalStep : straightStep;
-				const candidate = cost[u] + step * CLASS_FACTOR[grid.cells[v]];
+				let factor = CLASS_FACTOR[grid.cells[v]];
+				// A step next to a footprint whose centre-to-centre line touches the
+				// real outline is priced like walking through the building: the chain
+				// then stays outside, so even unsmoothed steps never clip a wall.
+				if (
+					factor < GRID_BUILDING_FACTOR &&
+					(grid.cells[u] >= CLASS_BUILDING || grid.cells[v] >= CLASS_BUILDING) &&
+					stepClipsBuilding(grid, u, v, (dy + 1) * 3 + (dx + 1))
+				) {
+					factor = GRID_BUILDING_FACTOR;
+				}
+				const candidate = cost[u] + step * factor;
 				if (candidate < cost[v]) {
 					cost[v] = candidate;
 					meters[v] = meters[u] + step;
@@ -346,65 +570,104 @@ export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve 
 				}
 			}
 		}
+		if (stop(u)) return u;
 	}
+}
+
+/**
+ * Single-source Dijkstra over the terrain grid (8-connected). `cost` ranks
+ * (cell factors applied), `meters` tracks the plain geometric step length along
+ * the same predecessor chain. The field is solved lazily: each query settles
+ * cells only until its target (or the first cell of a goal set) is final, and
+ * the state is memoised on the grid per origin cell, so the selected marker's
+ * path after the list search needs no new solve. Returns `null` when the
+ * origin is off-grid.
+ */
+export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve | null {
+	const originCell = cellOf(grid, origin);
+	if (originCell === null) return null;
+	let state = grid.solve;
+	if (!state || state.originCell !== originCell) {
+		state = createSolveState(grid, origin, originCell);
+		grid.solve = state;
+	}
+	const s = state;
+
+	const settle = (cell: number): boolean => {
+		if (!s.done[cell]) settleUntil(grid, s, (u) => u === cell);
+		return s.done[cell] === 1 && Number.isFinite(s.cost[cell]);
+	};
+	const chainTo = (cell: number): number[] => {
+		const chain: number[] = [];
+		for (let cur = cell; cur !== -1; cur = s.prev[cur]) chain.push(cur);
+		return chain.reverse();
+	};
+
+	const routeToPoint = (target: GeoPoint): GridRoute | null => {
+		const cell = cellOf(grid, target);
+		if (cell === null || !settle(cell)) return null;
+		const points = smoothChain(grid, chainTo(cell), origin, target);
+		return { points, meters: polylineMeters(points), cost: s.cost[cell], endpoint: target };
+	};
+
+	const routeToShore = (outline: GeoJSON.Geometry): GridRoute | null => {
+		const goals = shoreGoalCells(grid, outline);
+		if (goals.size === 0) return null;
+		// Settled costs are final and never exceed an unsettled one, so the
+		// cheapest settled goal cell is the first one the search would pop.
+		let best = -1;
+		for (const cell of goals) {
+			if (
+				s.done[cell] &&
+				Number.isFinite(s.cost[cell]) &&
+				(best === -1 || s.cost[cell] < s.cost[best])
+			) {
+				best = cell;
+			}
+		}
+		if (best === -1) best = settleUntil(grid, s, (u) => goals.has(u));
+		if (best === -1 || !Number.isFinite(s.cost[best])) return null;
+		const endpoint = nearestPointOnOutline(outline, cellCenter(grid, best));
+		if (!endpoint) return null;
+		const points = smoothChain(grid, chainTo(best), origin, endpoint);
+		return { points, meters: polylineMeters(points), cost: s.cost[best], endpoint };
+	};
 
 	return {
 		distanceTo(target: GeoPoint): RouteResult | null {
 			const cell = cellOf(grid, target);
-			if (cell === null || !Number.isFinite(cost[cell])) return null;
+			if (cell === null || !settle(cell)) return null;
 			const targetOffset = distanceTo(target, cellCenter(grid, cell));
 			return {
-				cost: cost[cell] + targetOffset * CLASS_FACTOR[grid.cells[cell]],
-				meters: meters[cell] + targetOffset
+				cost: s.cost[cell] + targetOffset * CLASS_FACTOR[grid.cells[cell]],
+				meters: s.meters[cell] + targetOffset
 			};
 		},
 		pathTo(target: GeoPoint): GeoPoint[] | null {
-			const cell = cellOf(grid, target);
-			if (cell === null || !Number.isFinite(cost[cell])) return null;
-			const chain: number[] = [];
-			for (let cur = cell; cur !== -1; cur = prev[cur]) chain.push(cur);
-			chain.reverse();
-			// Greedy line-of-sight smoothing: from each kept vertex jump to the
-			// farthest later cell still visible without crossing a building —
-			// checked against the raster first (cheap) and then against the true
-			// footprints (the raster under-represents corners at 8 m cells).
-			const kept: number[] = [];
-			let i = 0;
-			while (i < chain.length) {
-				kept.push(chain[i]);
-				let next = i + 1;
-				for (let j = chain.length - 1; j > i + 1; j--) {
-					if (lineOfSight(grid, chain[i], chain[j]) && exactLineOfSight(grid, chain[i], chain[j])) {
-						next = j;
-						break;
-					}
-				}
-				i = next;
-			}
-			// The origin and target stand in for the centers of their own cells:
-			// going through a cell center first draws a kink of up to ~6 m at
-			// each end — at a pond's shore point that center can lie in the water,
-			// so the line visibly overshoots into the pond and comes back.
-			const path: GeoPoint[] = [origin];
-			for (let k = 1; k < kept.length - 1; k++) path.push(cellCenter(grid, kept[k]));
-			path.push(target);
-			return path;
+			return routeToPoint(target)?.points ?? null;
+		},
+		routeTo(goal: GridGoal): GridRoute | null {
+			return goal.kind === 'point' ? routeToPoint(goal.point) : routeToShore(goal.outline);
+		},
+		solveAll(): void {
+			settleUntil(grid, s, () => false);
 		}
 	};
 }
 
 /**
- * Terrain-routed results from `origin` to each target. ONE grid solve serves
- * all targets. `null` per target when it's off-grid/unreached.
+ * Smoothed terrain routes from `origin` to each goal. ONE (lazily settled,
+ * memoised) grid solve serves all goals. `null` per goal when it is off-grid
+ * or unreached.
  */
 export function gridRouteFromOrigin(
 	grid: TerrainGrid,
 	origin: GeoPoint,
-	targets: GeoPoint[]
-): (RouteResult | null)[] {
+	goals: GridGoal[]
+): (GridRoute | null)[] {
 	const solve = solveTerrain(grid, origin);
-	if (!solve) return targets.map(() => null);
-	return targets.map((t) => solve.distanceTo(t));
+	if (!solve) return goals.map(() => null);
+	return goals.map((goal) => solve.routeTo(goal));
 }
 
 /** Terrain-routed display polyline `origin` → `target`, or `null`. */

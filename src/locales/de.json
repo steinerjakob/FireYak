@@ -459,7 +459,9 @@
 			"title": "Pumpenberechnung",
 			"hoseLength": "Schlauchlänge (m)",
 			"hoseDiameter": "Schlauchdurchmesser (mm)",
-			"hoseName": "Schlauchbezeichnung"
+			"hoseName": "Schlauchbezeichnung",
+			"maxHosePressure": "Max. Betriebsdruck der Schläuche (bar)",
+			"maxHosePressureHelp": "Lange Leitungen bergab warnen, wenn der Ruhedruck ihn erreichen könnte"
 		},
 		"offline": {
 			"title": "Offline",
@@ -518,5 +520,21 @@
 		},
 		"aboutLink": "Neuigkeiten",
 		"support": "Projekt unterstützen"
+	},
+	"route": {
+		"estimate": "ca. {distance}",
+		"offRoad": "{distance} querfeldein",
+		"roadOnly": "Straße {distance}",
+		"notRecommended": "Nicht empfohlen",
+		"checkPressure": "Druck prüfen",
+		"incomplete": "Kartendaten unvollständig",
+		"fallback": {
+			"cellCap": "Gebiet zu groß: nur Straßen",
+			"tileCap": "Kartendaten abgeschnitten",
+			"tooFar": "Luftlinie: zu weit für eine Route",
+			"noRoadNearby": "Luftlinie: keine Straße in der Nähe",
+			"gridUnreached": "Querfeldein nicht erreichbar: nur Straßen",
+			"thinBuildings": "Gebäude hier lückenhaft: nur Straßen"
+		}
 	}
 }

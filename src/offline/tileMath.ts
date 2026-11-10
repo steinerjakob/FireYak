@@ -24,6 +24,12 @@ export interface TileCoord {
 export const PROTOMAPS_MAX_ZOOM = 15;
 export const SATELLITE_MAX_ZOOM = 17;
 export const TERRAIN_MAX_ZOOM = 12;
+/**
+ * DEM zoom for the slope profile of hose routes (≈ 3.2 m/px at 48° N, plan
+ * §4.2). Fetched cache-first like the display tiles; when it is unavailable the
+ * profile falls back to {@link TERRAIN_MAX_ZOOM} and shows at most "steep".
+ */
+export const TERRAIN_ROUTING_ZOOM = 14;
 
 /** Converts a lng/lat pair to the XYZ tile it falls into at zoom `z`. */
 export function lngLatToTile(lng: number, lat: number, z: number): { x: number; y: number } {

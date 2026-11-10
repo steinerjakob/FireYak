@@ -34,6 +34,7 @@
 								<th>Ratio</th>
 								<th>On road</th>
 								<th>Time</th>
+								<th>Profile</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -44,8 +45,9 @@
 									<td>{{ results[m.id].ratio?.toFixed(2) ?? '-' }}</td>
 									<td>{{ formatShare(results[m.id].onRoad) }}</td>
 									<td>{{ results[m.id].ms.toFixed(0) }} ms</td>
+									<td>{{ results[m.id].note }}</td>
 								</template>
-								<td v-else colspan="4">{{ busy ? '...' : 'no route' }}</td>
+								<td v-else colspan="5">{{ busy ? '...' : 'no route' }}</td>
 							</tr>
 						</tbody>
 					</table>
@@ -149,6 +151,8 @@ interface ModeResult {
 	ratio: number | null;
 	onRoad: number;
 	ms: number;
+	/** Steep metres, warnings, fallback and DEM zoom of the route. */
+	note: string;
 }
 
 const sceneLoaders = import.meta.glob<DebugScene>(
@@ -263,8 +267,9 @@ async function recompute(): Promise<void> {
 	const next: Record<string, ModeResult> = {};
 	for (const mode of MODES) {
 		const t0 = performance.now();
-		const path = await getRoutedPath(origin, target, mode.options);
+		const route = await getRoutedPath(origin, target, mode.options);
 		const ms = performance.now() - t0;
+		const path = route.routed ? route.points : null;
 		setRouteLine(mode.id, mode.color, path);
 		if (path) {
 			const meters = pathLength(path);
@@ -272,7 +277,18 @@ async function recompute(): Promise<void> {
 				meters,
 				ratio: straightMeters.value > 0 ? meters / straightMeters.value : null,
 				onRoad: onRoadShare(path, roads),
-				ms
+				ms,
+				note: [
+					`>25%: ${route.metersOver25.toFixed(0)} m`,
+					`>50%: ${route.metersOver50.toFixed(0)} m`,
+					route.climbM === null
+						? 'no DEM'
+						: `climb ${route.climbM.toFixed(0)} m (z${route.demZoom})`,
+					route.notRecommended ? 'NOT RECOMMENDED' : '',
+					route.fallback ?? ''
+				]
+					.filter(Boolean)
+					.join(', ')
 			};
 		}
 	}

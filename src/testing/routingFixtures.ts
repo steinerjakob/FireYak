@@ -6,6 +6,7 @@ import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
 import decodeWebp, { init as initWebp } from '@jsquash/webp/decode.js';
 import type { GeoPoint } from '@/types/geo';
+import { terrariumToElevations } from '@/helper/demRaster';
 
 /**
  * Test-only helpers for the routing fixtures in
@@ -174,11 +175,5 @@ export async function decodeDemWebp(buffer: ArrayBuffer): Promise<DecodedDemTile
 	await webpReady;
 	const image = await decodeWebp(buffer);
 	const size = image.width;
-	const elevations = new Float32Array(size * image.height);
-	for (let i = 0; i < elevations.length; i++) {
-		const p = i * 4;
-		// Terrarium encoding: elevation = r*256 + g + b/256 - 32768.
-		elevations[i] = image.data[p] * 256 + image.data[p + 1] + image.data[p + 2] / 256 - 32768;
-	}
-	return { size, elevations };
+	return { size, elevations: terrariumToElevations(image.data, size * image.height) };
 }

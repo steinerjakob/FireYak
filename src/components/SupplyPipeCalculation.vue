@@ -11,7 +11,7 @@ import {
 	IonSelect,
 	IonSelectOption
 } from '@ionic/vue';
-import { calculator, cloudOfflineOutline, locate } from 'ionicons/icons';
+import { calculator, cloudOfflineOutline, locate, warningOutline } from 'ionicons/icons';
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation, type ResultEntryId } from '@/composable/pumpCalculation';
 import ElevationChart from '@/components/ElevationChart.vue';
@@ -48,16 +48,33 @@ const targetPressureChanged = (event: CustomEvent) => {
 	pumpCalculationStore.targetPressure = Number(event.detail.value);
 };
 
+// The line length is the drawn polyline's, the same number the map shows.
 const tubeCount = computed(() => {
 	return Math.ceil(
-		(pumpCalculation.calculationResult.value?.realDistance || 0) / pumpCalculationStore.tubeLength
+		(pumpCalculation.calculationResult.value?.lineMeters || 0) / pumpCalculationStore.tubeLength
 	);
+});
+
+/** Warning and fallback chips of the line (not recommended, check pressure, …). */
+const lineChips = computed(() => {
+	const warnings = pumpCalculation.calculationResult.value?.warnings;
+	if (!warnings) return [];
+	const chips: { key: string; color: 'danger' | 'warning' | 'medium' }[] = [];
+	if (warnings.notRecommended) chips.push({ key: 'route.notRecommended', color: 'danger' });
+	if (warnings.pressureLevel === 'caution') {
+		chips.push({ key: 'route.checkPressure', color: 'warning' });
+	}
+	for (const fallback of warnings.fallbacks) {
+		chips.push({ key: `route.fallback.${fallback}`, color: 'medium' });
+	}
+	if (warnings.incomplete) chips.push({ key: 'route.incomplete', color: 'medium' });
+	return chips;
 });
 
 // Reserve material per doctrine: 1 spare B-hose per 100 m of line,
 // 1 spare pump per 4 pumps in use.
 const reserveTubes = computed(() => {
-	return Math.ceil((pumpCalculation.calculationResult.value?.realDistance || 0) / 100);
+	return Math.ceil((pumpCalculation.calculationResult.value?.lineMeters || 0) / 100);
 });
 
 const reservePumps = computed(() => {
@@ -263,6 +280,19 @@ watch(pumpCalculation.selectedResultEntry, (id) => {
 				{{ t('pumpCalculation.elevationIgnored') }}
 			</ion-chip>
 		</ion-item>
+		<ion-item v-if="lineChips.length > 0" lines="none">
+			<div class="line-chips">
+				<ion-chip
+					v-for="chip in lineChips"
+					:key="chip.key"
+					:color="chip.color"
+					:outline="chip.color === 'medium'"
+				>
+					<ion-icon v-if="chip.color !== 'medium'" :icon="warningOutline"></ion-icon>
+					{{ t(chip.key) }}
+				</ion-chip>
+			</div>
+		</ion-item>
 
 		<!-- Summary stat grid -->
 		<ion-item lines="none">
@@ -281,7 +311,7 @@ watch(pumpCalculation.selectedResultEntry, (id) => {
 					<div class="stat-tile">
 						<div class="stat-label">{{ t('pumpCalculation.pump.distanceFromStart') }}</div>
 						<div class="stat-value">
-							~{{ pumpCalculation.calculationResult.value.realDistance.toFixed(0) }} m
+							~{{ pumpCalculation.calculationResult.value.lineMeters.toFixed(0) }} m
 						</div>
 					</div>
 					<div class="stat-tile">
@@ -468,6 +498,20 @@ ion-item {
 }
 
 .elevation-ignored-chip ion-icon {
+	margin-inline-end: 4px;
+}
+
+.line-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.line-chips ion-chip {
+	margin: 0;
+}
+
+.line-chips ion-icon {
 	margin-inline-end: 4px;
 }
 </style>

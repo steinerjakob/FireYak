@@ -70,7 +70,7 @@ src/
 | `offlineAreasStore.ts` | Manages downloaded offline map areas (download/refresh/delete, size estimates, auto-refresh) |
 | `osmAuthStore.ts` | OAuth2 PKCE authentication with OpenStreetMap |
 | `pendingEditsStore.ts` | Reactive facade over the offline edit queue; exposes pending edits and sync-now |
-| `pumpCalculationSettings.ts` | Pump calculation parameters with localStorage persistence |
+| `pumpCalculationSettings.ts` | Pump calculation parameters (incl. max. hose working pressure) with Preferences persistence |
 | `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, marker filters, zoom button visibility, system bar styling |
 
 ### Composables (`src/composable/`)
@@ -97,10 +97,15 @@ src/
 | `appStoreInfos.ts` | App Store / Play Store URLs for the current app |
 | `areaShore.ts` | Outline geometry for water areas: nearest shore point, point-in-area, outline bounds |
 | `calculatePumpPosition.ts` | Optimal pump positioning along routes (pressure/elevation/flow) |
-| `demElevation.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo) |
+| `demElevation.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo); route profiles try z14 within a budget, else z12 |
+| `demRaster.ts` | Pure DEM helpers: terrarium decode and bilinear sampling across tile edges |
 | `distanceCalculation.ts` | Haversine distance + geodetic point interpolation (20m intervals) |
 | `elevationData.ts` | Batch elevation fetching helper (legacy/fallback path) |
 | `helper.ts` | Debounce utility |
+| `hosePressure.ts` | Downhill static-pressure rule against the max. hose working pressure; hydrant pressure parsing |
+| `polygonGeometry.ts` | Exact segment/polygon tests (edge intersection, containment, holes) used by route smoothing |
+| `routeLabel.ts` | Route label line and warning/fallback chips shared by the nearby list, map label and pump panel |
+| `routeProfile.ts` | Steep (>25 %/>50 %) and off-road runs of a route, slope "not recommended" triggers |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
 | `weightedDistance.ts` | Tuning constants for the road-aware weighted-distance heuristic (building penalty, road bonus, sampling) |
@@ -113,15 +118,16 @@ src/
 | `gridRouting.ts` | Cost-grid Dijkstra terrain routing for hose laying (not clamped to roads, avoids buildings) |
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
 | `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
-| `nearbyRouting.ts` | Road-aware ranking for the nearby water sources list (routed distance → weighted heuristic → straight-line) |
-| `obstacleGeometry.ts` | Decodes building footprints and road centerlines from Protomaps vector tiles for routing |
+| `nearbyRouting.ts` | Hose routing for the nearby list, marker path and pump line: returns a `HoseRoute` (one length, steep/off-road runs, warnings, surfaced fallbacks, coverage) |
+| `obstacleGeometry.ts` | Decodes building footprints, road centerlines and water polygons from Protomaps vector tiles for routing; missing tiles are reported, never cached as empty |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
-| `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker |
+| `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker (shore targets with 250 m final legs) |
+| `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs |
 | `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster) for the dev-only routing debug view |
 | `__fixtures__/routing/` | Test data for the routing specs: five real scenes (`scene.json` committed, tiles gitignored and fetched locally, README there). Never import from app code |
 | `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
 | `areaOutline.ts` | Session cache + Overpass `out geom` lookup for pond-area outlines (map highlight) |
-| `waterSourceAccess.ts` | Where a hose reaches a water source: pond areas use a mapped suction point at the pond or the nearest shore point instead of the center (nearby list, path, pump calculation) |
+| `waterSourceAccess.ts` | Where a hose reaches a water source: a mapped suction point at a pond, else the whole shore as a routing goal (outline from the extract, else the Protomaps water polygon; Overpass only in the background) |
 
 ### Offline mode (`src/offline/`)
 

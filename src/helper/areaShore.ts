@@ -160,3 +160,55 @@ export function distanceToOutline(
 	const nearest = nearestPointOnOutline(geometry, point);
 	return nearest ? distanceTo(point, nearest) : null;
 }
+
+/**
+ * Points along every line of an outline, at most `stepM` metres apart, used as
+ * the targets of a pond's shore (plan §6.5). Each line gets at least three
+ * samples, so a tiny pond still offers more than one side; open member lines
+ * (split multipolygon members) include their end point.
+ */
+export function sampleShore(
+	geometry: GeoJSON.Geometry | null | undefined,
+	stepM: number
+): GeoPoint[] {
+	const samples: GeoPoint[] = [];
+	for (const line of outlineLines(geometry)) {
+		if (line.length === 0) continue;
+		const points = line.map(([lng, lat]) => ({ lng, lat }));
+		if (points.length === 1) {
+			samples.push(points[0]);
+			continue;
+		}
+		const lengths: number[] = [];
+		let total = 0;
+		for (let i = 0; i + 1 < points.length; i++) {
+			const d = distanceTo(points[i], points[i + 1]);
+			lengths.push(d);
+			total += d;
+		}
+		if (total === 0) {
+			samples.push(points[0]);
+			continue;
+		}
+		const first = line[0];
+		const last = line[line.length - 1];
+		const closed = first[0] === last[0] && first[1] === last[1];
+		const count = Math.max(3, Math.ceil(total / stepM));
+		const spacing = total / count;
+		const n = closed ? count : count + 1;
+		let segment = 0;
+		let walked = 0;
+		for (let k = 0; k < n; k++) {
+			const target = Math.min(k * spacing, total);
+			while (segment < lengths.length - 1 && walked + lengths[segment] < target) {
+				walked += lengths[segment++];
+			}
+			const len = lengths[segment];
+			const f = len > 0 ? Math.min(1, (target - walked) / len) : 0;
+			const a = points[segment];
+			const b = points[segment + 1];
+			samples.push({ lat: a.lat + (b.lat - a.lat) * f, lng: a.lng + (b.lng - a.lng) * f });
+		}
+	}
+	return samples;
+}

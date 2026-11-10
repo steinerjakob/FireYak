@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IonItem, IonLabel, IonList } from '@ionic/vue';
+import { IonChip, IonItem, IonLabel, IonList } from '@ionic/vue';
 
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { computed } from 'vue';
@@ -9,11 +9,12 @@ import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { coerceRef, toRef } from '@/helper/osmRef';
 import { markerTitleKey } from '@/helper/markerTitle';
+import { formatMeters, routeChips } from '@/helper/routeLabel';
 
 const { list } = useNearbyWaterSource();
 const router = useRouter();
 const route = useRoute();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const pumpCalculationStore = usePumpCalculationStore();
 
 const getTitle = (markerData: OverPassElement) => {
@@ -31,26 +32,23 @@ const getBTubes = (distance: number) => {
 };
 
 const getDistanceText = (distance: number) => {
-	let text = '';
-	if (distance < 1000) {
-		text = `${Math.round(distance)}m ${t('nearbyMarker.away')}`;
-	} else {
-		text = `${(distance / 1000).toFixed(1)}km ${t('nearbyMarker.away')}`;
-	}
+	// Metres like the map label (the same number for a routed line).
+	const text = `${t('route.estimate', { distance: formatMeters(distance, locale.value) })} ${t('nearbyMarker.away')}`;
 	return `${text} ${getBTubes(distance)}`;
 };
 
 const formattedList = computed(() => {
 	return list.value.map((nearbyMarker) => {
-		// Prefer the routed distance along the road network: that is the length
-		// the hoses actually have to cover (and what the B-tube count is for).
+		// Prefer the routed length: that is the length the hoses actually have
+		// to cover (and what the B-tube count is for) and what the map label shows.
 		const displayDistance = nearbyMarker.routedDistance ?? nearbyMarker.distance;
 		return {
 			ref: toRef(nearbyMarker.element.type, nearbyMarker.element.id),
 			title: getTitle(nearbyMarker.element),
 			icon: nearbyMarker.icon,
 			distance: nearbyMarker.distance,
-			distanceText: getDistanceText(displayDistance)
+			distanceText: getDistanceText(displayDistance),
+			chips: routeChips(nearbyMarker.route, nearbyMarker.fallback)
 		};
 	});
 });
@@ -80,6 +78,16 @@ const selectedMarkerRef = computed(() => {
 			<ion-label>
 				<h3>{{ item.title }}</h3>
 				<p>{{ item.distanceText }}</p>
+				<div v-if="item.chips.length > 0" class="route-chips">
+					<ion-chip
+						v-for="chip in item.chips"
+						:key="chip.key"
+						:color="chip.color"
+						:outline="chip.color === 'medium'"
+					>
+						{{ t(chip.key) }}
+					</ion-chip>
+				</div>
 			</ion-label>
 		</ion-item>
 	</ion-list>
@@ -113,6 +121,21 @@ ion-label h3 {
 ion-label p {
 	font-size: 1rem !important;
 	margin-top: 0;
+}
+
+.route-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 2px;
+}
+
+.route-chips ion-chip {
+	margin: 0;
+	height: 22px;
+	font-size: 0.75rem;
+	--padding-start: 8px;
+	--padding-end: 8px;
 }
 
 .loading-note {

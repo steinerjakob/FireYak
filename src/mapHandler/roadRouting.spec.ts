@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { distanceTo } from '@/types/geo';
 import type { RoadLine } from '@/types/obstacles';
-import { MAX_SNAP_M, buildRoadGraph, routeFromOrigin, routePath } from '@/mapHandler/roadRouting';
+import {
+	MAX_SNAP_M,
+	POND_SHORE_SNAP_M,
+	buildRoadGraph,
+	routeFromOrigin,
+	routePath
+} from '@/mapHandler/roadRouting';
 
 // Synthetic roads in a local metre frame around (48, 15).
 const LAT = 48;
@@ -82,5 +88,43 @@ describe('routing', () => {
 		expect(length).toBeCloseTo(result!.meters, 0);
 		expect(path![0]).toEqual(origin);
 		expect(path![path!.length - 1]).toEqual(target);
+	});
+});
+
+describe('shore targets (plan section 6.5)', () => {
+	// One straight road; a pond 240 m north of it, shore sampled every 20 m.
+	const graph = buildRoadGraph([road([0, 0], [400, 0])]);
+	const shore = [0, 20, 40, 60, 80].map((dx) => at(160 + dx, 240));
+
+	it('uses a final leg of up to 250 m when it is the cheapest arrival', () => {
+		expect(POND_SHORE_SNAP_M).toBe(250);
+		const origin = at(0, 0);
+		// A single point 240 m off the road is out of the normal 100 m snap range.
+		expect(routeFromOrigin(graph, origin, [shore[0]])).toEqual([null]);
+		const [result] = routeFromOrigin(graph, origin, [
+			{ points: shore, maxSnapM: POND_SHORE_SNAP_M }
+		]);
+		expect(result).not.toBeNull();
+		// The cheapest arrival is the sample nearest the origin: 160 m along, 240 m up.
+		expect(result!.endpoint).toEqual(shore[0]);
+		expect(result!.meters).toBeCloseTo(400, -1);
+		const path = routePath(graph, origin, { points: shore, maxSnapM: POND_SHORE_SNAP_M })!;
+		expect(path[path.length - 1]).toEqual(shore[0]);
+		expect(distanceTo(path[path.length - 2], path[path.length - 1])).toBeGreaterThan(235);
+	});
+
+	it('attaches at a farther road when that arrival is cheaper (all roads in range count)', () => {
+		// The origin sits on a spur that ends 10 m below the shore's east end.
+		const bent = buildRoadGraph([road([0, 0], [300, 0]), road([300, 0], [300, 230])]);
+		const [result] = routeFromOrigin(bent, at(300, 200), [
+			{ points: shore, maxSnapM: POND_SHORE_SNAP_M }
+		]);
+		expect(result!.endpoint).toEqual(shore[4]);
+		expect(result!.meters).toBeLessThan(100);
+		// From the west end of the straight road the west sample wins instead.
+		const [west] = routeFromOrigin(bent, at(0, 0), [
+			{ points: shore, maxSnapM: POND_SHORE_SNAP_M }
+		]);
+		expect(west!.endpoint).toEqual(shore[0]);
 	});
 });

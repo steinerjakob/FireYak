@@ -4,7 +4,8 @@ import {
 	expandBounds,
 	isInsideOutline,
 	nearestPointOnOutline,
-	outlineBounds
+	outlineBounds,
+	sampleShore
 } from '@/helper/areaShore';
 import { distanceTo } from '@/types/geo';
 
@@ -120,5 +121,48 @@ describe('outlineBounds and expandBounds', () => {
 
 	it('is null without vertices', () => {
 		expect(outlineBounds(null)).toBeNull();
+	});
+});
+
+describe('sampleShore', () => {
+	/** Largest gap between consecutive samples, including the wrap-around. */
+	const maxGap = (points: { lat: number; lng: number }[]) => {
+		let max = 0;
+		for (let i = 0; i < points.length; i++) {
+			max = Math.max(max, distanceTo(points[i], points[(i + 1) % points.length]));
+		}
+		return max;
+	};
+
+	it('spaces samples at most 20 m apart, all on the outline', () => {
+		const samples = sampleShore(square, 20);
+		expect(samples.length).toBeGreaterThanOrEqual(40);
+		expect(maxGap(samples)).toBeLessThanOrEqual(20);
+		for (const p of samples) expect(distanceToOutline(square, p)).toBeLessThan(0.01);
+	});
+
+	it('a pond under 20 m perimeter still yields at least 3 samples', () => {
+		const tiny: GeoJSON.Polygon = {
+			type: 'Polygon',
+			coordinates: [closedRing([0, 0], [4, 0], [4, 4], [0, 4])]
+		};
+		expect(sampleShore(tiny, 20).length).toBeGreaterThanOrEqual(3);
+	});
+
+	it('samples multipolygon members and open member lines', () => {
+		const multi: GeoJSON.MultiPolygon = {
+			type: 'MultiPolygon',
+			coordinates: [[SQUARE_RING], [closedRing([300, 0], [340, 0], [340, 40], [300, 40])]]
+		};
+		const samples = sampleShore(multi, 20);
+		expect(samples.some((p) => distanceTo(p, at(320, 20)) < 30)).toBe(true);
+		expect(samples.some((p) => distanceTo(p, at(0, 0)) < 150)).toBe(true);
+		const lines: GeoJSON.MultiLineString = {
+			type: 'MultiLineString',
+			coordinates: [[pos(0, 0), pos(100, 0)]]
+		};
+		const lineSamples = sampleShore(lines, 20);
+		expect(lineSamples).toHaveLength(6);
+		expect(distanceTo(lineSamples[5], at(100, 0))).toBeLessThan(0.01);
 	});
 });

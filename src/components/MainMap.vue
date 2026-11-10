@@ -179,8 +179,11 @@ import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
-import { getRoutedPath } from '@/mapHandler/nearbyRouting';
-import { resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
+import { getRoutedPath, type HoseRoute, type RouteTargetInput } from '@/mapHandler/nearbyRouting';
+import { accessTargetPoint, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
+import { addRouteLayers, routeLayerIds, routeRunFeatures } from '@/mapHandler/routeLayers';
+import { routeChips, routeLabel } from '@/helper/routeLabel';
+import { parseHydrantPressure } from '@/helper/hosePressure';
 import { detectWaterAt } from '@/mapHandler/waterDetection';
 import { getAreaOutline, cachedOutline, getContainingWaterOutline } from '@/mapHandler/areaOutline';
 import { toRef } from '@/helper/osmRef';
@@ -197,7 +200,8 @@ const DISABLE_CLUSTERING_ZOOM = 14;
 const CLUSTER_RADIUS = 50;
 const MARKER_SOURCE_ID = 'markers';
 const SELECTED_PATH_SOURCE = 'selected-path';
-const SELECTED_PATH_LAYER = 'selected-path-layer';
+// Route runs (on-road, off-road dashed, steep ticks) share this prefix.
+const SELECTED_PATH_LAYER_PREFIX = 'selected-path';
 const SELECTED_PATH_LABEL_LAYER = 'selected-path-label-layer';
 const MAP_VIEW_STORAGE_KEY = 'mapView';
 // Fallback center used only until the device location resolves on a fresh
@@ -813,12 +817,22 @@ const selectedPathCoords = ref<[number, number][]>([]);
 const selectedPathVisible = ref(false);
 // Length of the displayed path (routed or straight), rendered as a label on the line.
 const selectedPathDistanceText = ref('');
+/** The displayed route: runs, steep classes and warnings for the label. */
+let selectedRoute: HoseRoute | null = null;
 const pumpCalculationStore = usePumpCalculationStore();
 
-function formatPathDistance(meters: number): string {
-	const distance = meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
-	const tubes = Math.ceil(meters / pumpCalculationStore.tubeLength);
-	return `${distance} · ~${tubes} ${pumpCalculationStore.hoseName}-${t('pumpCalculation.pump.tubes')}`;
+/** Label text: the route line plus its warning chips on a second line. */
+function routeLabelText(hoseRoute: HoseRoute): string {
+	const main = routeLabel(hoseRoute, {
+		t,
+		locale: locale.value,
+		tubeLength: pumpCalculationStore.tubeLength,
+		hoseName: pumpCalculationStore.hoseName
+	});
+	const chips = routeChips(hoseRoute, null).map((chip) =>
+		chip.color === 'medium' ? t(chip.key) : `⚠ ${t(chip.key)}`
+	);
+	return chips.length > 0 ? `${main}\n${chips.join(' · ')}` : main;
 }
 
 /** Point halfway along the polyline (by length) — anchors the distance label. */
@@ -854,13 +868,9 @@ function pathMidpoint(coords: [number, number][]): [number, number] {
  * bent paths would intermittently lose their distance text.
  */
 function selectedPathFeatures(): GeoJSON.FeatureCollection {
-	const features: GeoJSON.Feature[] = [
-		{
-			type: 'Feature',
-			geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
-			properties: {}
-		}
-	];
+	const features: GeoJSON.Feature[] = selectedRoute
+		? routeRunFeatures(selectedRoute.points, selectedRoute.segments)
+		: [];
 	if (selectedPathCoords.value.length >= 2) {
 		features.push({
 			type: 'Feature',
@@ -874,20 +884,18 @@ function selectedPathFeatures(): GeoJSON.FeatureCollection {
 function setSelectedPathVisibility(visible: boolean) {
 	if (!rootMap) return;
 	const visibility = visible ? 'visible' : 'none';
-	for (const layer of [SELECTED_PATH_LAYER, SELECTED_PATH_LABEL_LAYER]) {
+	for (const layer of [...routeLayerIds(SELECTED_PATH_LAYER_PREFIX), SELECTED_PATH_LABEL_LAYER]) {
 		if (rootMap.getLayer(layer)) {
 			rootMap.setLayoutProperty(layer, 'visibility', visibility);
 		}
 	}
 }
 
-function updateSelectedPath(points: GeoPoint[]) {
-	selectedPathCoords.value = points.map((p) => [p.lng, p.lat] as [number, number]);
-	let pathLengthM = 0;
-	for (let i = 0; i < points.length - 1; i++) {
-		pathLengthM += distanceTo(points[i], points[i + 1]);
-	}
-	selectedPathDistanceText.value = formatPathDistance(pathLengthM);
+function updateSelectedPath(hoseRoute: HoseRoute) {
+	selectedRoute = hoseRoute;
+	selectedPathCoords.value = hoseRoute.points.map((p) => [p.lng, p.lat] as [number, number]);
+	// The same metres as the nearby list: the length of this polyline.
+	selectedPathDistanceText.value = routeLabelText(hoseRoute);
 	selectedPathVisible.value = true;
 
 	if (rootMap && mapReady) {
@@ -901,6 +909,7 @@ function updateSelectedPath(points: GeoPoint[]) {
 
 function hideSelectedPath() {
 	selectedPathVisible.value = false;
+	selectedRoute = null;
 	selectedPathCoords.value = [];
 	if (rootMap && mapReady) {
 		setSelectedPathVisibility(false);
@@ -995,7 +1004,7 @@ const MAX_PATH_DIRECT_DISTANCE_M = 2500;
 // without await, and only the newest selection may draw its path.
 let pathRequestSeq = 0;
 
-const showPathToSelectedMarker = async () => {
+const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 	if (!selectedMarker) return;
 	const inNearbyMode = nearbyWaterSource.isActive.value;
 	// The user can turn the marker line off; the nearby view always shows it
@@ -1013,32 +1022,42 @@ const showPathToSelectedMarker = async () => {
 		return;
 	}
 	const markerLngLat = selectedMarker.getLngLat();
-	let target: GeoPoint = { lat: markerLngLat.lat, lng: markerLngLat.lng };
-	// A pond area is reached at its shore (or its mapped suction point), not
-	// at the center the marker sits on.
+	let target: RouteTargetInput = { lat: markerLngLat.lat, lng: markerLngLat.lng };
+	// A pond area is reached at its shore (routing picks the best reachable
+	// shore point) or at its mapped suction point, not at the center the
+	// marker sits on. A pond outline that only arrives later (Overpass, in the
+	// background) redraws the line silently.
 	const element = markerStore.selectedMarker;
 	if (element) {
-		const access = await resolveAccessPoint(element, currentLocation);
+		const access = await resolveAccessPoint(element, currentLocation, {
+			onOutlineArrived: () => {
+				if (requestId === pathRequestSeq) void showPathToSelectedMarker({ silent: true });
+			}
+		});
 		if (requestId !== pathRequestSeq) return;
 		if (access) target = access;
 	}
+	const targetPoint = 'kind' in target ? accessTargetPoint(target) : target;
 	// A marker far from the user would draw a long, useless line across the
 	// map (and cost a routing request) — skip it. The nearby view is exempt:
 	// its results are distance-ordered and the line is its core feature.
-	if (!inNearbyMode && distanceTo(currentLocation, target) > MAX_PATH_DIRECT_DISTANCE_M) {
+	if (!inNearbyMode && distanceTo(currentLocation, targetPoint) > MAX_PATH_DIRECT_DISTANCE_M) {
 		hideSelectedPath();
 		return;
 	}
-	// Prefer the routed path; fall back to the straight line.
-	const routed = await getRoutedPath(currentLocation, target, {
-		clampToRoads: settingsStore.clampHosesToRoads
+	// The routed path, or the straight line with the reason when unroutable.
+	const hoseRoute = await getRoutedPath(currentLocation, target, {
+		clampToRoads: settingsStore.clampHosesToRoads,
+		maxHosePressureBar: pumpCalculationStore.maxHosePressure,
+		// A pressurised hydrant feeds the line; otherwise a pump at the source.
+		sourcePressureBar: parseHydrantPressure(element?.tags) ?? pumpCalculationStore.outputPressure
 	});
 	if (requestId !== pathRequestSeq) return;
-	const points = routed && routed.length >= 2 ? routed : [currentLocation, target];
-	updateSelectedPath(points);
+	updateSelectedPath(hoseRoute);
 	// Only the nearby view refits the camera to the path; a plain marker tap
-	// keeps its usual fly-to/centering behavior and just shows the line.
-	if (inNearbyMode) {
+	// keeps its usual fly-to/centering behavior and just shows the line. A
+	// silent recompute (late data) never moves the camera.
+	if (inNearbyMode && !options.silent) {
 		fitMapToLayer();
 	}
 };
@@ -1452,16 +1471,9 @@ function addMapLayers(map: maplibregl.Map) {
 		data: { type: 'FeatureCollection', features: [] }
 	});
 
-	map.addLayer({
-		id: SELECTED_PATH_LAYER,
-		type: 'line',
-		source: SELECTED_PATH_SOURCE,
-		layout: { visibility: 'none' },
-		paint: {
-			'line-color': '#3388ff',
-			'line-width': 3
-		}
-	});
+	// Route runs: solid on roads, dashed off-road, coloured by steepness,
+	// ticks across very steep runs (plan section 6.8).
+	addRouteLayers(map, SELECTED_PATH_SOURCE, SELECTED_PATH_LAYER_PREFIX, false);
 
 	// Distance label rendered along the selected path line.
 	map.addLayer({
@@ -1477,7 +1489,7 @@ function addMapLayers(map: maplibregl.Map) {
 			'text-field': ['get', 'distanceText'],
 			'text-font': ['Noto Sans Medium'],
 			'text-size': 13,
-			'text-offset': [0, -0.9],
+			'text-offset': [0, -1.4],
 			// The single label must always render, even over other symbols.
 			'text-allow-overlap': true,
 			'text-ignore-placement': true

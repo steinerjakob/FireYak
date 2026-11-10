@@ -459,7 +459,9 @@
 			"title": "Pump calculation",
 			"hoseLength": "Hose length (m)",
 			"hoseDiameter": "Hose diameter (mm)",
-			"hoseName": "Hose designation"
+			"hoseName": "Hose designation",
+			"maxHosePressure": "Max. hose working pressure (bar)",
+			"maxHosePressureHelp": "Long downhill lines warn when the pressure at rest could reach it"
 		},
 		"offline": {
 			"title": "Offline",
@@ -518,5 +520,21 @@
 		},
 		"aboutLink": "What's new",
 		"support": "Support this project"
+	},
+	"route": {
+		"estimate": "approx. {distance}",
+		"offRoad": "{distance} off-road",
+		"roadOnly": "road {distance}",
+		"notRecommended": "Not recommended",
+		"checkPressure": "Check pressure",
+		"incomplete": "Map data incomplete",
+		"fallback": {
+			"cellCap": "Area too large: roads only",
+			"tileCap": "Map data cut off",
+			"tooFar": "Straight line: too far to route",
+			"noRoadNearby": "Straight line: no road nearby",
+			"gridUnreached": "Not reachable off-road: roads only",
+			"thinBuildings": "Buildings incomplete here: roads only"
+		}
 	}
 }

@@ -27,8 +27,23 @@
 		},
 		{
 			"type": "improvement",
-			"en": "Distances to large fire water ponds are now measured to the shore or its suction point, not to the middle of the water.",
-			"de": "Entfernungen zu großen Löschteichen werden jetzt bis zum Ufer oder zur Saugstelle gemessen, nicht bis zur Teichmitte."
+			"en": "Distances and hose routes to large fire water ponds now end at the best reachable shore point or its suction point.",
+			"de": "Entfernungen und Schlauchwege zu großen Löschteichen enden jetzt am besten erreichbaren Uferpunkt oder an der Saugstelle."
+		},
+		{
+			"type": "fix",
+			"en": "Hose routes to a hydrant no longer cut through buildings, and the list and map show the same length.",
+			"de": "Schlauchwege zum Hydranten führen nicht mehr durch Gebäude, und Liste und Karte zeigen dieselbe Länge."
+		},
+		{
+			"type": "improvement",
+			"en": "Steep stretches of a hose route are highlighted, with a warning when the route is not recommended.",
+			"de": "Steile Abschnitte eines Schlauchwegs werden hervorgehoben, mit einem Hinweis, wenn der Weg nicht zu empfehlen ist."
+		},
+		{
+			"type": "feature",
+			"en": "Set the maximum working pressure of your hoses; long downhill lines warn when it could be exceeded.",
+			"de": "Der maximale Betriebsdruck der Schläuche ist einstellbar; lange Leitungen bergab warnen, wenn er überschritten werden könnte."
 		}
 	],
 	"releases": [

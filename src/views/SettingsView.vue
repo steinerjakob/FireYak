@@ -110,6 +110,18 @@
 					></ion-input>
 				</ion-item>
 
+				<ion-item>
+					<ion-input
+						:label="$t('settings.pumpCalculation.maxHosePressure')"
+						:helper-text="$t('settings.pumpCalculation.maxHosePressureHelp')"
+						label-placement="stacked"
+						type="number"
+						inputmode="decimal"
+						:value="pumpCalculationStore.maxHosePressure"
+						@ion-change="onMaxHosePressureChange($event)"
+					></ion-input>
+				</ion-item>
+
 				<!-- Offline Section -->
 				<ion-list-header>
 					<ion-label>{{ $t('settings.offline.title') }}</ion-label>
@@ -275,6 +287,13 @@ const onHoseDiameterChange = (event: InputCustomEvent) => {
 	const value = Number(event.detail.value);
 	if (Number.isFinite(value) && value > 0) {
 		pumpCalculationStore.tubeDiameter = value;
+	}
+};
+
+const onMaxHosePressureChange = (event: InputCustomEvent) => {
+	const value = Number(event.detail.value);
+	if (Number.isFinite(value) && value > 0) {
+		pumpCalculationStore.maxHosePressure = value;
 	}
 };
 
