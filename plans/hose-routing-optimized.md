@@ -1783,6 +1783,89 @@ single cost grid that remains after phase 5.
   | 4, ratio optimized / road | median 0.80–1.00 (research 0.86); every position 0.70–1.15 |
   | 4, off-road | 0 positions notably off-road |
 
+**Implemented (phase 3 notes).** Where the code differs from the text above:
+
+- Modules: `costGrid.ts` (pure rasteriser: scanline fill, supercover lines, the §6.3
+  order, `routableRoads`), `cellHeap.ts` (typed heap with the old heap's sift rules, so
+  the `direct` grid pops equal keys in the same order and its routes did not move), and
+  `gridRouting.ts` serving both models (`direct` unchanged, `optimized` new). Cell size
+  stays 8 m and the cap 250k (phase 6).
+- Raster details the plan leaves open: paths and steps are drawn before roads (the cheaper
+  class wins a shared cell); a building fringe never overwrites a `BLOCKED` cell (a house on
+  the shore must not open the lake); a diagonal step may not cut the corner of an
+  impassable cell, so 4-connected supercover walls (rail, rivers, cliffs) stay watertight.
+  A step whose centre line touches a footprint is impassable (phase-1 rule, now with the
+  escape factor 30 inside the escape zone instead of a plain ×30). The `BRIDGE` step rule
+  waits for phase 4, which lists it with slope.
+- Escape zone: every cell whose centre is within 12 m of an endpoint; a `BUILDING_CORE` in
+  it costs 30, and the endpoint cell itself costs 30 whatever its class (a point on a
+  blocked cell can still start or end). Other blocked cells stay blocked in the zone. The
+  zone is fixed when a field is set up: the list's one-to-many Dijkstra includes every
+  point target's zone, and a single path reuses that field (no A*) when its target is one
+  of them, so list and line agree; otherwise A* runs with the two endpoints' zones. A route
+  to one list target could pass another target's zone at ×30; accepted (rare, priced).
+- Windows (§6.5): `optimized` uses bbox + max(150 m, 0.25 × the farthest straight
+  distance) for list and line alike and re-solves once in a window ×1.5 larger when a
+  route touches the edge (16 m) or a target is `gridUnreached`. Without this, Melk's north
+  ring could not reach the underpass. `direct` and `roads` keep bbox + 150 m.
+- Off-road for `optimized` (§6.8): a point is on road when its cell is `ROAD`/`PATH`/
+  `STEPS`/`BRIDGE` **or** within the 6 m of a road line the other modes use. With 8 m cells
+  the class alone marks every corner cut and every centreline near a cell edge as off-road
+  (Melk: 32 instead of 15 notably off-road positions).
+- Road mode: a pond's final shore leg is priced by `lineCost` over the cost grid (straight
+  line, per-cell length × factor), with the pond's own cells within 12 m of the shore point
+  priced as open ground; a leg through water, rail or a building is not used. Snap legs to
+  points keep `effectiveDistanceMeters`. Scene 1 pond (road) is unchanged at 790 m.
+- `routableRoads` (`classifyRoad` ≠ `excluded`) filters `roads` once per routing context,
+  so the road graph, both grids, the weighted heuristic and the off-road test all lose
+  ferries, `path/corridor`, tunnelled paths and military access. Scene 4 moves (the
+  phase-2 note named the neighbouring values): road rings 483 → 479 m and 569 → 565 m
+  (corridors), and the last 300 m ring 644 → 708 m in road mode and 581 → 598 m in terrain
+  mode (tunnelled footways). Every other pinned length is unchanged.
+- Settings: `settingsStore.hoseRouting` (default `direct`) replaces `clampHosesToRoads`
+  (kept as a getter for the toggle) plus `hoseRoutingPreview`. `resolveHoseRouting`
+  implements both columns of the table. `saveHoseRouting` writes `hose_routing` and keeps
+  `clamp_hoses_to_roads` in step until phase 5, so a downgraded app still agrees on
+  `roads`. The preview item: en "Optimized routing (preview)", de "Optimierte Route
+  (Vorschau)". A mode change redraws the selected marker's line (`MainMap.vue`).
+- Thin buildings (§6.11): the decoder records per tile `{ tileM2, residentialM2,
+  buildingM2 }`; `coverage.thinBuildingTiles` counts flagged tiles
+  (`isThinBuildingTile`). Only `optimized` acts on it (roads, `fallback: 'thinBuildings'`,
+  `basemap: 'partial'`), so production is unchanged. No tile of the five scenes is
+  flagged (residential tiles have building/residential ratios above 0.1). A poorly mapped
+  sample is still OPEN.
+- Smoothing: greedy cost-aware pulling plus the gated Douglas–Peucker (`simplifyGated`);
+  as in phase 1 the pass rarely removes anything, because pulling already took the
+  farthest valid vertex.
+- Measured `optimized` numbers (no slope), against the table above:
+
+  | Scene | Measured | Plan | Note |
+  |---|---|---|---|
+  | 1, pond | 687 m, on the outline, 0 contacts | 528–700 m | |
+  | 1, hydrant | 454 m (road 462 m), 0 contacts | ≤ 295 m | the straight line from this vehicle is 300 m; spec: ≤ road mode |
+  | 2, rail | 0 off-road crossings over 38 positions | 0 | crossings only at roads (≤ 8 m) |
+  | 2, off-road | 15 of 38 | 5–11 | no slope: the stream, cutting and farmland south are crossed straight; phase 4 |
+  | 3, Danube | 0 contacts | 0 | |
+  | 3, 151/797 m | 151 m (0.19 × road) | < 0.8 × road | |
+  | 3, off-road | 24 of 33 | research 18 | scarp, phase 4 |
+  | 4, tram removed | all 30 equal | ±0.5 m | the fixtures have 30 ring positions at 150/300 m, not 32 |
+  | 4, ratio | median 0.93, min 0.60, max 1.00 | 0.80–1.00; each 0.70–1.15 | three 300 m positions cross a park lawn (OPEN 1.25) where road mode follows its paths (PATH 1.05) |
+  | 4, off-road | 4 of 30 | 0 | the same park crossings |
+  | 5, 500 m north | 515 m, straight down the scarp | phase 4 | |
+
+  Specs keep tolerant ranges around these values and say where phase 4 must tighten them.
+- Node timings (4-core 2.1 GHz Xeon, Node 22), largest fixture window (scene 1, 3 × 3
+  z15 tiles, 307 × 304 = 93k cells): decode 28 ms, build the `optimized` grid 19–76 ms
+  (cold first), full Dijkstra 53–86 ms, A* to the farthest case 4–20 ms (`direct`: build
+  8–14 ms, full Dijkstra 34–52 ms). Vienna (41k cells, 2,251 buildings): build 37–46 ms,
+  list of 30 smoothed routes 9 ms (`direct` build 176–202 ms).
+- Specs: `cellHeap.spec.ts` (5), `costGrid.spec.ts` (21), `gridRouting.spec.ts` (+17:
+  symmetry and A* on 100 seeded grids, goal sets, suction override, smoothing property on
+  200 scenes, `simplifyGated`), `hoseRoutingSetting.spec.ts` (21), `gridRouting.scenes.spec.ts`
+  (19, fixtures), plus thin-buildings cases in `hoseCostModel.spec.ts`,
+  `hoseCostModel.scenes.spec.ts` and `obstacleDecode.spec.ts`, a shore-leg case in
+  `roadRouting.spec.ts` and an `optimized` raster case in `routingDebug.spec.ts`.
+
 **Manual:** in a preview build with the flag, the preview item switches modes
 and the route redraws.
 
