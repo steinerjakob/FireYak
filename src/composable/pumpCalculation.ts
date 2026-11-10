@@ -13,6 +13,8 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useDefaultStore } from '@/store/defaultStore';
 import { getRoutedPath } from '@/mapHandler/nearbyRouting';
 import { getMapNodeById } from '@/mapHandler/databaseHandler';
+import { isPondArea, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
+import type { OverPassElement } from '@/mapHandler/overPassApi';
 import { alertController } from '@ionic/vue';
 import { GeoPoint, distanceTo } from '@/types/geo';
 import { OsmRef } from '@/helper/osmRef';
@@ -26,6 +28,14 @@ let suctionPoint: maplibregl.Marker | null = null;
 let targetPoint: maplibregl.Marker | null = null;
 const wayPoints: maplibregl.Marker[] = [];
 const pumpMarkers: maplibregl.Marker[] = [];
+/**
+ * Pond area the suction point was taken from (issue #110). While set, the
+ * suction point follows the fire point: it sits on the pond's shore nearest to
+ * it (or on a mapped suction point at the pond). Cleared as soon as the user
+ * places or drags the suction point themselves.
+ */
+let pondSource: OverPassElement | null = null;
+let pondSnapToken = 0;
 
 export interface CalculationResult {
 	realDistance: number;
@@ -360,6 +370,23 @@ function hasPolyline(): boolean {
 	return Boolean(suctionPoint && targetPoint);
 }
 
+/**
+ * Moves a pond-sourced suction point to the shore point nearest to the fire
+ * point. No-op unless the suction point came from a pond area.
+ */
+async function snapPondSuctionToFirePoint(): Promise<void> {
+	if (!pondSource || !suctionPoint || !targetPoint) return;
+	const token = ++pondSnapToken;
+	const source = pondSource;
+	const access = await resolveAccessPoint(source, getMarkerLngLat(targetPoint));
+	// Superseded, torn down, or the user took over the suction point meanwhile.
+	if (token !== pondSnapToken || pondSource !== source || !suctionPoint || !access) return;
+	const current = getMarkerLngLat(suctionPoint);
+	if (current.lat === access.lat && current.lng === access.lng) return;
+	suctionPoint.setLngLat([access.lng, access.lat]);
+	updatePolyline();
+}
+
 const setTargetPoint = (latlng?: GeoPoint) => {
 	const point =
 		latlng || (rootMap ? { lat: rootMap.getCenter().lat, lng: rootMap.getCenter().lng } : null);
@@ -382,10 +409,12 @@ const setTargetPoint = (latlng?: GeoPoint) => {
 
 	targetPoint.on('dragend', () => {
 		updatePolyline();
+		void snapPondSuctionToFirePoint();
 	});
 
 	firePointSet.value = true;
 	updatePolyline();
+	void snapPondSuctionToFirePoint();
 };
 
 const removeWayPoint = (wayPointToRemove: maplibregl.Marker) => {
@@ -480,6 +509,10 @@ export function usePumpCalculation() {
 		if (!point || !rootMap) return;
 
 		sourcePressure = pressure;
+		// A manually placed suction point no longer follows a pond's shore;
+		// useMarkerAsWaterSource sets this again right after for pond areas.
+		pondSource = null;
+		pondSnapToken++;
 
 		if (!suctionPoint) {
 			const { iconUrl, size, anchor } = getMarkerConfig('suctionPoint');
@@ -492,6 +525,9 @@ export function usePumpCalculation() {
 			suctionPoint.on('dragend', () => {
 				// Dragged away from the hydrant → its pressure no longer applies.
 				sourcePressure = null;
+				// …and a pond-sourced point stays where the user put it.
+				pondSource = null;
+				pondSnapToken++;
 				updatePolyline();
 			});
 			suctionPoint.getElement().addEventListener('click', () => {
@@ -534,8 +570,15 @@ export function usePumpCalculation() {
 		if (!node || !isWaterSource) return;
 
 		const pressure = parseHydrantPressure(node.tags);
-		const point =
+		let point: GeoPoint =
 			node.lat !== undefined && node.lon !== undefined ? { lat: node.lat, lng: node.lon } : coords;
+		// A pond area is pumped from its shore (or its mapped suction point),
+		// not its center: take the spot nearest to the fire point, if one is set.
+		const isPond = isPondArea(node);
+		if (isPond) {
+			const reference = targetPoint ? getMarkerLngLat(targetPoint) : point;
+			point = (await resolveAccessPoint(node, reference)) ?? point;
+		}
 
 		const alert = await alertController.create({
 			header: t('pumpCalculation.useAsSource.title'),
@@ -552,6 +595,11 @@ export function usePumpCalculation() {
 		const { role } = await alert.onDidDismiss();
 		if (role === 'confirm') {
 			setSuctionPoint(point, pressure);
+			if (isPond) {
+				pondSource = node;
+				// The fire point may have moved while the dialog was open.
+				void snapPondSuctionToFirePoint();
+			}
 		}
 	};
 
@@ -650,6 +698,8 @@ export function usePumpCalculation() {
 			routingToken++; // invalidate any in-flight routing
 			segmentLabels = [];
 			sourcePressure = null;
+			pondSource = null;
+			pondSnapToken++;
 			// A pending auto-recalc firing after teardown would recreate markers.
 			if (autoRecalcTimer) {
 				clearTimeout(autoRecalcTimer);

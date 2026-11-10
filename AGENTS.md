@@ -93,6 +93,7 @@ src/
 | File | Purpose |
 |---|---|
 | `appStoreInfos.ts` | App Store / Play Store URLs for the current app |
+| `areaShore.ts` | Outline geometry for water areas: nearest shore point, point-in-area, outline bounds |
 | `calculatePumpPosition.ts` | Optimal pump positioning along routes (pressure/elevation/flow) |
 | `demElevation.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo) |
 | `distanceCalculation.ts` | Haversine distance + geodetic point interpolation (20m intervals) |
@@ -116,6 +117,7 @@ src/
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker |
 | `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
 | `areaOutline.ts` | Session cache + Overpass `out geom` lookup for pond-area outlines (map highlight) |
+| `waterSourceAccess.ts` | Where a hose reaches a water source: pond areas use a mapped suction point at the pond or the nearest shore point instead of the center (nearby list, path, pump calculation) |
 
 ### Offline mode (`src/offline/`)
 

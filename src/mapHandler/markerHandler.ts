@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue';
-import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
+import { GeoBounds, GeoPoint, boundsContains, distanceTo } from '@/types/geo';
 
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
@@ -24,6 +24,15 @@ import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
 import { isSuctionHydrant } from '@/helper/markerTitle';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
 import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
+import {
+	accessPointFor,
+	isMappedSuctionPoint,
+	isPondArea,
+	knownOutline,
+	markerPoint,
+	preloadPondOutlines
+} from '@/mapHandler/waterSourceAccess';
+import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
 
@@ -562,17 +571,15 @@ export async function getMarkersForView(
  * above a geometrically closer one across a building block.
  *
  * @param elements
+ * @param points - Where each element is measured to (parallel to `elements`).
  * @param {GeoPoint} latLng - The reference geographic location used to calculate distances from each marker.
  * @return {Promise<NearbyMarker[]>} A promise that resolves to an array of objects, each containing a marker and its distances from the specified location, sorted in ascending ranking order.
  */
 async function sortElementsByDistance(
 	elements: OverPassElement[],
+	points: GeoPoint[],
 	latLng: GeoPoint
 ): Promise<NearbyMarker[]> {
-	const points: GeoPoint[] = elements.map((element) => ({
-		lat: (element?.lat || element.center?.lat) as number,
-		lng: (element.lon || element.center?.lon) as number
-	}));
 	const straightDistances = points.map((point) => distanceTo(latLng, point));
 
 	let ranking: NearbyDistanceResult[];
@@ -591,6 +598,7 @@ async function sortElementsByDistance(
 
 	const markersWithDistance: NearbyMarker[] = elements.map((element, i) => ({
 		element,
+		target: points[i],
 		distance: straightDistances[i],
 		routedDistance: ranking[i].routedDistance,
 		sortDistance: ranking[i].sortDistance,
@@ -603,16 +611,81 @@ async function sortElementsByDistance(
 }
 
 /**
+ * How far (m) beyond the radius pond **centers** are searched, so pond areas
+ * whose shore lies inside the radius are found even when their center lies far
+ * outside it (issue #110). Ponds with a known outline are then kept by their
+ * outline's extent; the cache is indexed by center tile, so a pond whose center
+ * is farther than this still can't be found.
+ */
+const POND_AREA_SEARCH_MARGIN_M = 10_000;
+/**
+ * Ponds without an outline are only fetched within this margin: the on-demand
+ * outline lookup covers about a kilometre around the pond's center.
+ */
+const POND_OUTLINE_FETCH_MARGIN_M = 1000;
+
+/** Square bounds of `halfSizeM` meters around `center`. */
+function boundsAroundPoint(center: GeoPoint, halfSizeM: number): GeoBounds {
+	const latDelta = halfSizeM / 111000;
+	const lngDelta = halfSizeM / (111000 * Math.cos((center.lat * Math.PI) / 180));
+	return {
+		south: center.lat - latDelta,
+		north: center.lat + latDelta,
+		west: center.lng - lngDelta,
+		east: center.lng + lngDelta
+	};
+}
+
+/**
  * Retrieves a list of nearby markers within the specified radius around a point,
  * sorted by their distance from the given coordinates.
  *
+ * Fire water ponds mapped as an area are measured to their nearest shore point
+ * (or to a mapped suction point at the pond) instead of their center; see
+ * `src/mapHandler/waterSourceAccess.ts`. They are found by their outline, so a
+ * large pond counts when its shore is in range. Ponds without a known outline
+ * keep the center.
+ *
  * @param {GeoPoint} latLng - The latitude and longitude coordinates used as the center point.
- * @param {number} radius - The search radius in meters around the center point (default: 5000 meters).
+ * @param {number} radius - The search radius in meters around the center point (default: 2000 meters).
  * @return {Promise<NearbyMarker[]>} A promise that resolves with a list of sorted markers containing their distance and icons.
  */
 export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise<NearbyMarker[]> {
-	const elements = await getNearbyMapNodes(latLng, radius);
-	return sortElementsByDistance(elements, latLng);
+	// Everything else is found by its position, exactly as before.
+	const pointCandidates = (await getNearbyMapNodes(latLng, radius)).filter((e) => !isPondArea(e));
+
+	// Pond areas: a wider window of centers, kept when their outline reaches
+	// the radius (or, without an outline, when it could still be fetched).
+	const wideCandidates = await getMapNodesForView(
+		boundsAroundPoint(latLng, radius + POND_AREA_SEARCH_MARGIN_M)
+	);
+	const pondCandidates = wideCandidates.filter((element) => {
+		if (!isPondArea(element)) return false;
+		const outline = knownOutline(element);
+		const outlineExtent = outline ? outlineBounds(outline) : null;
+		if (outlineExtent) return boundsContains(expandBounds(outlineExtent, radius), latLng);
+		const center = markerPoint(element);
+		return center !== null && distanceTo(latLng, center) <= radius + POND_OUTLINE_FETCH_MARGIN_M;
+	});
+
+	// Ponds that came without their outline: fetch it (briefly, online only).
+	if (useNetworkStatus().isOnline.value) {
+		await preloadPondOutlines(pondCandidates);
+	}
+
+	const suctionPoints = wideCandidates.filter(isMappedSuctionPoint);
+	const elements: OverPassElement[] = [];
+	const points: GeoPoint[] = [];
+	for (const element of [...pointCandidates, ...pondCandidates]) {
+		const point = isPondArea(element)
+			? accessPointFor(element, latLng, knownOutline(element), suctionPoints)
+			: markerPoint(element);
+		if (point && distanceTo(latLng, point) <= radius) {
+			elements.push(element);
+			points.push(point);
+		}
+	}
+	return sortElementsByDistance(elements, points, latLng);
 }
 
 export async function getMarkerById(ref: OsmRef) {

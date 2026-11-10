@@ -381,8 +381,12 @@ export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve 
 				}
 				i = next;
 			}
+			// The origin and target stand in for the centers of their own cells:
+			// going through a cell center first draws a kink of up to ~6 m at
+			// each end — at a pond's shore point that center can lie in the water,
+			// so the line visibly overshoots into the pond and comes back.
 			const path: GeoPoint[] = [origin];
-			for (const cellIdx of kept) path.push(cellCenter(grid, cellIdx));
+			for (let k = 1; k < kept.length - 1; k++) path.push(cellCenter(grid, kept[k]));
 			path.push(target);
 			return path;
 		}
