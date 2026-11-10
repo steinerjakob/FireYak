@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue';
-import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
+import { GeoBounds, GeoPoint, boundsContains, distanceTo } from '@/types/geo';
 
 import iconFirestation from '../assets/markers/firestation.png';
 import iconHydrant from '../assets/markers/hydrant.png';
@@ -29,8 +29,10 @@ import {
 	isMappedSuctionPoint,
 	isPondArea,
 	knownOutline,
+	markerPoint,
 	preloadPondOutlines
 } from '@/mapHandler/waterSourceAccess';
+import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
 
@@ -609,10 +611,30 @@ async function sortElementsByDistance(
 }
 
 /**
- * Extra search margin (m) so pond areas whose shore lies inside the radius
- * are found even when their center lies outside it (issue #110).
+ * How far (m) beyond the radius pond **centers** are searched, so pond areas
+ * whose shore lies inside the radius are found even when their center lies far
+ * outside it (issue #110). Ponds with a known outline are then kept by their
+ * outline's extent; the cache is indexed by center tile, so a pond whose center
+ * is farther than this still can't be found.
  */
-const POND_AREA_SEARCH_MARGIN_M = 1000;
+const POND_AREA_SEARCH_MARGIN_M = 10_000;
+/**
+ * Ponds without an outline are only fetched within this margin: the on-demand
+ * outline lookup covers about a kilometre around the pond's center.
+ */
+const POND_OUTLINE_FETCH_MARGIN_M = 1000;
+
+/** Square bounds of `halfSizeM` meters around `center`. */
+function boundsAroundPoint(center: GeoPoint, halfSizeM: number): GeoBounds {
+	const latDelta = halfSizeM / 111000;
+	const lngDelta = halfSizeM / (111000 * Math.cos((center.lat * Math.PI) / 180));
+	return {
+		south: center.lat - latDelta,
+		north: center.lat + latDelta,
+		west: center.lng - lngDelta,
+		east: center.lng + lngDelta
+	};
+}
 
 /**
  * Retrieves a list of nearby markers within the specified radius around a point,
@@ -620,27 +642,44 @@ const POND_AREA_SEARCH_MARGIN_M = 1000;
  *
  * Fire water ponds mapped as an area are measured to their nearest shore point
  * (or to a mapped suction point at the pond) instead of their center; see
- * `src/mapHandler/waterSourceAccess.ts`. Ponds without a known outline keep the
- * center.
+ * `src/mapHandler/waterSourceAccess.ts`. They are found by their outline, so a
+ * large pond counts when its shore is in range. Ponds without a known outline
+ * keep the center.
  *
  * @param {GeoPoint} latLng - The latitude and longitude coordinates used as the center point.
  * @param {number} radius - The search radius in meters around the center point (default: 2000 meters).
  * @return {Promise<NearbyMarker[]>} A promise that resolves with a list of sorted markers containing their distance and icons.
  */
 export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise<NearbyMarker[]> {
-	const candidates = await getNearbyMapNodes(latLng, radius + POND_AREA_SEARCH_MARGIN_M);
+	// Everything else is found by its position, exactly as before.
+	const pointCandidates = (await getNearbyMapNodes(latLng, radius)).filter((e) => !isPondArea(e));
+
+	// Pond areas: a wider window of centers, kept when their outline reaches
+	// the radius (or, without an outline, when it could still be fetched).
+	const wideCandidates = await getMapNodesForView(
+		boundsAroundPoint(latLng, radius + POND_AREA_SEARCH_MARGIN_M)
+	);
+	const pondCandidates = wideCandidates.filter((element) => {
+		if (!isPondArea(element)) return false;
+		const outline = knownOutline(element);
+		const outlineExtent = outline ? outlineBounds(outline) : null;
+		if (outlineExtent) return boundsContains(expandBounds(outlineExtent, radius), latLng);
+		const center = markerPoint(element);
+		return center !== null && distanceTo(latLng, center) <= radius + POND_OUTLINE_FETCH_MARGIN_M;
+	});
 
 	// Ponds that came without their outline: fetch it (briefly, online only).
 	if (useNetworkStatus().isOnline.value) {
-		await preloadPondOutlines(candidates);
+		await preloadPondOutlines(pondCandidates);
 	}
 
-	const suctionPoints = candidates.filter(isMappedSuctionPoint);
+	const suctionPoints = wideCandidates.filter(isMappedSuctionPoint);
 	const elements: OverPassElement[] = [];
 	const points: GeoPoint[] = [];
-	for (const element of candidates) {
-		const outline = isPondArea(element) ? knownOutline(element) : undefined;
-		const point = accessPointFor(element, latLng, outline, suctionPoints);
+	for (const element of [...pointCandidates, ...pondCandidates]) {
+		const point = isPondArea(element)
+			? accessPointFor(element, latLng, knownOutline(element), suctionPoints)
+			: markerPoint(element);
 		if (point && distanceTo(latLng, point) <= radius) {
 			elements.push(element);
 			points.push(point);

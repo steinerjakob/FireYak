@@ -1,5 +1,5 @@
 import type { OverPassElement } from '@/mapHandler/overPassApi';
-import { GeoPoint, distanceTo } from '@/types/geo';
+import { GeoPoint, boundsContains, distanceTo } from '@/types/geo';
 import { elementPosition, elementTypeOf, isAreaType } from '@/helper/osmElement';
 import { toRef } from '@/helper/osmRef';
 import { isSuctionHydrant } from '@/helper/markerTitle';
@@ -64,11 +64,15 @@ export function accessPointFor(
 	const position = markerPoint(element);
 	if (!isPondArea(element) || !outline) return position;
 
+	// Cheap bounds test first: callers may pass every suction point of a
+	// large search window.
+	const extent = outlineBounds(outline);
+	const reach = extent ? expandBounds(extent, SUCTION_POINT_SHORE_TOLERANCE_M) : null;
 	let bestSuction: GeoPoint | null = null;
 	let bestSuctionDistance = Infinity;
 	for (const candidate of suctionPoints) {
 		const point = markerPoint(candidate);
-		if (!point) continue;
+		if (!point || (reach && !boundsContains(reach, point))) continue;
 		const toShore = distanceToOutline(outline, point);
 		if (toShore === null || toShore > SUCTION_POINT_SHORE_TOLERANCE_M) continue;
 		const d = distanceTo(from, point);
