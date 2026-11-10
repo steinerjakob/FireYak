@@ -1,7 +1,8 @@
 # Hose routing: optimized mode, slope, steep-section warnings, non-blocking data
 
-> **Code references.** Every `file:line` below points to
-> `origin/feature/110-pond-shore` at commit `558308a`, the branch this work lands on.
+> **Code references.** Every `file:line` below points to commit `558308a`
+> (`feature/110-pond-shore`), whose tree is identical to `main` at `1726b5c`
+> after #114 was merged.
 > Read them with `git show 558308a:<path>`. The local checkout may be on another
 > branch, where the line numbers differ.
 >
@@ -531,7 +532,7 @@ values to tune on the scenes.**
 | `STREAM` | water line kind_detail stream/ditch/drain, buffered to one cell | 4 |
 | `BUILDING_FRINGE` | footprint touches the cell, centre outside | 6 |
 | `BUILDING_CORE` | centre inside a footprint | blocked. Inside the **escape radius** (~12 m around origin and target): 30 |
-| `BLOCKED` | water polygons (except the target pond's own polygon, see §6.5); water lines river/canal; heavy rail on the surface; motorway on the surface; cliff lines | ∞ |
+| `BLOCKED` | water polygons (except the target pond's own polygon, see §6.5); water lines river/canal; heavy rail on the surface; motorway on the surface; cliff lines; `landuse=military` | ∞ |
 
 Rail and motorway rules:
 
@@ -544,11 +545,16 @@ Excluded from both graph and grid:
 
 - `ferry`;
 - `path/corridor` (indoor passages);
-- tunnelled footways: OPEN question. The proposal is to exclude them, because
-  most are underground passages (INFERRED).
+- tunnelled footways and other tunnelled paths (`kind=path` with `is_tunnel`):
+  **excluded** (owner decision). Most are underground passages (INFERRED).
+  Tunnelled roads stay passable; `building_passage` arrives as a tunnelled
+  road or path, so a passage under a building that is tagged as a footway is
+  excluded too.
 
-`access` and `oneway` are ignored: the fire service may enter private ground. A
-possible exception is `access=military` (OPEN).
+`access` and `oneway` are ignored: the fire service may enter private ground.
+The one exception is military ground (owner decision): roads and paths with
+`access=military` are excluded from graph and grid, and `landuse=military`
+polygons are `BLOCKED`.
 
 **Rasterisation order** (later layers overwrite earlier ones):
 
@@ -1007,8 +1013,8 @@ How the line starts:
 - i18n `settings.pumpCalculation.maxHosePressure`: en "Max. hose working
   pressure (bar)", de "Max. Betriebsdruck der Schläuche (bar)".
 
-16 bar is **RECALLED** as the working pressure of pressure hoses under DIN
-14811 (test pressure 24 bar). The owner must confirm it.
+16 bar is the working pressure of pressure hoses under DIN 14811 (test
+pressure 24 bar). The owner confirmed it as the default.
 
 **Rule.** This is static pressure, with no flow. A closed branch is the worst
 case.
@@ -2081,29 +2087,34 @@ summarised in the second-to-last row.
   targets, not as truth. If the real router lands outside a range, check the
   case before tuning to it.
 - The pressure rule is static. It ignores friction (which only lowers
-  pressure), pressure surges and hose ageing, and the 16 bar default is
-  recalled, not verified.
+  pressure), pressure surges and hose ageing.
 - Everything shown is an estimate. The UI must say so (§6.8).
 
 ## 10. Open questions
 
-1. **Tunnelled footways:** exclude (proposed) or treat as paths?
-2. **Slope thresholds** for amber, red and the "not recommended" chip are
-   starting values to confirm in the field. The pressure rule's 16 bar default
-   (DIN 14811, RECALLED) also needs the owner's confirmation.
-3. **Why do the Vienna tiles lack sidewalks** (35 % of road length)? Is it
+**Decided by the owner** (recorded here so the history stays readable):
+
+- Tunnelled footways and paths are excluded (§6.3).
+- The slope thresholds for amber, red and the "not recommended" chip are
+  accepted as the starting values, and 16 bar is the default maximum hose
+  working pressure (§6.13).
+- `access=military` roads and `landuse=military` block; every other `access`
+  value stays passable (§6.3).
+
+**Still open:**
+
+1. **Why do the Vienna tiles lack sidewalks** (35 % of road length)? Is it
    Protomaps generalisation, or an OSM tagging pattern (sidewalks mapped as
    `footway=sidewalk` on separate ways)?
-4. **R2:** the real pricing and limits, and what the stale ~1.2 GB prefix is.
-5. Should `access=military` block?
-6. **Fixture redistribution:** do Protomaps' terms (and Mapterhorn's per-source
+2. **R2:** the real pricing and limits, and what the stale ~1.2 GB prefix is.
+3. **Fixture redistribution:** do Protomaps' terms (and Mapterhorn's per-source
    licences) allow the routing fixtures in a public repository? Until
    confirmed, the tiles stay gitignored and scene specs skip (§6.14).
-7. How should "Wi-Fi only" work on the web build? `navigator.connection` is
+4. How should "Wi-Fi only" work on the web build? `navigator.connection` is
    missing in Safari, so either treat unknown as "no prefetch" or allow it.
-8. Should the nearby list re-sort after a silent recompute, or only update the
+5. Should the nearby list re-sort after a silent recompute, or only update the
    metres?
-9. Precaching raises Protomaps API request volume. Check the key's plan limits.
+6. Precaching raises Protomaps API request volume. Check the key's plan limits.
 
 ## 11. Risks
 
