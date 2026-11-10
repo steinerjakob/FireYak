@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import type { HoseRoutingMode } from '@/helper/hoseRoutingSetting';
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import {
 	initSystemColorScheme,
@@ -56,9 +57,14 @@ export const useSettingsStore = defineStore('settings', {
 		showZoomButtons: true,
 		mapLayer: 'standard' as MapLayerSetting,
 		terrain3d: false,
-		// When true, hose routes stick to the road network; when false (default)
-		// they may cut through gardens/open ground (buildings always avoided).
-		clampHosesToRoads: false,
+		// How hose routes are laid (plan §6.7): `roads` sticks to the road
+		// network; `direct` (default until phase 5) may cut through gardens and
+		// open ground (buildings always avoided); `optimized` (preview) weighs
+		// roads, land use and obstacles.
+		hoseRouting: 'direct' as HoseRoutingMode,
+		// The "optimized routing (preview)" toggle (dev builds and
+		// VITE_HOSE_ROUTING_OPTIMIZED=1 only); picks `optimized` over `direct`.
+		hoseRoutingPreview: false,
 		// When true, a line from the user position to the selected marker is
 		// drawn on the map.
 		showPathToMarker: true,
@@ -67,7 +73,9 @@ export const useSettingsStore = defineStore('settings', {
 	}),
 	getters: {
 		/** Whether the dark palette is currently active. */
-		isDarkMode: (state) => resolveIsDark(state.theme)
+		isDarkMode: (state) => resolveIsDark(state.theme),
+		/** The "keep hose route on roads" toggle. */
+		clampHosesToRoads: (state) => state.hoseRouting === 'roads'
 	},
 	actions: {
 		setTheme(theme: ThemeSetting) {
@@ -83,8 +91,11 @@ export const useSettingsStore = defineStore('settings', {
 		setTerrain3d(enabled: boolean) {
 			this.terrain3d = enabled;
 		},
-		setClampHosesToRoads(enabled: boolean) {
-			this.clampHosesToRoads = enabled;
+		setHoseRouting(mode: HoseRoutingMode) {
+			this.hoseRouting = mode;
+		},
+		setHoseRoutingPreview(enabled: boolean) {
+			this.hoseRoutingPreview = enabled;
 		},
 		setShowPathToMarker(enabled: boolean) {
 			this.showPathToMarker = enabled;

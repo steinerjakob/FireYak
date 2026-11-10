@@ -14,7 +14,8 @@ import type { RoadLine } from '@/types/obstacles';
  * graph, the debug view and the specs agree on what a feature is.
  *
  * Pure module: no store, map, network or Capacitor imports; safe in a worker.
- * It is not used for routing yet (phase 3). All numbers are starting values to
+ * The `optimized` grid (`costGrid.ts`) and the road mode's shore legs use it
+ * from phase 3; slope enters the cost in phase 4. All numbers are starting values to
  * tune on the validation scenes. Every factor is at least 1.0, which keeps the
  * A* heuristic (straight line x 1.0) admissible.
  */
@@ -254,6 +255,47 @@ export function classifyWaterArea(_kind: string): CellClass {
 
 /** Cliff lines are walls. */
 export const CLIFF_CLASS: CellClass = CELL_CLASS.BLOCKED;
+
+// ---------------------------------------------------------------------------
+// Thin building data (plan §6.11)
+// ---------------------------------------------------------------------------
+
+/** Landuse kinds whose area counts as "residential" for the thin-buildings test. */
+export const RESIDENTIAL_LANDUSE_KINDS: ReadonlySet<string> = new Set([
+	'residential',
+	'commercial',
+	'industrial'
+]);
+
+/**
+ * Thresholds of the thin-buildings safeguard (ESTIMATES, plan §6.11): a tile is
+ * flagged when residential land use covers more than `minResidentialShare` of
+ * it and buildings cover less than `maxBuildingRatio` of that residential area.
+ */
+export const THIN_BUILDINGS = {
+	minResidentialShare: 0.2,
+	maxBuildingRatio: 0.05
+} as const;
+
+/** Per-tile land statistics the safeguard reads (areas in m²). */
+export interface TileLandStats {
+	tileM2: number;
+	residentialM2: number;
+	buildingM2: number;
+}
+
+/**
+ * True when a tile maps a lot of residential land with hardly any buildings:
+ * the grid would then send hoses through houses that are not in the data, so
+ * such a request is routed on roads instead.
+ */
+export function isThinBuildingTile(stats: TileLandStats): boolean {
+	if (stats.tileM2 <= 0 || stats.residentialM2 <= 0) return false;
+	return (
+		stats.residentialM2 > THIN_BUILDINGS.minResidentialShare * stats.tileM2 &&
+		stats.buildingM2 / stats.residentialM2 < THIN_BUILDINGS.maxBuildingRatio
+	);
+}
 
 // ---------------------------------------------------------------------------
 // Slope

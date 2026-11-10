@@ -3,59 +3,99 @@ import { BuildingPolygon, ObstacleData } from '@/types/obstacles';
 import { RouteResult } from '@/mapHandler/roadRouting';
 import { pointInPolygon, segmentIntersectsPolygon } from '@/helper/polygonGeometry';
 import { nearestPointOnOutline, outlineLines } from '@/helper/areaShore';
+import { CellHeap } from '@/mapHandler/cellHeap';
+import {
+	M_PER_DEG_LAT,
+	gridFrameFor,
+	gridX,
+	gridY,
+	rasterizeCostClasses,
+	traverseSegment
+} from '@/mapHandler/costGrid';
+import {
+	BUILDING_CORE_ESCAPE_FACTOR,
+	CELL_CLASS,
+	CLASS_FACTOR as COST_CLASS_FACTOR,
+	ESCAPE_RADIUS_M,
+	type CellClass
+} from '@/mapHandler/hoseCostModel';
 
 /**
- * Terrain routing for hose laying: a cost-grid Dijkstra over the decoded
- * obstacles. Unlike the road-graph router this is NOT clamped to roads —
- * hoses may cut through gardens and open ground and around houses. Roads are
- * still preferred (cheaper), buildings are strongly avoided but never fully
- * block (a courtyard hydrant must stay reachable).
+ * Cost-grid routing for hose laying. Two cost models share the grid, the
+ * search and the smoothing:
+ *
+ * - `direct` (today's terrain mode, transitional until phase 5): four classes,
+ *   roads slightly cheaper, buildings strongly avoided but never fully
+ *   blocking (a courtyard hydrant must stay reachable), the step priced by the
+ *   class of the cell entered.
+ * - `optimized` (plan §6.3-§6.6): the classes and factors of `hoseCostModel.ts`
+ *   rasterised by `costGrid.ts`; blocked cells (water, heavy rail, motorway,
+ *   cliffs, military ground, building cores) are impassable except building
+ *   cores within the escape radius of an endpoint; a step costs the mean of the
+ *   two cells' factors, so A to B costs exactly what B to A does; single paths
+ *   use A* with the octile heuristic, the nearby list a one-to-many Dijkstra
+ *   with early exit; smoothing is cost-aware.
  */
 
 /** Grid resolution; 8 m ≈ alley width, keeps a 3 km window under the cell cap. */
 export const GRID_CELL_M = 8;
 /**
- * Cost multiplier for cells on a road. Kept close to 1: every extra meter of
- * detour is an extra meter of hose, so roads only break ties — they must not
- * justify e.g. a 30% longer loop over a garden shortcut.
+ * `direct` model: cost multiplier for cells on a road. Kept close to 1: every
+ * extra meter of detour is an extra meter of hose, so roads only break ties —
+ * they must not justify e.g. a 30% longer loop over a garden shortcut.
  */
 export const GRID_ROAD_FACTOR = 0.9;
-/** Cost multiplier for open ground (gardens, fields, squares). */
+/** `direct` model: cost multiplier for open ground (gardens, fields, squares). */
 export const GRID_OPEN_FACTOR = 1.0;
-/** Cost multiplier inside buildings: effectively avoided, never disconnecting. */
+/** `direct` model: cost multiplier inside buildings: effectively avoided, never disconnecting. */
 export const GRID_BUILDING_FACTOR = 30;
 /**
- * Cost multiplier for building-fringe cells (footprint touches the cell but
- * its center is outside). Passable at a squeeze-past-the-wall price: without
- * this class an 8 m raster dilates every house by ~half a cell per side, which
- * seals the garden gaps between neighbouring houses and forces long road loops.
+ * `direct` model: cost multiplier for building-fringe cells (footprint touches
+ * the cell but its center is outside). Passable at a squeeze-past-the-wall
+ * price: without this class an 8 m raster dilates every house by ~half a cell
+ * per side, which seals the garden gaps between neighbouring houses and forces
+ * long road loops.
  */
 export const GRID_BUILDING_FRINGE_FACTOR = 4;
 /** Hard cap on grid size; larger windows fall back to graph routing. */
 export const MAX_GRID_CELLS = 250_000;
+/**
+ * Cost-aware smoothing (plan §6.6): a shortcut may cost at most this share
+ * more than the cell path it replaces, plus {@link SMOOTH_SLACK_M}.
+ */
+export const SMOOTH_COST_TOLERANCE = 1.02;
+export const SMOOTH_SLACK_M = 2;
+/** Douglas–Peucker tolerance after string pulling (m). */
+export const SIMPLIFY_TOLERANCE_M = 1.5;
 
-const M_PER_DEG_LAT = 110540;
 const M_PER_DEG_LNG_EQUATOR = 111320;
 
-// Cell classes (index into CLASS_FACTOR):
+// `direct` cell classes (index into DIRECT_FACTOR):
 // 0 = open, 1 = road, 2 = building core, 3 = building fringe.
 const CLASS_ROAD = 1;
 const CLASS_BUILDING = 2;
 const CLASS_FRINGE = 3;
-const CLASS_FACTOR = [
+const DIRECT_FACTOR = [
 	GRID_OPEN_FACTOR,
 	GRID_ROAD_FACTOR,
 	GRID_BUILDING_FACTOR,
 	GRID_BUILDING_FRINGE_FACTOR
 ];
 
+/** Which cost model a grid carries. */
+export type GridModel = 'direct' | 'optimized';
+
 export interface TerrainGrid {
+	model: GridModel;
 	west: number;
 	south: number;
 	mPerDegLng: number;
 	cols: number;
 	rows: number;
-	/** Cell class per cell (row-major): 0 open, 1 road, 2 building core, 3 fringe. */
+	/**
+	 * Cell class per cell (row-major). `direct`: 0 open, 1 road, 2 building core,
+	 * 3 fringe. `optimized`: a {@link CellClass} of `hoseCostModel.ts`.
+	 */
 	cells: Uint8Array;
 	/** Source footprints, kept for exact checks during path smoothing. */
 	buildings: BuildingPolygon[];
@@ -83,10 +123,10 @@ function pointInBuilding(lng: number, lat: number, building: BuildingPolygon): b
 }
 
 /**
- * Builds the terrain cost grid over `bounds`, or `null` when the window would
- * exceed the cell cap (caller falls back to graph routing). Buildings are
- * rasterized first, roads afterwards — a road cell stays a road even where it
- * touches a building footprint (passages, bridges).
+ * Builds the `direct` terrain cost grid over `bounds`, or `null` when the
+ * window would exceed the cell cap (caller falls back to graph routing).
+ * Buildings are rasterized first, roads afterwards — a road cell stays a road
+ * even where it touches a building footprint (passages, bridges).
  */
 export function buildTerrainGrid(obstacles: ObstacleData, bounds: GeoBounds): TerrainGrid | null {
 	const midLat = (bounds.south + bounds.north) / 2;
@@ -96,6 +136,7 @@ export function buildTerrainGrid(obstacles: ObstacleData, bounds: GeoBounds): Te
 	if (cols <= 0 || rows <= 0 || cols * rows > MAX_GRID_CELLS) return null;
 
 	const grid: TerrainGrid = {
+		model: 'direct',
 		west: bounds.west,
 		south: bounds.south,
 		mPerDegLng,
@@ -178,54 +219,25 @@ export function buildTerrainGrid(obstacles: ObstacleData, bounds: GeoBounds): Te
 	return grid;
 }
 
-/** Minimal binary min-heap over (cost, cell) pairs with lazy deletion. */
-class CellHeap {
-	private cost: number[] = [];
-	private cell: number[] = [];
-
-	get size(): number {
-		return this.cost.length;
-	}
-
-	push(cost: number, cellIdx: number): void {
-		this.cost.push(cost);
-		this.cell.push(cellIdx);
-		let i = this.cost.length - 1;
-		while (i > 0) {
-			const parent = (i - 1) >> 1;
-			if (this.cost[parent] <= this.cost[i]) break;
-			this.swap(i, parent);
-			i = parent;
-		}
-	}
-
-	pop(): { cost: number; cellIdx: number } | null {
-		if (this.cost.length === 0) return null;
-		const top = { cost: this.cost[0], cellIdx: this.cell[0] };
-		const lastCost = this.cost.pop() as number;
-		const lastCell = this.cell.pop() as number;
-		if (this.cost.length > 0) {
-			this.cost[0] = lastCost;
-			this.cell[0] = lastCell;
-			let i = 0;
-			for (;;) {
-				const left = 2 * i + 1;
-				const right = left + 1;
-				let smallest = i;
-				if (left < this.cost.length && this.cost[left] < this.cost[smallest]) smallest = left;
-				if (right < this.cost.length && this.cost[right] < this.cost[smallest]) smallest = right;
-				if (smallest === i) break;
-				this.swap(i, smallest);
-				i = smallest;
-			}
-		}
-		return top;
-	}
-
-	private swap(i: number, j: number): void {
-		[this.cost[i], this.cost[j]] = [this.cost[j], this.cost[i]];
-		[this.cell[i], this.cell[j]] = [this.cell[j], this.cell[i]];
-	}
+/**
+ * Builds the `optimized` cost grid over `bounds` (classes of
+ * `hoseCostModel.ts`, rasterised by `costGrid.ts`), or `null` above the cell
+ * cap. The caller passes only the roads that take part in routing.
+ */
+export function buildOptimizedGrid(obstacles: ObstacleData, bounds: GeoBounds): TerrainGrid | null {
+	const frame = gridFrameFor(bounds, GRID_CELL_M, MAX_GRID_CELLS);
+	if (!frame) return null;
+	const raster = rasterizeCostClasses(obstacles, frame);
+	return {
+		model: 'optimized',
+		west: raster.west,
+		south: raster.south,
+		mPerDegLng: raster.mPerDegLng,
+		cols: raster.cols,
+		rows: raster.rows,
+		cells: raster.cells,
+		buildings: obstacles.buildings
+	};
 }
 
 /** A grid route target: one point, or a pond shore (every cell next to its outline). */
@@ -241,6 +253,8 @@ export interface GridRoute {
 	cost: number;
 	/** Where the route ends: the target point, or the chosen shore point. */
 	endpoint: GeoPoint;
+	/** The cell the cell chain ends in (for a shore: the goal cell that won). */
+	cell: number;
 }
 
 /** Solved single-source terrain field; answers distance/path queries per target. */
@@ -255,8 +269,8 @@ export interface TerrainSolve {
 	solveAll(): void;
 }
 
-/** Counts Dijkstra field set-ups (specs check the memoisation with it). */
-export const terrainSolveStats = { solves: 0 };
+/** Counts field set-ups, Dijkstra and A* (specs check the memoisation with it). */
+export const terrainSolveStats = { solves: 0, astar: 0 };
 
 function cellOf(grid: TerrainGrid, p: GeoPoint): number | null {
 	const c = Math.floor(((p.lng - grid.west) * grid.mPerDegLng) / GRID_CELL_M);
@@ -274,10 +288,83 @@ function cellCenter(grid: TerrainGrid, cellIdx: number): GeoPoint {
 	};
 }
 
+/** Class of the cell under `p` (`null` off-grid); for the off-road display and specs. */
+export function cellClassAt(grid: TerrainGrid, p: GeoPoint): number | null {
+	const cell = cellOf(grid, p);
+	return cell === null ? null : grid.cells[cell];
+}
+
+// ---------------------------------------------------------------------------
+// Escape zone (optimized): building cores near an endpoint stay reachable
+// ---------------------------------------------------------------------------
+
 /**
- * True when the straight cell-line a→b crosses no building cell. Supercover
- * variant of Bresenham: on diagonal steps BOTH adjacent cells are checked, so
- * the shortcut can never slip through a building corner.
+ * Cells within {@link ESCAPE_RADIUS_M} (centre distance) of an endpoint, and
+ * the endpoint cells themselves. A building core in the zone costs
+ * {@link BUILDING_CORE_ESCAPE_FACTOR} instead of being blocked (a hydrant in a
+ * courtyard or at a wall); an endpoint cell of any impassable class does too,
+ * so a point on a blocked cell can still start or end a route. Other blocked
+ * cells (water, rail) stay blocked in the zone.
+ */
+export interface EscapeZone {
+	cells: Set<number>;
+	endpoints: Set<number>;
+}
+
+export function escapeZone(grid: TerrainGrid, points: GeoPoint[]): EscapeZone {
+	const zone: EscapeZone = { cells: new Set(), endpoints: new Set() };
+	addToEscapeZone(grid, zone, points);
+	return zone;
+}
+
+function addToEscapeZone(grid: TerrainGrid, zone: EscapeZone, points: GeoPoint[]): void {
+	const reach = Math.ceil(ESCAPE_RADIUS_M / GRID_CELL_M) + 1;
+	for (const p of points) {
+		const cell = cellOf(grid, p);
+		if (cell === null) continue;
+		zone.endpoints.add(cell);
+		const cx = cell % grid.cols;
+		const cy = Math.floor(cell / grid.cols);
+		for (let y = Math.max(0, cy - reach); y <= Math.min(grid.rows - 1, cy + reach); y++) {
+			for (let x = Math.max(0, cx - reach); x <= Math.min(grid.cols - 1, cx + reach); x++) {
+				const c = y * grid.cols + x;
+				if (distanceTo(p, cellCenter(grid, c)) <= ESCAPE_RADIUS_M) zone.cells.add(c);
+			}
+		}
+	}
+}
+
+/** Cost factor of entering `cell` in the `optimized` model; `Infinity` = impassable. */
+export function optimizedCellFactor(grid: TerrainGrid, zone: EscapeZone, cell: number): number {
+	const cls = grid.cells[cell] as CellClass;
+	const factor = COST_CLASS_FACTOR[cls];
+	if (factor !== Infinity) return factor;
+	if (cls === CELL_CLASS.BUILDING_CORE && zone.cells.has(cell)) return BUILDING_CORE_ESCAPE_FACTOR;
+	if (zone.endpoints.has(cell)) return BUILDING_CORE_ESCAPE_FACTOR;
+	return Infinity;
+}
+
+const isBuildingClass = (grid: TerrainGrid, cell: number) =>
+	grid.model === 'direct'
+		? grid.cells[cell] >= CLASS_BUILDING
+		: grid.cells[cell] === CELL_CLASS.BUILDING_CORE ||
+			grid.cells[cell] === CELL_CLASS.BUILDING_FRINGE;
+
+/** Factor of the cell a point lies in, for the true-endpoint offsets. */
+function endpointFactor(grid: TerrainGrid, zone: EscapeZone, cell: number): number {
+	return grid.model === 'direct'
+		? DIRECT_FACTOR[grid.cells[cell]]
+		: optimizedCellFactor(grid, zone, cell);
+}
+
+// ---------------------------------------------------------------------------
+// Line tests
+// ---------------------------------------------------------------------------
+
+/**
+ * `direct` model: true when the straight cell-line a→b crosses no building
+ * cell. Supercover variant of Bresenham: on diagonal steps BOTH adjacent cells
+ * are checked, so the shortcut can never slip through a building corner.
  */
 function lineOfSight(grid: TerrainGrid, a: number, b: number): boolean {
 	let x0 = a % grid.cols;
@@ -314,6 +401,46 @@ function lineOfSight(grid: TerrainGrid, a: number, b: number): boolean {
 		}
 	}
 }
+
+/**
+ * `optimized` model: priced cost of the straight segment a→b over the cells it
+ * passes through (supercover; length in each cell × its factor), or `Infinity`
+ * when it touches an impassable cell. Cells outside the grid count as
+ * `UNKNOWN_OPEN`. Impassable cells within `lenientEndM` of `b` are priced as
+ * `UNKNOWN_OPEN` (a leg ending ON a pond's shore touches the pond's own cells).
+ */
+export function lineCost(
+	grid: TerrainGrid,
+	a: GeoPoint,
+	b: GeoPoint,
+	zone: EscapeZone = NO_ESCAPE,
+	lenientEndM = 0
+): number {
+	const length = distanceTo(a, b);
+	if (length === 0) return 0;
+	const frame = { ...grid, cellM: GRID_CELL_M };
+	const outside = COST_CLASS_FACTOR[CELL_CLASS.UNKNOWN_OPEN];
+	let cost = 0;
+	traverseSegment(
+		frame,
+		gridX(frame, a.lng),
+		gridY(frame, a.lat),
+		gridX(frame, b.lng),
+		gridY(frame, b.lat),
+		(cell, t0, t1) => {
+			let factor = cell < 0 ? outside : optimizedCellFactor(grid, zone, cell);
+			if (factor === Infinity && (1 - t0) * length <= lenientEndM) factor = outside;
+			if (factor === Infinity) {
+				cost = Infinity;
+				return false;
+			}
+			cost += (t1 - t0) * length * factor;
+		}
+	);
+	return cost;
+}
+
+const NO_ESCAPE: EscapeZone = { cells: new Set(), endpoints: new Set() };
 
 /** Bucket edge of the building index used by the exact segment test. */
 const BUCKET_M = 32;
@@ -407,16 +534,91 @@ function polylineMeters(points: GeoPoint[]): number {
 	return total;
 }
 
+// ---------------------------------------------------------------------------
+// Smoothing
+// ---------------------------------------------------------------------------
+
 /**
  * Greedy string pulling over the cell chain, starting from the TRUE origin and
  * ending at the TRUE target (the chain's first and last cell centres are
  * replaced before smoothing, so the end segments are checked too). From each
- * kept vertex it jumps to the farthest later vertex that is visible both on
- * the raster (no building-core cell) and against the real footprints. When
- * not even the next vertex is visible (an endpoint inside a footprint), the
- * step is taken anyway so the path always exists.
+ * kept vertex it jumps to the farthest later vertex for which `visible`
+ * holds. When not even the next vertex is visible (an endpoint inside a
+ * footprint), the step is taken anyway so the path always exists. Returns the
+ * kept chain indexes.
  */
-function smoothChain(
+function pullString(count: number, visible: (i: number, j: number) => boolean): number[] {
+	const kept = [0];
+	let i = 0;
+	while (i < count - 1) {
+		let next = i + 1;
+		for (let j = count - 1; j > i + 1; j--) {
+			if (visible(i, j)) {
+				next = j;
+				break;
+			}
+		}
+		kept.push(next);
+		i = next;
+	}
+	return kept;
+}
+
+/**
+ * Douglas–Peucker over `indexes` (positions into `points`) with a gate: the
+ * vertices between two kept ones are dropped only when they all lie within
+ * `toleranceM` of the chord AND `valid(from, to)` accepts the chord, so a
+ * removal can never break the tests the string pulling applied. Returns the
+ * kept indexes (always the first and the last).
+ */
+export function simplifyGated(
+	points: GeoPoint[],
+	indexes: number[],
+	toleranceM: number,
+	valid: (from: number, to: number) => boolean
+): number[] {
+	if (indexes.length <= 2) return [...indexes];
+	const keep = new Uint8Array(indexes.length);
+	keep[0] = 1;
+	keep[indexes.length - 1] = 1;
+	const stack: [number, number][] = [[0, indexes.length - 1]];
+	while (stack.length > 0) {
+		const [s, e] = stack.pop()!;
+		if (e - s < 2) continue;
+		const a = points[indexes[s]];
+		const b = points[indexes[e]];
+		let worst = -1;
+		let worstD = -1;
+		for (let k = s + 1; k < e; k++) {
+			const d = pointSegmentDistanceM(points[indexes[k]], a, b);
+			if (d > worstD) {
+				worstD = d;
+				worst = k;
+			}
+		}
+		if (worstD <= toleranceM && valid(indexes[s], indexes[e])) continue;
+		keep[worst] = 1;
+		stack.push([s, worst], [worst, e]);
+	}
+	return indexes.filter((_, k) => keep[k] === 1);
+}
+
+/** Distance in metres from `p` to segment a–b (local equirectangular frame). */
+function pointSegmentDistanceM(p: GeoPoint, a: GeoPoint, b: GeoPoint): number {
+	const kx = Math.cos(toRadians(p.lat)) * M_PER_DEG_LNG_EQUATOR;
+	const ax = (a.lng - p.lng) * kx;
+	const ay = (a.lat - p.lat) * M_PER_DEG_LAT;
+	const bx = (b.lng - p.lng) * kx;
+	const by = (b.lat - p.lat) * M_PER_DEG_LAT;
+	const dx = bx - ax;
+	const dy = by - ay;
+	const lenSq = dx * dx + dy * dy;
+	const t = lenSq > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lenSq)) : 0;
+	return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
+/** `direct` model smoothing: visible on the raster (no core cell) and against the footprints. */
+function smoothChainDirect(
 	grid: TerrainGrid,
 	chain: number[],
 	start: GeoPoint,
@@ -428,24 +630,58 @@ function smoothChain(
 	points[points.length - 1] = end;
 	const visible = (i: number, j: number) =>
 		lineOfSight(grid, chain[i], chain[j]) && exactLineOfSight(grid, points[i], points[j]);
-	const path: GeoPoint[] = [points[0]];
-	let i = 0;
-	while (i < points.length - 1) {
-		let next = i + 1;
-		for (let j = points.length - 1; j > i + 1; j--) {
-			if (visible(i, j)) {
-				next = j;
-				break;
-			}
-		}
-		path.push(points[next]);
-		i = next;
-	}
-	return path;
+	return pullString(points.length, visible).map((k) => points[k]);
 }
 
-/** Cells next to (and on) an outline's lines, excluding building cores. */
-function shoreGoalCells(grid: TerrainGrid, outline: GeoJSON.Geometry): Set<number> {
+/**
+ * `optimized` model: cost-aware string pulling (plan §6.6). A shortcut i→j is
+ * accepted only when its priced line cost is at most the cell path's cost
+ * between i and j × {@link SMOOTH_COST_TOLERANCE} + {@link SMOOTH_SLACK_M}, it
+ * touches no impassable cell (blocked, non-escape core), and it touches no
+ * building edge (exact test). `pathCost[k]` is the priced cost from the true
+ * origin to chain vertex k. A gated Douglas–Peucker pass follows.
+ */
+function smoothChainOptimized(
+	grid: TerrainGrid,
+	zone: EscapeZone,
+	chain: number[],
+	pathCost: number[],
+	start: GeoPoint,
+	end: GeoPoint
+): GeoPoint[] {
+	if (chain.length <= 1) return [start, end];
+	const points = chain.map((cell) => cellCenter(grid, cell));
+	points[0] = start;
+	points[points.length - 1] = end;
+	const visible = (i: number, j: number) =>
+		shortcutAllowed(grid, zone, points[i], points[j], pathCost[j] - pathCost[i]);
+	const kept = pullString(points.length, visible);
+	return simplifyGated(points, kept, SIMPLIFY_TOLERANCE_M, visible).map((k) => points[k]);
+}
+
+/** The three tests of a cost-aware shortcut (plan §6.6). */
+export function shortcutAllowed(
+	grid: TerrainGrid,
+	zone: EscapeZone,
+	a: GeoPoint,
+	b: GeoPoint,
+	pathCostAB: number
+): boolean {
+	const cost = lineCost(grid, a, b, zone);
+	if (cost > pathCostAB * SMOOTH_COST_TOLERANCE + SMOOTH_SLACK_M) return false;
+	return exactLineOfSight(grid, a, b);
+}
+
+// ---------------------------------------------------------------------------
+// Goals
+// ---------------------------------------------------------------------------
+
+/** Cells next to (and on) an outline's lines that a route may end in. */
+export function shoreGoalCells(
+	grid: TerrainGrid,
+	outline: GeoJSON.Geometry,
+	zone: EscapeZone
+): Set<number> {
 	const onLine = new Set<number>();
 	for (const line of outlineLines(outline)) {
 		for (let i = 0; i < line.length; i++) {
@@ -460,6 +696,12 @@ function shoreGoalCells(grid: TerrainGrid, outline: GeoJSON.Geometry): Set<numbe
 			}
 		}
 	}
+	// `direct`: every non-core cell; `optimized`: every passable cell (the pond's
+	// own water cells stay blocked, so the goal ring lies on the dry side).
+	const usable = (idx: number) =>
+		grid.model === 'direct'
+			? grid.cells[idx] !== CLASS_BUILDING
+			: optimizedCellFactor(grid, zone, idx) !== Infinity;
 	const goals = new Set<number>();
 	for (const cell of onLine) {
 		const cx = cell % grid.cols;
@@ -470,7 +712,7 @@ function shoreGoalCells(grid: TerrainGrid, outline: GeoJSON.Geometry): Set<numbe
 				const y = cy + dy;
 				if (x < 0 || x >= grid.cols || y < 0 || y >= grid.rows) continue;
 				const idx = y * grid.cols + x;
-				if (grid.cells[idx] !== CLASS_BUILDING) goals.add(idx);
+				if (usable(idx)) goals.add(idx);
 			}
 		}
 	}
@@ -493,7 +735,11 @@ function stepClipsBuilding(grid: TerrainGrid, u: number, v: number, k: number): 
 	return clips;
 }
 
-/** Resumable single-source Dijkstra state (early exit + memoisation, plan §6.5). */
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+/** Resumable single-source search state (early exit + memoisation, plan §6.5). */
 interface SolveState {
 	originCell: number;
 	cost: Float64Array;
@@ -501,10 +747,21 @@ interface SolveState {
 	prev: Int32Array;
 	done: Uint8Array;
 	heap: CellHeap;
+	/** `optimized`: escape zone of the endpoints this state was set up for. */
+	zone: EscapeZone;
+	/** A* lower bound to the goal (`null` = Dijkstra). */
+	heuristic: ((cell: number) => number) | null;
 }
 
-function createSolveState(grid: TerrainGrid, origin: GeoPoint, originCell: number): SolveState {
+function createSolveState(
+	grid: TerrainGrid,
+	origin: GeoPoint,
+	originCell: number,
+	zone: EscapeZone,
+	heuristic: ((cell: number) => number) | null = null
+): SolveState {
 	terrainSolveStats.solves++;
+	if (heuristic) terrainSolveStats.astar++;
 	const n = grid.cols * grid.rows;
 	const state: SolveState = {
 		originCell,
@@ -512,12 +769,14 @@ function createSolveState(grid: TerrainGrid, origin: GeoPoint, originCell: numbe
 		meters: new Float64Array(n).fill(Infinity),
 		prev: new Int32Array(n).fill(-1),
 		done: new Uint8Array(n),
-		heap: new CellHeap()
+		heap: new CellHeap(),
+		zone,
+		heuristic
 	};
 	const originOffset = distanceTo(origin, cellCenter(grid, originCell));
-	state.cost[originCell] = originOffset * CLASS_FACTOR[grid.cells[originCell]];
+	state.cost[originCell] = originOffset * endpointFactor(grid, zone, originCell);
 	state.meters[originCell] = originOffset;
-	state.heap.push(state.cost[originCell], originCell);
+	state.heap.push(state.cost[originCell] + (heuristic ? heuristic(originCell) : 0), originCell);
 	return state;
 }
 
@@ -530,13 +789,22 @@ function settleUntil(
 	state: SolveState,
 	stop: (cell: number) => boolean
 ): number {
+	return grid.model === 'direct'
+		? settleDirect(grid, state, stop)
+		: settleOptimized(grid, state, stop);
+}
+
+function settleDirect(
+	grid: TerrainGrid,
+	state: SolveState,
+	stop: (cell: number) => boolean
+): number {
 	const { cost, meters, prev, done, heap } = state;
 	const straightStep = GRID_CELL_M;
 	const diagonalStep = GRID_CELL_M * Math.SQRT2;
 	for (;;) {
-		const top = heap.pop();
-		if (!top) return -1;
-		const u = top.cellIdx;
+		const u = heap.pop();
+		if (u === -1) return -1;
 		if (done[u]) continue;
 		done[u] = 1;
 		const ux = u % grid.cols;
@@ -550,7 +818,7 @@ function settleUntil(
 				const v = vy * grid.cols + vx;
 				if (done[v]) continue;
 				const step = dx !== 0 && dy !== 0 ? diagonalStep : straightStep;
-				let factor = CLASS_FACTOR[grid.cells[v]];
+				let factor = DIRECT_FACTOR[grid.cells[v]];
 				// A step next to a footprint whose centre-to-centre line touches the
 				// real outline is priced like walking through the building: the chain
 				// then stays outside, so even unsmoothed steps never clip a wall.
@@ -575,6 +843,151 @@ function settleUntil(
 }
 
 /**
+ * `optimized` relaxation: the step costs step × (F(u) + F(v)) / 2, so it is
+ * the same in both directions; impassable cells are never entered; a diagonal
+ * step may not cut the corner of an impassable cell (a supercover wall is
+ * 4-connected, so this keeps rail and water lines watertight); a step whose
+ * centre line touches a footprint is priced like a core cell (escape factor
+ * inside the escape zone, else impassable).
+ */
+function settleOptimized(
+	grid: TerrainGrid,
+	state: SolveState,
+	stop: (cell: number) => boolean
+): number {
+	const { cost, meters, prev, done, heap, zone, heuristic } = state;
+	const { cols, rows } = grid;
+	const straightStep = GRID_CELL_M;
+	const diagonalStep = GRID_CELL_M * Math.SQRT2;
+	const factor = (cell: number) => optimizedCellFactor(grid, zone, cell);
+	for (;;) {
+		const u = heap.pop();
+		if (u === -1) return -1;
+		if (done[u]) continue;
+		done[u] = 1;
+		const ux = u % cols;
+		const uy = Math.floor(u / cols);
+		const fu = factor(u);
+		const uBuilding = isBuildingClass(grid, u);
+		for (let dy = -1; dy <= 1; dy++) {
+			for (let dx = -1; dx <= 1; dx++) {
+				if (dx === 0 && dy === 0) continue;
+				const vx = ux + dx;
+				const vy = uy + dy;
+				if (vx < 0 || vx >= cols || vy < 0 || vy >= rows) continue;
+				const v = vy * cols + vx;
+				if (done[v]) continue;
+				const fv = factor(v);
+				if (fv === Infinity) continue;
+				const diagonal = dx !== 0 && dy !== 0;
+				if (
+					diagonal &&
+					(factor(uy * cols + vx) === Infinity || factor(vy * cols + ux) === Infinity)
+				) {
+					continue;
+				}
+				let f = (fu + fv) / 2;
+				if (
+					(uBuilding || isBuildingClass(grid, v)) &&
+					stepClipsBuilding(grid, u, v, (dy + 1) * 3 + (dx + 1))
+				) {
+					if (!zone.cells.has(u) && !zone.cells.has(v)) continue;
+					f = BUILDING_CORE_ESCAPE_FACTOR;
+				}
+				const candidate = cost[u] + (diagonal ? diagonalStep : straightStep) * f;
+				if (candidate < cost[v]) {
+					cost[v] = candidate;
+					meters[v] = meters[u] + (diagonal ? diagonalStep : straightStep);
+					prev[v] = u;
+					heap.push(heuristic ? candidate + heuristic(v) : candidate, v);
+				}
+			}
+		}
+		if (stop(u)) return u;
+	}
+}
+
+/** Octile distance in metres between cell (x0, y0) and the box [x1..x2] × [y1..y2]. */
+function octileToBox(x0: number, y0: number, x1: number, x2: number, y1: number, y2: number) {
+	const dx = Math.max(x1 - x0, 0, x0 - x2);
+	const dy = Math.max(y1 - y0, 0, y0 - y2);
+	return (Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy)) * GRID_CELL_M;
+}
+
+/**
+ * Admissible A* heuristic towards a set of goal cells: the octile distance to
+ * their bounding box × 1.0 (the cheapest factor, `ROAD`/`BRIDGE`, is 1.0 and
+ * every step costs at least its length). For one cell it is the plain octile
+ * distance.
+ */
+function octileHeuristic(grid: TerrainGrid, goals: Iterable<number>): (cell: number) => number {
+	let x1 = Infinity;
+	let x2 = -Infinity;
+	let y1 = Infinity;
+	let y2 = -Infinity;
+	for (const g of goals) {
+		const x = g % grid.cols;
+		const y = Math.floor(g / grid.cols);
+		if (x < x1) x1 = x;
+		if (x > x2) x2 = x;
+		if (y < y1) y1 = y;
+		if (y > y2) y2 = y;
+	}
+	return (cell) => octileToBox(cell % grid.cols, Math.floor(cell / grid.cols), x1, x2, y1, y2);
+}
+
+/** Cell chain from the state's origin to `cell`. */
+function chainTo(state: SolveState, cell: number): number[] {
+	const chain: number[] = [];
+	for (let cur = cell; cur !== -1; cur = state.prev[cur]) chain.push(cur);
+	return chain.reverse();
+}
+
+/** Smoothed route along the solved chain to `cell`, ending at `endpoint`. */
+function smoothedRoute(
+	grid: TerrainGrid,
+	state: SolveState,
+	origin: GeoPoint,
+	cell: number,
+	endpoint: GeoPoint
+): GridRoute {
+	const chain = chainTo(state, cell);
+	const endOffset = distanceTo(endpoint, cellCenter(grid, cell));
+	const total = state.cost[cell] + endOffset * endpointFactor(grid, state.zone, cell);
+	let points: GeoPoint[];
+	if (grid.model === 'direct') {
+		points = smoothChainDirect(grid, chain, origin, endpoint);
+	} else {
+		const pathCost = chain.map((c) => state.cost[c]);
+		pathCost[0] = 0;
+		pathCost[pathCost.length - 1] = total;
+		points = smoothChainOptimized(grid, state.zone, chain, pathCost, origin, endpoint);
+	}
+	return {
+		points,
+		meters: polylineMeters(points),
+		cost: grid.model === 'direct' ? state.cost[cell] : total,
+		endpoint,
+		cell
+	};
+}
+
+/** The cheapest already settled goal cell (settled costs are final), or -1. */
+function bestSettledGoal(state: SolveState, goals: Set<number>): number {
+	let best = -1;
+	for (const cell of goals) {
+		if (
+			state.done[cell] &&
+			Number.isFinite(state.cost[cell]) &&
+			(best === -1 || state.cost[cell] < state.cost[best])
+		) {
+			best = cell;
+		}
+	}
+	return best;
+}
+
+/**
  * Single-source Dijkstra over the terrain grid (8-connected). `cost` ranks
  * (cell factors applied), `meters` tracks the plain geometric step length along
  * the same predecessor chain. The field is solved lazily: each query settles
@@ -582,13 +995,29 @@ function settleUntil(
  * the state is memoised on the grid per origin cell, so the selected marker's
  * path after the list search needs no new solve. Returns `null` when the
  * origin is off-grid.
+ *
+ * `endpoints` (`optimized` only) are the targets the caller will ask for: the
+ * escape zone around them and the origin is part of the field, so they are
+ * fixed when the field is set up. A memoised field is reused only when it
+ * already covers every endpoint asked for.
  */
-export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve | null {
+export function solveTerrain(
+	grid: TerrainGrid,
+	origin: GeoPoint,
+	endpoints: GeoPoint[] = []
+): TerrainSolve | null {
 	const originCell = cellOf(grid, origin);
 	if (originCell === null) return null;
 	let state = grid.solve;
-	if (!state || state.originCell !== originCell) {
-		state = createSolveState(grid, origin, originCell);
+	const covers = (s: SolveState) =>
+		grid.model === 'direct' ||
+		endpoints.every((p) => {
+			const cell = cellOf(grid, p);
+			return cell === null || s.zone.endpoints.has(cell);
+		});
+	if (!state || state.originCell !== originCell || !covers(state)) {
+		const zone = grid.model === 'direct' ? NO_ESCAPE : escapeZone(grid, [origin, ...endpoints]);
+		state = createSolveState(grid, origin, originCell, zone);
 		grid.solve = state;
 	}
 	const s = state;
@@ -597,40 +1026,24 @@ export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve 
 		if (!s.done[cell]) settleUntil(grid, s, (u) => u === cell);
 		return s.done[cell] === 1 && Number.isFinite(s.cost[cell]);
 	};
-	const chainTo = (cell: number): number[] => {
-		const chain: number[] = [];
-		for (let cur = cell; cur !== -1; cur = s.prev[cur]) chain.push(cur);
-		return chain.reverse();
-	};
 
 	const routeToPoint = (target: GeoPoint): GridRoute | null => {
 		const cell = cellOf(grid, target);
 		if (cell === null || !settle(cell)) return null;
-		const points = smoothChain(grid, chainTo(cell), origin, target);
-		return { points, meters: polylineMeters(points), cost: s.cost[cell], endpoint: target };
+		return smoothedRoute(grid, s, origin, cell, target);
 	};
 
 	const routeToShore = (outline: GeoJSON.Geometry): GridRoute | null => {
-		const goals = shoreGoalCells(grid, outline);
+		const goals = shoreGoalCells(grid, outline, s.zone);
 		if (goals.size === 0) return null;
 		// Settled costs are final and never exceed an unsettled one, so the
 		// cheapest settled goal cell is the first one the search would pop.
-		let best = -1;
-		for (const cell of goals) {
-			if (
-				s.done[cell] &&
-				Number.isFinite(s.cost[cell]) &&
-				(best === -1 || s.cost[cell] < s.cost[best])
-			) {
-				best = cell;
-			}
-		}
+		let best = bestSettledGoal(s, goals);
 		if (best === -1) best = settleUntil(grid, s, (u) => goals.has(u));
 		if (best === -1 || !Number.isFinite(s.cost[best])) return null;
 		const endpoint = nearestPointOnOutline(outline, cellCenter(grid, best));
 		if (!endpoint) return null;
-		const points = smoothChain(grid, chainTo(best), origin, endpoint);
-		return { points, meters: polylineMeters(points), cost: s.cost[best], endpoint };
+		return smoothedRoute(grid, s, origin, best, endpoint);
 	};
 
 	return {
@@ -639,7 +1052,7 @@ export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve 
 			if (cell === null || !settle(cell)) return null;
 			const targetOffset = distanceTo(target, cellCenter(grid, cell));
 			return {
-				cost: s.cost[cell] + targetOffset * CLASS_FACTOR[grid.cells[cell]],
+				cost: s.cost[cell] + targetOffset * endpointFactor(grid, s.zone, cell),
 				meters: s.meters[cell] + targetOffset
 			};
 		},
@@ -656,6 +1069,58 @@ export function solveTerrain(grid: TerrainGrid, origin: GeoPoint): TerrainSolve 
 }
 
 /**
+ * `optimized` single path (plan §6.5): A* with the octile heuristic × 1.0 (for
+ * a goal set, the octile distance to the set's bbox). Not memoised: the state
+ * is specific to the goal. `null` when an end is off-grid or unreached.
+ */
+export function astarRoute(grid: TerrainGrid, origin: GeoPoint, goal: GridGoal): GridRoute | null {
+	const originCell = cellOf(grid, origin);
+	if (originCell === null) return null;
+	if (goal.kind === 'point') {
+		const cell = cellOf(grid, goal.point);
+		if (cell === null) return null;
+		const zone = escapeZone(grid, [origin, goal.point]);
+		const state = createSolveState(grid, origin, originCell, zone, octileHeuristic(grid, [cell]));
+		const reached = settleUntil(grid, state, (u) => u === cell);
+		if (reached === -1 || !Number.isFinite(state.cost[cell])) return null;
+		return smoothedRoute(grid, state, origin, cell, goal.point);
+	}
+	const zone = escapeZone(grid, [origin]);
+	const goals = shoreGoalCells(grid, goal.outline, zone);
+	if (goals.size === 0) return null;
+	const state = createSolveState(grid, origin, originCell, zone, octileHeuristic(grid, goals));
+	const best = settleUntil(grid, state, (u) => goals.has(u));
+	if (best === -1 || !Number.isFinite(state.cost[best])) return null;
+	const endpoint = nearestPointOnOutline(goal.outline, cellCenter(grid, best));
+	if (!endpoint) return null;
+	return smoothedRoute(grid, state, origin, best, endpoint);
+}
+
+/**
+ * One route `origin` → `goal`. `optimized`: answered from the memoised field of
+ * the same origin when it covers the goal (the selected marker after the list
+ * search, so list and line agree), else by A*. `direct`: the memoised field.
+ */
+export function gridRouteSingle(
+	grid: TerrainGrid,
+	origin: GeoPoint,
+	goal: GridGoal
+): GridRoute | null {
+	if (grid.model === 'optimized') {
+		const memo = grid.solve;
+		const originCell = cellOf(grid, origin);
+		const targetCell = goal.kind === 'point' ? cellOf(grid, goal.point) : null;
+		const covered =
+			memo !== undefined &&
+			memo.originCell === originCell &&
+			(goal.kind === 'shore' || (targetCell !== null && memo.zone.endpoints.has(targetCell)));
+		if (!covered) return astarRoute(grid, origin, goal);
+	}
+	const solve = solveTerrain(grid, origin, goal.kind === 'point' ? [goal.point] : []);
+	return solve ? solve.routeTo(goal) : null;
+}
+
+/**
  * Smoothed terrain routes from `origin` to each goal. ONE (lazily settled,
  * memoised) grid solve serves all goals. `null` per goal when it is off-grid
  * or unreached.
@@ -665,7 +1130,8 @@ export function gridRouteFromOrigin(
 	origin: GeoPoint,
 	goals: GridGoal[]
 ): (GridRoute | null)[] {
-	const solve = solveTerrain(grid, origin);
+	const endpoints = goals.flatMap((g) => (g.kind === 'point' ? [g.point] : []));
+	const solve = solveTerrain(grid, origin, endpoints);
 	if (!solve) return goals.map(() => null);
 	return goals.map((goal) => solve.routeTo(goal));
 }
@@ -676,7 +1142,5 @@ export function gridRoutePath(
 	origin: GeoPoint,
 	target: GeoPoint
 ): GeoPoint[] | null {
-	const solve = solveTerrain(grid, origin);
-	if (!solve) return null;
-	return solve.pathTo(target);
+	return gridRouteSingle(grid, origin, { kind: 'point', point: target })?.points ?? null;
 }

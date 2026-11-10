@@ -453,6 +453,10 @@
 			"clampToRoads": {
 				"label": "Schlauchweg an Straßen ausrichten",
 				"description": "Wenn deaktiviert, darf die Route durch Gärten und offenes Gelände führen (Gebäude werden immer umgangen)"
+			},
+			"hoseRoutingPreview": {
+				"label": "Optimierte Route (Vorschau)",
+				"description": "Nur wenn „an Straßen ausrichten“ aus ist: Die Route wägt Straßen, Felder, Gewässer, Bahnlinien und Hindernisse ab, statt nur Gebäude zu meiden. Testfunktion."
 			}
 		},
 		"pumpCalculation": {

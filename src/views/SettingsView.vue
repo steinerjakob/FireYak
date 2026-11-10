@@ -72,6 +72,18 @@
 					></ion-toggle>
 				</ion-item>
 
+				<ion-item v-if="hoseRoutingPreviewAvailable">
+					<ion-label>
+						<h2>{{ $t('settings.map.hoseRoutingPreview.label') }}</h2>
+						<p>{{ $t('settings.map.hoseRoutingPreview.description') }}</p>
+					</ion-label>
+					<ion-toggle
+						slot="end"
+						:checked="hoseRoutingPreview"
+						@ion-change="onHoseRoutingPreviewChange($event)"
+					></ion-toggle>
+				</ion-item>
+
 				<!-- Pump calculation Section -->
 				<ion-list-header>
 					<ion-label>{{ $t('settings.pumpCalculation.title') }}</ion-label>
@@ -215,6 +227,7 @@ import {
 import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { useSettings } from '@/composable/settings';
+import { HOSE_ROUTING_PREVIEW_AVAILABLE, modeFromToggles } from '@/helper/hoseRoutingSetting';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { OSM_WEB_URL } from '@/services/osmConfig';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
@@ -250,9 +263,11 @@ onBeforeUnmount(() => {
 });
 
 const settingsStore = useSettingsStore();
-const { saveTheme, saveShowZoomButtons, saveClampHosesToRoads, saveShowPathToMarker } =
-	useSettings();
-const { theme, showZoomButtons, clampHosesToRoads, showPathToMarker } = storeToRefs(settingsStore);
+const { saveTheme, saveShowZoomButtons, saveHoseRouting, saveShowPathToMarker } = useSettings();
+const { theme, showZoomButtons, clampHosesToRoads, hoseRoutingPreview, showPathToMarker } =
+	storeToRefs(settingsStore);
+// Phases 3-4: the optimized routing preview toggle (plan §6.7).
+const hoseRoutingPreviewAvailable = HOSE_ROUTING_PREVIEW_AVAILABLE;
 const osmAuthStore = useOsmAuthStore();
 const pendingEditsStore = usePendingEditsStore();
 const { pendingCount } = storeToRefs(pendingEditsStore);
@@ -266,7 +281,21 @@ const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 };
 
 const onClampToRoadsChange = (event: ToggleCustomEvent) => {
-	saveClampHosesToRoads(event.detail.checked);
+	saveHoseRouting(
+		modeFromToggles(
+			event.detail.checked,
+			settingsStore.hoseRoutingPreview,
+			HOSE_ROUTING_PREVIEW_AVAILABLE
+		)
+	);
+};
+
+const onHoseRoutingPreviewChange = (event: ToggleCustomEvent) => {
+	settingsStore.setHoseRoutingPreview(event.detail.checked);
+	// While routes are kept on roads the choice only takes effect when that is switched off.
+	if (settingsStore.hoseRouting !== 'roads') {
+		saveHoseRouting(modeFromToggles(false, event.detail.checked, HOSE_ROUTING_PREVIEW_AVAILABLE));
+	}
 };
 
 const onShowPathToMarkerChange = (event: ToggleCustomEvent) => {

@@ -3,7 +3,8 @@ import {
 	OBSTACLE_LAYERS,
 	decodeObstacleTile,
 	emptyTileObstacles,
-	mergeTileObstacles
+	mergeTileObstacles,
+	tileAreaM2
 } from '@/mapHandler/obstacleDecode';
 import { tileToBounds } from '@/offline/tileMath';
 import { pointInPolygon } from '@/helper/polygonGeometry';
@@ -219,7 +220,36 @@ describe('decodeObstacleTile: landuse, water, earth, buildings', () => {
 
 	it('a tile without layers decodes to nothing', () => {
 		const tile = decodeObstacleTile(encodeMvt([{ name: 'pois', features: [] }]), X, Y, Z);
-		expect(tile).toEqual(emptyTileObstacles());
+		const empty = emptyTileObstacles();
+		expect(tile).toEqual({ ...empty, stats: { ...empty.stats, tileM2: tileAreaM2(X, Y, Z) } });
+	});
+
+	it('records residential and building area for the thin-buildings safeguard', () => {
+		const tile = decodeObstacleTile(
+			encodeMvt([
+				{
+					name: 'landuse',
+					features: [
+						{ type: 3, geometry: [square(0, 0, 2048, 2048)], properties: { kind: 'residential' } },
+						{ type: 3, geometry: [square(2048, 0, 4096, 2048)], properties: { kind: 'farmland' } }
+					]
+				},
+				{
+					name: 'buildings',
+					features: [
+						{ type: 3, geometry: [square(100, 100, 200, 200)], properties: { kind: 'building' } }
+					]
+				}
+			]),
+			X,
+			Y,
+			Z
+		);
+		const area = tileAreaM2(X, Y, Z);
+		// One quarter of the tile is residential; the house covers 100 x 100 of 4096 x 4096 units.
+		expect(tile.stats.tileM2).toBeCloseTo(area, -2);
+		expect(tile.stats.residentialM2 / area).toBeCloseTo(0.25, 2);
+		expect(tile.stats.buildingM2 / area).toBeCloseTo((100 * 100) / (4096 * 4096), 4);
 	});
 });
 

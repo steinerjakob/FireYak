@@ -188,6 +188,7 @@ export async function decodeDemWebp(buffer: ArrayBuffer): Promise<DecodedDemTile
 export function decodeSceneObstacles(scene: RoutingScene): {
 	data: ObstacleData;
 	layers: Record<ObstacleLayer, LayerCoverage>;
+	thinBuildingTiles: number;
 	tiles: TileObstacles[];
 } {
 	const tiles = tilesOfRange(scene.tiles.basemap).map((t) => {

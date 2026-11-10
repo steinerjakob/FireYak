@@ -499,11 +499,17 @@ export interface RoadRouteResult extends RouteResult {
 /**
  * Where a road route may end: one point (snapped within {@link MAX_SNAP_M}),
  * or a set of points such as a pond's shore samples, each snapped within
- * `maxSnapM`; the cheapest arrival over all of them wins.
+ * `maxSnapM`; the cheapest arrival over all of them wins. A set may bring its
+ * own `legCost` for the final leg (a shore leg priced by the cost model, plan
+ * §6.5); a leg it prices `Infinity` (through a building or water) is not used.
  */
-export type RoadTarget = GeoPoint | { points: GeoPoint[]; maxSnapM: number };
+export type RoadTarget = GeoPoint | { points: GeoPoint[]; maxSnapM: number; legCost?: LegCostFn };
 
-function targetPoints(target: RoadTarget): { points: GeoPoint[]; maxSnapM: number } {
+function targetPoints(target: RoadTarget): {
+	points: GeoPoint[];
+	maxSnapM: number;
+	legCost?: LegCostFn;
+} {
 	return 'points' in target ? target : { points: [target], maxSnapM: MAX_SNAP_M };
 }
 
@@ -519,7 +525,8 @@ function bestArrival(
 	legCost: LegCostFn
 ): Arrival | null {
 	let best: Arrival | null = null;
-	const { points, maxSnapM } = targetPoints(target);
+	const { points, maxSnapM, legCost: targetLegCost } = targetPoints(target);
+	const finalLegCost = targetLegCost ?? legCost;
 	// A set of points (a shore) is attached to every road within range, ranked
 	// by the network cost plus the straight leg, and only the most promising
 	// legs per point are priced (legCost is the expensive part).
@@ -556,7 +563,8 @@ function bestArrival(
 			if (!Number.isFinite(via) && !Number.isFinite(directBest)) continue;
 			// Legs cost ≥ 0: skip pricing a leg that cannot beat the best arrival.
 			if (best && Math.min(via, directBest) >= best.cost) continue;
-			tc.legCost = legCost(point, tc.position);
+			tc.legCost = finalLegCost(point, tc.position);
+			if (!Number.isFinite(tc.legCost)) continue;
 			if (Number.isFinite(via)) {
 				const cost = via + tc.legCost;
 				if (!best || cost < best.cost) {

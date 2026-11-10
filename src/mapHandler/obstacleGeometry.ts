@@ -85,10 +85,15 @@ export async function getObstaclesForBounds(
 	const results = await Promise.all(tiles.map((t) => getTileObstacles(t.x, t.y, fetcher)));
 
 	const missingTiles = results.filter((result) => result.status === 'missing').length;
-	const { data, layers } = mergeTileObstacles(results.map((result) => result.data));
+	const { data, layers, thinBuildingTiles } = mergeTileObstacles(
+		results.map((result) => result.data)
+	);
 	const decoded = tiles.length - missingTiles;
 	const basemap = decoded === 0 ? 'none' : missingTiles > 0 || truncated ? 'partial' : 'full';
-	return { ...data, coverage: { basemap, truncated, missingTiles, totalTiles, layers } };
+	return {
+		...data,
+		coverage: { basemap, truncated, missingTiles, totalTiles, layers, thinBuildingTiles }
+	};
 }
 
 /** Cache-aware accessor for a single z15 tile's obstacles (LRU + in-flight dedupe). */

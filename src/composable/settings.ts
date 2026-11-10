@@ -5,12 +5,18 @@ import {
 	type MarkerFilters
 } from '@/store/settingsStore';
 import { Preferences } from '@capacitor/preferences';
+import {
+	CLAMP_HOSES_TO_ROADS_KEY,
+	HOSE_ROUTING_KEY,
+	HOSE_ROUTING_PREVIEW_AVAILABLE,
+	resolveHoseRouting,
+	type HoseRoutingMode
+} from '@/helper/hoseRoutingSetting';
 
 const THEME_KEY = 'theme';
 const SHOW_ZOOM_BUTTONS_KEY = 'show_zoom_buttons';
 const MAP_LAYER_KEY = 'map_layer';
 const TERRAIN_3D_KEY = 'terrain_3d';
-const CLAMP_HOSES_TO_ROADS_KEY = 'clamp_hoses_to_roads';
 const SHOW_PATH_TO_MARKER_KEY = 'show_path_to_marker';
 const OSM_AUTH_KEY = 'osm_token';
 const MARKER_FILTERS_KEY = 'marker_filters';
@@ -28,6 +34,7 @@ export function useSettings() {
 			showZoomButtonsResult,
 			mapLayerResult,
 			terrain3dResult,
+			hoseRoutingResult,
 			clampHosesToRoadsResult,
 			showPathToMarkerResult,
 			osmAuthKey,
@@ -37,6 +44,7 @@ export function useSettings() {
 			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
 			Preferences.get({ key: MAP_LAYER_KEY }),
 			Preferences.get({ key: TERRAIN_3D_KEY }),
+			Preferences.get({ key: HOSE_ROUTING_KEY }),
 			Preferences.get({ key: CLAMP_HOSES_TO_ROADS_KEY }),
 			Preferences.get({ key: SHOW_PATH_TO_MARKER_KEY }),
 			Preferences.get({ key: OSM_AUTH_KEY }),
@@ -59,8 +67,20 @@ export function useSettings() {
 			settingsStore.setTerrain3d(terrain3dResult.value === 'true');
 		}
 
-		if (clampHosesToRoadsResult.value) {
-			settingsStore.setClampHosesToRoads(clampHosesToRoadsResult.value === 'true');
+		// Phases 3-4: the migrated mode is applied but not written back (plan §6.7).
+		const hoseRouting = resolveHoseRouting(
+			{
+				hoseRouting: hoseRoutingResult.value ?? null,
+				clampHosesToRoads: clampHosesToRoadsResult.value ?? null
+			},
+			'transitional',
+			HOSE_ROUTING_PREVIEW_AVAILABLE
+		);
+		settingsStore.setHoseRouting(hoseRouting.mode);
+		settingsStore.setHoseRoutingPreview(hoseRoutingResult.value === 'optimized');
+		if (hoseRouting.shouldPersist) {
+			await Preferences.set({ key: HOSE_ROUTING_KEY, value: hoseRouting.mode });
+			await Preferences.remove({ key: CLAMP_HOSES_TO_ROADS_KEY });
 		}
 
 		if (showPathToMarkerResult.value) {
@@ -130,15 +150,14 @@ export function useSettings() {
 	};
 
 	/**
-	 * Saves whether hose routes must stick to the road network (see
-	 * `clampHosesToRoads` in the settings store).
+	 * Saves the hose routing mode (an explicit choice; see `hoseRouting` in the
+	 * settings store). The old boolean key is kept in step while both exist, so
+	 * an older app version reading it after a downgrade agrees on `roads`.
 	 */
-	const saveClampHosesToRoads = async (enabled: boolean) => {
-		settingsStore.setClampHosesToRoads(enabled);
-		await Preferences.set({
-			key: CLAMP_HOSES_TO_ROADS_KEY,
-			value: String(enabled)
-		});
+	const saveHoseRouting = async (mode: HoseRoutingMode) => {
+		settingsStore.setHoseRouting(mode);
+		await Preferences.set({ key: HOSE_ROUTING_KEY, value: mode });
+		await Preferences.set({ key: CLAMP_HOSES_TO_ROADS_KEY, value: String(mode === 'roads') });
 	};
 
 	/**
@@ -198,7 +217,7 @@ export function useSettings() {
 		saveShowZoomButtons,
 		saveMapLayer,
 		saveTerrain3d,
-		saveClampHosesToRoads,
+		saveHoseRouting,
 		saveShowPathToMarker,
 		saveOsmAuthToken,
 		removeOsmAuthToken,

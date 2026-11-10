@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	CELL_CLASS,
 	CELL_CLASS_NAME,
+	THIN_BUILDINGS,
+	isThinBuildingTile,
 	WATER_LINE_CLASS,
 	classifyRoad,
 	isKnownLanduseKind,
@@ -181,6 +183,21 @@ describe.skipIf(!fixturesPresent)('cost-model classes over the fixture scenes', 
 			for (const value of [...Object.values(summary.areaM2), ...Object.values(summary.lengthM)]) {
 				expect(Number.isFinite(value)).toBe(true);
 				expect(value).toBeGreaterThanOrEqual(0);
+			}
+		}
+	});
+
+	// Plan section 6.11: the thresholds are estimates; all five scenes must stay unflagged.
+	it('no tile of any scene is flagged by the thin-buildings safeguard', () => {
+		for (const scene of scenes) {
+			expect(scene.thinBuildingTiles, scene.id).toBe(0);
+			for (const tile of scene.tiles) {
+				expect(isThinBuildingTile(tile.stats), scene.id).toBe(false);
+				const share = tile.stats.residentialM2 / tile.stats.tileM2;
+				if (share > THIN_BUILDINGS.minResidentialShare) {
+					// Residential tiles carry plenty of buildings (ratio well above 5 %).
+					expect(tile.stats.buildingM2 / tile.stats.residentialM2, scene.id).toBeGreaterThan(0.1);
+				}
 			}
 		}
 	});

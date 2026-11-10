@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { emptyObstacleData } from '@/mapHandler/obstacleDecode';
 import { classSummary, lineLengthM } from '@/mapHandler/routingDebug';
 import type { RoadLine } from '@/types/obstacles';
-import { buildTerrainGrid } from '@/mapHandler/gridRouting';
-import { costRaster, onRoadShare, pathLength, ratioTable } from '@/mapHandler/routingDebug';
+import { buildOptimizedGrid, buildTerrainGrid } from '@/mapHandler/gridRouting';
+import { CELL_CLASS } from '@/mapHandler/hoseCostModel';
+import {
+	OPTIMIZED_CLASS_COLOR,
+	costRaster,
+	onRoadShare,
+	pathLength,
+	ratioTable
+} from '@/mapHandler/routingDebug';
 
 const LAT = 48;
 const LNG = 15;
@@ -95,6 +102,33 @@ describe('costRaster', () => {
 			raster.data[(imageRow * raster.width + col) * 4 + 3];
 		expect(alphaAt(raster.height - 1, 3)).toBeGreaterThan(0);
 		expect(alphaAt(0, 3)).toBe(0);
+	});
+});
+
+describe('costRaster, optimized grid', () => {
+	it('colours the cost-model classes (road blue, blocked dark)', () => {
+		const bounds = {
+			south: LAT,
+			west: LNG,
+			north: LAT + 80 / 110_540,
+			east: LNG + 80 / mPerDegLng
+		};
+		const rail: RoadLine = { ...road([0, 76], [80, 76]), kind: 'rail', kindDetail: 'rail' };
+		const grid = buildOptimizedGrid(
+			{ ...emptyObstacleData(), roads: [road([0, 4], [80, 4])], rails: [rail] },
+			bounds
+		)!;
+		const raster = costRaster(grid);
+		const pixel = (imageRow: number, col: number) => [
+			...raster.data.slice(
+				(imageRow * raster.width + col) * 4,
+				(imageRow * raster.width + col) * 4 + 4
+			)
+		];
+		expect(pixel(raster.height - 1, 3)).toEqual(OPTIMIZED_CLASS_COLOR[CELL_CLASS.ROAD]);
+		const railRow = raster.height - 1 - Math.floor(76 / 8);
+		expect(pixel(railRow, 3)).toEqual(OPTIMIZED_CLASS_COLOR[CELL_CLASS.BLOCKED]);
+		expect(pixel(4, 3)[3]).toBe(0);
 	});
 });
 

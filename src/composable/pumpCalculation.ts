@@ -291,7 +291,7 @@ async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
 		// calculation over the joined profile (see calculatePumpRequirements).
 		legs.push(
 			await getRoutedPath(chain[i], chain[i + 1], {
-				clampToRoads: settingsStore.clampHosesToRoads,
+				mode: settingsStore.hoseRouting,
 				compareRoads: false
 			})
 		);
@@ -410,7 +410,7 @@ async function suctionPointOnShore(
 ): Promise<GeoPoint> {
 	if (target.kind === 'point') return target.point;
 	const route = await getRoutedPath(firePoint, target, {
-		clampToRoads: useSettingsStore().clampHosesToRoads,
+		mode: useSettingsStore().hoseRouting,
 		profile: false,
 		compareRoads: false
 	});

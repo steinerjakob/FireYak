@@ -1,21 +1,43 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { distanceTo } from '@/types/geo';
 import { emptyObstacleData } from '@/mapHandler/obstacleDecode';
 import type { BuildingPolygon, ObstacleData, RoadLine } from '@/types/obstacles';
 import { segmentIntersectsPolygon } from '@/helper/polygonGeometry';
-import { distanceToOutline } from '@/helper/areaShore';
+import { distanceToOutline, nearestPointOnOutline } from '@/helper/areaShore';
 import {
 	GRID_BUILDING_FACTOR,
 	GRID_BUILDING_FRINGE_FACTOR,
 	GRID_CELL_M,
 	GRID_ROAD_FACTOR,
+	SMOOTH_COST_TOLERANCE,
+	SMOOTH_SLACK_M,
+	astarRoute,
+	buildOptimizedGrid,
 	buildTerrainGrid,
+	escapeZone,
 	gridRouteFromOrigin,
 	gridRoutePath,
+	gridRouteSingle,
+	lineCost,
+	shoreGoalCells,
+	simplifyGated,
 	solveTerrain,
 	terrainSolveStats,
+	type GridGoal,
 	type TerrainGrid
 } from '@/mapHandler/gridRouting';
+import { accessTargetFor } from '@/mapHandler/waterSourceAccess';
+import type { OverPassElement } from '@/mapHandler/overPassApi';
+import type { AreaPolygon, LinearFeature, WaterPolygon } from '@/types/obstacles';
+
+// waterSourceAccess reads IndexedDB, Overpass and the tile protocol; only its pure
+// `accessTargetFor` is used here.
+vi.mock('@/mapHandler/areaOutline', () => ({
+	cachedOutline: () => undefined,
+	getAreaOutline: async () => null
+}));
+vi.mock('@/mapHandler/databaseHandler', () => ({ getMapNodesForView: async () => [] }));
+vi.mock('@/mapHandler/obstacleGeometry', () => ({ waterOutlineAt: async () => null }));
 
 // Synthetic scene in a local metre frame: a 200 m x 200 m window at (48, 15).
 const LAT = 48;
@@ -53,7 +75,12 @@ function roadLine(...points: [number, number][]): RoadLine {
 		return [p.lng, p.lat] as [number, number];
 	});
 	return {
-		bbox: [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), 0, 0],
+		bbox: [
+			Math.min(...pts.map((p) => p[0])),
+			Math.min(...pts.map((p) => p[1])),
+			Math.max(...pts.map((p) => p[0])),
+			Math.max(...pts.map((p) => p[1]))
+		],
 		points: pts,
 		kind: 'minor_road',
 		kindDetail: 'residential',
@@ -431,5 +458,402 @@ describe('shore goal sets', () => {
 		expect(gridRouteFromOrigin(build({}), at(100, 60), [{ kind: 'shore', outline: far }])).toEqual([
 			null
 		]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// optimized model (plan sections 6.3, 6.5, 6.6)
+// ---------------------------------------------------------------------------
+
+const lngLat = (x: number, y: number): [number, number] => {
+	const p = at(x, y);
+	return [p.lng, p.lat];
+};
+
+function areaRect(kind: string, x0: number, y0: number, x1: number, y1: number): AreaPolygon {
+	const poly = polygon([
+		[x0, y0],
+		[x1, y0],
+		[x1, y1],
+		[x0, y1]
+	]);
+	return { ...poly, kind, areaM2: (x1 - x0) * (y1 - y0) };
+}
+
+function linear(kind: string, kindDetail: string, ...points: [number, number][]): LinearFeature {
+	const pts = points.map(([x, y]) => lngLat(x, y));
+	return {
+		bbox: [
+			Math.min(...pts.map((p) => p[0])),
+			Math.min(...pts.map((p) => p[1])),
+			Math.max(...pts.map((p) => p[0])),
+			Math.max(...pts.map((p) => p[1]))
+		],
+		points: pts,
+		kind,
+		kindDetail,
+		isBridge: false,
+		isTunnel: false
+	};
+}
+
+const LANDUSE_KINDS = ['farmland', 'forest', 'residential', 'park', 'railway', 'garden', 'school'];
+
+/**
+ * Random optimized scene: landuse patches, buildings, maybe a water body, a
+ * stream, a heavy-rail line with a level crossing, and a few roads and paths.
+ */
+function randomScene(next: () => number): Partial<ObstacleData> {
+	const r = (lo: number, hi: number) => lo + next() * (hi - lo);
+	const landuse: AreaPolygon[] = [];
+	for (let i = 0, n = 2 + Math.floor(next() * 5); i < n; i++) {
+		const x0 = r(0, 150);
+		const y0 = r(0, 150);
+		landuse.push(
+			areaRect(
+				LANDUSE_KINDS[Math.floor(next() * LANDUSE_KINDS.length)],
+				x0,
+				y0,
+				x0 + r(20, 120),
+				y0 + r(20, 120)
+			)
+		);
+	}
+	const buildings = [];
+	for (let i = 0, n = Math.floor(next() * 7); i < n; i++) {
+		const x0 = r(5, 170);
+		const y0 = r(5, 170);
+		buildings.push(
+			polygon([
+				[x0, y0],
+				[x0 + r(6, 30), y0],
+				[x0 + r(6, 30), y0 + r(6, 30)],
+				[x0, y0 + r(6, 30)]
+			])
+		);
+	}
+	// Roads drawn over a footprint are passages (passable by design): keep the
+	// random houses off the random roads so the building-edge property is meaningful.
+	const roads: RoadLine[] = [];
+	for (let i = 0, n = 1 + Math.floor(next() * 3); i < n; i++) {
+		const road = roadLine([r(0, 200), 0], [r(0, 200), 200]);
+		if (next() < 0.4) road.kind = 'path';
+		if (next() < 0.4) road.kindDetail = 'footway';
+		roads.push(road);
+	}
+	const clearOfRoads = buildings.filter(
+		(b) => !roads.some((road) => segmentIntersectsPolygon(road.points[0], road.points[1], b))
+	);
+	const waterAreas: WaterPolygon[] = [];
+	if (next() < 0.4) {
+		const x0 = r(20, 150);
+		const y0 = r(20, 150);
+		waterAreas.push({
+			...areaRect('water', x0, y0, x0 + r(10, 40), y0 + r(10, 40)),
+			tile: '15/0/0'
+		});
+	}
+	const waterLines = next() < 0.5 ? [linear('stream', '', [r(0, 200), 0], [r(0, 200), 200])] : [];
+	const rails = next() < 0.5 ? [linear('rail', 'rail', [0, r(30, 170)], [200, r(30, 170)])] : [];
+	return { landuse, buildings: clearOfRoads, waterAreas, waterLines, rails, roads };
+}
+
+function randomPoint(next: () => number) {
+	return at(3 + next() * 194, 3 + next() * 194);
+}
+
+/** Dijkstra cost A → B (true endpoints, escape zones of both), or null. */
+function dijkstraCost(
+	grid: TerrainGrid,
+	a: { lng: number; lat: number },
+	b: { lng: number; lat: number }
+) {
+	grid.solve = undefined;
+	return solveTerrain(grid, a, [b])!.distanceTo(b)?.cost ?? null;
+}
+
+describe('optimized: symmetric step cost and A* (plan section 6.5)', () => {
+	it('100 seeded random grids: cost A to B equals cost B to A', () => {
+		const next = rng(31337);
+		let compared = 0;
+		for (let n = 0; n < 100; n++) {
+			const grid = buildOptimizedGrid({ ...emptyObstacleData(), ...randomScene(next) }, BOUNDS)!;
+			const a = randomPoint(next);
+			const b = randomPoint(next);
+			const ab = dijkstraCost(grid, a, b);
+			const ba = dijkstraCost(grid, b, a);
+			if (ab === null || ba === null) {
+				expect(ab, `grid ${n}`).toBe(ba);
+				continue;
+			}
+			expect(Math.abs(ab - ba), `grid ${n}`).toBeLessThan(1e-9 * Math.max(1, ab));
+			compared++;
+		}
+		expect(compared).toBeGreaterThan(70);
+	});
+
+	it('A* cost equals Dijkstra cost on the same 100 cases (admissible heuristic)', () => {
+		const next = rng(31337);
+		let compared = 0;
+		for (let n = 0; n < 100; n++) {
+			const grid = buildOptimizedGrid({ ...emptyObstacleData(), ...randomScene(next) }, BOUNDS)!;
+			const a = randomPoint(next);
+			const b = randomPoint(next);
+			const dijkstra = dijkstraCost(grid, a, b);
+			const astar = astarRoute(grid, a, { kind: 'point', point: b });
+			if (dijkstra === null) {
+				expect(astar, `grid ${n}`).toBeNull();
+				continue;
+			}
+			expect(Math.abs(astar!.cost - dijkstra), `grid ${n}`).toBeLessThan(
+				1e-9 * Math.max(1, dijkstra)
+			);
+			compared++;
+		}
+		expect(compared).toBeGreaterThan(70);
+	});
+
+	it('A* settles fewer cells than the full field', () => {
+		const grid = buildOptimizedGrid(emptyObstacleData(), BOUNDS)!;
+		const before = terrainSolveStats.astar;
+		const route = astarRoute(grid, at(20, 100), { kind: 'point', point: at(60, 100) })!;
+		expect(terrainSolveStats.astar - before).toBe(1);
+		expect(route.meters).toBeCloseTo(40, 0);
+	});
+
+	it('a single path after the list search reuses the list field (same chain, same metres)', () => {
+		const grid = buildOptimizedGrid({ ...emptyObstacleData(), ...randomScene(rng(5)) }, BOUNDS)!;
+		const origin = at(20, 20);
+		const targets = [at(180, 180), at(30, 170), at(170, 40)];
+		const listed = gridRouteFromOrigin(
+			grid,
+			origin,
+			targets.map((point): GridGoal => ({ kind: 'point', point }))
+		);
+		const astarBefore = terrainSolveStats.astar;
+		const single = gridRouteSingle(grid, origin, { kind: 'point', point: targets[0] });
+		expect(terrainSolveStats.astar).toBe(astarBefore);
+		expect(single?.meters).toBe(listed[0]?.meters);
+	});
+});
+
+describe('optimized: blocked classes and escape', () => {
+	it('heavy rail is crossed only at the level crossing', () => {
+		const grid = buildOptimizedGrid(
+			{
+				...emptyObstacleData(),
+				rails: [linear('rail', 'rail', [0, 100], [200, 100])],
+				roads: [roadLine([150, 0], [150, 200])]
+			},
+			BOUNDS
+		)!;
+		const route = gridRouteSingle(grid, at(40, 60), { kind: 'point', point: at(40, 140) })!;
+		// Around via the crossing at x = 150: 2 x sqrt(110^2 + 40^2) = 234 m at least.
+		expect(route.meters).toBeGreaterThan(230);
+		const y = (lat: number) => (lat - LAT) * M_PER_DEG_LAT;
+		const x = (lng: number) => (lng - LNG) * mPerDegLng;
+		const crossing = route.points.some((p, i) => {
+			const q = route.points[i + 1];
+			if (!q || (y(p.lat) - 100) * (y(q.lat) - 100) > 0) return false;
+			const f = (100 - y(p.lat)) / (y(q.lat) - y(p.lat));
+			return Math.abs(x(p.lng) + f * (x(q.lng) - x(p.lng)) - 150) < 8;
+		});
+		expect(crossing).toBe(true);
+	});
+
+	it('a target inside a building is reached through the escape zone', () => {
+		const house = polygon([
+			[90, 90],
+			[110, 90],
+			[110, 110],
+			[90, 110]
+		]);
+		const grid = buildOptimizedGrid({ ...emptyObstacleData(), buildings: [house] }, BOUNDS)!;
+		const route = gridRouteSingle(grid, at(20, 100), { kind: 'point', point: at(100, 100) });
+		expect(route).not.toBeNull();
+		expect(route!.points.at(-1)).toEqual(at(100, 100));
+	});
+
+	it('a target deep inside a large building (beyond the escape radius of its walls) is unreached', () => {
+		const block = polygon([
+			[40, 40],
+			[160, 40],
+			[160, 160],
+			[40, 160]
+		]);
+		const grid = buildOptimizedGrid({ ...emptyObstacleData(), buildings: [block] }, BOUNDS)!;
+		expect(gridRouteSingle(grid, at(10, 10), { kind: 'point', point: at(100, 100) })).toBeNull();
+	});
+});
+
+describe('optimized: goal sets for ponds', () => {
+	// 60 x 40 m pond, near shore 60 m north of the origin; a wall in front of it.
+	const pondRing = [
+		[70, 120],
+		[130, 120],
+		[130, 160],
+		[70, 160],
+		[70, 120]
+	].map(([x, y]) => lngLat(x, y));
+	const pond: GeoJSON.Polygon = { type: 'Polygon', coordinates: [pondRing] };
+	const obstacles: ObstacleData = {
+		...emptyObstacleData(),
+		waterAreas: [{ ...areaRect('water', 70, 120, 130, 160), tile: '15/0/0' }],
+		buildings: [
+			polygon([
+				[60, 90],
+				[115, 90],
+				[115, 105],
+				[60, 105]
+			])
+		],
+		landuse: [areaRect('farmland', 0, 0, 200, 200)]
+	};
+	const origin = at(95, 50);
+
+	it('the returned goal is the minimum-cost goal cell, and A* agrees with Dijkstra', () => {
+		const grid = buildOptimizedGrid(obstacles, BOUNDS)!;
+		const astar = astarRoute(grid, origin, { kind: 'shore', outline: pond })!;
+		expect(astar).not.toBeNull();
+		const solve = solveTerrain(grid, origin)!;
+		const dijkstra = solve.routeTo({ kind: 'shore', outline: pond })!;
+		const goals = shoreGoalCells(grid, pond, escapeZone(grid, [origin]));
+		expect(goals.has(astar.cell)).toBe(true);
+		const goalCost = (cell: number) =>
+			solve.distanceTo(centreOf(grid, cell % grid.cols, Math.floor(cell / grid.cols)))!.cost;
+		const best = Math.min(...[...goals].map(goalCost));
+		expect(goalCost(astar.cell)).toBeCloseTo(best, 9);
+		expect(goalCost(dijkstra.cell)).toBeCloseTo(best, 9);
+		expect(astar.cost).toBeCloseTo(dijkstra.cost, 9);
+	});
+
+	it('goal cells are passable: the pond itself stays blocked', () => {
+		const grid = buildOptimizedGrid(obstacles, BOUNDS)!;
+		const goals = shoreGoalCells(grid, pond, escapeZone(grid, [origin]));
+		expect(goals.size).toBeGreaterThan(20);
+		for (const cell of goals) expect(grid.cells[cell]).not.toBe(12);
+	});
+
+	it('the endpoint equals nearestPointOnOutline of the goal cell', () => {
+		const grid = buildOptimizedGrid(obstacles, BOUNDS)!;
+		const route = astarRoute(grid, origin, { kind: 'shore', outline: pond })!;
+		const cellCentre = centreOf(grid, route.cell % grid.cols, Math.floor(route.cell / grid.cols));
+		expect(route.endpoint).toEqual(nearestPointOnOutline(pond, cellCentre));
+		expect(route.points.at(-1)).toEqual(route.endpoint);
+		expect(distanceToOutline(pond, route.endpoint)).toBeLessThan(0.01);
+	});
+
+	it('a suction point within 30 m overrides the goal set', () => {
+		const element = {
+			type: 'way',
+			id: 1,
+			center: { lat: at(100, 140).lat, lon: at(100, 140).lng },
+			tags: { emergency: 'fire_water_pond' },
+			outline: pond
+		} as unknown as OverPassElement;
+		const suction = at(140, 140);
+		const suctionNode = {
+			type: 'node',
+			id: 2,
+			lat: suction.lat,
+			lon: suction.lng,
+			tags: { emergency: 'suction_point' }
+		} as unknown as OverPassElement;
+		const target = accessTargetFor(element, origin, pond, [suctionNode]);
+		expect(target).toEqual({ kind: 'point', point: suction });
+		const grid = buildOptimizedGrid(obstacles, BOUNDS)!;
+		const route = gridRouteSingle(grid, origin, { kind: 'point', point: suction })!;
+		expect(route.points.at(-1)).toEqual(suction);
+		// The shore goal would have ended on the pond's south side instead.
+		const shore = gridRouteSingle(grid, origin, { kind: 'shore', outline: pond })!;
+		expect(distanceTo(shore.endpoint, suction)).toBeGreaterThan(10);
+	});
+});
+
+describe('optimized: cost-aware smoothing (plan section 6.6)', () => {
+	it('200 seeded scenes: no segment touches a building edge or a blocked cell; cost within bounds', () => {
+		const next = rng(4242);
+		let routes = 0;
+		for (let n = 0; n < 200; n++) {
+			const scene = randomScene(next);
+			const grid = buildOptimizedGrid({ ...emptyObstacleData(), ...scene }, BOUNDS)!;
+			const a = randomPoint(next);
+			const b = randomPoint(next);
+			// Endpoints clear of the escape zone (12 m) by a cell: a building near an
+			// endpoint may be passed on purpose (courtyard hydrants).
+			const nearBuilding = (p: { lng: number; lat: number }) =>
+				(scene.buildings ?? []).some((bd) => {
+					const [w, so, e, n] = bd.bbox;
+					const dx = Math.max(w - p.lng, 0, p.lng - e) * mPerDegLng;
+					const dy = Math.max(so - p.lat, 0, p.lat - n) * M_PER_DEG_LAT;
+					return Math.hypot(dx, dy) < 18;
+				});
+			if (nearBuilding(a) || nearBuilding(b)) continue;
+			const route = gridRouteSingle(grid, a, { kind: 'point', point: b });
+			if (!route) continue;
+			routes++;
+			const zone = escapeZone(grid, [a, b]);
+			let smoothedCost = 0;
+			for (let i = 0; i + 1 < route.points.length; i++) {
+				const p = route.points[i];
+				const q = route.points[i + 1];
+				for (const building of scene.buildings ?? []) {
+					expect(
+						segmentIntersectsPolygon([p.lng, p.lat], [q.lng, q.lat], building),
+						`scene ${n}, segment ${i}`
+					).toBe(false);
+				}
+				const cost = lineCost(grid, p, q, zone);
+				expect(Number.isFinite(cost), `scene ${n}, segment ${i} crosses a blocked cell`).toBe(true);
+				smoothedCost += cost;
+			}
+			const segments = route.points.length - 1;
+			expect(smoothedCost, `scene ${n}`).toBeLessThanOrEqual(
+				route.cost * SMOOTH_COST_TOLERANCE + SMOOTH_SLACK_M * segments + 1e-6
+			);
+			expect(Math.abs(route.meters - polylineLength(route.points))).toBeLessThan(0.01);
+		}
+		expect(routes).toBeGreaterThan(120);
+	});
+
+	it('takes a straight shortcut on uniform ground, keeps to the road when the field is dearer', () => {
+		const open = buildOptimizedGrid(emptyObstacleData(), BOUNDS)!;
+		expect(
+			gridRouteSingle(open, at(20, 20), { kind: 'point', point: at(180, 150) })!.points
+		).toHaveLength(2);
+		// An L-shaped road vs a diagonal across forest (1.6): the road (1.0) wins.
+		const forest = buildOptimizedGrid(
+			{
+				...emptyObstacleData(),
+				landuse: [areaRect('forest', 0, 0, 200, 200)],
+				roads: [roadLine([20, 20], [180, 20], [180, 180])]
+			},
+			BOUNDS
+		)!;
+		const route = gridRouteSingle(forest, at(20, 20), { kind: 'point', point: at(180, 180) })!;
+		expect(route.points.length).toBeGreaterThanOrEqual(3);
+		expect(route.meters).toBeGreaterThan(300);
+	});
+});
+
+describe('simplifyGated (Douglas-Peucker with the smoothing tests)', () => {
+	const pts = [at(0, 0), at(50, 1), at(100, 0), at(150, 1), at(200, 0)];
+	const all = [0, 1, 2, 3, 4];
+
+	it('drops vertices within the tolerance when the chord passes the tests', () => {
+		expect(simplifyGated(pts, all, 1.5, () => true)).toEqual([0, 4]);
+	});
+
+	it('never removes a vertex whose removal would break the tests', () => {
+		// The chord 0 -> 4 and 0 -> 2 are rejected (say, they cross a wall).
+		const valid = (i: number, j: number) => !(i === 0 && j >= 2);
+		const kept = simplifyGated(pts, all, 1.5, valid);
+		expect(kept).toContain(1);
+		for (let k = 0; k + 1 < kept.length; k++) expect(valid(kept[k], kept[k + 1])).toBe(true);
+	});
+
+	it('keeps vertices beyond the tolerance', () => {
+		const zig = [at(0, 0), at(50, 10), at(100, 0)];
+		expect(simplifyGated(zig, [0, 1, 2], 1.5, () => true)).toEqual([0, 1, 2]);
 	});
 });

@@ -5,7 +5,9 @@ import {
 	CLASS_FACTOR,
 	CLIFF_CLASS,
 	LANDUSE_CLASS,
+	RESIDENTIAL_LANDUSE_KINDS,
 	ROAD_SLOPE_CAP,
+	THIN_BUILDINGS,
 	SLOPE_CURVE,
 	UNTUNED_LANDUSE_KINDS,
 	WARNING_THRESHOLDS,
@@ -18,6 +20,7 @@ import {
 	isKnownLanduseKind,
 	isOnRoadClass,
 	isPassable,
+	isThinBuildingTile,
 	slopeFactor,
 	type CellClass,
 	type FeatureEffect,
@@ -334,5 +337,37 @@ describe('warning thresholds', () => {
 		expect(WARNING_THRESHOLDS.warningShare).toBe(1);
 		expect(WARNING_THRESHOLDS.barPerMetre).toBe(0.1);
 		expect(WARNING_THRESHOLDS.defaultMaxHosePressureBar).toBe(16);
+	});
+});
+
+describe('thin-buildings safeguard (plan section 6.11)', () => {
+	const tileM2 = 600_000;
+	it('uses the documented thresholds and residential kinds', () => {
+		expect(THIN_BUILDINGS).toEqual({ minResidentialShare: 0.2, maxBuildingRatio: 0.05 });
+		expect([...RESIDENTIAL_LANDUSE_KINDS].sort()).toEqual([
+			'commercial',
+			'industrial',
+			'residential'
+		]);
+	});
+
+	it('flags a tile with much residential land and hardly any buildings', () => {
+		expect(isThinBuildingTile({ tileM2, residentialM2: 300_000, buildingM2: 6_000 })).toBe(true);
+	});
+
+	it('does not flag a well-mapped town (buildings >= 5 % of residential)', () => {
+		expect(isThinBuildingTile({ tileM2, residentialM2: 300_000, buildingM2: 15_000 })).toBe(false);
+		expect(isThinBuildingTile({ tileM2, residentialM2: 300_000, buildingM2: 60_000 })).toBe(false);
+	});
+
+	it('does not flag a tile with little residential land (farmland with a hamlet)', () => {
+		expect(isThinBuildingTile({ tileM2, residentialM2: 120_000, buildingM2: 0 })).toBe(false);
+		expect(isThinBuildingTile({ tileM2, residentialM2: 0, buildingM2: 0 })).toBe(false);
+	});
+
+	it('the edges: just above 20 % residential and just below 5 % buildings', () => {
+		expect(isThinBuildingTile({ tileM2, residentialM2: 120_001, buildingM2: 5_999 })).toBe(true);
+		expect(isThinBuildingTile({ tileM2, residentialM2: 120_001, buildingM2: 6_001 })).toBe(false);
+		expect(isThinBuildingTile({ tileM2: 0, residentialM2: 1, buildingM2: 0 })).toBe(false);
 	});
 });

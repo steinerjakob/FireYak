@@ -17,6 +17,8 @@ interface ImportMetaEnv {
 	readonly VITE_OSM_CLIENT_ID?: string;
 	/** `1` registers the dev-only `/debug/routing` view in non-dev builds too. */
 	readonly VITE_ROUTING_DEBUG?: string;
+	/** `1` offers the `optimized` hose routing preview toggle in non-dev builds (plan §6.7). */
+	readonly VITE_HOSE_ROUTING_OPTIMIZED?: string;
 }
 
 interface ImportMeta {

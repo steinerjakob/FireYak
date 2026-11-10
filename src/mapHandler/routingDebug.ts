@@ -121,7 +121,7 @@ export function ratioTable(samples: RingSample[]): RatioRow[] {
 	});
 }
 
-/** RGBA per grid cell class: 0 open, 1 road, 2 building core, 3 building fringe. */
+/** RGBA per `direct` grid cell class: 0 open, 1 road, 2 building core, 3 building fringe. */
 const CLASS_COLOR: [number, number, number, number][] = [
 	[0, 0, 0, 0],
 	[30, 120, 255, 150],
@@ -129,10 +129,27 @@ const CLASS_COLOR: [number, number, number, number][] = [
 	[255, 150, 0, 150]
 ];
 
+/** RGBA per `optimized` cell class (`CELL_CLASS` of `hoseCostModel.ts`). */
+export const OPTIMIZED_CLASS_COLOR: Record<number, [number, number, number, number]> = {
+	[CELL_CLASS.UNKNOWN_OPEN]: [0, 0, 0, 0],
+	[CELL_CLASS.OPEN]: [140, 200, 90, 90],
+	[CELL_CLASS.FOREST]: [20, 110, 40, 130],
+	[CELL_CLASS.YARD]: [200, 160, 120, 120],
+	[CELL_CLASS.RAIL_LANDUSE]: [150, 110, 160, 130],
+	[CELL_CLASS.STREAM]: [60, 200, 230, 170],
+	[CELL_CLASS.BUILDING_FRINGE]: [255, 150, 0, 150],
+	[CELL_CLASS.BUILDING_CORE]: [220, 40, 40, 170],
+	[CELL_CLASS.ROAD]: [30, 120, 255, 160],
+	[CELL_CLASS.PATH]: [120, 170, 255, 150],
+	[CELL_CLASS.STEPS]: [180, 90, 255, 160],
+	[CELL_CLASS.BRIDGE]: [0, 230, 230, 180],
+	[CELL_CLASS.BLOCKED]: [10, 10, 10, 190]
+};
+
 /**
  * The terrain grid as an RGBA raster, north row first (image order), ready for
- * a canvas `ImageData` and a MapLibre `image` source. Later phases add their
- * cost classes here.
+ * a canvas `ImageData` and a MapLibre `image` source. A `direct` grid shows its
+ * four classes, an `optimized` grid its cost-model classes.
  */
 export function costRaster(grid: TerrainGrid): {
 	width: number;
@@ -140,10 +157,12 @@ export function costRaster(grid: TerrainGrid): {
 	data: Uint8ClampedArray<ArrayBuffer>;
 } {
 	const data = new Uint8ClampedArray(grid.cols * grid.rows * 4);
+	const palette =
+		grid.model === 'optimized' ? OPTIMIZED_CLASS_COLOR : (CLASS_COLOR as Record<number, number[]>);
 	for (let row = 0; row < grid.rows; row++) {
 		const imageRow = grid.rows - 1 - row;
 		for (let col = 0; col < grid.cols; col++) {
-			const color = CLASS_COLOR[grid.cells[row * grid.cols + col]] ?? CLASS_COLOR[0];
+			const color = palette[grid.cells[row * grid.cols + col]] ?? palette[0];
 			data.set(color, (imageRow * grid.cols + col) * 4);
 		}
 	}

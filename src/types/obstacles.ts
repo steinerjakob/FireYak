@@ -104,6 +104,12 @@ export interface BasemapCoverage {
 	 * `tiles` below the decoded count is normal (open farmland has no `buildings`).
 	 */
 	layers: Record<ObstacleLayer, LayerCoverage>;
+	/**
+	 * Decoded tiles that map much residential land with hardly any buildings
+	 * (`isThinBuildingTile` in `hoseCostModel.ts`); `optimized` routing then
+	 * falls back to roads (plan §6.11).
+	 */
+	thinBuildingTiles: number;
 }
 
 /** Decoded obstacles plus the coverage they were decoded with. */

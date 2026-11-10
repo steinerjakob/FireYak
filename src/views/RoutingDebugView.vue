@@ -55,8 +55,8 @@
 
 					<template v-if="summary">
 						<p class="hint">
-							Classes in the window (area of polygons, length of lines; cost-model classes of phase
-							2, not routed yet)
+							Classes in the window (area of polygons, length of lines; cost-model classes the
+							optimized grid routes on)
 						</p>
 						<table class="stats">
 							<tbody>
@@ -85,8 +85,19 @@
 
 					<label class="check">
 						<input v-model="showCost" type="checkbox" @change="updateCostOverlay" />
-						Cost raster (red building, orange fringe, blue road)
+						Cost raster
+						<select v-model="rasterModel" @change="updateCostOverlay">
+							<option value="optimized">optimized classes</option>
+							<option value="direct">direct (terrain) classes</option>
+						</select>
 					</label>
+					<p v-if="showCost" class="hint">
+						{{
+							rasterModel === 'optimized'
+								? 'Blue road, light blue path, violet steps, cyan bridge, dark blocked, red building core, orange fringe, green open/forest, tan yard, purple rail ground, turquoise stream; clear = unknown open.'
+								: 'Red building, orange fringe, blue road.'
+						}}
+					</p>
 
 					<button :disabled="busy || !scene?.rings?.length" @click="runRings">
 						Run ring simulation ({{ scene?.rings?.length ?? 0 }} positions)
@@ -152,7 +163,8 @@ import {
 	type RoutingOptions
 } from '@/mapHandler/nearbyRouting';
 import { getObstaclesForBounds } from '@/mapHandler/obstacleGeometry';
-import { buildTerrainGrid } from '@/mapHandler/gridRouting';
+import { buildOptimizedGrid, buildTerrainGrid } from '@/mapHandler/gridRouting';
+import { routableRoads } from '@/mapHandler/costGrid';
 import {
 	costRaster,
 	onRoadShare,
@@ -164,10 +176,11 @@ import {
 	type RingSample
 } from '@/mapHandler/routingDebug';
 
-/** The routing modes drawn and compared. Phase 3+ append `optimized` here. */
+/** The routing modes drawn and compared (phases 3-4: all three; from phase 5 two). */
 const MODES: { id: string; label: string; color: string; options: RoutingOptions }[] = [
-	{ id: 'roads', label: 'Road graph', color: '#0050ff', options: { clampToRoads: true } },
-	{ id: 'terrain', label: 'Terrain grid', color: '#d02020', options: { clampToRoads: false } }
+	{ id: 'roads', label: 'Road graph', color: '#0050ff', options: { mode: 'roads' } },
+	{ id: 'terrain', label: 'Terrain grid (direct)', color: '#d02020', options: { mode: 'direct' } },
+	{ id: 'optimized', label: 'Optimized grid', color: '#0a9a3a', options: { mode: 'optimized' } }
 ];
 
 /** Subset of a fixture `scene.json` this view reads (the fixtures themselves are test data). */
@@ -207,6 +220,8 @@ const straightMeters = ref(0);
 const busy = ref(false);
 const summary = shallowRef<ClassSummary | null>(null);
 const showCost = ref(false);
+/** Which grid the cost raster shows. */
+const rasterModel = ref<'optimized' | 'direct'>('optimized');
 const ringRows = ref<(RatioRow & { mode: string })[]>([]);
 const ringProgress = ref('');
 
@@ -342,7 +357,12 @@ async function updateCostOverlay(): Promise<void> {
 		[point(originMarker.getLngLat()), point(targetMarker.getLngLat())],
 		MARGIN_M
 	);
-	const grid = buildTerrainGrid(await getObstaclesForBounds(bounds), bounds);
+	const decoded = await getObstaclesForBounds(bounds);
+	const obstacles = { ...decoded, roads: routableRoads(decoded.roads) };
+	const grid =
+		rasterModel.value === 'optimized'
+			? buildOptimizedGrid(obstacles, bounds)
+			: buildTerrainGrid(obstacles, bounds);
 	if (!grid) return;
 	const raster = costRaster(grid);
 	const canvas = document.createElement('canvas');

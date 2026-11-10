@@ -1047,7 +1047,7 @@ const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 	}
 	// The routed path, or the straight line with the reason when unroutable.
 	const hoseRoute = await getRoutedPath(currentLocation, target, {
-		clampToRoads: settingsStore.clampHosesToRoads,
+		mode: settingsStore.hoseRouting,
 		maxHosePressureBar: pumpCalculationStore.maxHosePressure,
 		// A pressurised hydrant feeds the line; otherwise a pump at the source.
 		sourcePressureBar: parseHydrantPressure(element?.tags) ?? pumpCalculationStore.outputPressure
@@ -1063,9 +1063,10 @@ const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 };
 
 // Toggling the setting while a marker is selected redraws or hides the
-// line immediately (the function no-ops when nothing is selected).
+// line immediately (the function no-ops when nothing is selected); so does a
+// change of the hose routing mode.
 watch(
-	() => settingsStore.showPathToMarker,
+	() => [settingsStore.showPathToMarker, settingsStore.hoseRouting],
 	() => {
 		void showPathToSelectedMarker();
 	}

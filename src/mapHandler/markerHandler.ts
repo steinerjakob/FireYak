@@ -592,7 +592,7 @@ async function sortElementsByDistance(
 	let ranking: NearbyDistanceResult[];
 	try {
 		ranking = await computeNearbyDistances(latLng, targets, straightDistances, {
-			clampToRoads: useSettingsStore().clampHosesToRoads,
+			mode: useSettingsStore().hoseRouting,
 			maxHosePressureBar: pumpStore.maxHosePressure,
 			// A pressurised hydrant feeds the line itself; otherwise a pump at the
 			// source does, at its outlet pressure (plan §6.13).

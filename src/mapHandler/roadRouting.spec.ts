@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { distanceTo } from '@/types/geo';
+import { distanceTo, type GeoPoint } from '@/types/geo';
 import type { RoadLine } from '@/types/obstacles';
 import {
 	MAX_SNAP_M,
@@ -129,5 +129,31 @@ describe('shore targets (plan section 6.5)', () => {
 			{ points: shore, maxSnapM: POND_SHORE_SNAP_M }
 		]);
 		expect(west!.endpoint).toEqual(shore[0]);
+	});
+
+	it('a shore target may price its final leg itself; an infinite leg is never used', () => {
+		const origin = at(0, 0);
+		const legs: [number, number][] = [];
+		// Every leg to the two west samples crosses "water": Infinity.
+		const legCost = (shorePoint: GeoPoint, roadPoint: GeoPoint) => {
+			legs.push([shorePoint.lng, roadPoint.lng]);
+			const blocked = shorePoint.lng < shore[2].lng;
+			return blocked ? Infinity : distanceTo(shorePoint, roadPoint) * 1.25;
+		};
+		const [result] = routeFromOrigin(graph, origin, [
+			{ points: shore, maxSnapM: POND_SHORE_SNAP_M, legCost }
+		]);
+		expect(legs.length).toBeGreaterThan(0);
+		expect(result).not.toBeNull();
+		expect(result!.endpoint).toEqual(shore[2]);
+		// The cost carries the priced leg (1.25 x 240 m); the metres stay geometric.
+		expect(result!.cost).toBeCloseTo(200 + 240 * 1.25, -1);
+		expect(result!.meters).toBeCloseTo(440, -1);
+		// All legs blocked: no route.
+		expect(
+			routeFromOrigin(graph, origin, [
+				{ points: shore, maxSnapM: POND_SHORE_SNAP_M, legCost: () => Infinity }
+			])
+		).toEqual([null]);
 	});
 });

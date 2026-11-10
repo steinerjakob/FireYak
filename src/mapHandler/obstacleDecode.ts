@@ -3,6 +3,11 @@ import type { VectorTileFeature } from '@mapbox/vector-tile';
 import { PbfReader } from 'pbf';
 import type { Feature, Position } from 'geojson';
 import { ringsAreaM2 } from '@/helper/polygonGeometry';
+import {
+	RESIDENTIAL_LANDUSE_KINDS,
+	isThinBuildingTile,
+	type TileLandStats
+} from '@/mapHandler/hoseCostModel';
 import type {
 	AreaPolygon,
 	BasemapCoverage,
@@ -45,6 +50,8 @@ export const OBSTACLE_LAYERS: readonly ObstacleLayer[] = [
 export interface TileObstacles extends ObstacleData {
 	/** Raw feature count per source layer; 0 for a layer the tile does not contain. */
 	featureCounts: Record<ObstacleLayer, number>;
+	/** Residential and building area of the tile (thin-buildings safeguard, plan §6.11). */
+	stats: TileLandStats;
 }
 
 export function emptyObstacleData(): ObstacleData {
@@ -65,7 +72,22 @@ function emptyCounts(): Record<ObstacleLayer, number> {
 
 /** An empty tile (no bytes were available or the tile has no layers). */
 export function emptyTileObstacles(): TileObstacles {
-	return { ...emptyObstacleData(), featureCounts: emptyCounts() };
+	return {
+		...emptyObstacleData(),
+		featureCounts: emptyCounts(),
+		stats: { tileM2: 0, residentialM2: 0, buildingM2: 0 }
+	};
+}
+
+/** Ground area of a Web-Mercator tile in m² (spherical, at its mid latitude). */
+export function tileAreaM2(x: number, y: number, z: number): number {
+	const n = 2 ** z;
+	const latOf = (row: number) => Math.atan(Math.sinh(Math.PI * (1 - (2 * row) / n)));
+	const north = latOf(y);
+	const south = latOf(y + 1);
+	const width = (2 * Math.PI * 6_371_000 * Math.cos((north + south) / 2)) / n;
+	const height = 6_371_000 * (north - south);
+	return width * height;
 }
 
 /**
@@ -163,6 +185,14 @@ export function decodeObstacleTile(
 		}
 	}
 
+	out.stats = {
+		tileM2: tileAreaM2(x, y, z),
+		residentialM2: out.landuse
+			.filter((area) => RESIDENTIAL_LANDUSE_KINDS.has(area.kind))
+			.reduce((sum, area) => sum + area.areaM2, 0),
+		buildingM2: out.buildings.reduce((sum, building) => sum + ringsAreaM2(building.rings), 0)
+	};
+
 	const earthLayer = tile.layers[EARTH_LAYER];
 	if (earthLayer) {
 		out.featureCounts.earth = earthLayer.length;
@@ -184,7 +214,10 @@ export function decodeObstacleTile(
 export function mergeTileObstacles(tiles: TileObstacles[]): {
 	data: ObstacleData;
 	layers: BasemapCoverage['layers'];
+	/** Tiles flagged by the thin-buildings safeguard (plan §6.11). */
+	thinBuildingTiles: number;
 } {
+	let thinBuildingTiles = 0;
 	const data = emptyObstacleData();
 	const layers = Object.fromEntries(
 		OBSTACLE_LAYERS.map((layer) => [layer, { tiles: 0, features: 0 } as LayerCoverage])
@@ -202,8 +235,9 @@ export function mergeTileObstacles(tiles: TileObstacles[]): {
 			if (count > 0) layers[layer].tiles++;
 			layers[layer].features += count;
 		}
+		if (isThinBuildingTile(tile.stats)) thinBuildingTiles++;
 	}
-	return { data, layers };
+	return { data, layers, thinBuildingTiles };
 }
 
 const NO_FLAGS = { isBridge: false, isTunnel: false };

@@ -453,6 +453,10 @@
 			"clampToRoads": {
 				"label": "Keep hose route on roads",
 				"description": "When off, routes may cut through gardens and open ground (buildings are always avoided)"
+			},
+			"hoseRoutingPreview": {
+				"label": "Optimized routing (preview)",
+				"description": "Only when “Keep hose route on roads” is off: routes weigh roads, fields, water, railways and obstacles instead of only avoiding buildings. Test feature."
 			}
 		},
 		"pumpCalculation": {
