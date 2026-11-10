@@ -33,11 +33,15 @@ The owner's screenshots and the research found these problems:
 
 Goal:
 
-1. Add a third mode, **`optimized`**: a weighted cost grid built from Protomaps z15
-   and the Mapterhorn DEM at z14. It is to become the default.
-2. Fix the defects of the two existing modes.
+1. Add the mode **`optimized`**: a weighted cost grid built from Protomaps z15
+   and the Mapterhorn DEM at z14. It becomes the default and **replaces** the
+   terrain-only mode. The end state has two modes, `optimized` and `roads`
+   (§6.7).
+2. Fix the defects of the two existing modes. The terrain-mode fixes carry over
+   into the single cost grid that remains.
 3. Price slope into the cost.
-4. Show steep and off-road sections on the route line, with a warning.
+4. Show steep and off-road sections on the route line, with warnings for steep
+   stretches and for excess hose pressure on downhill lines (§6.13).
 5. Never block routing on Overpass.
 6. Optional, last: a barrier extract in `fireyak-data`.
 
@@ -50,7 +54,7 @@ hydrant mode is INFERRED from that brief.
 | # | Screenshot | Verified cause |
 |---|---|---|
 | 1 | Pond, road mode: 1.7 km / 85 hoses | The only road within `MAX_SNAP_M = 100` (`roadRouting.ts:27`) of the shore point is a cycleway that leads away from the village. The farm track that comes within 198 m is out of snap range. A faithful JS port of `roadRouting` gave 1,727 m. Attaching at the track would give ≈ 842 m. The graph itself is healthy: 11 components, the main one 56.6 km, no broken track stubs. Also, the shore point is fixed **before** routing as the straight-line nearest outline point (`waterSourceAccess.ts:86`), so the router cannot pick a better point on the shore. |
-| 2 | Pond, terrain mode: 528 m straight across farmland | The behaviour is as designed: the grid has no land-use classes, and all non-road, non-building cells cost `GRID_OPEN_FACTOR = 1.0` (`gridRouting.ts:22`). String pulling then draws a straight line. The number is a fair lower bound but not a recommendation. |
+| 2 | Pond, terrain mode: 528 m straight across farmland | The behaviour is as designed: the grid has no land-use classes, and all non-road, non-building cells cost `GRID_OPEN_FACTOR = 1.0` (`gridRouting.ts:22`). String pulling then draws a straight line. The number is the shortest conceivable line, not a recommendation. |
 | 3 | Hydrant ~300 m east (node 4477703437), road mode: 295 m | The road route is plausible. It serves as the reference value. |
 | 4 | Same hydrant, terrain mode: 232 m through gardens | The straight drawn line crosses 4 building polygons that **are in the tile**, so no data is missing. Smoothing lets the line through for three reasons: line of sight is checked from cell centres (`gridRouting.ts:282-297`); footprints are only point-sampled every 4 m (`:285`); and the drawn line starts at the true origin/target, not the checked cell centre (`:388-390`). The hydrant position is approximate. |
 
@@ -301,6 +305,9 @@ z15 tile ranges are for a ±700 m window. For scenes 1 and 2 they match the
 research. For scenes 3–5 they were computed for this plan. The z14 DEM tiles are
 the same ranges with `x >> 1`, `y >> 1`.
 
+These scenes are also the committed test fixtures (§6.14). The fixtures crop
+Vienna to ±500 m.
+
 | # | Scene | Anchor | z15 tiles |
 |---|---|---|---|
 | 1 | Rural pond | Pond: OSM relation 7228761, 48.133078, 15.264769. Vehicle ≈ 48.1300, 15.2725 | x 17772–17774, y 11371–11373 |
@@ -422,14 +429,15 @@ the same ranges with `x >> 1`, `y >> 1`.
 - Height difference on four positions is 177–220 m. That is 18–22 bar static
   against ~6 bar friction, assuming 1.1 bar per 100 m of B hose at 800 l/min.
   Because the vehicle is below, this is a pressure **gain**. Whether it exceeds
-  hose ratings is for the owner to confirm (§10).
+  hose ratings is now judged by the pressure rule (§6.13): it gives a warning.
 
 ## 6. Design (decisions already made)
 
 ### 6.1 Engine
 
 **Chosen:** extend the terrain grid (`gridRouting.ts`) into a weighted cost grid.
-It is shared by `optimized` and `direct`.
+It serves `optimized`. Until phase 5 it also serves the transitional `direct`
+mode (§6.7); after that, one cost grid remains.
 
 Rejected:
 
@@ -478,6 +486,22 @@ export interface ObstacleData {
   coverage: TileCoverage;
 }
 ```
+
+**Pure decode vs I/O.** Each module is split into a pure part (bytes in, data
+out) and a thin I/O part. The pure part can then run under vitest in Node
+(§6.14) and in the worker (§6.10).
+
+- `src/mapHandler/obstacleDecode.ts` (pure):
+  `decodeObstacleTile(buffer, x, y, z): ObstacleData`. It does not import
+  `offlineProtocol`, which pulls in `maplibre-gl` and the Capacitor-backed
+  `tileStore`.
+- `obstacleGeometry.ts` keeps fetching, the LRU and coverage. It takes an
+  injectable `TileFetcher = (source, z, x, y, signal?) => Promise<ArrayBuffer | null>`,
+  defaulting to `fetchTileCacheFirst`.
+- The DEM is split the same way:
+  - `src/helper/demRaster.ts` (pure): `terrariumToElevations(rgba, size)`,
+    cross-tile bilinear sampling, `buildHeightRaster`;
+  - `demElevation.ts`: image decode via `createImageBitmap` and fetching.
 
 ### 6.3 Cost model: one shared module
 
@@ -581,8 +605,9 @@ building edges.
 `TERRAIN_MAX_ZOOM = 12`, which stays as the display zoom. z15 is not needed
 (§4.2). Storage cost is ≈ 25–45 kB/km².
 
-**Pressure** stays in the existing post-route calculation
-(`calculatePumpPosition.ts`).
+**Pressure.** Friction and uphill loss stay in the existing post-route
+calculation (`calculatePumpPosition.ts`). The downhill static-pressure check is
+new (§6.13).
 
 **Reported metres** are the 3D length of the final polyline. List, label and
 pump calculation all use this one number.
@@ -655,37 +680,91 @@ Cost-aware string pulling over the cell chain:
 - Then run Douglas–Peucker at ~1.5 m. A vertex may be removed only if the new
   segment passes the same tests.
 
-### 6.7 Settings
+### 6.7 Settings: two modes in the end state
+
+**End state** (from phase 5): two modes.
+
+- **`optimized`**, the default.
+- **`roads`**.
+
+The terrain-only mode `direct` (today's `clampHosesToRoads = false`) exists only
+as a **transitional** value while `optimized` is behind the dev flag (phases
+3–4). It is removed in phase 5.
 
 ```ts
+// phases 3–4
 export type HoseRoutingMode = 'optimized' | 'roads' | 'direct';
+// from phase 5
+export type HoseRoutingMode = 'optimized' | 'roads';
 // settingsStore: hoseRouting: HoseRoutingMode (replaces clampHosesToRoads)
 // nearbyRouting: RoutingOptions { mode: HoseRoutingMode } (replaces clampToRoads)
 ```
 
-**Preferences.** The new key is `hose_routing`. Migration happens in
-`composable/settings.ts`, in memory only:
+**Preferences and migration.**
 
-| Stored state | Mode used |
-|---|---|
-| `hose_routing` present | that value |
-| else `clamp_hoses_to_roads === 'true'` | `roads` |
-| else (`'false'` or absent) | `DEFAULT_HOSE_ROUTING` |
+- The new key is `hose_routing`.
+- The mapping is a pure function in the new `src/helper/hoseRoutingSetting.ts`:
 
-`DEFAULT_HOSE_ROUTING` is `'direct'` until phase 5, then `'optimized'`.
+  ```ts
+  resolveHoseRouting(stored, phase): { mode; shouldPersist }
+  ```
 
-The migrated value is **not** written back. Only an explicit choice is
-persisted, so users who never chose get the new default when it flips. The old
-key is removed when the new one is saved.
+  It has a spec and is called from `loadSettings` in `composable/settings.ts`.
 
-**Modes**
+| Stored state | Phases 3–4 | From phase 5 |
+|---|---|---|
+| `hose_routing = 'optimized'` | `optimized` with the dev flag, else `direct` | `optimized` |
+| `hose_routing = 'roads'` | `roads` | `roads` |
+| `hose_routing = 'direct'` | `direct` | `optimized` |
+| no `hose_routing`, `clamp_hoses_to_roads = 'true'` | `roads` | `roads` |
+| no `hose_routing`, `clamp_hoses_to_roads = 'false'` or absent | `direct` | `optimized` |
+| any other value | `direct` | `optimized` |
 
-- `direct` = today's terrain behaviour with the phase-1 fixes. It is labelled as
-  a lower bound.
-- The toggle becomes a three-way select. Keys: `settings.map.hoseRouting.label`,
-  `.description` and `.options.{optimized,roads,direct}`, plus `.directHint`, in
-  en and de. Remove `settings.map.clampToRoads.*`.
-- `optimized` becomes the default only after phase 5.
+When the value is written back:
+
+- **Phases 3–4:** the migrated value is **not** written back. Only an explicit
+  choice is saved.
+- **From phase 5:** the default is final. `loadSettings` writes `hose_routing`
+  once (`shouldPersist`) and removes `clamp_hoses_to_roads`.
+
+**UI: back to a toggle.** With two modes, a select adds nothing.
+
+- The existing toggle (`SettingsView.vue:63-73`) stays: on → `roads`,
+  off → `optimized`.
+- The i18n keys stay `settings.map.clampToRoads.{label,description}`, with new
+  texts:
+
+| Key | en | de |
+|---|---|---|
+| `label` | Keep hose route on roads | Schlauchweg nur auf Straßen und Wegen |
+| `description` | Off: the route weighs roads, fields, slopes and obstacles. On: roads and paths only, with short connections at both ends. | Aus: Die Route wägt Straßen, Felder, Steigungen und Hindernisse ab. Ein: nur Straßen und Wege, mit kurzen Anbindungen an beiden Enden. |
+
+The en label is today's text. The de label changes from "Schlauchweg an Straßen
+ausrichten".
+
+**Phases 3–4 (transitional).**
+
+- The toggle keeps today's behaviour: on → `roads`, off → `direct`.
+- With `VITE_HOSE_ROUTING_OPTIMIZED=1` or in dev, an extra toggle "Optimized
+  routing (preview)" (`settings.map.hoseRoutingPreview.{label,description}`, en
+  and de) makes the off state `optimized`.
+- No production user sees a change.
+
+**Removed in phase 5:**
+
+- `'direct'` in the type;
+- the preview toggle and its keys;
+- every `clampToRoads` branch;
+- the legacy terrain-only cost path:
+  - `GRID_ROAD_FACTOR`, `GRID_OPEN_FACTOR`, `GRID_BUILDING_FACTOR`,
+    `GRID_BUILDING_FRINGE_FACTOR` (`gridRouting.ts:15-31`);
+  - the four-class `CLASS_FACTOR` table (`:38-48`).
+
+One cost grid remains, driven by `hoseCostModel.ts`.
+
+`weightedDistance.ts` is deleted too once no caller remains. Today its callers
+are `nearbyRouting.ts:172,191,222`. The label keeps the road-only comparison
+(§6.8).
 
 ### 6.8 UI: two independent visual channels
 
@@ -722,14 +801,17 @@ The route line uses **dash = off-road** and **colour = steepness**:
     with 6 m.
 - With only z12 DEM, at most the amber class is shown.
 
-**"Not recommended" chip.** Shown when any of these holds:
+**Warnings.** Two slope triggers and one pressure trigger:
 
-- any stretch > 50 % for ≥ 10 m;
-- more than 50 m in total above 25 %;
-- |Δh| between the ends > `HEIGHT_WARN_M`. The placeholder is 50 m (= 5 bar
-  static); the owner sets the real value (§10).
+- **"Not recommended"** when any of these holds:
+  - any stretch > 50 % for ≥ 10 m;
+  - more than 50 m in total above 25 %;
+  - the estimated static pressure at the lowest point of the line is ≥ 100 %
+    of `maxHosePressure` (§6.13).
+- **"Check pressure"** (amber) when that static pressure is ≥ 75 % of
+  `maxHosePressure`.
 
-The chip appears on:
+The chips appear on:
 
 - the nearby list item (`NearbyMarker.vue`);
 - the map label;
@@ -754,8 +836,13 @@ The chip appears on:
 
 All thresholds are starting values.
 
-The steep display and the warning apply to **all three modes**. They ship in
-phase 1, before `optimized` exists.
+The steep display and the warnings apply to every mode that exists at the
+time:
+
+- in phase 1, the road graph and the terrain grid;
+- from phase 5, `optimized` and `roads`.
+
+They ship in phase 1, before `optimized` exists.
 
 ### 6.9 Never block on remote data
 
@@ -875,6 +962,8 @@ export interface HoseRoute {
   segments: { from: number; to: number; offRoad: boolean; steep: 0 | 1 | 2 }[];
   climbM: number | null;        // signed height(target) − height(origin)
   metersOver25: number; metersOver50: number; maxGradePct: number | null;
+  staticPressureMaxBar: number | null;          // §6.13
+  pressureLevel: 'ok' | 'caution' | 'warning' | null;
   roadOnlyMeters: number | null;
   demZoom: number | null;
   fallback: RouteFallback | null;
@@ -882,83 +971,475 @@ export interface HoseRoute {
 }
 ```
 
+### 6.13 Downhill pressure rule
+
+**What exists today.**
+
+The pump-calculation store is `src/store/pumpCalculationSettings.ts`. Its
+Preferences keys are `pumpCalc_*` (`:6-14`), and it saves on every change.
+
+| Setting | Default | Line | Edited in |
+|---|---|---|---|
+| `tubeLength` | 20 m | `:17` | `SettingsView.vue:79-88` |
+| `inputPressure` (min. inlet pressure at a booster pump) | 1.5 bar | `:18` | `SupplyPipeCalculation.vue` |
+| `outputPressure` (pump outlet pressure) | 8 bar | `:21` | `SupplyPipeCalculation.vue` |
+| `pressureLost` (friction per 100 m) | 1.0 bar | `:22` | `SupplyPipeCalculation.vue` (flow select) |
+| `targetPressure` (nozzle) | 5 bar | `:26` | `SupplyPipeCalculation.vue` |
+| `tubeDiameter` | 75 mm | `:29` | `SettingsView.vue:90-99` |
+| `hoseName` | `B` | `:30` | `SettingsView.vue:101-110` |
+
+How the line starts:
+
+- The source pressure is the hydrant's `fire_hydrant:pressure` when the water
+  source is a pressurised hydrant (`parseHydrantPressure`,
+  `pumpCalculation.ts:493-498`; `sourcePressure`, `:490`).
+- Otherwise the line starts at `outputPressure`
+  (`calculatePumpPosition.ts:55`).
+
+**No hose pressure rating exists.**
+
+**New setting.** `maxHosePressure`:
+
+- default **16 bar**;
+- Preferences key `pumpCalc_maxHosePressure`;
+- stored in the same store and edited in the pump-calculation section of
+  `SettingsView.vue` (`:74-110`), next to hose length, diameter and name;
+- i18n `settings.pumpCalculation.maxHosePressure`: en "Max. hose working
+  pressure (bar)", de "Max. Betriebsdruck der Schläuche (bar)".
+
+16 bar is **RECALLED** as the working pressure of pressure hoses under DIN
+14811 (test pressure 24 bar). The owner must confirm it.
+
+**Rule.** This is static pressure, with no flow. A closed branch is the worst
+case.
+
+```
+p_static(lowest) = p_source + 0.1 bar/m × (h_source − h_min)
+caution  when p_static ≥ 0.75 × maxHosePressure   (12 bar with the default)
+warning  when p_static ≥ 1.00 × maxHosePressure   (16 bar) → "not recommended"
+```
+
+The inputs:
+
+- **`p_source`:** the hydrant's mapped pressure for a pressurised hydrant (same
+  `parseHydrantPressure`, moved to the new pure `src/helper/hosePressure.ts`);
+  otherwise `outputPressure`, default 8 bar, for the pump at the source. No new
+  default is invented.
+- **`h_source`:** the height at the water-source end of the line. For nearby
+  routes that is the route's target. For the pump line it is the suction point.
+- **`h_min`:** the lowest height on the line downstream of the source.
+- **Pump line with booster pumps:** each stretch is evaluated from its pump,
+  with the pressure the pump calculation assigns there.
+
+Heights come from the same resampled profile as the steep display
+(`routeProfile.ts`).
+
+**What this means in metres of drop below the source:**
+
+| Source | `p_source` | Caution (12 bar) from | Warning (16 bar) from |
+|---|---|---|---|
+| pump at the source (`outputPressure` default) | 8 bar | 40 m | 80 m |
+| hydrant, 6 bar mapped | 6 bar | 60 m | 100 m |
+| hydrant, 4 bar mapped | 4 bar | 80 m | 120 m |
+
+In general, drop = (threshold − `p_source`) / 0.1 bar/m.
+
+**Check against Innsbruck** (scene 5).
+
+- The four positions with the vehicle below the hydrant drop 177–220 m. That is
+  17.7–22 bar from height alone.
+- Even with `p_source = 0` this is ≥ 16 bar, so it gives a **warning**.
+- With the 8 bar default it is 25.7–30 bar.
+
+**Uphill lines** are already handled. The pump/relay calculation subtracts the
+height gain and friction and places booster pumps
+(`calculatePumpPosition.ts:69-81` and the placement loop after it). The pressure
+rule adds nothing for uphill lines; the label only shows the signed height
+difference.
+
+**Display**
+
+- `caution`: an amber chip, "Druck prüfen".
+- `warning`: the "not recommended" chip (§6.8). The two slope-based triggers
+  are unchanged.
+
+### 6.14 Tests and fixtures
+
+**Runner: vitest** (decided). The exact config is in phase 0.
+
+- Spec files sit **next to** the source: `src/mapHandler/gridRouting.ts` →
+  `src/mapHandler/gridRouting.spec.ts`.
+- Scene specs over fixtures are named `*.scenes.spec.ts`.
+- Environment: Node.
+- Shared test-only helpers live in `src/testing/`, which app code may not
+  import (eslint rule, phase 0).
+
+**Testable without the app shell.** Modules under test import only pure
+modules. I/O goes through injected fetchers (§6.2). Scene specs that drive
+`nearbyRouting.ts` before phase 2 mock `@/offline/offlineProtocol` with
+`vi.mock`, so `maplibre-gl` and the Capacitor tile store are never loaded.
+
+**DEM in Node.** `createImageBitmap` and canvas are missing in Node, so specs
+decode the WebP fixtures with a WASM decoder dev dependency. The proposal is
+`@jsquash/webp`, **not tried**. It feeds the pure `terrariumToElevations`. If
+that does not work, the fetch script stores the DEM fixtures re-encoded as
+lossless PNG, decoded with `pngjs`, at a larger size.
+
+**Fixtures: committed as test data** (proposal; one item is OPEN, below).
+
+```
+src/mapHandler/__fixtures__/routing/
+  README.md
+  1-rural-pond/scene.json
+  1-rural-pond/basemap/15/<x>/<y>.mvt
+  1-rural-pond/dem/14/<x>/<y>.webp
+  1-rural-pond/dem/12/<x>/<y>.webp      (scenes 1 and 5 only, for the z12 fallback)
+  2-melk/…  3-persenbeug/…  4-vienna/…  5-innsbruck/…
+```
+
+**Why this location.**
+
+- It sits next to the routing code its specs test.
+- Vite bundles only modules reachable from `src/main.ts`, and specs read
+  fixtures with `node:fs` relative to `import.meta.url` (never `import`). So
+  the tiles never become modules and never reach `dist/`.
+- `public/` is the only folder copied verbatim; fixtures must never go there.
+- Capacitor copies only `dist` (`capacitor.config.ts:6`), so the files stay out
+  of the native assets.
+- Safeguards:
+  - the eslint `no-restricted-imports` rule;
+  - the phase-0 check that `dist/` has no `__fixtures__` path.
+- A top-level `test/fixtures/` would work just as well. It was not chosen,
+  only to stay consistent with specs alongside the source.
+
+**`scene.json`** holds:
+
+- the anchor;
+- named cases (origin and target, e.g. `pond`, `hydrantEast`, `north500`);
+- the ring positions **already moved to the nearest road** as in the research,
+  so tests do not depend on that rule;
+- the pond outline as GeoJSON (scene 1);
+- the tile lists;
+- the fetch date.
+
+Expected values live in the spec files as tolerant ranges, not in the JSON.
+
+**Contents and size.** Only what tests need:
+
+| Scene | Basemap z15 | Basemap bytes | DEM z14 tiles | DEM z12 |
+|---|---|---|---|---|
+| 1 | ±700 m: x 17772–17774, y 11371–11373 | 131 kB (MEASURED) | x 8886–8887, y 5685–5686 (4) | 2221/1421 |
+| 2 | ±700 m: x 17779–17780, y 11359–11361 | 184 kB (MEASURED) | x 8889–8890, y 5679–5680 (4) | — |
+| 3 | ±700 m: x 17756–17757, y 11363–11365 | 120 kB (MEASURED) | x 8878, y 5681–5682 (2) | — |
+| 4 | **cropped to ±500 m**: x 17873–17874, y 11362–11363 (4 instead of 9) | ≈ 0.7 MB (ESTIMATE: 4/9 of the measured 1,598 kB) | x 8936–8937, y 5680–5681 (4) | — |
+| 5 | ±700 m: x 17418–17419, y 11491–11493 | 151 kB (MEASURED) | x 8709, y 5745–5746 (2) | 2177/1436 |
+
+The DEM and cropped ranges were computed for this plan.
+
+| Part | Size |
+|---|---|
+| basemap | ≈ 1.3 MB |
+| DEM z14, 16 tiles × ~68 kB | ≈ 1.1 MB |
+| DEM z12, 2 tiles | ESTIMATE ~0.2 MB |
+| JSON | < 0.1 MB |
+| **total** | **≈ 2.6–2.8 MB** |
+
+Because of the crop, scene-4 specs use the 150 m and 300 m rings only (32
+positions). The 500 m figures stay in §5 as the research record.
+
+**README in the fixtures folder.** It records:
+
+- the source URLs (without the key);
+- the fetch date and the tile ranges;
+- the regeneration command;
+- attribution: "© OpenStreetMap contributors, ODbL. Vector tiles: Protomaps.
+  Terrain: Mapterhorn (per-source attribution at mapterhorn.com/attribution)";
+- that the files are test data, not app assets.
+
+**Regeneration.** Run `node scripts/fetch-routing-fixtures.mjs [--scene <id>]`.
+
+- The key comes from `VITE_PROTOMAPS_API_KEY` in the environment and is never
+  written to a file.
+- Re-fetching will change the data slightly over time, which is why the specs
+  use ranges.
+- **This plan document, not the fixtures, is the record of the research.** The
+  fixtures are a test snapshot.
+
+**OPEN: redistribution terms.** It is not yet confirmed that Protomaps' terms
+allow redistributing these few tiles in a public repository. Check Mapterhorn's
+per-source licences at the same time.
+
+Until both are confirmed:
+
+- the tile files are gitignored (`src/mapHandler/__fixtures__/routing/**/*.mvt`,
+  `**/*.webp`); the README and the `scene.json` files are committed;
+- every `*.scenes.spec.ts` is wrapped in `describe.skipIf(!fixturesPresent)`;
+- unit specs always run;
+- developers fetch the fixtures locally with the script.
+
+**What stays manual, and why.**
+
+- Map rendering: MapLibre layers, dashes, colours, ticks and label placement.
+  This needs WebGL and visual judgement.
+- The worker on a device: Capacitor WebViews, `OffscreenCanvas` availability,
+  real timings.
+- Precache behaviour: network type, `saveData`, IndexedDB quotas on iOS, and
+  timing while moving.
+- Settings and panel UI flows.
+
+The repo's `verify` skill (headless app run) can cover parts of the UI checks.
+
 ## 7. Phases
 
 Each phase is a separate, mergeable PR, and the order matters. What's New
 entries follow AGENTS.md §6. If an `unreleased` entry for the same feature
-already exists, update it instead of adding a new one.
+already exists, update it instead of adding a new one. English texts are given
+below; each entry also needs its German text.
 
-### Phase 0: fixtures, debug view, test decision
+**Acceptance is by spec files.** From phase 0 on, every phase lists the spec
+files it adds or changes and the cases they must contain. Scene numbers are
+written as tolerant ranges (§6.14). A phase is done when `npm test` is green in
+CI and the listed manual checks are done. The debug view is for tuning, not for
+acceptance.
+
+### Phase 0: test runner, fixtures, debug view
 
 **Files**
 
 | File | Status |
 |---|---|
+| `package.json`, `package-lock.json` | changed: `vitest` dev dependency; `test`, `test:watch` and `typecheck` scripts |
+| `vitest.config.ts` | new |
+| `tsconfig.node.json` | changed: `include` gets `vitest.config.ts` |
+| `eslint.config.mjs` | changed: fixture/vitest import guard |
+| `.prettierignore` | changed: `src/**/__fixtures__/` |
+| `.github/workflows/ci.yml` | new |
+| `.github/workflows/release.yml` | changed: test step in `prepare` |
+| `AGENTS.md` | changed (**required**): §7 and related places |
+| `CLAUDE.md` | changed: it repeats "no test suite" |
+| `src/composable/modalBreakpointWatcher.ts`, `src/views/SettingsView.vue` | changed: fix the two existing type errors so `typecheck` is green |
 | `scripts/fetch-routing-fixtures.mjs` | new |
-| `src/views/RoutingDebugView.vue` | new |
-| `src/router/index.ts` | changed |
-| `.gitignore` | changed |
+| `src/mapHandler/__fixtures__/routing/**` | new: README, `scene.json` per scene, tiles |
+| `src/testing/routingFixtures.ts` | new: test-only helpers |
+| `src/views/RoutingDebugView.vue`, `src/router/index.ts` | new / changed |
 
-**Fixtures**
+**Runner and config.** These are the exact changes. They were tried in a scratch
+copy of `558308a` (Node 22, vitest 5.1.0). In that trial:
 
-- The script downloads the z15 basemap and the z14 + z12 DEM tiles for the five
-  scenes (§5) into `dev-fixtures/routing/<scene>/{z}/{x}/{y}.{mvt,webp}`.
-- It reads the Protomaps key from the `VITE_PROTOMAPS_API_KEY` environment
-  variable. **The key is never written to a file.**
-- Fixtures are gitignored by default. Committing them is OPEN: about 2–4 MB
-  (ESTIMATE), and the Protomaps terms must be checked.
+- a sample `src/helper/areaShore.spec.ts` ran green;
+- `eslint` passed on the spec and on `vitest.config.ts`;
+- `vue-tsc` type-checked the spec, including its `vitest` import, with no new
+  errors;
+- `vite build` contained no spec code.
 
-**Debug view**
+- `package.json`:
+  - `devDependencies`: `"vitest": "^5.1.0"`. In the trial, 5.1.0 resolved
+    against the repo's `vite` 7.3.6.
+  - `scripts`:
+
+    ```json
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "vue-tsc --noEmit --skipLibCheck -p tsconfig.json"
+    ```
+
+    `vue-tsc` is already a dev dependency, but no script runs it today, and
+    `vite build` does not type-check.
+- `vitest.config.ts` is kept separate from `vite.config.ts`, so tests do not load
+  VitePWA or ViteFonts:
+
+  ```ts
+  import { defineConfig } from 'vitest/config';
+  import { fileURLToPath, URL } from 'node:url';
+
+  export default defineConfig({
+  	resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+  	test: { include: ['src/**/*.spec.ts'], environment: 'node' }
+  });
+  ```
+
+- `tsconfig.json` needs **no change**:
+  - `include: ["src/**/*.ts", …]` already type-checks `*.spec.ts`;
+  - specs import `describe`, `it`, `expect` and `vi` from `'vitest'`
+    explicitly, so no `vitest/globals` type entry is needed;
+  - `types: ["node"]` already covers `node:fs` in fixture loaders.
+- `tsconfig.node.json`: add `vitest.config.ts` to `include` (today only
+  `vite.config.ts`).
+- `vite.config.ts` needs **no change**:
+  - the production build only bundles modules reachable from `src/main.ts`, so
+    spec files, `src/testing/` and `__fixtures__/` never enter `dist/`;
+  - Capacitor copies only `webDir: 'dist'` (`capacitor.config.ts:6`);
+  - the Workbox precache globs run over `dist/`.
+
+  In the trial, `vite build` contained no spec content.
+- `eslint.config.mjs`: linting needs no change. `**/*.{js,mjs,cjs,ts,tsx}`
+  already matches `*.spec.ts` and `vitest.config.ts`, and in the trial
+  `eslint` passed on both. Add one config object that keeps app code from
+  importing test material:
+
+  ```js
+  {
+  	files: ['src/**/*.{ts,vue}'],
+  	ignores: ['src/**/*.spec.ts', 'src/testing/**'],
+  	rules: {
+  		'no-restricted-imports': ['error', { patterns: ['**/__fixtures__/**', '@/testing/*', 'vitest'] }]
+  	}
+  }
+  ```
+
+- `.prettierignore`: add `src/**/__fixtures__/`, so lint-staged does not
+  reformat the fixture JSON.
+- **Type errors today.** With `vue-tsc --noEmit --skipLibCheck`, `558308a`
+  reports two errors (MEASURED with vue-tsc 3.2.5):
+  - `src/composable/modalBreakpointWatcher.ts:12` (`$el` on an Ionic component
+    ref);
+  - `src/views/SettingsView.vue:146` (`fill="primary"` on a button).
+
+  Phase 0 fixes both. Without `--skipLibCheck`, four more errors come from
+  `node_modules` typings.
+
+**CI.** Today no workflow runs on pull requests. `main.yml` only builds on a
+release or by hand, and `dev-builds.yml` builds native apps on pushes to
+`main`. Proposed changes:
+
+- New `.github/workflows/ci.yml`. It reuses the action SHAs already pinned in
+  `main.yml`:
+
+  ```yaml
+  name: CI
+  on:
+    pull_request:
+    push:
+      branches: [main]
+  permissions:
+    contents: read
+  jobs:
+    check:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+          with:
+            persist-credentials: false
+        - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+          with:
+            node-version: 22
+            cache: 'npm'
+        - run: npm ci --ignore-scripts
+        - run: npx eslint .
+        - run: npm run typecheck
+        - run: npm test
+  ```
+
+- `release.yml`, `prepare` job: add a `Test` step (`run: npm test`) right
+  after "Install dependencies". A red test then stops the release before
+  anything is tagged. `main.yml` runs in parallel with the native builds, so it
+  is not a useful gate.
+- Cloudflare Pages previews do not run tests. That is acceptable, because
+  `ci.yml` covers the PR.
+
+**AGENTS.md: required change, in this phase.**
+
+- §7: replace "No test suite exists…" with:
+  - unit tests run with vitest via `npm test`;
+  - spec files sit next to the source (`foo.ts` → `foo.spec.ts`) in the Node
+    environment, for pure modules;
+  - routing scene fixtures live in `src/mapHandler/__fixtures__/routing/`
+    (README there) and must never be imported from app code;
+  - run `npm test` (and `npm run typecheck`) before committing changes to
+    tested modules.
+- Also add `npm test` / `npm run typecheck` to §4, Vitest to §2 "Code Quality",
+  and `ci.yml` to the §3 workflow table.
+- `CLAUDE.md` mentions "§7's note that there is no test suite"; update that
+  sentence too.
+
+**Fixtures.** See §6.14 for layout, sizes, README and licence. The fetch script:
+
+- reads the Protomaps key from `VITE_PROTOMAPS_API_KEY` in the environment;
+  **the key is never written to a file**;
+- fetches exactly the tiles listed in each `scene.json`;
+- prints the total size.
+
+**Debug view.** A tuning tool, not the acceptance mechanism.
 
 - Route `/debug/routing`, registered only when `import.meta.env.DEV` or
   `VITE_ROUTING_DEBUG=1`.
 - It has a scene picker and draggable origin and target.
-- It draws all modes at once, each with its length, timing and coverage.
+- It draws every mode that exists at that point:
+  - phases 0–2: road and terrain;
+  - phases 3–4: also `optimized`;
+  - from phase 5: `optimized` and `roads`.
+
+  Each mode shows its length, timing and coverage.
 - It overlays the cost raster (canvas → MapLibre `image` source).
-- It has a "ring" button that runs the §5 ring simulation and prints the ratio
-  table.
-- A fixture switch makes `fetchTileCacheFirst` read from `dev-fixtures` (dev
-  only).
+- It runs the §5 ring simulation and prints the ratio table.
+- In `npm run dev` it can read the fixtures through the dev server's `/src/…`
+  paths (INFERRED); preview builds use live tiles.
 
-**Test decision (OWNER)**
+**Specs**
 
-- **Option A:** add `vitest` as a dev dependency, for the pure modules only:
-  `hoseCostModel`, raster fill, solve, smoothing, `routeProfile`, settings
-  migration, `areaShore`. Then update AGENTS.md §7.
-- **Option B:** no test runner. Use the debug view, a
-  `window.__routingHarness` that logs the scene checks of §7 as a table, and a
-  manual checklist in the PR.
+- `src/testing/routingFixtures.ts` (helper, not a spec): `loadScene(id)`,
+  `fixtureFetcher(scene)` (a `TileFetcher` reading `node:fs`), and
+  `fixturesPresent`.
+- `src/testing/routingFixtures.spec.ts`:
+  - every tile listed in each `scene.json` exists and decodes (MVT layers
+    present; DEM decodes to 512×512);
+  - the total fixture size is ≤ 3.5 MB;
+  - like all fixture-driven specs, it is skipped when `!fixturesPresent`.
+- `src/helper/areaShore.spec.ts`:
+  - `nearestPointOnOutline` on a square, a multipolygon and open member lines;
+  - `isInsideOutline` with a hole;
+  - `distanceToOutline` is 0 inside.
+- `src/mapHandler/roadRouting.spec.ts` (synthetic lines):
+  - nodes merge within 2 m but not at 3 m;
+  - T-junction repair joins a side street that ends mid-segment within 6 m;
+  - no route when nothing lies within 100 m;
+  - `meters` equals the length of the `routePath` polyline.
+- `src/mapHandler/gridRouting.spec.ts` (synthetic, characterising today):
+  - building cells cost 30 and fringe cells 4;
+  - one `it.fails` case documents the known defect: a smoothed segment from the
+    true endpoint crosses an L-shaped building. Phase 1 turns it into a passing
+    `it`.
+- `src/mapHandler/nearbyRouting.scenes.spec.ts`:
+  - uses `vi.mock('@/offline/offlineProtocol', …)` to serve the fixture
+    fetcher, so `maplibre-gl` and the Capacitor tile store are never loaded;
+  - the whole file is skipped when `!fixturesPresent`;
+  - baseline cases:
 
-**Acceptance**
+    | Case | Expected |
+    |---|---|
+    | scene 1 pond, road | 1,600–1,850 m |
+    | scene 1 pond, terrain | 500–560 m |
+    | scene 1 hydrant, road | 280–310 m |
+    | scene 1 hydrant, terrain | 220–245 m |
+    | scene 2 ring medians at 150 / 300 m | within ±10 % of §5 |
 
-- The debug view reproduces today's numbers:
+**Manual:** `npm run build`, then check that `dist/` contains no `__fixtures__`
+path and that its size is unchanged against `main`.
 
-  | Check | Expected |
-  |---|---|
-  | scene 1 pond, road mode | ≈ 1.7 km |
-  | scene 1 pond, terrain mode | ≈ 528 m |
-  | scene 1 hydrant, road / terrain | 295 m / 232 m |
+**What's New:** none (tooling only).
 
-- The Melk ring medians are within ±10 % of §5.
-
-**What's New:** none (dev only).
-
-### Phase 1: fixes without new data, and the steep display for existing modes
+### Phase 1: fixes without new data, steep and pressure warnings for the existing modes
 
 **Files**
 
 - `gridRouting.ts`, `nearbyRouting.ts`, `roadRouting.ts`, `obstacleGeometry.ts`
 - `waterSourceAccess.ts`, `markerHandler.ts`
-- `demElevation.ts`, `offline/tileMath.ts`
+- `demElevation.ts` plus new pure `src/helper/demRaster.ts`
+- `offline/tileMath.ts`
+- new `src/helper/polygonGeometry.ts` (exact segment/polygon tests)
 - new `src/helper/routeProfile.ts`
+- new `src/helper/hosePressure.ts`
+- `src/store/pumpCalculationSettings.ts` (`maxHosePressure`)
+- `SettingsView.vue`
 - `MainMap.vue`, `pumpCalculation.ts`, `NearbyMarker.vue`, `SupplyPipeCalculation.vue`
 - `src/locales/{en,de}.json`
+- the spec files below
 
 **Changes**
 
 1. **Exact building test and true endpoints.** Smoothing starts from the true
    origin and target. `exactLineOfSight` becomes a segment/edge intersection
-   test (§6.6).
+   test (§6.6), via `segmentIntersectsPolygon` in `polygonGeometry.ts`.
 2. **One length.** `computeNearbyDistances` returns the length of the
    **smoothed polyline** per target. Road mode already does (§3.2); terrain
    mode needs path reconstruction and smoothing per reached target, ≤ 30. Label,
@@ -968,10 +1449,12 @@ already exists, update it instead of adding a new one.
    (`nearbyRouting.ts:216-221`), the tile cap (`obstacleGeometry.ts:54-59`),
    > 3 km (`:211`) and "no road within 100 m".
 4. **Missing vs empty** (§6.9). Do not cache missing tiles. Add
-   `coverage.basemap`.
+   `coverage.basemap`. `getObstaclesForBounds` takes an optional injected
+   `TileFetcher`.
 5. **Pond shore chosen by routing.**
    - `resolveAccessPoint` returns
      `AccessTarget = { kind: 'point'; point } | { kind: 'shore'; outline; fallback: GeoPoint }`.
+   - Add `sampleShore(outline, stepM)` in `areaShore.ts`.
    - Grid mode: shore cells as targets (§6.5).
    - Road mode: shore samples every 20 m and `POND_SHORE_SNAP_M = 250`.
 6. **Remove the Overpass wait from routing.**
@@ -984,24 +1467,93 @@ already exists, update it instead of adding a new one.
    - `OUTLINE_WAIT_MS` stays only if a non-routing caller still needs it.
 7. **Early exit and memoisation** in `solveTerrain` (§6.5). Stop re-solving in
    `gridRoutePath`.
-8. **Steep display and warning for road and direct mode** (§6.8).
-   - Export `decodeTerrariumTile` and `pointToTileCoord`.
-   - Add `sampleElevationsBlended(points, zoom)`, which blends neighbour tiles
-     at edges.
+8. **Steep display and warnings for the modes that exist now** (road graph and
+   terrain grid; §6.8, §6.13).
+   - Move the pure terrarium decode and the cross-tile bilinear sampling into
+     `demRaster.ts`. `demElevation.ts` keeps the image decode and fetching.
+   - Add `sampleElevationsBlended(points, zoom)`.
    - Add `TERRAIN_ROUTING_ZOOM = 14`. Try z14 within the budget, else fall back
      to z12 (amber only).
    - Fix the comment at `demElevation.ts:14`.
    - Raise the DEM LRU to 16 tiles (ESTIMATE: 16 MB).
+   - New setting `maxHosePressure` (default 16 bar) and the pressure rule
+     (§6.13). Move `parseHydrantPressure` from `pumpCalculation.ts:493-498` to
+     `hosePressure.ts`.
 
-**Acceptance**
+These terrain-mode fixes are not throw-away work. Endpoint handling, exact
+building tests, shore goals, early exit and memoisation carry over into the
+single cost grid that remains after phase 5.
 
-| Scene | Check |
-|---|---|
-| 1, pond, road mode | ≤ ~900 m, attaches via the farm track (research: ≈ 842 m), ends on the shore |
-| 1, hydrant, direct | no segment intersects a building (exact test, logged in the harness); length between 232 and 295 m |
-| any | list metres = label metres (to the metre) for 10 random targets per scene |
-| 5, "500 m north", direct | red section shown and "not recommended" chip |
-| all, routing | does not wait on Overpass: with Overpass blocked in DevTools, the path appears within the 1.5 s budget |
+**Specs**
+
+- `src/helper/polygonGeometry.spec.ts`. `segmentIntersectsPolygon` cases:
+  - crossing an edge;
+  - touching a vertex;
+  - running along an edge;
+  - fully inside;
+  - inside a hole (no hit);
+  - bbox prefilter rejection.
+- `src/mapHandler/gridRouting.spec.ts`:
+  - the phase-0 `it.fails` case now passes;
+  - property test: 200 seeded random building layouts × endpoints, and no
+    output segment of `pathTo` intersects any building edge;
+  - the early-exit solve equals the full solve for the queried targets;
+  - a second query from the same origin cell reuses the memoised solve (spy
+    counts one solve);
+  - reported `meters` equals the polyline length (±0.01 m).
+- `src/mapHandler/obstacleGeometry.spec.ts`:
+  - a fetcher returning `null` gives a `missing` status and the tile is not
+    cached; once the fetcher returns bytes, the tile decodes;
+  - more than 32 tiles sets `coverage.truncated`.
+- `src/mapHandler/waterSourceAccess.spec.ts`:
+  - a suction point within 30 m is the only goal; one at 31 m is not;
+  - outline source order is extract → water polygon under the marker → point;
+  - with `getAreaOutline` mocked to never resolve, `resolveAccessPoint`
+    resolves at once (fake timers).
+- `src/helper/areaShore.spec.ts` (extended), `sampleShore`:
+  - spacing ≤ 20 m;
+  - a pond under 20 m perimeter still yields ≥ 3 samples;
+  - multipolygon members are sampled.
+- `src/mapHandler/roadRouting.spec.ts` (extended): with shore targets, a 250 m
+  final leg is used when it is the cheapest arrival.
+- `src/helper/demRaster.spec.ts`:
+  - terrarium decode of known RGB triplets;
+  - a plane spread over 4 synthetic tiles is reproduced exactly at tile edges
+    (no clamping seam).
+- `src/helper/routeProfile.spec.ts`:
+
+  | Profile | Expected |
+  |---|---|
+  | 40 m at 30 % | one amber run |
+  | 8 m at 55 % | no red (below the 10 m minimum) |
+  | 12 m at 55 % | red run + "not recommended" |
+  | 60 m at 26 % | "not recommended" |
+  | 45 m at 26 % | no chip |
+  | z12-only input at 70 % | amber, never red |
+  | off-road | runs from `isNearAnyRoad` (6 m) |
+  | short runs | adjacent same-class runs merge |
+- `src/helper/hosePressure.spec.ts`:
+  - `parseHydrantPressure`: `'6'` → 6, `'suction'` → null, `'0'` → null,
+    absent → null;
+  - the §6.13 threshold table, exact at its edges: pump 8 bar → 39 m ok,
+    40 m caution, 80 m warning; hydrant 4 bar → 80 m / 120 m;
+  - an uphill-only profile → `ok` (no rule applies);
+  - the lowest point downstream of the source is used, not the end point.
+- `src/mapHandler/nearbyRouting.scenes.spec.ts` (updated):
+
+  | Case | Expected |
+  |---|---|
+  | scene 1 pond, road | 750–900 m; ends within 1 m of the outline |
+  | scene 1 hydrant, terrain | 0 building-edge intersections; 232–295 m |
+  | all scenes, every ring target | list metres = polyline metres (±0.5 m) |
+  | scene 5 "500 m north", terrain | red run and "not recommended" |
+  | scene 5 "500 m north", terrain | pressure `warning` (drop 177–220 m) |
+
+**Manual** (needs a real browser):
+
+- Steep layers and chips render correctly on the map.
+- With Overpass blocked in DevTools, the path appears within ~1.5 s.
+- The `maxHosePressure` input persists across an app reload.
 
 **What's New**
 
@@ -1010,31 +1562,57 @@ already exists, update it instead of adding a new one.
 - `fix`: "Routes to fire water ponds now end at the best reachable shore point."
 - `improvement`: "Steep stretches of a hose route are highlighted, with a
   warning when the route is not recommended."
+- `feature`: "Set the maximum working pressure of your hoses; long downhill
+  lines warn when it could be exceeded."
 
 ### Phase 2: decode the extra tile layers and add the cost model (no behaviour change)
 
 **Files**
 
 - `src/types/obstacles.ts`
-- `obstacleGeometry.ts`
+- new pure `src/mapHandler/obstacleDecode.ts`, split out of
+  `obstacleGeometry.ts` (§6.2)
 - new `src/mapHandler/hoseCostModel.ts`
 - `RoutingDebugView.vue`, to show the classes
+- the spec files below
 
 **Changes**
 
 - Extend the decoder (§6.2). `roads` keeps excluding rail and ferry and now also
   `path/corridor`; rail goes to `rails`.
-- Add the cost-model module with classifiers and factors (§6.3, §6.4).
+- Add the cost-model module with classifiers, class factors and `slopeFactor`
+  (§6.3, §6.4). It is not used for routing yet.
 - In the debug view, list unknown landuse kinds seen per scene.
 
-**Acceptance**
+**Specs**
 
-- Road and direct results are identical to phase 1 on all scenes. The only
-  exception is the removal of `path/corridor` from road mode; check that Vienna
-  changes only where indoor passages were used.
-- Per-scene class histograms match §4.1. For example, scene 1 is ~55 % `OPEN`
-  from farmland.
-- Decode time per tile is logged.
+- `src/mapHandler/hoseCostModel.spec.ts`:
+  - one case per row of the §6.3 class table (kind / kind_detail / flags →
+    class and factor);
+  - heavy rail blocks only for {rail, light_rail, narrow_gauge} on the
+    surface. Tram, subway, disused, `is_tunnel` and `is_bridge` do not block;
+  - a motorway on a bridge or in a tunnel does not block;
+  - `ferry` and `path/corridor` are excluded;
+  - an unknown landuse kind maps to `UNKNOWN_OPEN`;
+  - every factor is ≥ 1.0;
+  - `slopeFactor` curve points: 0 → 1.0, 0.08 → 1.0, 0.25 → 1.7, 0.5 → 4.0,
+    0.8 → 8.0, 1.0 → 12, 1.5 → 12;
+  - `slopeFactor` is monotonic and symmetric in the sign of the grade;
+  - the road, path and steps cap is 1.3 at any grade; on a bridge it is 1.0.
+- `src/mapHandler/obstacleDecode.spec.ts` (fixtures):
+  - scene 4: every `kind=rail` feature is tram, subway or disused;
+  - scene 2: surface `kind_detail=rail` features exist and tunnel pieces
+    carry `isTunnel`;
+  - scene 3: a water polygon contains a point in the Danube;
+  - scene 1: farmland is the largest landuse class in the window;
+  - `kind=cliff` lines decode from `earth` where present;
+  - `is_bridge` and `is_tunnel` are parsed as booleans.
+- `src/mapHandler/nearbyRouting.scenes.spec.ts`: road and terrain lengths
+  equal the phase-1 values (stored as an inline snapshot rounded to 1 m). The
+  only allowed difference is a listed set of scene-4 cases affected by
+  removing `path/corridor`.
+
+**Manual:** none.
 
 **What's New:** none.
 
@@ -1043,10 +1621,13 @@ already exists, update it instead of adding a new one.
 **Files**
 
 - `gridRouting.ts`, possibly split out as `costGrid.ts`
+- new `src/mapHandler/cellHeap.ts`
 - `nearbyRouting.ts`, `roadRouting.ts`
+- new `src/helper/hoseRoutingSetting.ts`
 - `settingsStore.ts`, `composable/settings.ts`, `SettingsView.vue`
 - `markerHandler.ts`, `MainMap.vue`, `pumpCalculation.ts`
-- `src/locales/{en,de}.json`
+- `src/locales/{en,de}.json`: the dev preview item
+- the spec files below
 
 **Changes**
 
@@ -1054,58 +1635,115 @@ already exists, update it instead of adding a new one.
   scanline fill.
 - Goal sets and A* (§6.5).
 - Cost-aware smoothing (§6.6).
-- Settings enum and migration (§6.7). Default `direct`.
-- Show `optimized` in the select only when `VITE_HOSE_ROUTING_OPTIMIZED=1` or in
-  dev, so Cloudflare previews can enable it.
+- Settings enum and migration, phases 3–4 column (§6.7):
+  - type `'optimized' | 'roads' | 'direct'`;
+  - effective default `direct`;
+  - the production toggle maps on → `roads`, off → `direct`;
+  - the preview item appears only with `VITE_HOSE_ROUTING_OPTIMIZED=1` or in
+    dev, so Cloudflare previews can enable it.
 - Road mode: price the final leg with the cost model; this is the "light"
   variant from §6.1.
 
-**Acceptance (optimized, indicative targets)**
+**Specs**
 
-| Scene | Check |
-|---|---|
-| 1, pond | between ~528 m and ~700 m; ends on the shore; crosses no building |
-| 1, hydrant | ≤ 295 m; no segment intersects a building |
-| 2 | no route crosses surface heavy rail except along a road (the underpass ~155 m WNW, level crossings); ~8 of 38 positions notably off-road (± a few) |
-| 3 | no route enters the Danube polygon; the 151 m / 797 m case is clearly shorter than road mode |
-| 4 | trams never block: deleting tram features changes no route; optimized within ~15 % of road mode per position (research median 0.86); 0 of 45 notably off-road |
-| settings | a stored `clamp_hoses_to_roads='true'` loads as `roads`; `'false'`/absent loads as the default and is not persisted |
+- `src/mapHandler/cellHeap.spec.ts`:
+  - 10,000 seeded random pushes pop in non-decreasing order;
+  - the heap grows past its initial capacity;
+  - equal keys are handled.
+- `src/mapHandler/costGrid.spec.ts` (or `gridRouting.spec.ts`):
+  - scanline fill of a square, a concave polygon and a polygon with a hole
+    gives exactly the cells whose centre a reference point-in-polygon test
+    puts inside;
+  - fringe = edge-touched cells minus filled cells;
+  - order: a road drawn over heavy rail leaves the crossing cell passable;
+  - order: a nested smaller landuse polygon wins;
+  - bridged rail is not drawn;
+  - escape radius: a core cell 11 m from an endpoint is finite (30); at 13 m
+    it is blocked.
+- `src/mapHandler/gridRouting.spec.ts`:
+  - symmetry: on 100 seeded random grids, cost A→B = cost B→A (±1e-9);
+  - A* cost = Dijkstra cost on the same 100 cases (admissibility);
+  - goal set: the returned goal is the minimum-cost goal cell;
+  - the endpoint equals `nearestPointOnOutline` of that cell;
+  - a suction point within 30 m overrides the goal set;
+  - cost-aware smoothing: the property test (no building-edge intersection,
+    no blocked cell) passes;
+  - smoothed cost ≤ unsmoothed cost × 1.02 + 2 m;
+  - Douglas–Peucker never removes a vertex whose removal would break those
+    tests.
+- `src/helper/hoseRoutingSetting.spec.ts`: every row of the §6.7 migration
+  table, phases 3–4 column, including "migrated value is not persisted" (the
+  `shouldPersist` flag is false).
+- `src/mapHandler/gridRouting.scenes.spec.ts` (`optimized`, fixtures,
+  indicative targets):
 
-**What's New:** none while it is behind the flag. If the settings select ships
-visibly with only `roads`/`direct`, add an `improvement` entry that names the
-renamed option.
+  | Scene | Expected |
+  |---|---|
+  | 1, pond | 528–700 m; ends within 1 m of the outline; 0 building-edge intersections |
+  | 1, hydrant | ≤ 295 m; 0 intersections |
+  | 2, all 38 ring positions | 0 crossings of surface heavy rail outside road or bridge cells (the underpass ~155 m WNW counts as a road cell) |
+  | 2, off-road | 5–11 positions notably off-road (research: 8) |
+  | 3 | no route vertex or segment inside the Danube polygon |
+  | 3, the 151 m / 797 m case | optimized < 0.8 × road |
+  | 4, rings 150 / 300 m (32 positions) | removing all tram features leaves every length unchanged (±0.5 m) |
+  | 4, ratio optimized / road | median 0.80–1.00 (research 0.86); every position 0.70–1.15 |
+  | 4, off-road | 0 positions notably off-road |
+
+**Manual:** in a preview build with the flag, the preview item switches modes
+and the route redraws.
+
+**What's New:** none. The production UI is unchanged.
 
 ### Phase 4: slope in the cost
 
 **Files**
 
-- `demElevation.ts`: `getHeightRaster(bounds, cellM, zoom)`, which blends
-  across tiles, adds a halo and smooths 3×3.
+- `demRaster.ts`: `buildHeightRaster(bounds, cellM, tiles)` (pure: blends
+  across tiles, adds a halo, smooths 3×3)
+- `demElevation.ts`: fetch wrapper
 - `gridRouting.ts` / `costGrid.ts`, `hoseCostModel.ts`
 - `nearbyRouting.ts`, `routeProfile.ts`
+- the spec files below
 
 **Changes**
 
-- Add the slope factor (§6.4), the bridge class rules and the z12 fallback
-  baseline.
+- Add the slope factor to the step cost (§6.4), the bridge class rules and
+  the z12 fallback baseline.
 - Reported metres become the 3D polyline length in all modes.
 - `HoseRoute.climbM` feeds the label.
 
-**Acceptance**
+**Specs**
 
-| Scene | Check |
-|---|---|
-| 5, "500 m north" | no straight descent of the scarp; length ~1.2–1.5 km (research 1,367 m) |
-| 5, all 29 positions | metres over > 60 % ≤ ~25 m in total (research: 408 → 25) |
-| 5, blocking test | turning blocking on at 60 % or 80 % changes no length (research) |
-| 2 | the road in the cutting is still used; its banks do not act as walls for the road itself |
-| 4 | building-edge steepness artefacts do not change any route vs phase 3 by > 5 % |
-| 3D | extra length for road routes ≤ ~2–3 % (research median 0.1 %) |
-| z12 only | at most ~1 in 29 Innsbruck routes differs from z14 (research) |
+- `src/helper/demRaster.spec.ts` (extended):
+  - the height raster of a synthetic plane matches the plane at every cell,
+    across tile edges;
+  - 3×3 smoothing leaves a plane unchanged;
+  - the z12 baseline uses `ceil(24 / cellM)` cells.
+- `src/mapHandler/costGrid.spec.ts` (extended):
+  - the step cost with slope is symmetric (u→v = v→u);
+  - a `BRIDGE` cell ignores slope;
+  - a step `BRIDGE` → `OPEN` is rejected;
+  - on a synthetic ramp the router takes a 15 % switchback instead of a 70 %
+    direct line when the detour is under ~2×.
+- `src/helper/routeProfile.spec.ts` (extended): the 3D length of a known
+  inclined line is correct to 0.1 %.
+- `src/mapHandler/gridRouting.scenes.spec.ts` (extended, `optimized`):
+
+  | Scene | Expected |
+  |---|---|
+  | 5, "500 m north" | 1,200–1,500 m (research 1,367 m); no run steeper than 60 % longer than 10 m |
+  | 5, all 29 positions | total metres over ground steeper than 60 % ≤ 40 m (research 25) |
+  | 5, blocking at 60 % / 80 % vs none | every length within ±2 % (research: identical) |
+  | 5, z12-only DEM | ≤ 3 of 29 routes differ by > 5 % from z14 (research: 1) |
+  | 2, ring positions south of the hydrant | ≥ 80 % of route length on `ROAD`/`PATH`/`BRIDGE` cells (the cutting road stays usable) |
+  | 4, rings 150 / 300 m | every length within 5 % of the phase-3 snapshot (building-edge artefacts do not push routes) |
+  | all scenes, road-mode routes | 3D extra length ≤ 3 % (research median 0.1 %) |
+
+**Manual:** none.
 
 **What's New:** none while it is behind the flag.
 
-### Phase 5: UI completion, then optimized becomes the default
+### Phase 5: UI completion, optimized becomes the default, direct is removed
 
 **Files**
 
@@ -1113,8 +1751,13 @@ renamed option.
 - `pumpCalculation.ts`: the `pump-line` source gets segment features
   (`pumpLineFeatures`, `pumpCalculation.ts:236-252`)
 - `NearbyMarker.vue`, `SupplyPipeCalculation.vue`
+- new `src/helper/routeLabel.ts` (pure label formatter)
+- `settingsStore.ts`, `composable/settings.ts`, `hoseRoutingSetting.ts`
+- `SettingsView.vue`
 - `src/locales/{en,de}.json`
-- `settingsStore.ts`: `DEFAULT_HOSE_ROUTING = 'optimized'`
+- `gridRouting.ts`, `nearbyRouting.ts`, and `weightedDistance.ts` if it has no
+  callers left
+- the spec files below
 
 **Changes**
 
@@ -1123,38 +1766,93 @@ renamed option.
   selected route only.
 - Coverage chips and estimate labelling.
 - The one-time note, stored as a Preferences flag.
-- Remove the dev flag.
+- **Two modes from now on** (§6.7):
+  - remove `'direct'` from the type;
+  - remove the preview item and the `settings.map.hoseRoutingPreview` keys;
+  - the toggle maps off → `optimized`;
+  - new `settings.map.clampToRoads.description` text (and the de label);
+  - migrate stored `'direct'` and legacy `'false'`/absent to `optimized`, and
+    write the key once.
+- **Delete the legacy terrain-only cost path:**
+  - `GRID_ROAD_FACTOR`, `GRID_OPEN_FACTOR`, `GRID_BUILDING_FACTOR`,
+    `GRID_BUILDING_FRINGE_FACTOR` (`gridRouting.ts:15-31`);
+  - the four-class `CLASS_FACTOR` table (`:38-48`);
+  - any `clampToRoads` branch.
 
-**Acceptance**
+  One cost grid remains, driven by `hoseCostModel.ts`.
 
-- All checks from phases 3 and 4 still pass.
-- In scene 5, a route shows dashed, amber and red runs where expected.
-- The label format matches §6.8.
-- A user with `clamp_hoses_to_roads='true'` still gets `roads`.
+**Specs**
 
-**What's New:** `feature`: "New route mode that weighs roads, fields, slopes and
-obstacles; off-road and steep stretches are marked on the line."
+- `src/helper/hoseRoutingSetting.spec.ts`: switch to the "from phase 5" column
+  of §6.7:
+  - `'direct'` → `optimized`;
+  - `clamp='false'` → `optimized`;
+  - `clamp='true'` → `roads`;
+  - an unknown value → `optimized`;
+  - `shouldPersist` is true exactly once.
+- `src/helper/routeLabel.spec.ts`:
+
+  | Input | Output |
+  |---|---|
+  | 1,367 m / 20 m hoses / +197 m, de | `1.367 m · ~69 B-Schläuche · ↑197 m` |
+  | negative climb | `↓` |
+  | road-only differs by 16 % | road-only length appended |
+  | road-only differs by 14 % | nothing appended |
+  | any route with off-road metres | off-road metres shown |
+
+- `src/mapHandler/gridRouting.scenes.spec.ts`: drop the terrain/`direct`
+  baselines from phases 0–2. All phase-3/4 cases now run through the default
+  mode.
+- `src/mapHandler/gridRouting.spec.ts`: delete the specs that only covered the
+  removed four-class factors.
+
+**Manual:**
+
+- The map shows dashed, amber and red runs in scene 5 (debug view).
+- The label is readable on a phone.
+- The settings toggle works.
+- One preview round with the owner's unit before the merge.
+
+**What's New**
+
+- `feature`: "Hose routes now weigh roads, fields, slopes and obstacles;
+  off-road and steep stretches are marked on the line."
+- If a "steep stretches" entry from phase 1 is still `unreleased`, merge the
+  two.
 
 ### Phase 6: Web Worker and adaptive cell size
 
 **Files**
 
-- new `src/workers/hoseRouting.worker.ts`
+- new `src/workers/hoseRouting.worker.ts` (thin message shell)
+- new `src/mapHandler/hoseRoutingCore.ts` (pure solve entry used by worker
+  and main thread)
 - `nearbyRouting.ts` becomes the main-thread facade (fetch and transfer bytes)
 - `costGrid.ts`, `demElevation.ts`
+- the spec files below
 
 **Changes**
 
 - Adaptive cell size, cap 400k (§6.10).
 - Run the solve in the worker; fall back to the main thread.
 
-**Acceptance**
+**Specs**
 
+- `src/mapHandler/hoseRoutingCore.spec.ts`:
+  - `chooseCellSize(windowM, purpose)` returns 4 / 6 / 8 m at the §6.10
+    boundaries;
+  - above 400k cells it returns `cellCap`;
+  - the message payload round-trips via `structuredClone`.
+- `src/mapHandler/gridRouting.scenes.spec.ts`: runs through `hoseRoutingCore`
+  with adaptive cells. All phase-3/4/5 ranges still hold, and lengths stay
+  within 3 % of the 8 m results.
+
+**Manual** (the worker cannot be exercised in Node):
+
+- On one mid-range Android and one iPhone (Capacitor WebView), the worker
+  starts and the `OffscreenCanvas` fallback works.
 - No main-thread task > 50 ms during a nearby search (Performance panel).
-- Cold nearby list and single path times are measured on one mid-range Android
-  and one iPhone and written into this plan.
-- Results agree with phase 5 within 3 % on all scenes; finer cells may change
-  them slightly.
+- Cold nearby-list and single-path times, written into this plan.
 
 **What's New:** only if the speed-up is noticeable: `improvement`: "Hose routes
 are calculated faster."
@@ -1163,7 +1861,9 @@ are calculated faster."
 
 **Files**
 
-- new `src/offline/routingCache.ts`
+- new `src/offline/routingCache.ts` (IndexedDB adapter)
+- new pure `src/offline/routingCacheIndex.ts` (budget, LRU, TTL decisions)
+- new pure `src/offline/precachePolicy.ts`
 - `offlineProtocol.ts`
 - new `src/mapHandler/routingData.ts`
 - `MainMap.vue`, `markerHandler.ts`, `nearbyWaterSource.ts`
@@ -1173,6 +1873,7 @@ are calculated faster."
 - `offlineAreaActions.ts`: per-zoom size estimate
 - `SettingsView.vue`: cache budget
 - `src/locales/{en,de}.json`
+- the spec files below
 
 **Changes**
 
@@ -1180,13 +1881,32 @@ are calculated faster."
 - Existing offline areas get z14 on their next refresh: the `tileStore.has()`
   check in `downloadTiles` skips tiles already present.
 
-**Acceptance**
+**Specs**
 
-- With Overpass blocked and the network throttled to "Slow 3G", a route appears
-  within ~1.5 s with a coverage chip, then updates silently when the tiles land.
-- The cache byte total stays ≤ budget after a 20 km drive simulation.
-- No prefetch runs on cellular or with `saveData`.
-- Offline inside a re-downloaded area, `dem` coverage is `full` at z14.
+- `src/offline/routingCacheIndex.spec.ts`:
+  - eviction keeps the byte total ≤ budget and evicts least-recently-used
+    first;
+  - basemap expires after 30 days and DEM after 180 days;
+  - a 20 km drive simulation (synthetic tile stream) never exceeds the budget.
+- `src/offline/precachePolicy.spec.ts`:
+  - the ring refreshes after 500 m of movement, not 499 m;
+  - priority 3 needs zoom ≥ 14, 1.5 s idle and Wi-Fi;
+  - nothing is fetched when offline or with `saveData`;
+  - at most 3 requests run per source.
+- `src/offline/tileMath.spec.ts`: `tilesForZooms([0..12, 14])` equals the sum
+  of the per-zoom counts and skips z13.
+- `src/mapHandler/routingData.spec.ts` (fake timers): with a fetcher that
+  answers after 5 s, the router returns within 1.5 s with `coverage.basemap =
+  'partial'`, and `routingDataArrived` fires once the tile lands.
+
+**Manual** (browser and device behaviour):
+
+- With Overpass blocked and "Slow 3G", the route appears with a chip, then
+  updates silently.
+- Prefetch does not run on cellular.
+- iOS IndexedDB quota behaviour.
+- Re-downloading an offline area adds z14, and routing offline inside it shows
+  `dem: 'full'`.
 
 **What's New**
 
@@ -1287,6 +2007,15 @@ planet passes dominate. Estimated extra time:
 - Read `barriers.pmtiles` z14 through the `offline://` pipeline.
 - Barrier lines → `BLOCKED`; gates/entrances on a barrier → passable.
 - `coverage.barriers` becomes `full` or `partial`.
+- Specs for phase 8b:
+  - `obstacleDecode.spec.ts`: barrier lines and gate nodes decode from a small
+    synthetic tile;
+  - `hoseCostModel.spec.ts`: a barrier line is `BLOCKED`, a gate on it is
+    passable;
+  - a synthetic-grid case in `gridRouting.spec.ts` routes through the gate.
+
+  The pipeline itself (other repository, no test runner) stays manual: check
+  the first Austria build's size and spot-check it against openstreetmap.org.
 
 **What's New**
 
@@ -1295,25 +2024,37 @@ planet passes dominate. Estimated extra time:
 
 ## 8. Files touched (overview)
 
+Spec files sit next to their source file and are listed in each phase. They are
+summarised in the second-to-last row.
+
 | File | Phases |
 |---|---|
-| `src/mapHandler/gridRouting.ts` (+ new `costGrid.ts`) | 1, 3, 4, 6 |
-| `src/mapHandler/nearbyRouting.ts` | 1, 3, 4, 6, 7 |
+| `src/mapHandler/gridRouting.ts` (+ new `costGrid.ts`, `cellHeap.ts`) | 1, 3, 4, 5 (legacy factors removed), 6 |
+| `src/mapHandler/nearbyRouting.ts` | 1, 3, 4, 5, 6, 7 |
 | `src/mapHandler/roadRouting.ts` | 1, 3 |
-| `src/mapHandler/obstacleGeometry.ts`, `src/types/obstacles.ts` | 1, 2 |
+| `src/mapHandler/obstacleGeometry.ts`, new `obstacleDecode.ts`, `src/types/obstacles.ts` | 1, 2 |
 | `src/mapHandler/hoseCostModel.ts` (new) | 2–4 |
+| `src/mapHandler/hoseRoutingCore.ts` (new), `src/workers/hoseRouting.worker.ts` (new) | 6 |
 | `src/mapHandler/waterSourceAccess.ts`, `markerHandler.ts` | 1, 3, 7 |
 | `src/mapHandler/routingData.ts` (new) | 7 |
-| `src/helper/demElevation.ts`, `src/offline/tileMath.ts` | 1, 4, 6, 7 |
-| `src/helper/routeProfile.ts` (new) | 1, 4, 5 |
-| `src/offline/offlineProtocol.ts`, `routingCache.ts` (new), `tileDownloader.ts` | 7 |
+| `src/helper/demElevation.ts`, new `demRaster.ts`, `src/offline/tileMath.ts` | 1, 4, 6, 7 |
+| `src/helper/polygonGeometry.ts`, `routeProfile.ts`, `hosePressure.ts` (all new) | 1, 4, 5 |
+| `src/helper/hoseRoutingSetting.ts` (new), `src/helper/routeLabel.ts` (new) | 3, 5 |
+| `src/helper/weightedDistance.ts` | 5 (deleted if unused) |
+| `src/offline/offlineProtocol.ts`, `tileDownloader.ts`, new `routingCache.ts`, `routingCacheIndex.ts`, `precachePolicy.ts` | 7 |
 | `src/store/offlineAreasStore.ts`, `src/composable/offlineAreaActions.ts` | 7 |
-| `src/store/settingsStore.ts`, `src/composable/settings.ts`, `src/views/SettingsView.vue` | 3, 5, 7 |
+| `src/store/pumpCalculationSettings.ts` | 1 (`maxHosePressure`) |
+| `src/store/settingsStore.ts`, `src/composable/settings.ts`, `src/views/SettingsView.vue` | 1, 3, 5, 7 |
 | `src/components/MainMap.vue`, `src/composable/pumpCalculation.ts` | 1, 3, 5, 7 |
 | `src/components/NearbyMarker.vue`, `SupplyPipeCalculation.vue` | 1, 5 |
 | `src/locales/{en,de}.json` | 1, 3, 5, 7 |
-| `src/workers/hoseRouting.worker.ts` (new) | 6 |
-| `src/views/RoutingDebugView.vue` (new), `src/router/index.ts`, `scripts/fetch-routing-fixtures.mjs` (new) | 0 |
+| `src/composable/modalBreakpointWatcher.ts`, `src/views/SettingsView.vue` (existing type errors) | 0 |
+| `src/views/RoutingDebugView.vue` (new), `src/router/index.ts` | 0 (and kept current in later phases) |
+| `scripts/fetch-routing-fixtures.mjs` (new), `src/mapHandler/__fixtures__/routing/**` (new), `src/testing/routingFixtures.ts` (new) | 0 |
+| `package.json`, `package-lock.json`, `vitest.config.ts` (new), `tsconfig.node.json`, `eslint.config.mjs`, `.prettierignore` | 0 |
+| `.github/workflows/ci.yml` (new), `.github/workflows/release.yml` | 0 |
+| `AGENTS.md` (§2, §3, §4, §7), `CLAUDE.md` | 0 |
+| `*.spec.ts` / `*.scenes.spec.ts` next to the files above | 0–7 |
 | `src/assets/whats-new.json` | 1, 5, (6), 7 |
 | `fireyak-data`: `build.sh`, `export-config-barriers.json` (new), `Dockerfile` (COPY) | 8 |
 
@@ -1332,35 +2073,37 @@ planet passes dominate. Estimated extra time:
   order handle common cases, but a path passing under a road bridge shares cells
   with it. The DEM cuts bridges as terrain (§4.2).
 - The samples were small and all in Austria, which is a best case for building
-  completeness. §6.11 exists for other regions, with untested thresholds.
+  completeness. §6.11 exists for other regions, with untested thresholds. The
+  fixtures are Austrian too, so green scene specs prove nothing about other
+  regions.
 - The optimized numbers so far come from an **approximation** by the research
-  agent, not from the app. Phase 3/4 acceptance compares against them as
-  targets, not as truth.
+  agent, not from the app. The phase 3/4 scene specs use them as tolerant
+  targets, not as truth. If the real router lands outside a range, check the
+  case before tuning to it.
+- The pressure rule is static. It ignores friction (which only lowers
+  pressure), pressure surges and hose ageing, and the 16 bar default is
+  recalled, not verified.
 - Everything shown is an estimate. The UI must say so (§6.8).
 
 ## 10. Open questions
 
-1. **When does `optimized` become the default?** Proposed: at the end of
-   phase 5, after one preview round with the owner's unit.
-2. **vitest yes or no?** See phase 0.
-3. **Tunnelled footways:** exclude (proposed) or treat as paths?
-4. **Thresholds** for amber, red and the chip, and especially `HEIGHT_WARN_M`.
-   The owner should give the hose pressure rating, so the static gain on
-   downhill lines (Innsbruck: 18–22 bar) can be judged.
-5. **Should `direct` mode survive** once `optimized` is the default? It is
-   useful as a lower bound, but it is a third option to explain.
-6. **Why do the Vienna tiles lack sidewalks** (35 % of road length)? Is it
+1. **Tunnelled footways:** exclude (proposed) or treat as paths?
+2. **Slope thresholds** for amber, red and the "not recommended" chip are
+   starting values to confirm in the field. The pressure rule's 16 bar default
+   (DIN 14811, RECALLED) also needs the owner's confirmation.
+3. **Why do the Vienna tiles lack sidewalks** (35 % of road length)? Is it
    Protomaps generalisation, or an OSM tagging pattern (sidewalks mapped as
    `footway=sidewalk` on separate ways)?
-7. **R2:** the real pricing and limits, and what the stale ~1.2 GB prefix is.
-8. Should `access=military` block?
-9. Should the routing fixtures be committed (size, Protomaps terms) or stay
-   gitignored?
-10. How should "Wi-Fi only" work on the web build? `navigator.connection` is
-    missing in Safari, so either treat unknown as "no prefetch" or allow it.
-11. Should the nearby list re-sort after a silent recompute, or only update the
-    metres?
-12. Precaching raises Protomaps API request volume. Check the key's plan limits.
+4. **R2:** the real pricing and limits, and what the stale ~1.2 GB prefix is.
+5. Should `access=military` block?
+6. **Fixture redistribution:** do Protomaps' terms (and Mapterhorn's per-source
+   licences) allow the routing fixtures in a public repository? Until
+   confirmed, the tiles stay gitignored and scene specs skip (§6.14).
+7. How should "Wi-Fi only" work on the web build? `navigator.connection` is
+   missing in Safari, so either treat unknown as "no prefetch" or allow it.
+8. Should the nearby list re-sort after a silent recompute, or only update the
+   metres?
+9. Precaching raises Protomaps API request volume. Check the key's plan limits.
 
 ## 11. Risks
 
@@ -1369,13 +2112,31 @@ planet passes dominate. Estimated extra time:
 - **False confidence.** A tidy dashed line through a fenced garden looks
   authoritative. Mitigations: estimate labelling, the one-time note, and the
   coverage chips.
+- **Losing the straight-across mode.** Some users relied on the terrain mode as
+  a shortest-line estimate. `optimized` gives a similar line on open land, and
+  the label shows the road-only length when the two differ, but the "lower
+  bound" number itself is gone after phase 5.
 - **Window clipping.** Detours longer than the window margin are impossible. The
   edge-touch re-solve (§6.5) mitigates this, but a very long detour can still be
   cut.
 - **DEM artefacts** at bridges and building edges can push routes. They are
-  bounded by the road cap (×1.3) and the bridge class; check them in phase 4.
-- **Settings migration** could misread or overwrite user choices. Never persist
-  migrated values (§6.7).
+  bounded by the road cap (×1.3) and the bridge class; the phase 4 scene specs
+  check this.
+- **Settings migration** could misread or overwrite user choices. Phases 3–4
+  never persist migrated values; phase 5 writes once. Every case of the §6.7
+  table is a spec case.
+- **Pressure warnings in hilly regions.** With a pump at the source, a 40 m
+  drop already shows a caution. That may be noisy where such drops are normal;
+  the threshold follows the user's `maxHosePressure`.
+- **Test tolerances.** If the ranges are too tight, specs flap after a fixture
+  refresh; if too loose, regressions slip through. Re-check the ranges whenever
+  fixtures are regenerated, and keep the research figures in §5 as the
+  reference.
+- **Type-check baseline.** `typecheck` is red today (2 errors in `src`), so
+  phase 0 must fix them before CI can require the step.
+- **Fixture licence.** If the redistribution terms are not confirmed, scene
+  specs run only where a developer fetched the fixtures, and CI covers unit
+  specs only.
 - **Storage growth:** the routing cache plus DEM z14 in offline areas. Use the
   byte budget and show the estimates in the UI.
 - **CDN quota or rate limits** from precaching. Limit concurrency to 3, use
