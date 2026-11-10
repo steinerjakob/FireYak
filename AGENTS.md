@@ -249,7 +249,8 @@ such a branch for **new** work, create a properly named branch and push that ins
 
 **Exception — follow-ups on an existing PR:** keep pushing to that PR's head branch,
 whatever its name, so the commits land in the PR. Don't open a replacement branch
-or PR just to fix the name.
+or PR just to fix the name. If that branch can't be pushed to, stop and report it
+instead of pushing the work somewhere else.
 
 | Prefix | Use for | Commit type |
 |---|---|---|

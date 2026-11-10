@@ -460,11 +460,26 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	 */
 	function rebaseOnServer(serverTags: Record<string, string>, conflicts: string[]) {
 		if (!originalMarker.value) return;
-		originalMarker.value = { ...originalMarker.value, tags: { ...serverTags } };
-		for (const key of conflicts) {
-			if (serverTags[key] === undefined) delete editableTags.value[key];
-			else editableTags.value[key] = serverTags[key];
+		const oldBase = originalMarker.value.tags ?? {};
+		// An empty form field means "remove this tag".
+		const value = (v: string | undefined) => (v === '' ? undefined : v);
+		const keys = new Set([
+			...Object.keys(oldBase),
+			...Object.keys(serverTags),
+			...Object.keys(editableTags.value)
+		]);
+		for (const key of keys) {
+			const userEdited = value(editableTags.value[key]) !== value(oldBase[key]);
+			// Fields the user did not touch must follow the server, or a second
+			// save would upload their stale value over someone else's change.
+			// Conflicting fields show the other mapper's value too; the user's
+			// other (non-conflicting) edits are kept.
+			if (!userEdited || conflicts.includes(key)) {
+				if (serverTags[key] === undefined) delete editableTags.value[key];
+				else editableTags.value[key] = serverTags[key];
+			}
 		}
+		originalMarker.value = { ...originalMarker.value, tags: { ...serverTags } };
 	}
 
 	/** Another mapper changed the same keys since the edit started — don't upload. */
