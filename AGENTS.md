@@ -98,6 +98,7 @@ src/
 | `distanceCalculation.ts` | Haversine distance + geodetic point interpolation (20m intervals) |
 | `elevationData.ts` | Batch elevation fetching helper (legacy/fallback path) |
 | `helper.ts` | Debounce utility |
+| `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
 | `weightedDistance.ts` | Tuning constants for the road-aware weighted-distance heuristic (building penalty, road bonus, sampling) |
 
@@ -113,6 +114,8 @@ src/
 | `obstacleGeometry.ts` | Decodes building footprints and road centerlines from Protomaps vector tiles for routing |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker |
+| `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
+| `areaOutline.ts` | Session cache + Overpass `out geom` lookup for pond-area outlines (map highlight) |
 
 ### Offline mode (`src/offline/`)
 
@@ -142,6 +145,7 @@ src/
 | `NearbyMarker.vue` | List item showing nearby source with distance + B-tube count |
 | `NearbyMarkerHeader.vue` | Header for nearby markers section |
 | `NearbyMarkerPanel.vue` | Bottom sheet listing nearby water sources within radius |
+| `PondAreaCandidates.vue` | Add-mode list of OSM water areas at the pin: mark an existing pond, edit an existing fire pond, or suggest a suction point |
 | `ReloadPrompt.vue` | PWA update notification with reload button |
 | `SupplyPipeCalculation.vue` | Pump supply line UI (suction/fire points, waypoints, profile) |
 | `SupplyPipeCalculationHeader.vue` | Header for pump calculation panel |
@@ -202,7 +206,7 @@ Separate from the GitHub Actions above, **Cloudflare Pages** (Git integration, c
 - **`main`** → dev page at `https://fireyak.pages.dev` (not production; app.fireyak.org on GitHub Pages stays production).
 - **Every other branch** (except `dependabot/*`) → preview at `https://<branch-alias>.fireyak.pages.dev` plus a per-commit `https://<sha>.fireyak.pages.dev`. Cloudflare posts the link as a check/comment on the PR. Branches from forks are not built.
 
-Cloudflare builds set `VITE_OSM_URL`/`VITE_OSM_CLIENT_ID` (read by `src/services/osmConfig.ts`), so OSM login and edits go to the **OSM dev server** (`master.apis.dev.openstreetmap.org`). Login works only on hosts registered as exact redirect URIs on the dev OAuth app, so not on per-commit URLs. Because map data still comes from production OSM, editing/deleting *existing* markers is blocked on such builds (`OSM_EDITS_TARGET_OTHER_SERVER`); adding new markers works, and marker "view/edit on OSM" links always use production (`OSM_DATA_WEB_URL`). Native builds ignore these variables. Full setup and caveats: `plans/cloudflare-pages-previews.md`.
+Cloudflare builds set `VITE_OSM_URL`/`VITE_OSM_CLIENT_ID` (read by `src/services/osmConfig.ts`), so OSM login and edits go to the **OSM dev server** (`master.apis.dev.openstreetmap.org`). Login works only on hosts registered as exact redirect URIs on the dev OAuth app, so not on per-commit URLs. Because map data still comes from production OSM, edits to *existing* objects on such builds (`OSM_EDITS_TARGET_OTHER_SERVER`) are dry runs: `src/services/osmWrite.ts` reads them from the production API and shows the changeset instead of uploading it. All OSM reads-for-edit and uploads must go through `getFeatureForEdit`/`uploadChange` there. Adding new markers uploads to the dev server, and marker "view/edit on OSM" links always use production (`OSM_DATA_WEB_URL`). Native builds ignore these variables. Full setup and caveats: `plans/cloudflare-pages-previews.md`.
 
 ## 4. Key Commands
 
@@ -237,6 +241,32 @@ npm run generate:assets
 - **Material Design 3 Theming**: Custom MD3 CSS overrides for all Ionic components live in `src/theme/md3/`.
 - **Conventional Commits**: Enforced via Commitlint + Husky pre-commit hooks.
 
+### Branch naming (REQUIRED)
+
+Name every new branch `<type>/<short-kebab-slug>`. Do **not** use tool-generated
+names such as `claude/…`, `codex/…` or `copilot/…`. If your environment hands you
+such a branch for **new** work, create a properly named branch and push that instead.
+
+**Exception — follow-ups on an existing PR:** keep pushing to that PR's head branch,
+whatever its name, so the commits land in the PR. Don't open a replacement branch
+or PR just to fix the name. If that branch can't be pushed to, stop and report it
+instead of pushing the work somewhere else.
+
+| Prefix | Use for | Commit type |
+|---|---|---|
+| `feature/` | New user-facing functionality | `feat:` |
+| `bugfix/` | Fixing broken behaviour | `fix:` |
+| `docs/` | Documentation and plans only (`AGENTS.md`, `README.md`, `plans/`) | `docs:` |
+| `refactor/` | Code restructuring without behaviour change | `refactor:` |
+| `chore/` | CI, build, tooling, dependencies, releases | `chore:` / `ci:` / `build:` |
+
+- Add the issue number when there is one: `bugfix/101-suction-points`.
+- Keep the whole name short, **at most ~28 characters**. Cloudflare Pages builds
+  the branch preview URL from it (`/` → `-`) and cuts it at 28 characters,
+  e.g. `claude/issue-101-suction-pipes` became `claude-issue-101-suction-pip`.
+- One branch per PR. Don't stack unrelated changes on a branch that already has
+  an open PR.
+
 ## 6. What's New Maintenance (REQUIRED)
 
 Every **user-facing change** MUST add an entry to the `unreleased` array in
@@ -267,6 +297,7 @@ Rules:
 ## 7. Important Notes for AI Agents
 
 - **No test suite exists.** There are no unit or integration tests.
+- **Areas get tag-only edits.** Fire water ponds can be ways or multipolygon relations. For those, FireYak only changes tags: never coordinates, member nodes or members, and it never deletes them (that would remove the water body). "Delete" on a pond area removes only the `emergency=fire_water_pond` flag. Helpers live in `src/helper/osmElement.ts`; the edit queue rejects area deletes.
 - **OSM OAuth2 uses PKCE flow** — see `osmAuthStore.ts` for the implementation. Never hard-code `www.openstreetmap.org` or the client ID; use `OSM_WEB_URL`/`OSM_CLIENT_ID` from `src/services/osmConfig.ts` so preview builds hit the OSM dev server.
 - **Web changes get a Cloudflare Pages preview per branch** (see §3 "Preview deployments"); point reviewers to the PR's preview link for UI checks.
 - **The PWA manifest is generated by `vite-plugin-pwa`** from `vite.config.ts`, not a static file.

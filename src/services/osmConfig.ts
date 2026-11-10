@@ -35,9 +35,11 @@ export const OSM_WEB_URL = urlOverride || PRODUCTION_OSM_URL;
 export const OSM_DATA_WEB_URL = PRODUCTION_OSM_URL;
 
 /**
- * Production OSM API, used read-only to look up single objects (e.g. a marker
- * opened from a shared link that is not cached yet). Like the map data, it is
- * always production — never the preview dev server.
+ * Production OSM API, used read-only: to look up single objects (e.g. a marker
+ * opened from a shared link that is not cached yet), to search water areas at
+ * the pin, and by preview builds to load existing objects for a dry-run edit
+ * (see `src/services/osmWrite.ts`). Like the map data, it is always
+ * production — never the preview dev server.
  */
 export const OSM_DATA_API_URL = 'https://api.openstreetmap.org';
 

@@ -1,6 +1,11 @@
 {
 	"unreleased": [
 		{
+			"type": "feature",
+			"en": "Fire water ponds can now be added and edited, and existing ponds on the map can be marked as fire water ponds.",
+			"de": "Löschteiche lassen sich jetzt hinzufügen, bearbeiten und an bestehenden Teichen auf der Karte markieren."
+		},
+		{
 			"type": "fix",
 			"en": "Shared links to a water source now open it reliably, even on a device that hasn't loaded that area yet.",
 			"de": "Geteilte Links zu einer Wasserentnahmestelle öffnen sie jetzt zuverlässig, auch auf Geräten, die das Gebiet noch nicht geladen haben."

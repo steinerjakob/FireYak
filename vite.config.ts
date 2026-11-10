@@ -103,7 +103,11 @@ const pwaOptions: Partial<VitePWAOptions> = {
 			? { globPatterns: [] }
 			: {
 					globIgnores: ['**/land.html'],
-					navigateFallbackDenylist: [/^\/land\.html/],
+					// The OAuth popup lands on land.html, which hands the code back to the
+					// app and closes. It must never be swapped for the app shell. Cloudflare
+					// Pages (previews) redirects `/land.html` → `/land` ("pretty URLs"), so
+					// exclude both forms, or the popup loads the app and never closes.
+					navigateFallbackDenylist: [/^\/land(\.html)?(?:[?#]|$)/],
 					// The main chunk grew past workbox's 2 MiB default with the offline
 					// feature; the app shell must stay precached or the PWA won't start
 					// without connectivity.

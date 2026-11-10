@@ -53,25 +53,9 @@ You can:
 - Start navigation to the location (mobile & desktop).
 - Share a link to the marker.
 
-### Add, edit & delete water sources
+### Contribute to OpenStreetMap
 
-You can manage water sources directly within the app — all changes are synced to OpenStreetMap in real time.
-
-**Add a new marker:**
-- Press the + button at the bottom right.
-- Choose the type: fire hydrant, suction point or water tank.
-- Fill in details (diameter, pressure, flow, couplings, operator, etc.) and save.
-
-**Edit an existing marker:**
-- Tap a marker, then tap the edit button in the info panel.
-- Update any field — leave a field empty to remove it from OpenStreetMap.
-
-**Delete a marker:**
-- Open the edit panel for a marker and tap the trash icon.
-- A confirmation dialog ensures nothing is deleted by accident.
-
-All operations require an OpenStreetMap account (OAuth2 login is built in).
-Changes are uploaded immediately and include a changeset comment referencing FireYak.
+Missing or wrong water sources can be added, edited or removed directly in FireYak with an OpenStreetMap account (built-in login). Changes go straight to OpenStreetMap; offline changes are queued and uploaded once you are back online.
 
 ### Photos
 
@@ -130,12 +114,12 @@ Configuration:
 | Language | TypeScript |
 | State | Pinia |
 | Routing | Vue Router |
-| Maps | Leaflet + marker clustering |
+| Maps | MapLibre GL + Protomaps vector tiles |
 | Local storage | IndexedDB (via `idb`) |
 | PWA | Vite + `vite-plugin-pwa` |
 | Mobile | Capacitor (iOS + Android) |
 | OSM editing | osm-api (OAuth2 PKCE) |
-| Elevation | Open-Meteo API |
+| Elevation | Mapterhorn terrain tiles (offline-capable) |
 | Image gallery | PhotoSwipe (Wikimedia Commons, Panoramax) |
 | CI/CD | GitHub Actions + Fastlane |
 

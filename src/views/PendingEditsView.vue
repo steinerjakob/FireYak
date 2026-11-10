@@ -161,6 +161,16 @@ import { fetchServerTags } from '@/offline/editQueue';
 import { getIconUrlForNode } from '@/mapHandler/markerHandler';
 import type { PendingEdit } from '@/mapHandler/databaseHandler';
 import { markerTitleKey } from '@/helper/markerTitle';
+import type { OsmType } from '@/helper/osmRef';
+import { isFlagEdit, isUnflagEdit } from '@/helper/osmElement';
+
+/**
+ * Tags that identify what an edit is about. An unflag removes `emergency`, so
+ * its icon and title come from the snapshot taken before the edit.
+ */
+function displayTags(edit: PendingEdit): Record<string, string> {
+	return isUnflagEdit(edit.baseTags, edit.tags) ? (edit.baseTags ?? edit.tags) : edit.tags;
+}
 
 const { t } = useI18n();
 const { isOnline } = useNetworkStatus();
@@ -187,17 +197,17 @@ watch(
 				!(edit.localId in serverTags) &&
 				!serverTagsLoading[edit.localId]
 			) {
-				loadServerTags(edit.localId, edit.osmId);
+				loadServerTags(edit.localId, edit.osmId, edit.elementType ?? 'node');
 			}
 		}
 	},
 	{ immediate: true, deep: true }
 );
 
-async function loadServerTags(localId: number, osmId: number): Promise<void> {
+async function loadServerTags(localId: number, osmId: number, type: OsmType): Promise<void> {
 	serverTagsLoading[localId] = true;
 	try {
-		serverTags[localId] = await fetchServerTags(osmId);
+		serverTags[localId] = await fetchServerTags(osmId, type);
 	} finally {
 		serverTagsLoading[localId] = false;
 	}
@@ -208,20 +218,22 @@ async function loadServerTags(localId: number, osmId: number): Promise<void> {
 function iconFor(edit: PendingEdit): string {
 	return getIconUrlForNode({
 		id: edit.osmId,
-		type: 'node',
+		type: edit.elementType ?? 'node',
 		lat: edit.lat,
 		lon: edit.lon,
-		tags: edit.tags
+		tags: displayTags(edit)
 	});
 }
 
 function titleFor(edit: PendingEdit): string {
-	const tags = edit.tags;
+	const tags = displayTags(edit);
 	if (tags.name) return tags.name;
 	return t(markerTitleKey(tags));
 }
 
 function actionLabel(edit: PendingEdit): string {
+	if (isUnflagEdit(edit.baseTags, edit.tags)) return t('pendingEdits.actions.unflag');
+	if (isFlagEdit(edit.baseTags, edit.tags)) return t('pendingEdits.actions.flag');
 	return t(`pendingEdits.actions.${edit.action}`);
 }
 

@@ -151,6 +151,12 @@ export interface OverPassElement {
 	tags: {
 		[key: string]: string;
 	};
+	/**
+	 * Real outline of a pond area, kept from the static extract (which ships
+	 * full polygons) so the map highlight needs no extra request. Only set for
+	 * `emergency=fire_water_pond` ways/relations of modest size.
+	 */
+	outline?: GeoJSON.Geometry;
 }
 
 // ---------------------------------------------------------------------------
@@ -207,11 +213,14 @@ function buildAreaQuery(mapBounds: GeoBounds): string {
 	const bounds = clampBounds(mapBounds);
 	const boundString = `(${bounds.south},${bounds.west},${bounds.north},${bounds.east})`;
 
-	// A single regex node filter does one bbox scan server-side instead of four
+	// A single regex node filter does one bbox scan server-side instead of
 	// separate `node[emergency=…]` scans — cheaper and less likely to time out
-	// on large bboxes.
+	// on large bboxes. Fire water ponds are usually mapped on the water area
+	// itself (closed way or multipolygon), so they are queried as `nwr`; the
+	// `center` output reduces those areas to a marker position.
 	const statements = [
-		`node[emergency~"^(fire_hydrant|water_tank|suction_point|fire_water_pond)$"]${boundString};`,
+		`node[emergency~"^(fire_hydrant|water_tank|suction_point)$"]${boundString};`,
+		`nwr[emergency=fire_water_pond]${boundString};`,
 		`way[amenity=fire_station]${boundString};`
 	];
 
@@ -594,4 +603,243 @@ export async function fetchElementById(type: OsmType, id: number): Promise<OverP
 	const keyword = OVERPASS_KEYWORD[type];
 	if (!keyword) return null;
 	return fetchSingleElement(`${keyword}(${id});`, `${type} ${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Water areas at a point (fire-pond flagging, plan §2.1)
+// ---------------------------------------------------------------------------
+
+/** Search radius (m) for water areas whose outline is next to the pin. */
+export const WATER_AREA_NEAR_RADIUS_M = 30;
+/** Hard cap on returned areas — the UI lists a handful, never a long list. */
+export const WATER_AREA_MAX_RESULTS = 10;
+/** Separator element emitted between the "inside" and "near" result sets. */
+const WATER_AREA_SEPARATOR = 'fireyak_sep';
+
+/** A water area that could carry `emergency=fire_water_pond`. */
+export interface WaterAreaCandidate {
+	/** The OSM way or multipolygon relation, with its full current tags. */
+	element: OverPassElement;
+	/** True when the pin lies inside the area (else it is only nearby). */
+	inside: boolean;
+	/** Rough area in m² from the bounding box — for labels and the large-water hint. */
+	approxAreaM2: number;
+	/** Distance (m) from the pin to the area's center, for ordering. */
+	distanceM: number;
+	/** Outline for the map highlight, clipped to the search window (may be absent). */
+	outline?: GeoJSON.Geometry;
+}
+
+/** Half-size (degrees) of the window that returned outlines are clipped to. */
+const OUTLINE_CLIP_DEGREES = 0.01;
+
+interface OverpassGeomPoint {
+	lat: number;
+	lon: number;
+}
+
+interface OverpassGeomElement {
+	type: string;
+	geometry?: OverpassGeomPoint[];
+	members?: { type: string; role?: string; geometry?: OverpassGeomPoint[] }[];
+}
+
+/**
+ * Converts an Overpass `out geom` way/relation into GeoJSON for the outline
+ * highlight. A closed way becomes a Polygon (filled); a multipolygon becomes
+ * the MultiLineString of its member ways — assembling rings from split members
+ * is not worth it for a highlight. Clipped (`geom(bbox)`) output can leave gaps
+ * in the outline of large areas, which is fine for a highlight.
+ */
+export function overpassOutline(element: OverpassGeomElement): GeoJSON.Geometry | undefined {
+	const toLine = (pts: OverpassGeomPoint[] | undefined): GeoJSON.Position[] =>
+		(pts ?? []).filter((p) => p != null).map((p) => [p.lon, p.lat]);
+
+	if (element.type === 'way') {
+		const line = toLine(element.geometry);
+		if (line.length < 2) return undefined;
+		const first = line[0];
+		const last = line[line.length - 1];
+		const closed = line.length >= 4 && first[0] === last[0] && first[1] === last[1];
+		return closed
+			? { type: 'Polygon', coordinates: [line] }
+			: { type: 'LineString', coordinates: line };
+	}
+	if (element.type === 'relation') {
+		const lines = (element.members ?? [])
+			.filter((m) => m.type === 'way')
+			.map((m) => toLine(m.geometry))
+			.filter((l) => l.length >= 2);
+		return lines.length ? { type: 'MultiLineString', coordinates: lines } : undefined;
+	}
+	return undefined;
+}
+
+/** Bounds of an outline — fallback when Overpass sends no `bounds`. */
+function outlineBounds(geometry: GeoJSON.Geometry | undefined): OverpassBounds | undefined {
+	if (!geometry || !('coordinates' in geometry)) return undefined;
+	const flat = (geometry.coordinates as unknown[]).flat(3) as number[];
+	if (flat.length < 2) return undefined;
+	const b = { minlat: Infinity, minlon: Infinity, maxlat: -Infinity, maxlon: -Infinity };
+	for (let i = 0; i + 1 < flat.length; i += 2) {
+		b.minlon = Math.min(b.minlon, flat[i]);
+		b.maxlon = Math.max(b.maxlon, flat[i]);
+		b.minlat = Math.min(b.minlat, flat[i + 1]);
+		b.maxlat = Math.max(b.maxlat, flat[i + 1]);
+	}
+	return b;
+}
+
+/** `geom(s,w,n,e)` clip window around a point, so huge lakes stay small. */
+function clipWindow(lat: number, lon: number): string {
+	const d = OUTLINE_CLIP_DEGREES;
+	return `${(lat - d).toFixed(5)},${(lon - d).toFixed(5)},${(lat + d).toFixed(5)},${(lon + d).toFixed(5)}`;
+}
+
+/**
+ * Fetches the outline of one way/relation (for highlighting a selected or
+ * edited pond area), clipped to a window around `near`.
+ */
+export async function fetchElementOutline(
+	type: OsmType,
+	id: number,
+	near: { lat: number; lon: number },
+	signal?: AbortSignal
+): Promise<GeoJSON.Geometry | null> {
+	if (type === 'node') return null;
+	const keyword = OVERPASS_KEYWORD[type];
+	const query = `[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];${keyword}(${id});out geom(${clipWindow(near.lat, near.lon)});`;
+	const outerSignal = signal
+		? AbortSignal.any([signal, AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS)])
+		: AbortSignal.timeout(NODE_QUERY_TIMEOUT_MS);
+	try {
+		const [element] = await fetchFromPool(query, outerSignal);
+		return element ? (overpassOutline(element as unknown as OverpassGeomElement) ?? null) : null;
+	} catch (e) {
+		if (!signal?.aborted) console.warn('Outline lookup failed:', e);
+		return null;
+	}
+}
+
+export interface OverpassBounds {
+	minlat: number;
+	minlon: number;
+	maxlat: number;
+	maxlon: number;
+}
+
+export function boundsAreaM2(b: OverpassBounds | undefined): number {
+	if (!b) return 0;
+	const midLat = ((b.minlat + b.maxlat) / 2) * (Math.PI / 180);
+	const width = (b.maxlon - b.minlon) * 111_320 * Math.cos(midLat);
+	const height = (b.maxlat - b.minlat) * 110_540;
+	// A pond rarely fills its bounding box; ~70 % is a fair average for a label.
+	return Math.max(0, width * height * 0.7);
+}
+
+function distanceM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+	const rad = Math.PI / 180;
+	const x = (lon2 - lon1) * rad * Math.cos(((lat1 + lat2) / 2) * rad);
+	const y = (lat2 - lat1) * rad;
+	return Math.sqrt(x * x + y * y) * 6_371_000;
+}
+
+/**
+ * Overpass variant of the water-area search (see `waterAreaLookup.ts`, which
+ * tries the OSM API first). Finds water areas (closed ways and multipolygons tagged `natural=water`,
+ * `landuse=reservoir` or `landuse=basin`) that contain the given point or whose
+ * outline is within {@link WATER_AREA_NEAR_RADIUS_M} of it.
+ *
+ * Used to mark an existing pond as a fire water pond instead of adding a
+ * duplicate node. Protomaps vector tiles carry no OSM ids for water polygons,
+ * so this is the only way to learn *which* OSM object to tag.
+ *
+ * - `is_in` finds the areas the point lies in; the `around` part finds small
+ *   ponds next to it and still works on an instance without an area index.
+ * - Untagged multipolygon member ways never match (they carry no water tag).
+ * - Areas that already carry `emergency=*` are returned too, so the UI can
+ *   offer "edit the existing pond" instead of creating a duplicate.
+ *
+ * @returns candidates (inside first, then by distance), or `null` when the
+ *          lookup failed — callers then fall back to adding a point.
+ */
+export async function fetchWaterAreasViaOverpass(
+	lat: number,
+	lon: number,
+	signal?: AbortSignal,
+	timeoutMs: number = NODE_QUERY_TIMEOUT_MS
+): Promise<WaterAreaCandidate[] | null> {
+	const p = `${lat.toFixed(7)},${lon.toFixed(7)}`;
+	const r = WATER_AREA_NEAR_RADIUS_M;
+	const clip = clipWindow(lat, lon);
+	// Areas tagged with another `emergency=*` (e.g. a tank) are never offered,
+	// and filtering them here — before the result limit — keeps them from
+	// crowding out the ponds that should be listed. Existing fire ponds stay in
+	// for the duplicate guard.
+	const pondOrUnflagged = '(if: !is_tag("emergency") || t["emergency"] == "fire_water_pond")';
+	const filters = [
+		`[natural=water]${pondOrUnflagged}`,
+		`[landuse~"^(reservoir|basin)$"]${pondOrUnflagged}`
+	];
+	const inside = filters
+		.flatMap((f) => [`way(pivot.a)${f};`, `rel(pivot.a)[type=multipolygon]${f};`])
+		.join('');
+	// `rel(around:…)` is expensive on the public servers (it has to build
+	// relation geometry). Instead take the few ways near the pin and walk up to
+	// the multipolygons they belong to (`rel(bw)`), which is cheap.
+	const near = filters.flatMap((f) => [`way.w${f};`, `rel(bw.w)[type=multipolygon]${f};`]).join('');
+	const query =
+		`[out:json][timeout:${SERVER_TIMEOUT_SECONDS}];` +
+		`is_in(${p})->.a;(${inside})->.inside;` +
+		`way(around:${r},${p})->.w;(${near})->.near;` +
+		// `out geom` also returns each element's bounds (`center` and `bb`/`geom`
+		// are mutually exclusive, so the center is derived from the bounds). The
+		// geometry is clipped to a window around the pin so a huge lake the pin
+		// sits in stays a small response; it feeds the outline highlight.
+		`.inside out tags geom(${clip}) ${WATER_AREA_MAX_RESULTS};` +
+		`make ${WATER_AREA_SEPARATOR};out;` +
+		`(.near; - .inside;)->.nearOnly;.nearOnly out tags geom(${clip}) ${WATER_AREA_MAX_RESULTS};`;
+
+	const outerSignal = signal
+		? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+		: AbortSignal.timeout(timeoutMs);
+
+	let elements: OverPassElement[];
+	try {
+		elements = await fetchFromPool(query, outerSignal);
+	} catch (e) {
+		if (!signal?.aborted) console.warn('Water area lookup (Overpass) failed:', e);
+		return null;
+	}
+
+	const candidates: WaterAreaCandidate[] = [];
+	let isInside = true;
+	for (const element of elements) {
+		if ((element.type as string) === WATER_AREA_SEPARATOR) {
+			isInside = false;
+			continue;
+		}
+		if (element.type !== 'way' && element.type !== 'relation') continue;
+		const outline = overpassOutline(element as unknown as OverpassGeomElement);
+		const bounds = (element as { bounds?: OverpassBounds }).bounds ?? outlineBounds(outline);
+		const center =
+			element.center ??
+			(bounds
+				? { lat: (bounds.minlat + bounds.maxlat) / 2, lon: (bounds.minlon + bounds.maxlon) / 2 }
+				: undefined);
+		if (!center) continue;
+		candidates.push({
+			// The outline rides along on the element, so a marked area keeps it
+			// in the marker cache (it is clipped to the search window).
+			element: { id: element.id, type: element.type, center, tags: element.tags ?? {}, outline },
+			inside: isInside,
+			approxAreaM2: boundsAreaM2(bounds),
+			distanceM: distanceM(lat, lon, center.lat, center.lon),
+			outline
+		});
+	}
+
+	return candidates
+		.sort((a, b) => Number(b.inside) - Number(a.inside) || a.distanceM - b.distanceM)
+		.slice(0, WATER_AREA_MAX_RESULTS);
 }
