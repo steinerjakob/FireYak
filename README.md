@@ -53,34 +53,9 @@ You can:
 - Start navigation to the location (mobile & desktop).
 - Share a link to the marker.
 
-### Add, edit & delete water sources
+### Contribute to OpenStreetMap
 
-You can manage water sources directly within the app — all changes are synced to OpenStreetMap in real time.
-
-**Add a new marker:**
-- Press the + button at the bottom right.
-- Choose the type: fire hydrant, suction point, water tank or fire water pond.
-- Fill in details (diameter, pressure, flow, couplings, operator, etc.) and save.
-
-**Fire water ponds:**
-- Ponds are usually already on the map as a water area. When you add a fire water pond, FireYak lists the water areas at the pin. You can mark one of them as a fire water pond instead of adding a separate point. Ponds that are already marked show up there too, so you don't add them twice.
-- If there is no water area to use, the pond is added as a point (`natural=water` + `water=pond`, as the OpenStreetMap wiki asks).
-- For ponds mapped as an area, FireYak only changes the details (tags) and never the shape. "Delete" removes only the fire-pond information; the water area itself stays in OpenStreetMap.
-- After **adding** a new pond or **marking** a water area as a pond while online, FireYak offers to add its pumping spot as a suction point. For any pond (also after an edit or an offline save), use **Add pumping spot** in the pond's info panel.
-
-**Edit an existing marker:**
-- Tap a marker, then tap the edit button in the info panel.
-- Update any field — leave a field empty to remove it from OpenStreetMap.
-
-**Delete a marker:**
-- Open the edit panel for a marker and tap the trash icon. (For pond areas, this removes only the fire-pond information, see above.)
-- A confirmation dialog ensures nothing is deleted by accident.
-
-All operations require an OpenStreetMap account (OAuth2 login is built in).
-Changes are uploaded immediately and include a changeset comment referencing FireYak.
-If someone else changed the same field in the meantime, FireYak does not overwrite it:
-- **Online save:** nothing is saved; the form now shows their value, so you can check it and save again.
-- **Offline edit, synced later:** the edit is marked as a conflict under **Settings → Pending changes**. There you can compare the values, then either **Apply mine anyway** (your change is applied on top of the current data) or **Discard** your edit.
+Missing or wrong water sources can be added, edited or removed directly in FireYak with an OpenStreetMap account (built-in login). Changes go straight to OpenStreetMap; offline changes are queued and uploaded once you are back online.
 
 ### Photos
 
@@ -139,12 +114,12 @@ Configuration:
 | Language | TypeScript |
 | State | Pinia |
 | Routing | Vue Router |
-| Maps | Leaflet + marker clustering |
+| Maps | MapLibre GL + Protomaps vector tiles |
 | Local storage | IndexedDB (via `idb`) |
 | PWA | Vite + `vite-plugin-pwa` |
 | Mobile | Capacitor (iOS + Android) |
 | OSM editing | osm-api (OAuth2 PKCE) |
-| Elevation | Open-Meteo API |
+| Elevation | Mapterhorn terrain tiles (offline-capable) |
 | Image gallery | PhotoSwipe (Wikimedia Commons, Panoramax) |
 | CI/CD | GitHub Actions + Fastlane |
 
