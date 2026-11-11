@@ -965,6 +965,7 @@ Each value maps to a short chip text.
 export interface HoseRoute {
   points: GeoPoint[];
   meters: number;               // length of `points`: 2D until phase 4, then 3D; the ONE number shown everywhere
+  planMeters: number;           // phase 4: 2D length; `segments` and the profile are measured along it
   segments: { from: number; to: number; offRoad: boolean; steep: 0 | 1 | 2 }[];
   climbM: number | null;        // signed height(target) − height(origin)
   metersOver25: number; metersOver50: number; maxGradePct: number | null;
@@ -1919,6 +1920,99 @@ and the route redraws.
 **Manual:** none.
 
 **What's New:** none while it is behind the flag.
+
+**Implemented (phase 4 notes).** Where the code differs from the text above:
+
+- Height raster: `buildHeightRaster(frame, tiles, z)` takes the grid frame (`RasterFrame`:
+  west, south, m/° lng, cols, rows, cellM) instead of `(bounds, cellM, tiles)`, so it lines
+  up with the cost grid cell for cell. Heights at cell centres plus a one-cell halo
+  (`(cols + 2) × (rows + 2)`), bilinear across tile edges through one shared sampler
+  (`tileSampler`, also behind `sampleBlended`), then a 3×3 mean (`NaN` cells skipped). The
+  halo is what the z12 baseline reads at the grid edge.
+- Step grade (`stepGrade`): z14 per step; z12 over `ceil(24 / cellM)` steps centred on the
+  step (at 8 m: the cells before and after), interpolated between cells when that count is
+  even, so the grade stays symmetric. Unknown heights (`NaN`) cost no slope.
+- Step cost: `step × (F(u) + F(v)) / 2 × slopeFactor(g, cls)` where `cls` is `BRIDGE` when both
+  cells are bridges (1.0), `ROAD` when both are road/path/steps/bridge (cap ×1.3), else none.
+  The rule is symmetric, every factor stays ≥ 1, so A* stays admissible. Bridge rule: no step
+  between a `BRIDGE` cell and anything but `ROAD`/`PATH`/`STEPS`/`BRIDGE`, in both directions
+  (endpoint cells excepted). `TerrainGrid.slopeBlockGrade` (specs only) blocks off-road steps
+  above a grade, for the "blocking at 60 % / 80 %" comparison.
+- Smoothing needed slope too: `lineCost` prices each piece of a shortcut by the grade of the
+  line over one cell (z14) or the 24 m baseline (z12) around its midpoint, with the same cap,
+  bridge factor and bridge rule. Without it every shortcut down a scarp passed the cost test
+  (the cell path had paid the slope, the line did not). Road mode's shore legs call it
+  without slope (`withSlope = false`), so road mode does not depend on a cached raster.
+- Window (deviation from §6.5): `optimized` also widens its window to hold the road-mode
+  routes to the targets (+ 50 m), clipped to the endpoints' bbox + the farthest straight
+  distance. With slope the road round a scarp is often the best route, and the 0.25 × straight
+  margin cannot hold it; the steep shortcut then wins without ever touching the window edge
+  (Innsbruck "500 m north": 826 m down the forest in a 312 m wide window, 1,352 m with the
+  road window). In the fixtures the wider window can reach past the tiles of scene 1, so the
+  list = line spec accepts `coverage.basemap` `partial` there.
+- DEM fetch (`loadRoutingHeights`): z14 and z12 are requested at once and the wait ends at
+  `ROUTING_DEM_BUDGET_MS` = 1.5 s (phase 7 folds it into `ROUTING_DATA_BUDGET_MS`). z14 is used
+  when it covers every cell, else z12 when that does, else partial z14, else none. Tiles in
+  flight at the deadline are not aborted; they land in the decode cache, and a context whose
+  raster was incomplete loads it again on the next request. In the browser the first z14
+  tile took 1.3 s cold, so without this a slow first request routed without slope for the
+  context's whole 60 s life. `TERRAIN_ROUTING_ZOOM = 14` already existed (phase 1).
+- 3D metres: `HoseRoute.meters` is `length3d` over the profile stations (5 m and every
+  vertex) when the profile has heights, else the 2D length; the new `planMeters` is the 2D
+  length that `segments` and `profile.s` run along. `profile: false` routes report 2D (the
+  phase-1 length pins in `nearbyRouting.scenes.spec.ts` now route without the profile). The
+  pump panel shows the legs' summed `meters` and maps pump distances onto the drawn line by
+  `planMeters / meters`. `roadOnlyMeters` (the label's road comparison) stays 2D. `climbM`
+  already fed the label (phase 1).
+- Debug view: the cost-raster select has "optimized slope" (steepest straight step per cell
+  as the router prices it, coloured at the `slopeFactor` knots) and "optimized heights"
+  (grey), drawn by `heightRasterImage` in `routingDebug.ts`, with the DEM zoom in the hint.
+- Step-cost specs (symmetry, road cap, bridge, switchback) live in `gridRouting.spec.ts`,
+  where the step cost is, not in `costGrid.spec.ts`. The switchback case: a 30 m band at
+  70 % with a path climbing it at ~15 % in two legs (1.7× the straight line); the route
+  takes the path, and smoothing may round the hairpin over a few metres of the band (cheaper
+  than 30 m of path), so the spec checks segment grades < 30 % rather than a pure path.
+- Measured with slope (2D lengths, ring positions as in phase 3; "over 25 % / 60 %" is the
+  research metric: 10 m windows over the 5 m profile stations, summed over the positions):
+
+  | Scene | optimized / road (median, range) | notably off-road | over 25 % | over 60 % | phase 3 |
+  |---|---|---|---|---|---|
+  | 1, 2 cases | pond 681 / 1,752 m, hydrant 454 / 462 m | 1 of 2 | 20 m | 0 | 15 m, 0 |
+  | 2, 38 | 0.84 (0.42–0.96) | 11 (research 8) | 269 m | 5 m | 15 notably, 486 m, 0 |
+  | 3, 33 | 0.66 (0.18–1.01) | 22 (research 18) | 720 m | 25 m | 24, 883 m, 55 m |
+  | 4, 30 | 0.92 (0.61–1.00) | 4 | 0 | 0 | 4, 0, 0 |
+  | 5, 29 relaxed | 0.82 (0.19–0.96) | 5 | 1,187 m | 10 m (research 25) | 9, 1,510 m, 330 m (research 408) |
+
+  Innsbruck "500 m north": 1,352 m 3D / 1,332 m 2D (research 1,367 m, road 1,503 m), 45 m
+  off-road, no run over 60 %. Blocking at 60 % or 80 %: every length within 2 %. z12 only:
+  1 of 29 routes differs by more than 5 % (500 m / 315°: 1,361 → 1,244 m; research: 1).
+  Road-mode 3D extra: median 0–0.3 %, worst 2.2 % (Innsbruck). No route in any scene became
+  unroutable or fell back.
+- Remaining gaps: Melk's notably off-road positions cross the stream (`STREAM`, 4) and flat
+  farmland south of the hydrant where the road is more than twice the line; slope does not
+  touch them. So the "≥ 80 % of every southern route on road cells" row does not hold as
+  written (southern routes are 0.32 on road cells in total); the spec checks instead that no
+  southern route climbs a bank (no run over 60 % longer than 10 m) and that 500 m / 225°, which
+  ran 520 m over the fields along the cutting in phase 3, now follows the cutting road (≥ 80 %
+  on road cells). Persenbeug: the scarp is taken on its paths now, but most positions still
+  cross fields and yards between the terrace and the roads below. Vienna: 29 of 30 lengths
+  within 5 % of phase 3; 300 m / 270° moves 337 → 364 m (a park-lawn crossing and the road
+  beside it were a near tie, and a 2 m DEM step at the park edge tips it), so the spec allows
+  one position within 10 %. Melk's rail spec no longer expects crossings: every northern route
+  now passes under the rail bridges.
+- Node timings (4-core 2.1 GHz Xeon, Node 22), Innsbruck ±650 m window (163 × 163 = 26.6k
+  cells), three runs: decode 11–32 ms, class grid 15–24 ms, routing DEM cold (2 z14 + 1 z12
+  WebP decodes + raster) 23–40 ms, raster build alone 4–8 ms, full Dijkstra with slope
+  37–54 ms, A* to the farthest relaxed position 19–36 ms. `getRoutedPath` for "500 m north"
+  end to end (window, road routes, DEM, A*, profile) 60–115 ms.
+- Specs: `demRaster.spec.ts` (+10: tiles for a frame, plane across a seam, seam = single-tile
+  reference on random data, smoothing, unknown cells, baseline cells, z14/z12 step grades),
+  `gridRouting.spec.ts` (+8: symmetry and A* = Dijkstra on 100 seeded grids with terrain and
+  bridges, slope never cheaper, road cap, bridge factor, bridge rule in grid and smoothing,
+  bridge over a river, switchback), `routeProfile.spec.ts` (+2: 3D length),
+  `routingDebug.spec.ts` (+3: height/slope image), `gridRouting.scenes.spec.ts` (29, +10:
+  Innsbruck north/total/blocking/z12, Melk south, Vienna vs phase 3, road-mode 3D × 5 scenes).
+  `useFixtureScene(scene, skip)` can hide tiles (the z14 DEM for the z12 case).
 
 ### Phase 5: UI completion, optimized becomes the default, direct is removed
 
