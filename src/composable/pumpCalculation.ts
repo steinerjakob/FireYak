@@ -32,10 +32,11 @@ import type { OverPassElement } from '@/mapHandler/overPassApi';
 import { alertController } from '@ionic/vue';
 import { GeoPoint, distanceTo } from '@/types/geo';
 import { OsmRef } from '@/helper/osmRef';
+import { useRouteDetails } from '@/composable/routeDetails';
 
 const PUMP_LINE_SOURCE = 'pump-line';
 /** Route runs (on-road, off-road dashed, steep ticks) share this prefix. */
-const PUMP_LINE_LAYER_PREFIX = 'pump-line';
+export const PUMP_LINE_LAYER_PREFIX = 'pump-line';
 const PUMP_LINE_LABEL_LAYER = 'pump-line-label-layer';
 
 let rootMap: maplibregl.Map | null = null;
@@ -323,6 +324,7 @@ async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
 	routedLegs = legs;
 	lineSegments = segments;
 	routedPathPoints = path;
+	useRouteDetails().setPumpSegments(segments);
 	setPumpLineGeometry(path);
 }
 
@@ -363,6 +365,7 @@ const updatePolyline = (options: { autoRecalc?: boolean } = {}) => {
 	routedPathPoints = null;
 	routedLegs = null;
 	lineSegments = [];
+	useRouteDetails().setPumpSegments([]);
 	segmentLabels = [];
 	setPumpLineGeometry(chain);
 	// Precache the pump window (priority 1, plan §6.9).
@@ -862,6 +865,7 @@ export function usePumpCalculation() {
 			routedPathPoints = null;
 			routedLegs = null;
 			lineSegments = [];
+			useRouteDetails().setPumpSegments([]);
 			routingPromise = null;
 			routingToken++; // invalidate any in-flight routing
 			pumpFreshness.reset();

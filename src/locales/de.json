@@ -544,6 +544,37 @@
 			"gridUnreached": "Querfeldein nicht erreichbar: nur Straßen",
 			"thinBuildings": "Gebäude hier lückenhaft: nur Straßen"
 		},
-		"noElevation": "Höhendaten fehlen"
+		"noElevation": "Höhendaten fehlen",
+		"details": {
+			"title": "Schlauchweg",
+			"titlePump": "Schlauchleitung",
+			"close": "Schließen",
+			"length": "Länge",
+			"hoses": "Schläuche",
+			"climb": "Höhenunterschied",
+			"climbTowardsSource": "{climb} zur Entnahmestelle",
+			"offRoad": "Querfeldein",
+			"roadOnly": "Nur auf Straßen",
+			"stretches": "Farbige Abschnitte",
+			"noStretches": "Keine steilen oder querfeldein verlaufenden Abschnitte.",
+			"legend": "Legende",
+			"uphill": "bergauf",
+			"downhill": "bergab",
+			"directionSource": "Bergauf und bergab gesehen vom Standort zur Wasserentnahmestelle.",
+			"directionPump": "Bergauf und bergab gesehen von der Ansaugstelle zum Brandobjekt.",
+			"stretch": {
+				"steep": "Steil: {grade} % {direction} auf {distance}",
+				"verySteep": "Sehr steil: {grade} % {direction} auf {distance}",
+				"steepPlain": "Steil auf {distance}",
+				"verySteepPlain": "Sehr steil auf {distance}",
+				"offRoad": "Querfeldein: {distance}"
+			}
+		},
+		"legend": {
+			"road": "Auf Straßen und Wegen",
+			"offRoad": "Querfeldein (gestrichelt)",
+			"steep": "Steil: über 25 %",
+			"verySteep": "Sehr steil: über 50 % (Querstriche)"
+		}
 	}
 }

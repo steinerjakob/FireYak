@@ -833,6 +833,58 @@ The chips appear on:
 - The road-only length is added (`· Straße 1,504 m`) when it differs by > 15 %.
 - Metres use the locale's thousands separator.
 
+**Badge and details card (follow-up after phase 7, owner feedback).** The map no
+longer carries the whole label line (it wrapped to five lines and the chips to
+a sixth). The line shows a short **badge**, the card holds the rest:
+
+- Badge (`routeBadge`, `src/helper/routeDetails.ts`): `ca. 156 m · 8 B`, the
+  estimate prefix and the hose count only, Latin-1 glyphs (the Noto Sans label
+  font has no arrows or warning sign). A stretchable pill image per theme
+  (white / dark surface) via `icon-text-fit`, screen-sized at every zoom; its
+  border shows the tone: red when not recommended, amber for "check pressure".
+- **Card** (`RouteDetailsCard.vue`, state in `composable/routeDetails.ts`, view
+  model `routeDetailsView`): opens when a route is drawn (not on a silent
+  recompute) and on a tap on the line or the badge; closes with its button or
+  a tap on the map (the badge stays; the next map tap behaves as before). Rows:
+  length (estimate), hoses, height difference towards the water source (↑/↓),
+  off-road metres (≥ 10 m), road-only length (> 15 % off); the warning and
+  coverage chips (`routeChips` with coverage); the coloured stretches, one row
+  each (`routeStretches`/`stretchText`: "Steil: 32 % bergauf auf 15 m", "Sehr
+  steil: …", "Querfeldein: 215 m"; consecutive runs of one steep class are one
+  row even where off-road changes, consecutive off-road runs one row whatever
+  their steepness; off-road rows below 10 m, i.e. snap legs, are left out),
+  a note which way "uphill" is, and a legend of solid / dashed / amber / red
+  with ticks (`ROUTE_LEGEND`, the map colours). Each run carries its signed
+  steepest grade (`RouteSegment.gradePct`) and its `from`/`to` on the map.
+- A tap on an amber, red or dashed run opens the card focused on its stretch:
+  the row is highlighted and scrolled into view, and a wide translucent
+  highlight layer under the line marks the stretch (filter on the runs'
+  `from`/`to`); a tap on a row focuses it too. Taps hit an invisible 24 px
+  line layer; coloured runs win over plain ones under the finger.
+- Desktop: bottom left beside the side panel, 360 px wide. Phone: full width
+  above the bottom sheet (or above the FAB row without one), at most half the
+  free map height, scrolling inside; the legend starts folded there.
+- Pump line: the same card on a tap on the line, with only the stretches and
+  the legend (length, hoses, height and chips are in the pump panel already).
+- The list keeps its line (`routeLabel` with ↑/↓) and chips; list, badge, card
+  and pump panel show the one `route.meters`.
+
+**Bridges in the steep display (finding).** The owner saw an amber stretch where
+a route crosses the Melk on the Hauptstraße bridge in Ruprechtshofen (scene 1,
+bridge at 48.1387, 15.2806, about 35 m). Cause: the DEM is the terrain under the
+deck; the z14 profile dips 4.4 m into the river bed (241.6 → 237.3 m), 29 % over
+10 m at the banks. The routing cost has ignored slope on bridge cells since
+phase 4, the display sampled the raw DEM. Fix (`classifyRoute` option
+`isOnBridge`, `isAlongBridge`, `deckHeights` in `routeProfile.ts`): a 5 m piece
+runs on a bridge when its midpoint is within 6 m of a bridge centreline and it
+runs along it (≤ 30°; a line passing under a bridge keeps its slope); the grade
+is then taken over heights interpolated across the bridge and 10 m on either
+side (`BRIDGE_APPROACH_M`; the dip reaches about 5 m past the deck). Climb, 3D
+length and the pressure rule still use the raw DEM. Spec: scene 1 case
+`melkBridge` (both modes: the route runs over the bridge, the raw DEM is > 25 %
+there, no amber or red). The Innsbruck and the Melk/Vienna "no false red on
+roads" specs are unchanged.
+
 **Other UI**
 
 - Always label the result as an estimate ("ca.", "Schätzung").

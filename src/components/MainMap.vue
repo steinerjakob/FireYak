@@ -125,6 +125,7 @@
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<RouteDetailsCard />
 		<LayerSelectorModal
 			:is-open="layerModalOpen"
 			:event="layerSelectorEvent"
@@ -155,6 +156,7 @@ import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon, IonSpinner, toastController } from '@ionic/vue';
 import LayerSelectorModal from '@/components/LayerSelectorModal.vue';
 import AddressSearchBar from '@/components/AddressSearchBar.vue';
+import RouteDetailsCard from '@/components/RouteDetailsCard.vue';
 import { useScreenDetection } from '@/composable/screenDetection';
 import { usePhotonSearch, type PhotonFeature } from '@/composable/photonSearch';
 import {
@@ -169,7 +171,7 @@ import {
 	layers,
 	compass
 } from 'ionicons/icons';
-import { usePumpCalculation } from '@/composable/pumpCalculation';
+import { PUMP_LINE_LAYER_PREFIX, usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { useDefaultStore } from '@/store/defaultStore';
@@ -188,10 +190,13 @@ import {
 } from '@/mapHandler/nearbyRouting';
 import { accessTargetPoint, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
 import {
+	addRouteBadgeLayer,
 	addRouteLayers,
 	pulseRouteLayers,
+	routeHitLayerId,
 	routeLayerIds,
-	routeRunFeatures
+	routeRunFeatures,
+	setRouteHighlight
 } from '@/mapHandler/routeLayers';
 import {
 	RouteFreshness,
@@ -200,8 +205,9 @@ import {
 } from '@/mapHandler/routingData';
 import { prefetchMapView, prefetchRouteWindow, updateGpsRing } from '@/offline/routingPrefetch';
 import { MAP_MOVE_IDLE_MS } from '@/offline/precachePolicy';
-import { routeChips, routeLabel } from '@/helper/routeLabel';
+import { badgeTone, routeBadge } from '@/helper/routeDetails';
 import { useCrossCountryNote } from '@/composable/crossCountryNote';
+import { useRouteDetails, type TappedRun } from '@/composable/routeDetails';
 import { parseHydrantPressure } from '@/helper/hosePressure';
 import { detectWaterAt } from '@/mapHandler/waterDetection';
 import { getAreaOutline, cachedOutline, getContainingWaterOutline } from '@/mapHandler/areaOutline';
@@ -221,6 +227,7 @@ const MARKER_SOURCE_ID = 'markers';
 const SELECTED_PATH_SOURCE = 'selected-path';
 // Route runs (on-road, off-road dashed, steep ticks) share this prefix.
 const SELECTED_PATH_LAYER_PREFIX = 'selected-path';
+// The short badge ("ca. 156 m · 8 B") on the line; the details are in the card.
 const SELECTED_PATH_LABEL_LAYER = 'selected-path-label-layer';
 const MAP_VIEW_STORAGE_KEY = 'mapView';
 // Fallback center used only until the device location resolves on a fresh
@@ -853,28 +860,23 @@ function fitMapToLayer() {
 // Selected path state
 const selectedPathCoords = ref<[number, number][]>([]);
 const selectedPathVisible = ref(false);
-// Length of the displayed path (routed or straight), rendered as a label on the line.
-const selectedPathDistanceText = ref('');
-/** The displayed route: runs, steep classes and warnings for the label. */
+/** The displayed route: runs, steep classes and warnings for the badge and the card. */
 let selectedRoute: HoseRoute | null = null;
 const pumpCalculationStore = usePumpCalculationStore();
 const { maybeShowCrossCountryNote } = useCrossCountryNote();
+const routeDetails = useRouteDetails();
 
-/** Label text: the route line plus its warning and coverage chips on a second line. */
-function routeLabelText(hoseRoute: HoseRoute): string {
-	const main = routeLabel(hoseRoute, {
+/** Badge text on the line: the same metres as the list and the card. */
+function routeBadgeText(hoseRoute: HoseRoute): string {
+	return routeBadge(hoseRoute.meters, {
 		t,
 		locale: locale.value,
 		tubeLength: pumpCalculationStore.tubeLength,
-		hoseName: pumpCalculationStore.hoseName,
-		// The label font has no arrow or warning-sign glyphs.
-		climbSigns: 'plusMinus'
+		hoseName: pumpCalculationStore.hoseName
 	});
-	const chips = routeChips(hoseRoute, null, { coverage: true }).map((chip) => t(chip.key));
-	return chips.length > 0 ? `${main}\n${chips.join(' · ')}` : main;
 }
 
-/** Point halfway along the polyline (by length) — anchors the distance label. */
+/** Point halfway along the polyline (by length) — anchors the badge. */
 function pathMidpoint(coords: [number, number][]): [number, number] {
 	let total = 0;
 	const segment: number[] = [];
@@ -901,20 +903,20 @@ function pathMidpoint(coords: [number, number][]): [number, number] {
 }
 
 /**
- * The path line plus a midpoint anchor for the label. The label sits on a
+ * The path line plus a midpoint anchor for the badge. The badge sits on a
  * point symbol (not line-center placement): line-center labels are dropped
  * whenever the text doesn't fit along the rendered line, so short or sharply
- * bent paths would intermittently lose their distance text.
+ * bent paths would intermittently lose it.
  */
 function selectedPathFeatures(): GeoJSON.FeatureCollection {
 	const features: GeoJSON.Feature[] = selectedRoute
 		? routeRunFeatures(selectedRoute.points, selectedRoute.segments)
 		: [];
-	if (selectedPathCoords.value.length >= 2) {
+	if (selectedRoute && selectedPathCoords.value.length >= 2) {
 		features.push({
 			type: 'Feature',
 			geometry: { type: 'Point', coordinates: pathMidpoint(selectedPathCoords.value) },
-			properties: { distanceText: selectedPathDistanceText.value }
+			properties: { badge: routeBadgeText(selectedRoute), tone: badgeTone(selectedRoute) }
 		});
 	}
 	return { type: 'FeatureCollection', features };
@@ -933,9 +935,8 @@ function setSelectedPathVisibility(visible: boolean) {
 function updateSelectedPath(hoseRoute: HoseRoute) {
 	selectedRoute = hoseRoute;
 	selectedPathCoords.value = hoseRoute.points.map((p) => [p.lng, p.lat] as [number, number]);
-	// The same metres as the nearby list: the length of this polyline.
-	selectedPathDistanceText.value = routeLabelText(hoseRoute);
 	selectedPathVisible.value = true;
+	routeDetails.setSelectedRoute(hoseRoute);
 	if (hoseRoute.routed) void maybeShowCrossCountryNote(hoseRoute.offRoadMeters);
 
 	if (rootMap && mapReady) {
@@ -961,6 +962,7 @@ function hideSelectedPath() {
 	selectedPathVisible.value = false;
 	selectedRoute = null;
 	selectedPathCoords.value = [];
+	routeDetails.setSelectedRoute(null);
 	if (rootMap && mapReady) {
 		setSelectedPathVisibility(false);
 	}
@@ -1135,6 +1137,9 @@ const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 	if (options.silent && previous && rootMap && mapReady && routeChanged(previous, hoseRoute)) {
 		pulseRouteLayers(rootMap, SELECTED_PATH_LAYER_PREFIX);
 	}
+	// A newly drawn route opens its details card; a silent recompute only
+	// updates an open one.
+	if (!options.silent) routeDetails.openDetails('selected');
 	// Only the nearby view refits the camera to the path; a plain marker tap
 	// keeps its usual fly-to/centering behavior and just shows the line. A
 	// silent recompute (late data) never moves the camera.
@@ -1608,34 +1613,59 @@ function addMapLayers(map: maplibregl.Map) {
 	// ticks across very steep runs (plan section 6.8).
 	addRouteLayers(map, SELECTED_PATH_SOURCE, SELECTED_PATH_LAYER_PREFIX, false);
 
-	// Distance label rendered along the selected path line.
-	map.addLayer({
-		id: SELECTED_PATH_LABEL_LAYER,
-		type: 'symbol',
-		source: SELECTED_PATH_SOURCE,
-		// Anchored to the midpoint Point feature: a point symbol always renders,
-		// while 'line-center' placement drops the label whenever the text doesn't
-		// fit along the rendered line (short or sharply bent paths).
-		filter: ['==', ['geometry-type'], 'Point'],
-		layout: {
-			visibility: 'none',
-			'text-field': ['get', 'distanceText'],
-			'text-font': ['Noto Sans Medium'],
-			'text-size': 13,
-			'text-offset': [0, -1.4],
-			// The single label must always render, even over other symbols.
-			'text-allow-overlap': true,
-			'text-ignore-placement': true
-		},
-		paint: {
-			'text-color': '#3388ff',
-			'text-halo-color': '#ffffff',
-			'text-halo-width': 2
-		}
-	});
+	// The short badge on the line, anchored to the midpoint Point feature: a
+	// point symbol always renders, while 'line-center' placement drops it
+	// whenever the text doesn't fit along the rendered line.
+	addRouteBadgeLayer(
+		map,
+		SELECTED_PATH_SOURCE,
+		SELECTED_PATH_LABEL_LAYER,
+		isDarkMode.value && !isSatellite.value ? 'dark' : 'light',
+		false
+	);
 
 	pumpCalculation.setMap(map);
 }
+
+/** Layers a tap opens the route details card from: the lines and the badge. */
+function routeTapLayers(): string[] {
+	return [
+		SELECTED_PATH_LABEL_LAYER,
+		routeHitLayerId(SELECTED_PATH_LAYER_PREFIX),
+		routeHitLayerId(PUMP_LINE_LAYER_PREFIX)
+	];
+}
+
+/**
+ * Opens the details card for a route line or badge under `point`; true when
+ * one was hit. Of overlapping runs the coloured one wins, so a tap on an amber
+ * stretch focuses it.
+ */
+function openRouteDetailsAt(map: maplibregl.Map, point: maplibregl.Point): boolean {
+	const layers = routeTapLayers().filter((layer) => map.getLayer(layer));
+	if (layers.length === 0) return false;
+	const features = map.queryRenderedFeatures(point, { layers });
+	if (features.length === 0) return false;
+	const which = features.some((f) => f.layer.id === routeHitLayerId(PUMP_LINE_LAYER_PREFIX))
+		? 'pump'
+		: 'selected';
+	const runs = features
+		.filter((f) => f.geometry.type === 'LineString' && f.properties?.from !== undefined)
+		.map((f) => f.properties as TappedRun)
+		.sort((a, b) => Number(b.steep) - Number(a.steep) || Number(b.offRoad) - Number(a.offRoad));
+	routeDetails.openDetails(which, runs[0] ?? null);
+	return true;
+}
+
+/** Highlights the focused stretch on its line and clears the other line's highlight. */
+function applyRouteHighlight() {
+	if (!rootMap || !mapReady) return;
+	const stretch = routeDetails.focusedStretch.value;
+	const which = routeDetails.source.value;
+	setRouteHighlight(rootMap, SELECTED_PATH_LAYER_PREFIX, which === 'selected' ? stretch : null);
+	setRouteHighlight(rootMap, PUMP_LINE_LAYER_PREFIX, which === 'pump' ? stretch : null);
+}
+watch([routeDetails.focusedStretch, routeDetails.source], applyRouteHighlight);
 
 function setupMapEventListeners(map: maplibregl.Map) {
 	// Opens the supply-pipe marker chooser (fire object / suction point /
@@ -1778,6 +1808,16 @@ function setupMapEventListeners(map: maplibregl.Map) {
 			return;
 		}
 
+		// A tap on a route line or its badge opens the details card, focused on
+		// a tapped coloured or dashed stretch.
+		if (!markerEditStore.isActive && openRouteDetailsAt(map, e.point)) return;
+
+		// With the card open, a tap on the map only closes it (the badge stays).
+		if (routeDetails.isOpen.value) {
+			routeDetails.closeDetails();
+			return;
+		}
+
 		// Click on empty map area
 		if (markerEditStore.isActive) {
 			if (markerEditStore.isArea) return;
@@ -1810,6 +1850,14 @@ function setupMapEventListeners(map: maplibregl.Map) {
 	});
 
 	// Cursor changes for interactive layers
+	for (const layer of routeTapLayers()) {
+		map.on('mouseenter', layer, () => {
+			map.getCanvas().style.cursor = 'pointer';
+		});
+		map.on('mouseleave', layer, () => {
+			map.getCanvas().style.cursor = '';
+		});
+	}
 	map.on('mouseenter', 'unclustered-point', () => {
 		map.getCanvas().style.cursor = 'pointer';
 	});
@@ -1942,6 +1990,7 @@ function reloadMapStyle() {
 
 		// Restore selected path if it was visible
 		restoreSelectedPath();
+		applyRouteHighlight();
 
 		// Re-add DOM markers that may have been detached
 		restoreDomMarkers();
@@ -1988,6 +2037,10 @@ onMounted(async () => {
 			} else if (!path.includes('nearbysources')) {
 				nearbyWaterSource.setList([]);
 				listFreshness.reset();
+			}
+			// The pump line's card goes with the pump calculation.
+			if (!path.includes('supplypipe') && routeDetails.source.value === 'pump') {
+				routeDetails.closeDetails();
 			}
 		},
 		{ immediate: true }

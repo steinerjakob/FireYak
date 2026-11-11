@@ -79,6 +79,7 @@ src/
 | File | Purpose |
 |---|---|
 | `crossCountryNote.ts` | The one-time "check cross-country stretches on site" toast for the first hose line with an off-road stretch (flag persisted in Preferences) |
+| `routeDetails.ts` | State of the route details card: which line it shows (selected route or pump line), both lines' data, the focused stretch (tap on a coloured run or a row) |
 | `darkModeDetection.ts` | Read-only reactive "is the dark palette active" flag (view of `settingsStore`) |
 | `inAppReview.ts` | Tracks active usage days and triggers the one-shot native in-app review prompt |
 | `modalBreakpointWatcher.ts` | Tracks Ionic modal breakpoint state changes |
@@ -110,8 +111,9 @@ src/
 | `hosePressure.ts` | Downhill static-pressure rule against the max. hose working pressure; hydrant pressure parsing |
 | `hoseRoutingSetting.ts` | Hose routing mode type (`optimized` \| `roads`) and the pure migration from the old `clamp_hoses_to_roads` key and the removed `direct` mode (`resolveHoseRouting`: written back once, old key removed); toggle mapping (`modeFromToggle`) |
 | `polygonGeometry.ts` | Exact segment/polygon tests (edge intersection, containment, holes) used by route smoothing |
-| `routeLabel.ts` | Route label line (estimate prefix, hoses, signed climb, off-road metres, road-only length when > 15 % off) and the warning/fallback/coverage chips shared by the nearby list, map label and pump panel; when the one-time cross-country note is due |
-| `routeProfile.ts` | Steep (>25 %/>50 %) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
+| `routeLabel.ts` | Route label line of the nearby list (estimate prefix, hoses, signed climb, off-road metres, road-only length when > 15 % off) and the warning/fallback/coverage chips shared by the list, the details card and the pump panel; when the one-time cross-country note is due |
+| `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details card view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line |
+| `routeProfile.ts` | Steep (>25 %/>50 %, grade over deck heights on bridges) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
 
@@ -134,7 +136,7 @@ src/
 | `obstacleTiles.ts` | Collects z15 Protomaps tiles through an injected fetcher and merges `obstacleDecode.ts` results (LRU, per-layer coverage); missing tiles are reported, never cached as empty; no app I/O import (runs in the routing worker) |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker (shore targets with 250 m final legs, priced per target) |
-| `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs; `pulseRouteLayers` (width pulse after a silent recompute) |
+| `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs, focused-stretch highlight, tap target, the badge pill; `pulseRouteLayers` (width pulse after a silent recompute) |
 | `routingData.ts` | `routingDataArrived` (late basemap/DEM tiles and pond outlines, coalesced), `RouteFreshness` (recompute when a result was incomplete and data landed since), `isRouteDataComplete` |
 | `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster, height/slope raster, per-class area/length summary) for the dev-only routing debug view |
 | `__fixtures__/routing/` | Test data for the routing specs: five real scenes (`scene.json` committed, tiles gitignored and fetched locally, README there). Never import from app code |
@@ -177,6 +179,7 @@ src/
 | `NearbyMarkerHeader.vue` | Header for nearby markers section |
 | `NearbyMarkerPanel.vue` | Bottom sheet listing nearby water sources within radius |
 | `PondAreaCandidates.vue` | Add-mode list of OSM water areas at the pin: mark an existing pond, edit an existing fire pond, or suggest a suction point |
+| `RouteDetailsCard.vue` | Route details card (length, hoses, height, chips, coloured stretches, legend), floating above the bottom sheet on phones and beside the side panel on desktop |
 | `ReloadPrompt.vue` | PWA update notification with reload button |
 | `SupplyPipeCalculation.vue` | Pump supply line UI (suction/fire points, waypoints, profile) |
 | `SupplyPipeCalculationHeader.vue` | Header for pump calculation panel |

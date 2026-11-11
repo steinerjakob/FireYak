@@ -544,6 +544,37 @@
 			"gridUnreached": "Not reachable off-road: roads only",
 			"thinBuildings": "Buildings incomplete here: roads only"
 		},
-		"noElevation": "Elevation data missing"
+		"noElevation": "Elevation data missing",
+		"details": {
+			"title": "Hose route",
+			"titlePump": "Hose line",
+			"close": "Close",
+			"length": "Length",
+			"hoses": "Hoses",
+			"climb": "Height difference",
+			"climbTowardsSource": "{climb} to the water source",
+			"offRoad": "Off-road",
+			"roadOnly": "On roads only",
+			"stretches": "Coloured stretches",
+			"noStretches": "No steep or off-road stretches.",
+			"legend": "Legend",
+			"uphill": "uphill",
+			"downhill": "downhill",
+			"directionSource": "Uphill and downhill as seen from your position towards the water source.",
+			"directionPump": "Uphill and downhill as seen from the suction point towards the fire object.",
+			"stretch": {
+				"steep": "Steep: {grade} % {direction} over {distance}",
+				"verySteep": "Very steep: {grade} % {direction} over {distance}",
+				"steepPlain": "Steep over {distance}",
+				"verySteepPlain": "Very steep over {distance}",
+				"offRoad": "Off-road: {distance}"
+			}
+		},
+		"legend": {
+			"road": "On roads and paths",
+			"offRoad": "Off-road (dashed)",
+			"steep": "Steep: over 25 %",
+			"verySteep": "Very steep: over 50 % (ticks)"
+		}
 	}
 }
