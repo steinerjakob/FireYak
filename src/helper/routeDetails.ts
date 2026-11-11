@@ -289,3 +289,101 @@ export function pumpLineDetailsView(
 		...stretchesAndLegend(segments, options, 'route.details.directionPump')
 	};
 }
+
+/*
+ * The route section of a bottom sheet (phone layout, plan §6.8): a compact
+ * header row that expands to the details content of the card.
+ */
+
+/** Which line a sheet section shows: the selected route or the pump line. */
+export type RouteSectionHost = 'selected' | 'pump';
+
+/**
+ * Header line of the selected route's sheet section, e.g. "ca. 828 m · 42
+ * B-Schläuche · ↑13 m": estimate, hoses and the signed height difference
+ * towards the water source (left out below 1 m or without heights). DOM text,
+ * so the arrows are fine (unlike the badge on the map).
+ */
+export function routeSummary(
+	route: Pick<HoseRoute, 'meters' | 'climbM'>,
+	options: HoseOptions
+): string {
+	const { t, locale } = options;
+	const parts = [
+		t('route.estimate', { distance: formatMeters(route.meters, locale) }),
+		`${hoseCount(route.meters, options.tubeLength)} ${options.hoseName}-${t('pumpCalculation.pump.tubes')}`
+	];
+	if (route.climbM !== null && Math.abs(route.climbM) >= 1) {
+		parts.push(`${route.climbM > 0 ? '↑' : '↓'}${formatMeters(Math.abs(route.climbM), locale)}`);
+	}
+	return parts.join(' · ');
+}
+
+/**
+ * The one chip the collapsed header shows: "not recommended", else "check
+ * pressure", else a fallback (straight line, roads only, …); coverage notes
+ * (fences unknown, incomplete data, no heights) wait for the expanded view.
+ * `more` counts the chips the header leaves out.
+ */
+export function headerChip<C extends RouteChip>(chips: C[]): { chip: C | null; more: number } {
+	const chip =
+		chips.find((c) => c.color === 'danger') ??
+		chips.find((c) => c.color === 'warning') ??
+		chips.find((c) => c.key.startsWith('route.fallback.')) ??
+		null;
+	return { chip, more: chips.length - (chip ? 1 : 0) };
+}
+
+/**
+ * Header line of the pump line's sheet section: the stretches by kind, e.g.
+ * "1× sehr steil · 2× steil · 1× querfeldein" (length, hoses, height and chips
+ * are in the pump panel already), or "no coloured stretches".
+ */
+export function stretchSummary(
+	stretches: Pick<RouteStretch, 'kind'>[],
+	options: TextOptions
+): string {
+	const kinds: StretchKind[] = ['verySteep', 'steep', 'offRoad'];
+	const parts = kinds
+		.map((kind) => ({ kind, count: stretches.filter((s) => s.kind === kind).length }))
+		.filter((part) => part.count > 0)
+		.map((part) => options.t(`route.section.count.${part.kind}`, { count: part.count }));
+	return parts.length > 0 ? parts.join(' · ') : options.t('route.section.noStretches');
+}
+
+/** Expanded (true) or collapsed per sheet section; collapsed at the start of a session. */
+export type RouteSectionState = Record<RouteSectionHost, boolean>;
+
+export const INITIAL_SECTION_STATE: RouteSectionState = { selected: false, pump: false };
+
+/**
+ * `toggle`: the header was tapped; `focus`: a coloured or dashed run of the
+ * line was tapped on the map (opens the section on its stretch). Nothing
+ * collapses a section on its own: a new route keeps what the user chose.
+ */
+export type RouteSectionAction = 'toggle' | 'focus';
+
+export function sectionStateAfter(
+	state: RouteSectionState,
+	host: RouteSectionHost,
+	action: RouteSectionAction
+): RouteSectionState {
+	const expanded = action === 'focus' ? true : !state[host];
+	return expanded === state[host] ? state : { ...state, [host]: expanded };
+}
+
+/** A sheet below this breakpoint grows when its route section expands. */
+export const SECTION_SHEET_BREAKPOINT = 0.5;
+
+/**
+ * The breakpoint a sheet grows to when its route section expands: the first
+ * of its breakpoints at or above {@link SECTION_SHEET_BREAKPOINT}, or `null`
+ * when it is that high already (or has no such breakpoint). Never shrinks.
+ */
+export function sheetGrowTarget(breakpoints: readonly number[], current: number): number | null {
+	if (current >= SECTION_SHEET_BREAKPOINT - 1e-6) return null;
+	const target = [...breakpoints]
+		.sort((a, b) => a - b)
+		.find((b) => b >= SECTION_SHEET_BREAKPOINT - 1e-6 && b > current);
+	return target ?? null;
+}

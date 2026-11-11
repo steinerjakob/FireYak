@@ -570,6 +570,15 @@
 				"offRoad": "Querfeldein: {distance}"
 			}
 		},
+		"section": {
+			"noStretches": "Keine steilen oder querfeldein verlaufenden Abschnitte",
+			"more": "+{count} weitere",
+			"count": {
+				"verySteep": "{count}× sehr steil",
+				"steep": "{count}× steil",
+				"offRoad": "{count}× querfeldein"
+			}
+		},
 		"legend": {
 			"road": "Auf Straßen und Wegen",
 			"offRoad": "Querfeldein (gestrichelt)",

@@ -1,16 +1,31 @@
-import { computed, ref, shallowRef } from 'vue';
+import { computed, ref, shallowRef, type ComputedRef, type InjectionKey } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { HoseRoute } from '@/mapHandler/nearbyRouting';
 import type { RouteSegment } from '@/helper/routeProfile';
-import { routeStretches, stretchForRun, type RouteStretch } from '@/helper/routeDetails';
+import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import {
+	INITIAL_SECTION_STATE,
+	pumpLineDetailsView,
+	routeDetailsView,
+	routeStretches,
+	sectionStateAfter,
+	stretchForRun,
+	type RouteDetailsView,
+	type RouteSectionHost,
+	type RouteSectionState,
+	type RouteStretch
+} from '@/helper/routeDetails';
 
 /**
- * State of the route details card (plan §6.8), shared by the map, the pump
- * calculation and the card: which line it shows (`selected`: the nearby /
- * marker route; `pump`: the pump line), the data of both lines and the
- * focused stretch. A module singleton like the other map composables.
+ * State of the route details (plan §6.8), shared by the map, the pump
+ * calculation, the floating card (desktop) and the sheet sections (phone):
+ * which line was opened last (`selected`: the nearby / marker route; `pump`:
+ * the pump line), the data of both lines, the focused stretch and whether
+ * each sheet section is expanded (for the session, not persisted). A module
+ * singleton like the other map composables.
  */
 
-export type RouteDetailsSource = 'selected' | 'pump';
+export type RouteDetailsSource = RouteSectionHost;
 
 /** A tapped run of a line (its feature properties). */
 export type TappedRun = Pick<RouteSegment, 'from' | 'to' | 'steep' | 'offRoad'>;
@@ -19,6 +34,9 @@ const selectedRoute = shallowRef<HoseRoute | null>(null);
 const pumpSegments = shallowRef<RouteSegment[]>([]);
 const source = ref<RouteDetailsSource | null>(null);
 const focusId = ref<string | null>(null);
+const sectionState = ref<RouteSectionState>(INITIAL_SECTION_STATE);
+/** Counts taps on a line: its sheet section grows the sheet and shows the focused row on each. */
+const focusRequest = ref(0);
 
 const stretches = computed<RouteStretch[]>(() => {
 	if (source.value === 'selected') {
@@ -33,10 +51,22 @@ const focusedStretch = computed(
 	() => stretches.value.find((stretch) => stretch.id === focusId.value) ?? null
 );
 
-/** Opens the card for a line; a tapped coloured or dashed run focuses its stretch. */
-function openDetails(which: RouteDetailsSource, run?: TappedRun | null) {
+/**
+ * Opens the details for a line; a tapped coloured or dashed run focuses its
+ * stretch. `reveal` (a tap on the line or its badge) also expands the line's
+ * sheet section (phone) and asks it to show the focused row.
+ */
+function openDetails(
+	which: RouteDetailsSource,
+	run?: TappedRun | null,
+	options: { reveal?: boolean } = {}
+) {
 	source.value = which;
 	focusId.value = run ? (stretchForRun(stretches.value, run)?.id ?? null) : null;
+	if (options.reveal) {
+		sectionState.value = sectionStateAfter(sectionState.value, which, 'focus');
+		focusRequest.value++;
+	}
 }
 
 function closeDetails() {
@@ -47,6 +77,20 @@ function closeDetails() {
 /** Focuses a stretch of the open card (a row tap), or clears the focus. */
 function focusStretch(id: string | null) {
 	focusId.value = focusId.value === id ? null : id;
+}
+
+/** A row tap in a sheet section: that line's stretch is focused (or unfocused). */
+function selectStretch(which: RouteDetailsSource, id: string) {
+	if (source.value !== which) {
+		source.value = which;
+		focusId.value = null;
+	}
+	focusStretch(id);
+}
+
+/** A tap on a sheet section's header. */
+function toggleSection(which: RouteSectionHost) {
+	sectionState.value = sectionStateAfter(sectionState.value, which, 'toggle');
 }
 
 /** The selected route changed (or is gone): a gone route closes its card. */
@@ -74,7 +118,46 @@ export function useRouteDetails() {
 		openDetails,
 		closeDetails,
 		focusStretch,
+		selectStretch,
+		sectionState,
+		focusRequest,
+		toggleSection,
 		setSelectedRoute,
 		setPumpSegments
 	};
 }
+
+/**
+ * The details view model of a line (the card's and the sheet section's), in
+ * the current locale and with the pump settings' hose length and name. Call
+ * in a component's setup.
+ */
+export function useRouteDetailsView(
+	which: () => RouteDetailsSource | null
+): ComputedRef<RouteDetailsView | null> {
+	const { t, locale } = useI18n();
+	const pumpStore = usePumpCalculationStore();
+	return computed(() => {
+		const options = { t, locale: locale.value };
+		const line = which();
+		if (line === 'selected') {
+			const route = selectedRoute.value;
+			if (!route) return null;
+			return routeDetailsView(route, {
+				...options,
+				tubeLength: pumpStore.tubeLength,
+				hoseName: pumpStore.hoseName
+			});
+		}
+		if (line === 'pump') return pumpLineDetailsView(pumpSegments.value, options);
+		return null;
+	});
+}
+
+/** What a bottom sheet offers its route section: growing to a higher breakpoint. */
+export interface RouteSheet {
+	grow(): Promise<void>;
+}
+
+/** Provided by the sheet panels (phone layout), injected by `RouteSheetSection.vue`. */
+export const ROUTE_SHEET_KEY: InjectionKey<RouteSheet> = Symbol('routeSheet');

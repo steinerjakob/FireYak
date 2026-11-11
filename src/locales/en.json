@@ -570,6 +570,15 @@
 				"offRoad": "Off-road: {distance}"
 			}
 		},
+		"section": {
+			"noStretches": "No steep or off-road stretches",
+			"more": "+{count} more",
+			"count": {
+				"verySteep": "{count}× very steep",
+				"steep": "{count}× steep",
+				"offRoad": "{count}× off-road"
+			}
+		},
 		"legend": {
 			"road": "On roads and paths",
 			"offRoad": "Off-road (dashed)",

@@ -5,15 +5,22 @@ import type { HoseRoute } from '@/mapHandler/nearbyRouting';
 import type { RouteSegment } from '@/helper/routeProfile';
 import { routeLabel } from '@/helper/routeLabel';
 import {
+	INITIAL_SECTION_STATE,
 	ROUTE_LEGEND,
+	SECTION_SHEET_BREAKPOINT,
 	badgeTone,
 	formatClimb,
+	headerChip,
 	legendEntryOf,
 	pumpLineDetailsView,
 	routeBadge,
 	routeDetailsView,
 	routeStretches,
+	routeSummary,
+	sectionStateAfter,
+	sheetGrowTarget,
 	stretchForRun,
+	stretchSummary,
 	stretchText,
 	type RouteStretch
 } from '@/helper/routeDetails';
@@ -306,6 +313,129 @@ describe('formatClimb', () => {
 	});
 });
 
+describe('routeSummary: the header of the sheet section', () => {
+	it('"ca. 828 m · 42 B-Schläuche · ↑13 m" / "approx. 828 m · 42 B-hoses · ↑13 m"', () => {
+		const r = route({ meters: 828, climbM: 13.4 });
+		expect(routeSummary(r, deOptions)).toBe('ca. 828 m · 42 B-Schläuche · ↑13 m');
+		expect(routeSummary(r, enOptions)).toBe(
+			`approx. 828 m · 42 B-${translator(en)('pumpCalculation.pump.tubes')} · ↑13 m`
+		);
+	});
+
+	it('downhill with ↓ and the locale separator; no climb below 1 m or without heights', () => {
+		expect(routeSummary(route({ meters: 1367, climbM: -1197 }), deOptions)).toBe(
+			'ca. 1.367 m · 69 B-Schläuche · ↓1.197 m'
+		);
+		expect(routeSummary(route({ meters: 156, climbM: 0.4 }), deOptions)).toBe(
+			'ca. 156 m · 8 B-Schläuche'
+		);
+		expect(routeSummary(route({ meters: 156, climbM: null }), deOptions)).toBe(
+			'ca. 156 m · 8 B-Schläuche'
+		);
+	});
+
+	it('the same metres and hoses as the badge and the card rows', () => {
+		const r = route({ meters: 1366.6 });
+		const view = routeDetailsView(r, deOptions);
+		const summary = routeSummary(r, deOptions);
+		expect(summary.startsWith(view.rows.find((row) => row.key === 'length')!.value)).toBe(true);
+		expect(summary).toContain(view.rows.find((row) => row.key === 'hoses')!.value);
+		expect(summary).toContain(`· ${routeBadge(r.meters, deOptions).split(' · ')[1]}`);
+	});
+});
+
+describe('headerChip: the one chip of the collapsed header', () => {
+	const chip = (key: string, color: 'danger' | 'warning' | 'medium') => ({ key, color });
+
+	it('not recommended first, then check pressure', () => {
+		const chips = [
+			chip('route.barriersUnknown', 'medium'),
+			chip('route.checkPressure', 'warning'),
+			chip('route.notRecommended', 'danger')
+		];
+		expect(headerChip(chips)).toEqual({ chip: chips[2], more: 2 });
+		expect(headerChip(chips.slice(0, 2))).toEqual({ chip: chips[1], more: 1 });
+	});
+
+	it('a fallback before coverage notes', () => {
+		const chips = [chip('route.incomplete', 'medium'), chip('route.fallback.tooFar', 'medium')];
+		expect(headerChip(chips)).toEqual({ chip: chips[1], more: 1 });
+	});
+
+	it('coverage notes alone: no chip, only the count', () => {
+		const chips = [chip('route.barriersUnknown', 'medium'), chip('route.noElevation', 'medium')];
+		expect(headerChip(chips)).toEqual({ chip: null, more: 2 });
+		expect(headerChip([])).toEqual({ chip: null, more: 0 });
+	});
+
+	it('picks from the card view chips (with text)', () => {
+		const view = routeDetailsView(
+			route({ notRecommended: true, offRoadMeters: 40, metersOver50: 12 }),
+			deOptions
+		);
+		const { chip: picked, more } = headerChip(view.chips);
+		expect(picked?.text).toBe('Nicht empfohlen');
+		expect(more).toBe(view.chips.length - 1);
+	});
+});
+
+describe('stretchSummary: the header of the pump line section', () => {
+	it('counts by kind, steepest first', () => {
+		const stretches = [
+			{ kind: 'offRoad' as const },
+			{ kind: 'steep' as const },
+			{ kind: 'verySteep' as const },
+			{ kind: 'steep' as const }
+		];
+		expect(stretchSummary(stretches, deText)).toBe('1× sehr steil · 2× steil · 1× querfeldein');
+		expect(stretchSummary(stretches, enText)).toBe('1× very steep · 2× steep · 1× off-road');
+	});
+
+	it('no stretches', () => {
+		expect(stretchSummary([], deText)).toBe(
+			'Keine steilen oder querfeldein verlaufenden Abschnitte'
+		);
+	});
+});
+
+describe('sectionStateAfter: expanded or collapsed per sheet section', () => {
+	it('starts collapsed', () => {
+		expect(INITIAL_SECTION_STATE).toEqual({ selected: false, pump: false });
+	});
+
+	it('a header tap toggles only its own section', () => {
+		const open = sectionStateAfter(INITIAL_SECTION_STATE, 'selected', 'toggle');
+		expect(open).toEqual({ selected: true, pump: false });
+		expect(sectionStateAfter(open, 'selected', 'toggle')).toEqual(INITIAL_SECTION_STATE);
+		expect(sectionStateAfter(open, 'pump', 'toggle')).toEqual({ selected: true, pump: true });
+	});
+
+	it('a tap on the line expands and never collapses', () => {
+		const open = sectionStateAfter(INITIAL_SECTION_STATE, 'pump', 'focus');
+		expect(open).toEqual({ selected: false, pump: true });
+		expect(sectionStateAfter(open, 'pump', 'focus')).toBe(open);
+	});
+});
+
+describe('sheetGrowTarget: the sheet grows when its section expands', () => {
+	it('marker sheet [0.25, 0.5]: 0.25 grows to 0.5', () => {
+		expect(sheetGrowTarget([0.25, 0.5], 0.25)).toBe(0.5);
+		expect(sheetGrowTarget([0.25, 0.5], 0.5)).toBeNull();
+	});
+
+	it('list and pump sheets [0.25, 0.4, 0.5, 0.75]: up to half, never shrinks', () => {
+		const bps = [0.25, 0.4, 0.5, 0.75];
+		expect(sheetGrowTarget(bps, 0.25)).toBe(SECTION_SHEET_BREAKPOINT);
+		expect(sheetGrowTarget(bps, 0.4)).toBe(0.5);
+		expect(sheetGrowTarget(bps, 0.5)).toBeNull();
+		expect(sheetGrowTarget(bps, 0.75)).toBeNull();
+	});
+
+	it('no breakpoint that high: stays', () => {
+		expect(sheetGrowTarget([0.25, 0.4], 0.25)).toBeNull();
+	});
+});
+
 describe('i18n', () => {
 	it('every card string exists in en and de', () => {
 		const keys = [
@@ -330,6 +460,9 @@ describe('i18n', () => {
 			...['steep', 'verySteep', 'steepPlain', 'verySteepPlain', 'offRoad'].map(
 				(k) => `route.details.stretch.${k}`
 			),
+			'route.section.noStretches',
+			'route.section.more',
+			...['verySteep', 'steep', 'offRoad'].map((k) => `route.section.count.${k}`),
 			...ROUTE_LEGEND.map((e) => e.key)
 		];
 		for (const key of keys) {

@@ -1,31 +1,18 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router';
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { IonContent, IonCard, IonModal, IonThumbnail } from '@ionic/vue';
 import MarkerInfo from '@/components/MarkerInfo.vue';
 import MarkerInfoHeader from '@/components/MarkerInfoHeader.vue';
-import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
-import { useMapMarkerStore } from '@/store/mapMarkerStore';
-import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
+import RouteSheetSection from '@/components/RouteSheetSection.vue';
+import { provideRouteSheet, useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
 import { useScreenDetection } from '@/composable/screenDetection';
-import { useNetworkStatus } from '@/composable/networkStatus';
+import { useMarkerThumbnail } from '@/composable/markerThumbnail';
 
 const route = useRoute();
 const modal = ref<typeof IonModal>();
-const nearbyWaterSource = useNearbyWaterSource();
-const markerStore = useMapMarkerStore();
 const router = useRouter();
-const { isOnline } = useNetworkStatus();
-
-const showMarkerInfo = computed(() => {
-	return !!route.params.markerId && !nearbyWaterSource.isActive.value;
-});
-
-// Photos need a connection — hide the thumbnail entry point while offline
-// rather than showing a stale/broken image.
-const markerImage = computed(
-	() => (isOnline.value ? markerStore.selectedMarkerImages[0] : null) || null
-);
+const { showMarkerInfo, markerImage } = useMarkerThumbnail();
 
 const { isMobile } = useScreenDetection();
 const showImages = async () => {
@@ -33,8 +20,10 @@ const showImages = async () => {
 };
 
 const initialBreakpoint = 0.25;
+const breakpoints = [0.25, 0.5];
 
 useIonModalBreakpoint(modal, initialBreakpoint);
+provideRouteSheet(modal, breakpoints);
 </script>
 
 <template>
@@ -42,7 +31,7 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 		<ion-modal
 			ref="modal"
 			:is-open="showMarkerInfo"
-			:breakpoints="[0.25, 0.5]"
+			:breakpoints="breakpoints"
 			:initial-breakpoint="initialBreakpoint"
 			:backdrop-dismiss="false"
 			:backdrop-opacity="0"
@@ -58,6 +47,8 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 			</template>
 			<MarkerInfoHeader></MarkerInfoHeader>
 			<ion-content>
+				<!-- The route to this marker (phone): header row, expands in the sheet. -->
+				<RouteSheetSection host="selected" />
 				<MarkerInfo></MarkerInfo>
 			</ion-content>
 		</ion-modal>

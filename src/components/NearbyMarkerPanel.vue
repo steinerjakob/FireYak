@@ -4,7 +4,8 @@ import { IonContent, IonCard, IonModal } from '@ionic/vue';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import NearbyMarker from '@/components/NearbyMarker.vue';
 import NearbyMarkerHeader from '@/components/NearbyMarkerHeader.vue';
-import { useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
+import RouteSheetSection from '@/components/RouteSheetSection.vue';
+import { provideRouteSheet, useIonModalBreakpoint } from '@/composable/modalBreakpointWatcher';
 import { useScreenDetection } from '@/composable/screenDetection';
 
 const modal = ref<typeof IonModal>();
@@ -13,8 +14,10 @@ const { isActive } = useNearbyWaterSource();
 const { isMobile } = useScreenDetection();
 
 const initialBreakpoint = 0.4;
+const breakpoints = [0.25, 0.4, 0.5, 0.75];
 
 useIonModalBreakpoint(modal, initialBreakpoint);
+provideRouteSheet(modal, breakpoints);
 </script>
 
 <template>
@@ -22,7 +25,7 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 		<ion-modal
 			ref="modal"
 			:is-open="isActive"
-			:breakpoints="[0.25, 0.4, 0.5, 0.75]"
+			:breakpoints="breakpoints"
 			:initial-breakpoint="initialBreakpoint"
 			:backdrop-dismiss="false"
 			:backdrop-opacity="0"
@@ -33,6 +36,8 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 		>
 			<NearbyMarkerHeader></NearbyMarkerHeader>
 			<ion-content>
+				<!-- The selected entry's route (phone): on top, visible at the first breakpoint. -->
+				<RouteSheetSection host="selected" />
 				<NearbyMarker></NearbyMarker>
 			</ion-content>
 		</ion-modal>

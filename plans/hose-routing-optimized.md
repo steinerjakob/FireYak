@@ -842,8 +842,8 @@ a sixth). The line shows a short **badge**, the card holds the rest:
   font has no arrows or warning sign). A stretchable pill image per theme
   (white / dark surface) via `icon-text-fit`, screen-sized at every zoom; its
   border shows the tone: red when not recommended, amber for "check pressure".
-- **Card** (`RouteDetailsCard.vue`, state in `composable/routeDetails.ts`, view
-  model `routeDetailsView`): opens when a route is drawn (not on a silent
+- **Card** (`RouteDetailsCard.vue`, desktop only; state in
+  `composable/routeDetails.ts`, view model `routeDetailsView`): opens when a route is drawn (not on a silent
   recompute) and on a tap on the line or the badge; closes with its button or
   a tap on the map (the badge stays; the next map tap behaves as before). Rows:
   length (estimate), hoses, height difference towards the water source (↑/↓),
@@ -861,11 +861,46 @@ a sixth). The line shows a short **badge**, the card holds the rest:
   highlight layer under the line marks the stretch (filter on the runs'
   `from`/`to`); a tap on a row focuses it too. Taps hit an invisible 24 px
   line layer; coloured runs win over plain ones under the finger.
-- Desktop: bottom left beside the side panel, 360 px wide. Phone: full width
-  above the bottom sheet (or above the FAB row without one), at most half the
-  free map height, scrolling inside; the legend starts folded there.
+- Desktop (side-panel layout, ≥ 768 px, `useScreenDetection`): bottom left
+  beside the side panel, 360 px wide; when the marker info shows its photo
+  thumbnail (also bottom left there) the card moves right of it
+  (`useMarkerThumbnail`), so the photo never covers it.
 - Pump line: the same card on a tap on the line, with only the stretches and
   the legend (length, hoses, height and chips are in the pump panel already).
+- **Phone (sheet layout, < 768 px; owner feedback):** no floating card. A
+  card above the sheet covered most of the map, and the marker's photo
+  thumbnail covered the card. The details move into the bottom sheets as a
+  route section (`RouteSheetSection.vue`; the details themselves are
+  `RouteDetailsContent.vue`, shared with the card; the view model stays in
+  `routeDetails.ts`):
+  - where: the marker info sheet (route to that marker) and the nearby list
+    sheet (selected entry's route) at the top of the sheet content, visible
+    at the first breakpoint; the pump sheet right below its chips, with only
+    the stretches and the legend (no chips or numbers twice).
+  - collapsed header (button with `aria-expanded`, chevron): title and
+    `routeSummary` ("ca. 828 m · 42 B-Schläuche · ↑13 m"; DOM text, so the
+    arrows are fine), plus the most important chip (`headerChip`: not
+    recommended, else check pressure, else a fallback; coverage notes only
+    as "+n weitere"). Pump: `stretchSummary` ("1× sehr steil · 2× steil ·
+    1× querfeldein").
+  - expanded: rows, all chips, stretches, direction note, legend (folded).
+    Collapsed at the start of a session; the state is kept per section
+    (`selected`, `pump`) for the session (`sectionStateAfter`), not stored.
+  - expanding grows the sheet to its first breakpoint ≥ 0.5 when it is lower
+    (`sheetGrowTarget`, `provideRouteSheet` in `modalBreakpointWatcher.ts`
+    via `setCurrentBreakpoint`); it never shrinks it. Nothing new covers the
+    map.
+  - a tap on the line or the badge expands the section of that line; a tap
+    on a coloured or dashed run also focuses its stretch: the sheet grows,
+    the row is scrolled into view and highlighted, and the map highlight
+    shows as on desktop. A row tap focuses the stretch on the map. A tap on
+    the empty map clears the focus and then does what it did before the
+    card (e.g. closes the marker info); there is no card to close.
+  - a line without a sheet: the selected route exists only with the marker
+    info or the nearby sheet open, the pump line only with the pump sheet,
+    so this does not occur in normal use; should it, the tap only highlights
+    the stretch on the map (no card appears).
+  - the badge on the line stays.
 - The list keeps its line (`routeLabel` with ↑/↓) and chips; list, badge, card
   and pump panel show the one `route.meters`.
 

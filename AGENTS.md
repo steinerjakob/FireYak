@@ -79,10 +79,11 @@ src/
 | File | Purpose |
 |---|---|
 | `crossCountryNote.ts` | The one-time "check cross-country stretches on site" toast for the first hose line with an off-road stretch (flag persisted in Preferences) |
-| `routeDetails.ts` | State of the route details card: which line it shows (selected route or pump line), both lines' data, the focused stretch (tap on a coloured run or a row) |
+| `routeDetails.ts` | State of the route details (desktop card, phone sheet sections): which line was opened (selected route or pump line), both lines' data, the focused stretch (tap on a coloured run or a row), the session-only expanded state of each sheet section, the shared view model (`useRouteDetailsView`) and the sheet-grow injection key |
+| `markerThumbnail.ts` | Whether the marker info shows and its floating photo thumbnail (shared by the marker info panel and the desktop route card, which keeps clear of it) |
 | `darkModeDetection.ts` | Read-only reactive "is the dark palette active" flag (view of `settingsStore`) |
 | `inAppReview.ts` | Tracks active usage days and triggers the one-shot native in-app review prompt |
-| `modalBreakpointWatcher.ts` | Tracks Ionic modal breakpoint state changes |
+| `modalBreakpointWatcher.ts` | Tracks Ionic modal breakpoint state changes; `provideRouteSheet` lets a sheet's route section grow the sheet |
 | `nearbyWaterSource.ts` | Reactive list of nearby water sources, ranked by routed hose length (straight line for unrouted ones); `applySilentUpdate` takes a recompute after late routing data (metres in place with a short highlight, re-sorted once the list is not touched) |
 | `networkStatus.ts` | Singleton reactive online/offline status shared across the app |
 | `photonSearch.ts` | Address/place search against the Photon geocoding API |
@@ -112,7 +113,7 @@ src/
 | `hoseRoutingSetting.ts` | Hose routing mode type (`optimized` \| `roads`) and the pure migration from the old `clamp_hoses_to_roads` key and the removed `direct` mode (`resolveHoseRouting`: written back once, old key removed); toggle mapping (`modeFromToggle`) |
 | `polygonGeometry.ts` | Exact segment/polygon tests (edge intersection, containment, holes) used by route smoothing |
 | `routeLabel.ts` | Route label line of the nearby list (estimate prefix, hoses, signed climb, off-road metres, road-only length when > 15 % off) and the warning/fallback/coverage chips shared by the list, the details card and the pump panel; when the one-time cross-country note is due |
-| `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details card view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line |
+| `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line, and the phone sheet section's header (`routeSummary`, `headerChip`, `stretchSummary`), expanded state and sheet growth (`sectionStateAfter`, `sheetGrowTarget`) |
 | `routeProfile.ts` | Steep (>25 %/>50 %, grade over deck heights on bridges) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
@@ -179,7 +180,9 @@ src/
 | `NearbyMarkerHeader.vue` | Header for nearby markers section |
 | `NearbyMarkerPanel.vue` | Bottom sheet listing nearby water sources within radius |
 | `PondAreaCandidates.vue` | Add-mode list of OSM water areas at the pin: mark an existing pond, edit an existing fire pond, or suggest a suction point |
-| `RouteDetailsCard.vue` | Route details card (length, hoses, height, chips, coloured stretches, legend), floating above the bottom sheet on phones and beside the side panel on desktop |
+| `RouteDetailsCard.vue` | Floating route details card of the desktop layout, beside the side panel (and the marker photo thumbnail) |
+| `RouteDetailsContent.vue` | The route details themselves (length, hoses, height, chips, coloured stretches, legend), shared by the card and the sheet section |
+| `RouteSheetSection.vue` | Phone layout: the route section inside the marker info, nearby and pump sheets; a compact header row that expands to the details and grows the sheet |
 | `ReloadPrompt.vue` | PWA update notification with reload button |
 | `SupplyPipeCalculation.vue` | Pump supply line UI (suction/fire points, waypoints, profile) |
 | `SupplyPipeCalculationHeader.vue` | Header for pump calculation panel |

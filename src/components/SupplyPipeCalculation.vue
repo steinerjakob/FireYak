@@ -15,6 +15,8 @@ import { calculator, cloudOfflineOutline, locate, warningOutline } from 'ionicon
 import { useI18n } from 'vue-i18n';
 import { usePumpCalculation, type ResultEntryId } from '@/composable/pumpCalculation';
 import ElevationChart from '@/components/ElevationChart.vue';
+import RouteSheetSection from '@/components/RouteSheetSection.vue';
+import { useScreenDetection } from '@/composable/screenDetection';
 import type { PumpPosition } from '@/helper/calculatePumpPosition';
 import suctionPointIcon from '@/assets/markers/suctionpoint.png';
 import firepointIcon from '@/assets/markers/firepoint.png';
@@ -28,6 +30,7 @@ const { t, locale } = useI18n();
 const pumpCalculation = usePumpCalculation();
 const pumpCalculationStore = usePumpCalculationStore();
 const { maybeShowCrossCountryNote } = useCrossCountryNote();
+const { isMobile } = useScreenDetection();
 
 const calculationAllowed = computed(() => {
 	return pumpCalculation.firePointSet.value && pumpCalculation.suctionPointSet.value;
@@ -312,6 +315,11 @@ watch(pumpCalculation.selectedResultEntry, (id) => {
 				</ion-chip>
 			</div>
 		</ion-item>
+
+		<!-- The line's coloured stretches (phone), next to its chips and visible at
+		     the sheet's first breakpoint; length, hoses, height and chips stay in
+		     this panel, so the section adds only the stretches and the legend. -->
+		<RouteSheetSection v-if="isMobile" host="pump" />
 
 		<!-- Summary stat grid -->
 		<ion-item lines="none">

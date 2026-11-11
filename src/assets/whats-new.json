@@ -57,8 +57,8 @@
 		},
 		{
 			"type": "improvement",
-			"en": "Hose routes show a short badge on the map; tap it or the line for clear details: length, hoses, height difference, warnings and why a stretch is coloured. Bridges no longer show as steep.",
-			"de": "Schlauchwege zeigen auf der Karte ein kurzes Etikett; ein Tipp darauf oder auf die Linie öffnet übersichtliche Details: Länge, Schläuche, Höhenunterschied, Warnungen und warum ein Abschnitt farbig ist. Brücken gelten nicht mehr als steil."
+			"en": "Hose routes show a short badge on the map and clear details, on phones right in the bottom panel: length, hoses, height difference, warnings and why a stretch is coloured. Bridges no longer show as steep.",
+			"de": "Schlauchwege zeigen auf der Karte ein kurzes Etikett und übersichtliche Details, am Handy direkt im unteren Infobereich: Länge, Schläuche, Höhenunterschied, Warnungen und warum ein Abschnitt farbig ist. Brücken gelten nicht mehr als steil."
 		}
 	],
 	"releases": [

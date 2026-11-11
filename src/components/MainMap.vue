@@ -125,7 +125,8 @@
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
-		<RouteDetailsCard />
+		<!-- Side-panel layout only; on phones the details are in the bottom sheet. -->
+		<RouteDetailsCard v-if="!isMobile" />
 		<LayerSelectorModal
 			:is-open="layerModalOpen"
 			:event="layerSelectorEvent"
@@ -1637,9 +1638,11 @@ function routeTapLayers(): string[] {
 }
 
 /**
- * Opens the details card for a route line or badge under `point`; true when
- * one was hit. Of overlapping runs the coloured one wins, so a tap on an amber
- * stretch focuses it.
+ * Opens the details for a route line or badge under `point` (the card on
+ * desktop, the expanded sheet section on phones); true when one was hit. Of
+ * overlapping runs the coloured one wins, so a tap on an amber stretch
+ * focuses it. Without a sheet showing that line (phone) only the map
+ * highlight of the stretch remains.
  */
 function openRouteDetailsAt(map: maplibregl.Map, point: maplibregl.Point): boolean {
 	const layers = routeTapLayers().filter((layer) => map.getLayer(layer));
@@ -1653,7 +1656,7 @@ function openRouteDetailsAt(map: maplibregl.Map, point: maplibregl.Point): boole
 		.filter((f) => f.geometry.type === 'LineString' && f.properties?.from !== undefined)
 		.map((f) => f.properties as TappedRun)
 		.sort((a, b) => Number(b.steep) - Number(a.steep) || Number(b.offRoad) - Number(a.offRoad));
-	routeDetails.openDetails(which, runs[0] ?? null);
+	routeDetails.openDetails(which, runs[0] ?? null, { reveal: true });
 	return true;
 }
 
@@ -1813,9 +1816,11 @@ function setupMapEventListeners(map: maplibregl.Map) {
 		if (!markerEditStore.isActive && openRouteDetailsAt(map, e.point)) return;
 
 		// With the card open, a tap on the map only closes it (the badge stays).
+		// Phones have no card (the details are in the sheet): the tap clears a
+		// focused stretch and then behaves as before.
 		if (routeDetails.isOpen.value) {
 			routeDetails.closeDetails();
-			return;
+			if (!isMobile.value) return;
 		}
 
 		// Click on empty map area
