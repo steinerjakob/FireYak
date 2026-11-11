@@ -37,6 +37,7 @@ import {
 	OffRoadTest,
 	RouteSegment,
 	classifyRoute,
+	isAlongBridge,
 	isNearAnyRoad,
 	length3d,
 	resampleForProfile,
@@ -313,6 +314,8 @@ interface RoutingContext {
 	grids: Map<number, GridSlot>;
 	/** Lazily built road proximity test for the off-road classification. */
 	nearRoad?: (p: GeoPoint) => boolean;
+	/** Lazily filtered bridge ways for the profile's bridge test. */
+	bridges?: RoadLine[];
 	builtAt: number;
 }
 
@@ -640,6 +643,12 @@ async function getContext(
 	return context;
 }
 
+/** The routable bridge ways of a context (the profile's bridge test), cached on it. */
+function bridgesOf(ctx: RoutingContext): RoadLine[] {
+	ctx.bridges ??= ctx.obstacles.roads.filter((road) => road.isBridge);
+	return ctx.bridges;
+}
+
 /** Drops the cached routing context (e.g. for tuning/testing). */
 export function invalidateRoutingContext(): void {
 	context = null;
@@ -703,9 +712,13 @@ async function finishRoute(
 		}
 		checkCancelled(signal);
 	}
+	// On a bridge the DEM shows the valley below the deck; the grade is taken
+	// across it (the cost ignores slope on bridge cells too, plan §6.4).
+	const bridges = ctx ? bridgesOf(ctx) : [];
 	const profile = classifyRoute(stations, dem?.heights ?? null, {
 		demZoom: dem?.zoom ?? null,
-		isOffRoad
+		isOffRoad,
+		isOnBridge: bridges.length > 0 ? (a, b) => isAlongBridge(a, b, bridges) : undefined
 	});
 	let pressure: ReturnType<typeof evaluateDownhillPressure> = null;
 	if (profile.heights && options.maxHosePressureBar && sourcePressureBar !== undefined) {

@@ -11,6 +11,7 @@ import { getObstaclesForBounds, invalidateObstacleCache } from '@/mapHandler/obs
 import { setDemTileDecoder } from '@/helper/demElevation';
 import { distanceToOutline } from '@/helper/areaShore';
 import { segmentIntersectsPolygon } from '@/helper/polygonGeometry';
+import { STEEP_GRADE, isAlongBridge, resampleForProfile } from '@/helper/routeProfile';
 import type { AccessTarget } from '@/mapHandler/waterSourceAccess';
 import {
 	decodeDemWebp,
@@ -42,7 +43,8 @@ const modeOf = (mode: Mode) => (mode === 'road' ? ('roads' as const) : ('optimiz
  */
 const PHASE1_LENGTHS: Record<string, { road: string }> = {
 	'1-rural-pond': {
-		road: '790 462'
+		// The third case (the Melk bridge) was added after phase 7.
+		road: '790 462 534'
 	},
 	'2-melk': {
 		road: '555 613 617 712 694 381 340 282 225 227 408 415 644 750 858 1024 870 575 491 422 390 422 454 735 926 1035 1440 1081 1183 867 822 1011 785 614 596 623 694 733'
@@ -177,6 +179,63 @@ describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () =>
 			}
 			expect(hits).toBe(0);
 		});
+	});
+
+	// The owner's screenshot near scene 1: an amber stretch exactly where the route
+	// crosses the Melk on the Hauptstraße bridge (48.1387, 15.2806). The DEM shows
+	// the river bed under the 35 m deck (a dip of about 4.4 m, 29 % over 10 m at
+	// its banks); the routing cost ignores slope on bridges, and so does the
+	// steep display now (grade over the deck heights, 10 m approach margin).
+	describe('scene 1: the Hauptstraße bridge over the Melk', () => {
+		let scene: RoutingScene;
+		beforeAll(() => {
+			scene = useScene('1-rural-pond');
+		});
+
+		it.each(['roads', 'optimized'] as const)(
+			'%s: the route crosses the bridge and shows no amber or red there',
+			async (mode) => {
+				const { from, to } = scene.cases!.melkBridge;
+				invalidateRoutingContext();
+				const route = await getRoutedPath(from, to, { mode });
+				expect(route.routed).toBe(true);
+				expect(route.demZoom).toBe(14);
+				const { roads } = await getObstaclesForBounds({
+					south: 48.1375,
+					north: 48.14,
+					west: 15.279,
+					east: 15.282
+				});
+				const bridge = roads.filter(
+					(r) => r.isBridge && r.kind === 'major_road' && r.bbox[0] > 15.28 && r.bbox[1] > 48.1385
+				);
+				expect(bridge).toHaveLength(1);
+				// Stations of the profile on the bridge.
+				const stations = resampleForProfile(route.points);
+				const onBridge: number[] = [];
+				for (let k = 0; k + 1 < stations.points.length; k++) {
+					if (isAlongBridge(stations.points[k], stations.points[k + 1], bridge)) {
+						onBridge.push(stations.s[k], stations.s[k + 1]);
+					}
+				}
+				expect(onBridge.length).toBeGreaterThan(0);
+				const [deckFrom, deckTo] = [Math.min(...onBridge), Math.max(...onBridge)];
+				expect(deckTo - deckFrom).toBeGreaterThan(20);
+				// The raw DEM along the line is steep at the bridge: the spot reproduces.
+				const { s, heights } = route.profile!;
+				let rawGrade = 0;
+				for (let i = 0; i < s.length; i++) {
+					for (let j = i + 1; j < s.length && s[j] - s[i] <= 10.5; j++) {
+						if (s[j] - s[i] < 9.5 || s[i] < deckFrom - 15 || s[j] > deckTo + 15) continue;
+						rawGrade = Math.max(rawGrade, Math.abs(heights[j] - heights[i]) / (s[j] - s[i]));
+					}
+				}
+				expect(rawGrade).toBeGreaterThan(STEEP_GRADE);
+				// …and the display shows none of it.
+				expect(route.segments.filter((seg) => seg.steep > 0)).toEqual([]);
+				expect(route.metersOver25).toBe(0);
+			}
+		);
 	});
 
 	describe('scene 5: Innsbruck, "500 m north" (vehicle about 190 m below the hydrant)', () => {

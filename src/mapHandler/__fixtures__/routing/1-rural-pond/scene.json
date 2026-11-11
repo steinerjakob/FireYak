@@ -68,6 +68,18 @@
 				"lng": 15.2707171
 			},
 			"straightM": 300
+		},
+		"melkBridge": {
+			"label": "Hauptstraße bridge over the Melk (owner screenshot: amber on the bridge)",
+			"from": {
+				"lat": 48.1398,
+				"lng": 15.2832
+			},
+			"to": {
+				"lat": 48.1372,
+				"lng": 15.2782
+			},
+			"straightM": 470
 		}
 	},
 	"pond": {

@@ -9,9 +9,15 @@ import type { RoadLine } from '@/types/obstacles';
  * {@link MIN_RUN_M} are dropped. With only the coarse z12 DEM the grade is
  * taken over {@link GRADE_WINDOW_Z12_M} and at most "steep" is shown.
  *
- * Pure module: heights and the off-road test come from the caller;
+ * On a bridge the DEM shows the ground (or river) below the deck, not the
+ * deck: the grade is taken over "deck heights" there, the heights linearly
+ * interpolated across the bridge and {@link BRIDGE_APPROACH_M} on either side
+ * (the embankment the DEM smooths into the valley), so the display agrees
+ * with the routing cost, which ignores slope on bridge cells (plan §6.4).
+ *
+ * Pure module: heights, the off-road and the bridge test come from the caller;
  * {@link isNearAnyRoad} is the road proximity test the off-road display uses
- * where no cost-grid class is at hand.
+ * where no cost-grid class is at hand, {@link isAlongBridge} the bridge test.
  */
 
 export const PROFILE_STEP_M = 5;
@@ -29,6 +35,16 @@ export const STEEP_TOTAL_LIMIT_M = 50;
 export const OFF_ROAD_NEAR_M = 6;
 /** DEM zoom the fine classification needs; coarser data shows at most amber. */
 export const FINE_DEM_ZOOM = 14;
+/**
+ * Margin before and after a bridge over which the heights are bridged too:
+ * the DEM's dip under a 35 m bridge starts and ends a few metres past the
+ * deck (bilinear 3 m pixels, smoothed banks).
+ */
+export const BRIDGE_APPROACH_M = 10;
+/** A piece runs on a bridge when it is this close to a bridge centreline… */
+export const BRIDGE_NEAR_M = 6;
+/** …and runs along it within this angle (a line passing under it does not). */
+export const BRIDGE_MAX_ANGLE_DEG = 30;
 
 export type SteepClass = 0 | 1 | 2;
 
@@ -38,6 +54,11 @@ export interface RouteSegment {
 	to: number;
 	offRoad: boolean;
 	steep: SteepClass;
+	/**
+	 * Steepest grade over the run in percent, signed along the line (positive =
+	 * uphill from the route's start towards its end); absent without DEM.
+	 */
+	gradePct?: number;
 }
 
 export interface ProfileStations {
@@ -65,6 +86,9 @@ export interface RouteProfile {
 
 /** Off-road test per resampled piece: its midpoint and polyline segment index. */
 export type OffRoadTest = (midpoint: GeoPoint, polylineSegment: number) => boolean;
+
+/** Bridge test per resampled piece: its two ends. */
+export type BridgeTest = (a: GeoPoint, b: GeoPoint) => boolean;
 
 function lerp(a: GeoPoint, b: GeoPoint, f: number): GeoPoint {
 	return { lat: a.lat + (b.lat - a.lat) * f, lng: a.lng + (b.lng - a.lng) * f };
@@ -98,10 +122,13 @@ export function resampleForProfile(points: GeoPoint[], stepM = PROFILE_STEP_M): 
 	return out;
 }
 
-/** Window grade (0..∞) per station start: the steepest window covering each piece. */
+/**
+ * Window grade per piece, signed along the line: the steepest window covering
+ * each piece (|grade| decides, the sign is kept).
+ */
 function pieceGrades(s: number[], h: number[], windowM: number): number[] {
 	const pieces = s.length - 1;
-	const grades = new Array<number>(pieces).fill(0);
+	const grades = new Array<number>(Math.max(0, pieces)).fill(0);
 	if (pieces <= 0) return grades;
 	const total = s[s.length - 1];
 	if (total <= 0) return grades;
@@ -113,10 +140,48 @@ function pieceGrades(s: number[], h: number[], windowM: number): number[] {
 		const run = s[j] - s[i];
 		if (run <= 0) continue;
 		if (run < window - 1e-6 && i > 0) break; // tail windows are covered by earlier ones
-		const grade = Math.abs(h[j] - h[i]) / run;
-		for (let k = i; k < j; k++) if (grade > grades[k]) grades[k] = grade;
+		const grade = (h[j] - h[i]) / run;
+		for (let k = i; k < j; k++) if (Math.abs(grade) > Math.abs(grades[k])) grades[k] = grade;
 	}
 	return grades;
+}
+
+/**
+ * Heights with every bridge (pieces flagged in `onBridge`, grown by
+ * {@link BRIDGE_APPROACH_M} along the line) replaced by the straight line
+ * between the heights just outside it; at a route end the one outside height
+ * is held. Without a bridge the input is returned.
+ */
+export function deckHeights(s: number[], h: number[], onBridge: boolean[]): number[] {
+	if (!onBridge.some(Boolean)) return h;
+	const deck = new Array<boolean>(s.length).fill(false);
+	for (let k = 0; k < onBridge.length; k++) {
+		if (!onBridge[k]) continue;
+		const lo = s[k] - BRIDGE_APPROACH_M;
+		const hi = s[k + 1] + BRIDGE_APPROACH_M;
+		for (let i = 0; i < s.length; i++) if (s[i] >= lo - 1e-6 && s[i] <= hi + 1e-6) deck[i] = true;
+	}
+	const out = [...h];
+	let i = 0;
+	while (i < s.length) {
+		if (!deck[i]) {
+			i++;
+			continue;
+		}
+		let j = i;
+		while (j + 1 < s.length && deck[j + 1]) j++;
+		const a = i - 1;
+		const b = j + 1 < s.length ? j + 1 : -1;
+		for (let k = i; k <= j; k++) {
+			if (a >= 0 && b >= 0) {
+				const f = s[b] > s[a] ? (s[k] - s[a]) / (s[b] - s[a]) : 0;
+				out[k] = h[a] + (h[b] - h[a]) * f;
+			} else if (a >= 0) out[k] = h[a];
+			else if (b >= 0) out[k] = h[b];
+		}
+		i = j + 1;
+	}
+	return out;
 }
 
 /** Lowers runs of `cls ≥ level` shorter than {@link MIN_RUN_M} to `level − 1`. */
@@ -142,12 +207,14 @@ function dropShortRuns(classes: SteepClass[], lengths: number[], level: 1 | 2): 
 /**
  * Classifies a resampled route. `heights` are parallel to `stations.points`
  * (`null` = no DEM: no steep runs, no climb); `demZoom` below
- * {@link FINE_DEM_ZOOM} widens the grade window and caps the class at amber.
+ * {@link FINE_DEM_ZOOM} widens the grade window and caps the class at amber;
+ * `isOnBridge` marks the pieces on a bridge, whose grade is taken over
+ * {@link deckHeights}.
  */
 export function classifyRoute(
 	stations: ProfileStations,
 	heights: number[] | null,
-	options: { demZoom: number | null; isOffRoad: OffRoadTest }
+	options: { demZoom: number | null; isOffRoad: OffRoadTest; isOnBridge?: BridgeTest }
 ): RouteProfile {
 	const { s, points } = stations;
 	const pieces = Math.max(0, points.length - 1);
@@ -157,11 +224,17 @@ export function classifyRoute(
 	const coarse = options.demZoom !== null && options.demZoom < FINE_DEM_ZOOM;
 	const classes: SteepClass[] = new Array<SteepClass>(pieces).fill(0);
 	let maxGrade: number | null = null;
+	let grades: number[] | null = null;
 	if (heights && heights.length === points.length) {
-		const grades = pieceGrades(s, heights, coarse ? GRADE_WINDOW_Z12_M : GRADE_WINDOW_M);
-		maxGrade = grades.reduce((m, g) => Math.max(m, g), 0);
+		const isOnBridge = options.isOnBridge;
+		const onBridge = isOnBridge
+			? Array.from({ length: pieces }, (_, k) => isOnBridge(points[k], points[k + 1]))
+			: [];
+		const graded = deckHeights(s, heights, onBridge);
+		grades = pieceGrades(s, graded, coarse ? GRADE_WINDOW_Z12_M : GRADE_WINDOW_M);
+		maxGrade = grades.reduce((m, g) => Math.max(m, Math.abs(g)), 0);
 		for (let k = 0; k < pieces; k++) {
-			const g = grades[k];
+			const g = Math.abs(grades[k]);
 			const cls: SteepClass = g > VERY_STEEP_GRADE ? 2 : g > STEEP_GRADE ? 1 : 0;
 			classes[k] = coarse ? (Math.min(cls, 1) as SteepClass) : cls;
 		}
@@ -182,11 +255,22 @@ export function classifyRoute(
 		if (classes[k] >= 1) metersOver25 += lengths[k];
 		if (classes[k] >= 2) metersOver50 += lengths[k];
 		if (offRoad[k]) offRoadMeters += lengths[k];
+		const gradePct = grades ? grades[k] * 100 : undefined;
 		const last = segments[segments.length - 1];
 		if (last && last.offRoad === offRoad[k] && last.steep === classes[k]) {
 			last.to = s[k + 1];
+			if (gradePct !== undefined && Math.abs(gradePct) > Math.abs(last.gradePct ?? 0)) {
+				last.gradePct = gradePct;
+			}
 		} else {
-			segments.push({ from: s[k], to: s[k + 1], offRoad: offRoad[k], steep: classes[k] });
+			const segment: RouteSegment = {
+				from: s[k],
+				to: s[k + 1],
+				offRoad: offRoad[k],
+				steep: classes[k]
+			};
+			if (gradePct !== undefined) segment.gradePct = gradePct;
+			segments.push(segment);
 		}
 	}
 
@@ -226,7 +310,13 @@ export function slopeNotRecommended(profile: Pick<RouteProfile, 'metersOver25' |
 export function splitByRuns(
 	points: GeoPoint[],
 	segments: RouteSegment[]
-): { coordinates: [number, number][]; offRoad: boolean; steep: SteepClass }[] {
+): {
+	coordinates: [number, number][];
+	offRoad: boolean;
+	steep: SteepClass;
+	from: number;
+	to: number;
+}[] {
 	const cum: number[] = [0];
 	for (let i = 0; i < points.length - 1; i++)
 		cum.push(cum[i] + distanceTo(points[i], points[i + 1]));
@@ -250,7 +340,13 @@ export function splitByRuns(
 		}
 		const end = at(segment.to);
 		coordinates.push([end.lng, end.lat]);
-		return { coordinates, offRoad: segment.offRoad, steep: segment.steep };
+		return {
+			coordinates,
+			offRoad: segment.offRoad,
+			steep: segment.steep,
+			from: segment.from,
+			to: segment.to
+		};
 	});
 }
 
@@ -302,6 +398,47 @@ export function isNearAnyRoad(
 			if (distanceToSegmentMeters(point, road.points[i], road.points[i + 1]) <= maxDistanceM) {
 				return true;
 			}
+		}
+	}
+	return false;
+}
+
+/**
+ * True when the piece a–b runs on one of `bridges`: its midpoint within
+ * {@link BRIDGE_NEAR_M} of a bridge segment and its direction within
+ * {@link BRIDGE_MAX_ANGLE_DEG} of that segment's (a line passing under the
+ * bridge crosses it and does not count).
+ */
+export function isAlongBridge(a: GeoPoint, b: GeoPoint, bridges: RoadLine[]): boolean {
+	const mid = lerp(a, b, 0.5);
+	const kx = Math.cos((mid.lat * Math.PI) / 180) * METERS_PER_DEG_LNG_AT_EQUATOR;
+	const px = (b.lng - a.lng) * kx;
+	const py = (b.lat - a.lat) * METERS_PER_DEG_LAT;
+	const pieceLength = Math.hypot(px, py);
+	const minCos = Math.cos((BRIDGE_MAX_ANGLE_DEG * Math.PI) / 180);
+	const latGrow = BRIDGE_NEAR_M / METERS_PER_DEG_LAT;
+	const lngGrow = BRIDGE_NEAR_M / kx;
+	for (const bridge of bridges) {
+		const [west, south, east, north] = bridge.bbox;
+		if (
+			mid.lng < west - lngGrow ||
+			mid.lng > east + lngGrow ||
+			mid.lat < south - latGrow ||
+			mid.lat > north + latGrow
+		) {
+			continue;
+		}
+		for (let i = 0; i < bridge.points.length - 1; i++) {
+			const p = bridge.points[i];
+			const q = bridge.points[i + 1];
+			if (distanceToSegmentMeters(mid, p, q) > BRIDGE_NEAR_M) continue;
+			if (pieceLength === 0) return true;
+			const qx = (q[0] - p[0]) * kx;
+			const qy = (q[1] - p[1]) * METERS_PER_DEG_LAT;
+			const bridgeLength = Math.hypot(qx, qy);
+			if (bridgeLength === 0) continue;
+			const cos = Math.abs(px * qx + py * qy) / (pieceLength * bridgeLength);
+			if (cos >= minCos) return true;
 		}
 	}
 	return false;
