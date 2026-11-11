@@ -89,14 +89,12 @@
 						<select v-model="rasterModel" @change="updateCostOverlay">
 							<option value="optimized">optimized classes</option>
 							<option value="direct">direct (terrain) classes</option>
+							<option value="slope">optimized slope (routing DEM)</option>
+							<option value="height">optimized heights (routing DEM)</option>
 						</select>
 					</label>
 					<p v-if="showCost" class="hint">
-						{{
-							rasterModel === 'optimized'
-								? 'Blue road, light blue path, violet steps, cyan bridge, dark blocked, red building core, orange fringe, green open/forest, tan yard, purple rail ground, turquoise stream; clear = unknown open.'
-								: 'Red building, orange fringe, blue road.'
-						}}
+						{{ rasterHint }}
 					</p>
 
 					<button :disabled="busy || !scene?.rings?.length" @click="runRings">
@@ -141,7 +139,7 @@
  *
  * To add a routing mode, append an entry to `MODES`.
  */
-import { onMounted, onUnmounted, ref, shallowRef } from 'vue';
+import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue';
 import {
 	IonBackButton,
 	IonButtons,
@@ -163,10 +161,17 @@ import {
 	type RoutingOptions
 } from '@/mapHandler/nearbyRouting';
 import { getObstaclesForBounds } from '@/mapHandler/obstacleGeometry';
-import { buildOptimizedGrid, buildTerrainGrid } from '@/mapHandler/gridRouting';
+import {
+	buildOptimizedGrid,
+	buildTerrainGrid,
+	gridFrameOf,
+	setGridHeights
+} from '@/mapHandler/gridRouting';
+import { loadRoutingHeights } from '@/helper/demElevation';
 import { routableRoads } from '@/mapHandler/costGrid';
 import {
 	costRaster,
+	heightRasterImage,
 	onRoadShare,
 	classSummary,
 	pathLength,
@@ -220,8 +225,27 @@ const straightMeters = ref(0);
 const busy = ref(false);
 const summary = shallowRef<ClassSummary | null>(null);
 const showCost = ref(false);
-/** Which grid the cost raster shows. */
-const rasterModel = ref<'optimized' | 'direct'>('optimized');
+/** Which grid the cost raster shows; `slope`/`height`: the optimized grid's height raster. */
+const rasterModel = ref<'optimized' | 'direct' | 'slope' | 'height'>('optimized');
+/** DEM zoom of the last height raster drawn (`null` = none available). */
+const rasterDemZoom = ref<number | null>(null);
+const rasterHint = computed(() => {
+	switch (rasterModel.value) {
+		case 'optimized':
+			return 'Blue road, light blue path, violet steps, cyan bridge, dark blocked, red building core, orange fringe, green open/forest, tan yard, purple rail ground, turquoise stream; clear = unknown open.';
+		case 'direct':
+			return 'Red building, orange fringe, blue road.';
+		default: {
+			const dem =
+				rasterDemZoom.value === null
+					? 'no DEM'
+					: `z${rasterDemZoom.value}${rasterDemZoom.value < 14 ? ', 24 m baseline' : ''}`;
+			return rasterModel.value === 'slope'
+				? `Steepest step per cell as the router prices it (${dem}): clear <= 8 %, yellow <= 25 %, orange <= 50 %, red <= 80 %, purple steeper.`
+				: `Height, smoothed 3x3 (${dem}): black lowest, white highest.`;
+		}
+	}
+});
 const ringRows = ref<(RatioRow & { mode: string })[]>([]);
 const ringProgress = ref('');
 
@@ -360,11 +384,17 @@ async function updateCostOverlay(): Promise<void> {
 	const decoded = await getObstaclesForBounds(bounds);
 	const obstacles = { ...decoded, roads: routableRoads(decoded.roads) };
 	const grid =
-		rasterModel.value === 'optimized'
-			? buildOptimizedGrid(obstacles, bounds)
-			: buildTerrainGrid(obstacles, bounds);
+		rasterModel.value === 'direct'
+			? buildTerrainGrid(obstacles, bounds)
+			: buildOptimizedGrid(obstacles, bounds);
 	if (!grid) return;
-	const raster = costRaster(grid);
+	let raster = costRaster(grid);
+	if (rasterModel.value === 'slope' || rasterModel.value === 'height') {
+		setGridHeights(grid, await loadRoutingHeights(gridFrameOf(grid)));
+		rasterDemZoom.value = grid.heights?.zoom ?? null;
+		if (!grid.heights) return;
+		raster = heightRasterImage(grid.heights, rasterModel.value);
+	}
 	const canvas = document.createElement('canvas');
 	canvas.width = raster.width;
 	canvas.height = raster.height;

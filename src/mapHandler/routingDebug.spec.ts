@@ -7,7 +7,9 @@ import { CELL_CLASS } from '@/mapHandler/hoseCostModel';
 import {
 	OPTIMIZED_CLASS_COLOR,
 	costRaster,
+	heightRasterImage,
 	onRoadShare,
+	slopeBucket,
 	pathLength,
 	ratioTable
 } from '@/mapHandler/routingDebug';
@@ -172,5 +174,42 @@ describe('classSummary', () => {
 				[14, 48.001]
 			])
 		).toBeCloseTo(110.54, 1);
+	});
+});
+
+describe('heightRasterImage (phase 4: the height and slope raster)', () => {
+	// 4 x 3 cells of 8 m, a 30 % ramp to the east (halo included), one unknown cell.
+	const cols = 4;
+	const rows = 3;
+	const heights = new Float32Array((cols + 2) * (rows + 2));
+	for (let r = -1; r <= rows; r++) {
+		for (let c = -1; c <= cols; c++) heights[(r + 1) * (cols + 2) + (c + 1)] = 100 + 0.3 * 8 * c;
+	}
+	heights[(2 + 1) * (cols + 2) + (0 + 1)] = NaN; // cell (0, 2): north-west corner
+	const raster = { cols, rows, cellM: 8, zoom: 14, heights };
+
+	it('buckets grades at the slope-factor knots', () => {
+		expect([0, 0.08, 0.1, 0.25, 0.3, 0.5, 0.6, 0.8, 1.2].map(slopeBucket)).toEqual([
+			0, 0, 1, 1, 2, 2, 3, 3, 4
+		]);
+	});
+
+	it('colours every known cell by its steepest step, north row first', () => {
+		const image = heightRasterImage(raster, 'slope');
+		expect(image.width).toBe(cols);
+		expect(image.height).toBe(rows);
+		const pixel = (row: number, col: number) => [
+			...image.data.slice((row * cols + col) * 4, (row * cols + col) * 4 + 4)
+		];
+		// Cell (0, 2) is unknown: image row 0, col 0 stays clear.
+		expect(pixel(0, 0)[3]).toBe(0);
+		// A 30 % ramp: bucket 2 (25-50 %).
+		expect(pixel(2, 2)).toEqual([255, 140, 0, 150]);
+	});
+
+	it('shades heights from the lowest (black) to the highest (white) cell', () => {
+		const image = heightRasterImage(raster, 'height');
+		expect(image.data[(2 * cols + 0) * 4]).toBe(0);
+		expect(image.data[(2 * cols + 3) * 4]).toBe(255);
 	});
 });

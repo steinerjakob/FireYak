@@ -144,9 +144,18 @@ export function fixtureFetcher(scene: RoutingScene): TileFetcher {
 
 let activeFetcher: TileFetcher = async () => null;
 
-/** Makes `fetchTileCacheFirst` (mocked in scene specs) serve `scene`'s tiles. */
-export function useFixtureScene(scene: RoutingScene): void {
-	activeFetcher = fixtureFetcher(scene);
+/**
+ * Makes `fetchTileCacheFirst` (mocked in scene specs) serve `scene`'s tiles.
+ * `skip` hides tiles as if they were missing (e.g. the z14 DEM, to route on z12).
+ */
+export function useFixtureScene(
+	scene: RoutingScene,
+	skip?: (source: string, z: number) => boolean
+): void {
+	const fetcher = fixtureFetcher(scene);
+	activeFetcher = skip
+		? async (source, z, x, y, signal) => (skip(source, z) ? null : fetcher(source, z, x, y, signal))
+		: fetcher;
 }
 
 /** Delegating fetcher for `vi.mock('@/offline/offlineProtocol', …)` factories. */

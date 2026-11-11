@@ -97,8 +97,8 @@ src/
 | `appStoreInfos.ts` | App Store / Play Store URLs for the current app |
 | `areaShore.ts` | Outline geometry for water areas: nearest shore point, point-in-area, outline bounds |
 | `calculatePumpPosition.ts` | Optimal pump positioning along routes (pressure/elevation/flow) |
-| `demElevation.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo); route profiles try z14 within a budget, else z12 |
-| `demRaster.ts` | Pure DEM helpers: terrarium decode and bilinear sampling across tile edges |
+| `demElevation.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo); route profiles try z14 within a budget, else z12; `loadRoutingHeights` loads the `optimized` grid's height raster (z14, else z12, within the routing DEM budget) |
+| `demRaster.ts` | Pure DEM helpers: terrarium decode, bilinear sampling across tile edges, the cost grid's height raster (`buildHeightRaster`: one-cell halo, 3×3 smoothing) and step grades (`stepGrade`: per step on z14, 24 m baseline on z12) |
 | `distanceCalculation.ts` | Haversine distance + geodetic point interpolation (20m intervals) |
 | `elevationData.ts` | Batch elevation fetching helper (legacy/fallback path) |
 | `helper.ts` | Debounce utility |
@@ -106,7 +106,7 @@ src/
 | `hoseRoutingSetting.ts` | Hose routing mode type and the pure migration from the old `clamp_hoses_to_roads` key (`resolveHoseRouting`); the `optimized` preview flag (`VITE_HOSE_ROUTING_OPTIMIZED=1` or dev) |
 | `polygonGeometry.ts` | Exact segment/polygon tests (edge intersection, containment, holes) used by route smoothing |
 | `routeLabel.ts` | Route label line and warning/fallback chips shared by the nearby list, map label and pump panel |
-| `routeProfile.ts` | Steep (>25 %/>50 %) and off-road runs of a route, slope "not recommended" triggers |
+| `routeProfile.ts` | Steep (>25 %/>50 %) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
 | `weightedDistance.ts` | Tuning constants for the road-aware weighted-distance heuristic (building penalty, road bonus, sampling) |
@@ -116,19 +116,19 @@ src/
 | File | Purpose |
 |---|---|
 | `databaseHandler.ts` | IndexedDB wrapper for marker caching, offline areas, pending edits, and spatial queries |
-| `gridRouting.ts` | Cost-grid routing for hose laying in two models: `direct` (terrain grid, buildings avoided) and `optimized` (cost-model classes, symmetric step cost, escape radius, A* for single paths, early-exit Dijkstra for the list, cost-aware smoothing) |
+| `gridRouting.ts` | Cost-grid routing for hose laying in two models: `direct` (terrain grid, buildings avoided) and `optimized` (cost-model classes, symmetric step cost, escape radius, A* for single paths, early-exit Dijkstra for the list, cost-aware smoothing; with a height raster each step is also priced by its slope, capped ×1.3 on roads/paths/steps, 1.0 on bridges, and a bridge connects only to roads/paths/steps) |
 | `costGrid.ts` | Pure rasteriser of the `optimized` grid: scanline polygon fill and supercover lines, drawn in the cost model's order (landuse, water, buildings, walls, roads, bridges); `routableRoads` drops what `classifyRoad` excludes |
 | `cellHeap.ts` | Typed-array binary min-heap (cost, cell) used by the grid searches |
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
 | `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
-| `nearbyRouting.ts` | Hose routing for the nearby list, marker path and pump line (`RoutingOptions.mode`: `roads`, `direct`, `optimized`): returns a `HoseRoute` (one length, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |
+| `nearbyRouting.ts` | Hose routing for the nearby list, marker path and pump line (`RoutingOptions.mode`: `roads`, `direct`, `optimized`): returns a `HoseRoute` (one length, 3D over the DEM profile, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |
 | `hoseCostModel.ts` | Pure cost model for hose routing (drives the `optimized` grid and road-mode shore legs): cell classes and factors, `classifyRoad`/`classifyRail`/`classifyLanduse`/`classifyWaterLine`, `slopeFactor`, the thin-buildings test, UI warning thresholds |
 | `obstacleDecode.ts` | Pure decoder (bytes in, data out) of Protomaps tiles: buildings, roads with `kind_detail`/bridge/tunnel/access, rail, landuse, water polygons and lines, cliffs, per-tile residential/building area (thin-buildings safeguard); runs in Node specs and workers |
 | `obstacleGeometry.ts` | Fetches z15 Protomaps tiles and merges `obstacleDecode.ts` results (LRU, per-layer coverage); missing tiles are reported, never cached as empty |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker (shore targets with 250 m final legs, priced per target) |
 | `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs |
-| `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster, per-class area/length summary) for the dev-only routing debug view |
+| `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster, height/slope raster, per-class area/length summary) for the dev-only routing debug view |
 | `__fixtures__/routing/` | Test data for the routing specs: five real scenes (`scene.json` committed, tiles gitignored and fetched locally, README there). Never import from app code |
 | `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
 | `areaOutline.ts` | Session cache + Overpass `out geom` lookup for pond-area outlines (map highlight) |

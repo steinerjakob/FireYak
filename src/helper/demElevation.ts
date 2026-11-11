@@ -4,8 +4,12 @@ import { fetchTileCacheFirst } from '@/offline/offlineProtocol';
 import { TERRAIN_MAX_ZOOM, TERRAIN_ROUTING_ZOOM } from '@/offline/tileMath';
 import {
 	type DecodedDemTile,
+	type HeightRaster,
+	type RasterFrame,
+	buildHeightRaster,
 	sampleBlended,
 	terrariumToElevations,
+	tilesForFrame,
 	tilesForSamples
 } from '@/helper/demRaster';
 
@@ -92,6 +96,42 @@ export function setDemTileDecoder(decoder: DemTileDecoder | null): void {
 }
 
 /**
+ * Fetches and decodes the DEM tiles `keys` (`x/y`) at zoom `z`, cache-first.
+ * Tiles that are unavailable (offline and uncached, or a decode failure) are
+ * left out. With `tolerant`, an abort or a failing tile only drops that tile;
+ * otherwise the first error is rethrown.
+ */
+async function loadDemTiles(
+	keys: Iterable<string>,
+	z: number,
+	signal?: AbortSignal,
+	tolerant = false,
+	tiles = new Map<string, DecodedDemTile>()
+): Promise<Map<string, DecodedDemTile>> {
+	// Tiles are pinned in a local map for this call so LRU eviction can't drop
+	// one mid-computation; with `tiles` given, each lands there as it arrives.
+	await Promise.all(
+		[...keys].map(async (key) => {
+			const cacheKey = `${z}/${key}`;
+			try {
+				let tile = cacheGet(cacheKey);
+				if (!tile) {
+					const [x, y] = key.split('/').map(Number);
+					const buf = await fetchTileCacheFirst('terrain', z, x, y, signal);
+					if (!buf || buf.byteLength === 0) return;
+					tile = await decodeTile(buf);
+					cachePut(cacheKey, tile);
+				}
+				tiles.set(key, tile);
+			} catch (e) {
+				if (!tolerant) throw e;
+			}
+		})
+	);
+	return tiles;
+}
+
+/**
  * Elevations (metres) for `points` at DEM zoom `z`, bilinear across tile
  * edges (neighbour tiles are fetched as needed). `null` when a tile a point
  * lies in is unavailable (offline and uncached, or a decode failure); a missing
@@ -103,24 +143,7 @@ export async function sampleElevationsBlended(
 	signal?: AbortSignal
 ): Promise<number[] | null> {
 	if (points.length === 0) return [];
-	// Fetch + decode each distinct tile once. Tiles are pinned in a local map
-	// for this call so LRU eviction can't drop one mid-computation.
-	const tiles = new Map<string, DecodedDemTile>();
-	const keys = [...tilesForSamples(points, z)];
-	await Promise.all(
-		keys.map(async (key) => {
-			const cacheKey = `${z}/${key}`;
-			let tile = cacheGet(cacheKey);
-			if (!tile) {
-				const [x, y] = key.split('/').map(Number);
-				const buf = await fetchTileCacheFirst('terrain', z, x, y, signal);
-				if (!buf || buf.byteLength === 0) return;
-				tile = await decodeTile(buf);
-				cachePut(cacheKey, tile);
-			}
-			tiles.set(key, tile);
-		})
-	);
+	const tiles = await loadDemTiles(tilesForSamples(points, z), z, signal);
 	const heights: number[] = [];
 	for (const point of points) {
 		const h = sampleBlended(tiles, point, z);
@@ -128,6 +151,74 @@ export async function sampleElevationsBlended(
 		heights.push(h);
 	}
 	return heights;
+}
+
+/** Cells of the raster (halo included) without a height. */
+function unknownCells(raster: HeightRaster): number {
+	let n = 0;
+	for (const h of raster.heights) if (Number.isNaN(h)) n++;
+	return n;
+}
+
+/** Budget for the routing DEM (both zooms are fetched at once, plan §6.9). */
+export const ROUTING_DEM_BUDGET_MS = 1500;
+
+/**
+ * The height raster of a cost grid (plan §6.4): z14
+ * ({@link TERRAIN_ROUTING_ZOOM}) when its tiles cover every cell within the
+ * budget (a missing neighbour tile only degrades the edge pixels), else z12
+ * (grades over the 24 m baseline), else a partial z14 raster (unknown cells
+ * cost no slope), else `null` (routing without slope). Both zooms are
+ * requested at once and the wait stops at `budgetMs`; the z12 tiles are few
+ * and usually cached (display tiles, offline areas). Tiles still in flight at
+ * the deadline are not aborted: they land in the decode cache, so the next
+ * routing request finds them (see {@link isCompleteRoutingRaster}).
+ */
+export async function loadRoutingHeights(
+	frame: RasterFrame,
+	budgetMs = ROUTING_DEM_BUDGET_MS
+): Promise<HeightRaster | null> {
+	const fine = new Map<string, DecodedDemTile>();
+	const coarse = new Map<string, DecodedDemTile>();
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const deadline = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, budgetMs);
+	});
+	const all = Promise.all([
+		loadDemTiles(
+			tilesForFrame(frame, TERRAIN_ROUTING_ZOOM),
+			TERRAIN_ROUTING_ZOOM,
+			undefined,
+			true,
+			fine
+		),
+		loadDemTiles(tilesForFrame(frame, TERRAIN_MAX_ZOOM), TERRAIN_MAX_ZOOM, undefined, true, coarse)
+	]);
+	try {
+		await Promise.race([all, deadline]);
+		// Snapshot: tiles arriving later must not change a raster being built.
+		const fineRaster =
+			fine.size > 0 ? buildHeightRaster(frame, new Map(fine), TERRAIN_ROUTING_ZOOM) : null;
+		if (fineRaster && unknownCells(fineRaster) === 0) return fineRaster;
+		const coarseRaster =
+			coarse.size > 0 ? buildHeightRaster(frame, new Map(coarse), TERRAIN_MAX_ZOOM) : null;
+		if (coarseRaster && unknownCells(coarseRaster) === 0) return coarseRaster;
+		return fineRaster ?? coarseRaster;
+	} catch (e) {
+		console.warn('Routing DEM failed, routing without slope:', e);
+		return null;
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/**
+ * True when a routing raster is the best one there is (z14, every cell known).
+ * Anything less is worth loading again on the next request: the tiles that
+ * missed the budget may have arrived since.
+ */
+export function isCompleteRoutingRaster(raster: HeightRaster | null): boolean {
+	return raster !== null && raster.zoom >= TERRAIN_ROUTING_ZOOM && unknownCells(raster) === 0;
 }
 
 /** Budget for the z14 attempt before the route profile falls back to z12. */

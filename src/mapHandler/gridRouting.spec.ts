@@ -15,10 +15,12 @@ import {
 	buildOptimizedGrid,
 	buildTerrainGrid,
 	escapeZone,
+	gridFrameOf,
 	gridRouteFromOrigin,
 	gridRoutePath,
 	gridRouteSingle,
 	lineCost,
+	setGridHeights,
 	shoreGoalCells,
 	simplifyGated,
 	solveTerrain,
@@ -27,6 +29,8 @@ import {
 	type TerrainGrid
 } from '@/mapHandler/gridRouting';
 import { accessTargetFor } from '@/mapHandler/waterSourceAccess';
+import { heightAtGrid, type HeightRaster } from '@/helper/demRaster';
+import { gridX, gridY } from '@/mapHandler/costGrid';
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import type { AreaPolygon, LinearFeature, WaterPolygon } from '@/types/obstacles';
 
@@ -855,5 +859,235 @@ describe('simplifyGated (Douglas-Peucker with the smoothing tests)', () => {
 	it('keeps vertices beyond the tolerance', () => {
 		const zig = [at(0, 0), at(50, 10), at(100, 0)];
 		expect(simplifyGated(zig, [0, 1, 2], 1.5, () => true)).toEqual([0, 1, 2]);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// optimized: slope in the step cost (plan section 6.4, phase 4)
+// ---------------------------------------------------------------------------
+
+/** A height raster for `grid` from a function of the local metre frame (halo included). */
+function heightsFor(
+	grid: TerrainGrid,
+	height: (xM: number, yM: number) => number,
+	zoom = 14
+): HeightRaster {
+	const { cols, rows, cellM } = gridFrameOf(grid);
+	const heights = new Float32Array((cols + 2) * (rows + 2));
+	for (let r = -1; r <= rows; r++) {
+		for (let c = -1; c <= cols; c++) {
+			heights[(r + 1) * (cols + 2) + (c + 1)] = height((c + 0.5) * cellM, (r + 0.5) * cellM);
+		}
+	}
+	return { cols, rows, cellM, zoom, heights };
+}
+
+/** Rolling random terrain (hills of 20-60 m wavelength, grades up to ~150 %). */
+function randomTerrain(next: () => number): (x: number, y: number) => number {
+	const waves = Array.from({ length: 4 }, () => ({
+		ax: next() * 2 * Math.PI * (1 / 20 + next() / 40),
+		ay: next() * 2 * Math.PI * (1 / 20 + next() / 40),
+		amp: 2 + next() * 12,
+		phase: next() * 2 * Math.PI
+	}));
+	return (x, y) => waves.reduce((h, w) => h + w.amp * Math.sin(w.ax * x + w.ay * y + w.phase), 100);
+}
+
+function bridgeLine(...points: [number, number][]): RoadLine {
+	return { ...roadLine(...points), isBridge: true };
+}
+
+/** {@link randomScene} plus heights (z14 or z12) and, sometimes, a bridge. */
+function randomSlopeGrid(next: () => number, n: number): TerrainGrid {
+	const scene = randomScene(next);
+	if (next() < 0.5) {
+		const x = 20 + next() * 160;
+		scene.roads = [
+			...(scene.roads ?? []),
+			bridgeLine([x, 40 + next() * 40], [x, 120 + next() * 40])
+		];
+	}
+	const grid = buildOptimizedGrid({ ...emptyObstacleData(), ...scene }, BOUNDS)!;
+	setGridHeights(grid, heightsFor(grid, randomTerrain(next), n % 2 === 0 ? 14 : 12));
+	return grid;
+}
+
+describe('optimized: slope (plan section 6.4)', () => {
+	it('100 seeded grids with terrain: the step cost with slope is symmetric (A to B = B to A)', () => {
+		const next = rng(4242);
+		let compared = 0;
+		for (let n = 0; n < 100; n++) {
+			const grid = randomSlopeGrid(next, n);
+			const a = randomPoint(next);
+			const b = randomPoint(next);
+			const ab = dijkstraCost(grid, a, b);
+			const ba = dijkstraCost(grid, b, a);
+			if (ab === null || ba === null) {
+				expect(ab, `grid ${n}`).toBe(ba);
+				continue;
+			}
+			expect(Math.abs(ab - ba), `grid ${n}`).toBeLessThan(1e-9 * Math.max(1, ab));
+			compared++;
+		}
+		expect(compared).toBeGreaterThan(70);
+	});
+
+	it('A* cost equals Dijkstra cost with slope on the same 100 grids (admissible)', () => {
+		const next = rng(4242);
+		let compared = 0;
+		for (let n = 0; n < 100; n++) {
+			const grid = randomSlopeGrid(next, n);
+			const a = randomPoint(next);
+			const b = randomPoint(next);
+			const dijkstra = dijkstraCost(grid, a, b);
+			const astar = astarRoute(grid, a, { kind: 'point', point: b });
+			if (dijkstra === null) {
+				expect(astar, `grid ${n}`).toBeNull();
+				continue;
+			}
+			expect(Math.abs(astar!.cost - dijkstra), `grid ${n}`).toBeLessThan(
+				1e-9 * Math.max(1, dijkstra)
+			);
+			compared++;
+		}
+		expect(compared).toBeGreaterThan(70);
+	});
+
+	it('slope never makes a step cheaper: cost with terrain >= cost on flat ground', () => {
+		const next = rng(99);
+		for (let n = 0; n < 30; n++) {
+			const grid = randomSlopeGrid(next, n);
+			const a = randomPoint(next);
+			const b = randomPoint(next);
+			const sloped = dijkstraCost(grid, a, b);
+			const heights = grid.heights!;
+			setGridHeights(
+				grid,
+				heightsFor(grid, () => 50)
+			);
+			const flat = dijkstraCost(grid, a, b);
+			setGridHeights(grid, heights);
+			if (sloped === null || flat === null) continue;
+			expect(sloped).toBeGreaterThanOrEqual(flat - 1e-9);
+		}
+	});
+
+	// Straight east-west road on a 40 % slope across it (grade along the road 0 %) vs a
+	// road climbing a 40 % ramp: on road cells the factor is capped at x1.3.
+	it('caps the factor at x1.3 on roads; a step on open ground pays the full curve', () => {
+		const ramp = (_x: number, y: number) => 0.4 * y;
+		const road = buildOptimizedGrid(
+			{ ...emptyObstacleData(), roads: [roadLine([100, 10], [100, 190])] },
+			BOUNDS
+		)!;
+		setGridHeights(road, heightsFor(road, ramp));
+		const onRoad = astarRoute(road, at(100, 40), { kind: 'point', point: at(100, 160) })!;
+		// 120 m at factor 1.0 x 1.3; the endpoint offsets add at most a few metres.
+		expect(onRoad.cost).toBeGreaterThan(120 * 1.3 - 1);
+		expect(onRoad.cost).toBeLessThan(120 * 1.3 + 12);
+		const open = buildOptimizedGrid(emptyObstacleData(), BOUNDS)!;
+		setGridHeights(open, heightsFor(open, ramp));
+		const across = dijkstraCost(open, at(100, 40), at(100, 160))!;
+		// UNKNOWN_OPEN 1.3 x slopeFactor(0.4) = 1.3 x 3.08 straight up; diagonal steps
+		// (grade 0.28, factor 1.98, x1.41 length) are a little cheaper: 1.3 x 2.8.
+		expect(across).toBeGreaterThan(120 * 1.3 * 2.7);
+	});
+
+	it('a BRIDGE ignores slope (factor 1.0 along it)', () => {
+		const ramp = (_x: number, y: number) => 0.8 * y;
+		const grid = buildOptimizedGrid(
+			{ ...emptyObstacleData(), roads: [bridgeLine([100, 10], [100, 190])] },
+			BOUNDS
+		)!;
+		setGridHeights(grid, heightsFor(grid, ramp));
+		const route = astarRoute(grid, at(100, 40), { kind: 'point', point: at(100, 160) })!;
+		expect(route.cost).toBeGreaterThan(120 - 1);
+		expect(route.cost).toBeLessThan(120 + 12);
+	});
+
+	it('rejects a step from a BRIDGE to OPEN ground (and back), in the grid and in smoothing', () => {
+		// A bridge over meadow with no road at its ends: it cannot be entered or left.
+		const meadow = areaRect('meadow', 0, 0, 200, 200);
+		const isolated = buildOptimizedGrid(
+			{ ...emptyObstacleData(), landuse: [meadow], roads: [bridgeLine([100, 60], [100, 140])] },
+			BOUNDS
+		)!;
+		const along = (grid: TerrainGrid) =>
+			astarRoute(grid, at(100, 70), { kind: 'point', point: at(100, 130) });
+		// From a bridge cell to a bridge cell: the endpoint cells may step off, so use a
+		// target off the bridge instead.
+		expect(
+			astarRoute(isolated, at(60, 100), { kind: 'point', point: at(100, 100) })
+		).not.toBeNull();
+		const zone = escapeZone(isolated, [at(60, 100), at(140, 100)]);
+		// Straight across the bridge, ground to ground: never cheaper by riding the deck.
+		expect(lineCost(isolated, at(60, 100), at(140, 100), zone)).toBe(Infinity);
+		// The bridge alone, reached only through its endpoint cells.
+		expect(along(isolated)).not.toBeNull();
+		// The same deck as a plain road is crossed at ground level.
+		const plain = buildOptimizedGrid(
+			{ ...emptyObstacleData(), landuse: [meadow], roads: [roadLine([100, 60], [100, 140])] },
+			BOUNDS
+		)!;
+		expect(lineCost(plain, at(60, 100), at(140, 100), zone)).toBeLessThan(Infinity);
+		// A route from one side of the deck to the other must go round its ends.
+		const round = astarRoute(isolated, at(80, 100), { kind: 'point', point: at(120, 100) })!;
+		expect(round.meters).toBeGreaterThan(2 * 40);
+		const plainRoute = astarRoute(plain, at(80, 100), { kind: 'point', point: at(120, 100) })!;
+		expect(plainRoute.meters).toBeLessThan(41);
+	});
+
+	it('a bridge joined to roads at both ends carries the route over a river', () => {
+		const river: WaterPolygon = { ...areaRect('water', 0, 90, 200, 110), tile: '15/0/0' };
+		const grid = buildOptimizedGrid(
+			{
+				...emptyObstacleData(),
+				waterAreas: [river],
+				roads: [
+					roadLine([100, 20], [100, 80]),
+					bridgeLine([100, 80], [100, 120]),
+					roadLine([100, 120], [100, 180])
+				]
+			},
+			BOUNDS
+		)!;
+		const route = astarRoute(grid, at(100, 30), { kind: 'point', point: at(100, 170) });
+		expect(route).not.toBeNull();
+		expect(Math.abs(route!.meters - 140)).toBeLessThan(2);
+	});
+
+	// A 30 m band of 70 % slope (21 m) between flat ground. A path climbs it in two legs
+	// at ~15 % (1.7x the straight line in all); straight up costs 1.3 x 6.7 per metre on
+	// the band. Smoothing may round the hairpin (a few metres across the band are cheaper
+	// than 30 m of path), but no stretch of the line goes up the fall line. With a gentle
+	// 20 % band the detour is not worth it.
+	it('takes a 15 % switchback instead of a 70 % direct line when the detour is under 2x', () => {
+		const band = (grade: number) => (_x: number, y: number) =>
+			grade * Math.min(Math.max(y - 80, 0), 30);
+		const zig = {
+			...roadLine([100, 20], [100, 80], [168, 95], [100, 110], [100, 170]),
+			kind: 'path',
+			kindDetail: 'footway'
+		};
+		const grid = buildOptimizedGrid({ ...emptyObstacleData(), roads: [zig] }, BOUNDS)!;
+		const from = at(100, 25);
+		const to = at(100, 165);
+		setGridHeights(grid, heightsFor(grid, band(0.7)));
+		const steep = astarRoute(grid, from, { kind: 'point', point: to })!;
+		expect(steep.meters).toBeGreaterThan(1.15 * 140);
+		expect(steep.meters).toBeLessThan(2 * 140);
+		expect(steep.cost).toBeLessThan(lineCost(grid, from, to));
+		// No piece of the chosen line climbs faster than ~30 % (the path, not the fall line).
+		const frame = { ...grid, cellM: GRID_CELL_M };
+		const h = (p: { lng: number; lat: number }) =>
+			heightAtGrid(grid.heights!, gridX(frame, p.lng), gridY(frame, p.lat));
+		for (let i = 0; i + 1 < steep.points.length; i++) {
+			const a = steep.points[i];
+			const b = steep.points[i + 1];
+			expect(Math.abs(h(b) - h(a)) / distanceTo(a, b)).toBeLessThan(0.3);
+		}
+		setGridHeights(grid, heightsFor(grid, band(0.2)));
+		const gentle = astarRoute(grid, from, { kind: 'point', point: to })!;
+		expect(gentle.meters).toBeLessThan(145);
 	});
 });

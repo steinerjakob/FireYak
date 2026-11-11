@@ -15,8 +15,10 @@ import {
 	buildOptimizedGrid,
 	buildTerrainGrid,
 	cellClassAt,
+	gridFrameOf,
 	gridRouteSingle,
 	lineCost,
+	setGridHeights,
 	solveTerrain
 } from '@/mapHandler/gridRouting';
 import { routableRoads } from '@/mapHandler/costGrid';
@@ -29,11 +31,16 @@ import {
 	OffRoadTest,
 	RouteSegment,
 	classifyRoute,
+	length3d,
 	resampleForProfile,
 	slopeNotRecommended
 } from '@/helper/routeProfile';
 import { PressureLevel, evaluateDownhillPressure } from '@/helper/hosePressure';
-import { sampleRouteElevations } from '@/helper/demElevation';
+import {
+	isCompleteRoutingRaster,
+	loadRoutingHeights,
+	sampleRouteElevations
+} from '@/helper/demElevation';
 import type { AccessTarget } from '@/mapHandler/waterSourceAccess';
 
 /**
@@ -68,6 +75,8 @@ const BOUNDS_MARGIN_M = 150;
 const OPTIMIZED_MARGIN_SHARE = 0.25;
 /** `optimized`: a route touching the window edge (or missing a target) re-solves once in a window this much larger. */
 const WINDOW_GROWTH = 1.5;
+/** `optimized`: margin around the road-mode routes the window must hold. */
+const ROAD_ROUTE_MARGIN_M = 50;
 /** A grid route within this distance of the window edge "touches" it. */
 const EDGE_TOUCH_M = 16;
 /** Rebuild the road graph after this long even if the window still covers the query. */
@@ -96,8 +105,13 @@ export interface RoutingCoverage {
 /** A routed (or straight fallback) hose line with everything the UI shows (plan §6.12). */
 export interface HoseRoute {
 	points: GeoPoint[];
-	/** Length of `points` in metres (2D): the ONE number shown everywhere. */
+	/**
+	 * Length in metres: the 3D length of `points` over the DEM profile (plan
+	 * §6.4), the 2D length without one. The ONE number shown everywhere.
+	 */
 	meters: number;
+	/** 2D length of `points`; `segments` and `profile.s` are measured along it. */
+	planMeters: number;
 	/** Runs along the polyline in metres: off-road and steep class. */
 	segments: RouteSegment[];
 	/** Signed height(end) − height(start); `null` without DEM. */
@@ -155,6 +169,10 @@ interface RoutingContext {
 	terrain?: TerrainGrid | null;
 	/** Lazily built `optimized` cost grid; `null` = build failed (window too large). */
 	costGrid?: TerrainGrid | null;
+	/** The DEM load in flight for the cost grid's height raster. */
+	heightsLoad?: Promise<void>;
+	/** The cost grid carries the full z14 raster: no more loads. */
+	heightsComplete?: boolean;
 	/** Lazily built road proximity test for the off-road classification. */
 	nearRoad?: (p: GeoPoint) => boolean;
 	builtAt: number;
@@ -203,6 +221,26 @@ function costGridFor(ctx: RoutingContext): TerrainGrid | null {
 		ctx.costGrid = buildOptimizedGrid(ctx.obstacles, ctx.bounds);
 	}
 	return ctx.costGrid;
+}
+
+/**
+ * Builds the context's `optimized` grid and attaches its height raster (plan
+ * §6.4): z14 within the routing DEM budget, else z12, else no slope.
+ * Concurrent callers share one load. A raster that is not complete (the z14
+ * tiles missed the budget) is loaded again on the next request, when the
+ * late tiles are in the decode cache.
+ */
+async function prepareCostGrid(ctx: RoutingContext): Promise<void> {
+	if (ctx.coverage.thinBuildingTiles > 0) return;
+	const grid = costGridFor(ctx);
+	if (!grid || ctx.heightsComplete) return;
+	ctx.heightsLoad ??= loadRoutingHeights(gridFrameOf(grid)).then((heights) => {
+		ctx.heightsComplete = isCompleteRoutingRaster(heights);
+		// Keep a better raster than a worse retry (z14 partial over nothing, etc.).
+		if (heights || grid.heights === undefined) setGridHeights(grid, heights);
+		ctx.heightsLoad = undefined;
+	});
+	await ctx.heightsLoad;
 }
 
 /** Bucket edge of the road proximity index. */
@@ -314,6 +352,11 @@ type RoutedTargets = { route: RawRoute | null; fallback: RouteFallback | null }[
  * longest straight distance) and, when a grid route touches the window edge or
  * a target is not reached on the grid, re-solves once in a window
  * {@link WINDOW_GROWTH} times larger (plan §6.5): the detour may lie outside.
+ * `optimized` also widens the window to cover the road-mode routes to the
+ * targets (plus {@link ROAD_ROUTE_MARGIN_M}, at most the farthest straight
+ * distance beyond the endpoints): with slope in the cost the road round a
+ * scarp is often the best route, and a window that cannot hold it would return
+ * the steep shortcut without ever touching its edge.
  */
 async function routeInWindow(
 	origin: GeoPoint,
@@ -323,12 +366,27 @@ async function routeInWindow(
 ): Promise<{ ctx: RoutingContext; routed: RoutedTargets }> {
 	const points = [origin, ...targets.map(targetPoint)];
 	let margin = BOUNDS_MARGIN_M;
-	if (mode === 'optimized') {
-		const farthest = Math.max(...points.map((p) => distanceTo(origin, p)));
-		margin = Math.max(BOUNDS_MARGIN_M, OPTIMIZED_MARGIN_SHARE * farthest);
-	}
+	const farthest = Math.max(...points.map((p) => distanceTo(origin, p)));
+	if (mode === 'optimized') margin = Math.max(BOUNDS_MARGIN_M, OPTIMIZED_MARGIN_SHARE * farthest);
 	let bounds = boundsAround(points, margin);
 	let ctx = await getContext(bounds);
+	if (mode === 'optimized') {
+		const roadPoints = roadRoutes(ctx, origin, targets).flatMap((r) => r?.points ?? []);
+		if (roadPoints.length > 0) {
+			// At most the farthest straight distance beyond the endpoints' bbox: a road
+			// detour wider than that is never the cheaper route.
+			const limit = boundsAround(points, Math.max(BOUNDS_MARGIN_M, farthest));
+			const withRoads = intersectBounds(
+				unionBounds(bounds, boundsAround(roadPoints, ROAD_ROUTE_MARGIN_M)),
+				limit
+			);
+			if (!boundsCover(bounds, withRoads)) {
+				bounds = withRoads;
+				ctx = await getContext(bounds);
+			}
+		}
+		await prepareCostGrid(ctx);
+	}
 	let routed = routeAll(ctx, origin, targets, mode, single);
 	if (
 		mode === 'optimized' &&
@@ -341,9 +399,28 @@ async function routeInWindow(
 	) {
 		bounds = growBounds(ctx.bounds, WINDOW_GROWTH);
 		ctx = await getContext(bounds);
+		await prepareCostGrid(ctx);
 		routed = routeAll(ctx, origin, targets, mode, single);
 	}
 	return { ctx, routed };
+}
+
+function unionBounds(a: GeoBounds, b: GeoBounds): GeoBounds {
+	return {
+		south: Math.min(a.south, b.south),
+		west: Math.min(a.west, b.west),
+		north: Math.max(a.north, b.north),
+		east: Math.max(a.east, b.east)
+	};
+}
+
+function intersectBounds(a: GeoBounds, b: GeoBounds): GeoBounds {
+	return {
+		south: Math.max(a.south, b.south),
+		west: Math.max(a.west, b.west),
+		north: Math.min(a.north, b.north),
+		east: Math.min(a.east, b.east)
+	};
 }
 
 function boundsCover(outer: GeoBounds, inner: GeoBounds): boolean {
@@ -459,9 +536,13 @@ async function finishRoute(
 	const coverageFallback: RouteFallback | null = ctx?.coverage.truncated ? 'tileCap' : null;
 	// A thin-buildings fallback means the basemap is not complete enough for the grid.
 	const basemap = raw.fallback === 'thinBuildings' ? 'partial' : (ctx?.coverage.basemap ?? 'none');
+	const planMeters = polylineMeters(points);
 	return {
 		points,
-		meters: polylineMeters(points),
+		// 3D over the profile stations (every 5 m and every vertex); list, label
+		// and pump line all show this one number.
+		meters: profile.heights ? length3d(profile.s, profile.heights) : planMeters,
+		planMeters,
 		segments: profile.segments,
 		climbM: profile.climbM,
 		metersOver25: profile.metersOver25,
@@ -503,7 +584,7 @@ function roadRoutes(
 		if (!grid) return road;
 		// From the road position to the shore point, lenient at the shore end.
 		const shoreLeg = (shorePoint: GeoPoint, roadPoint: GeoPoint) =>
-			lineCost(grid, roadPoint, shorePoint, undefined, SHORE_LEG_LENIENT_M);
+			lineCost(grid, roadPoint, shorePoint, undefined, SHORE_LEG_LENIENT_M, false);
 		return { ...road, legCost: shoreLeg };
 	});
 	return routeFromOrigin(ctx.graph, origin, roadTargets, legCost).map((r) =>

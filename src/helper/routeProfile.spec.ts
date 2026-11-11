@@ -4,6 +4,7 @@ import type { RoadLine } from '@/types/obstacles';
 import {
 	OFF_ROAD_NEAR_M,
 	classifyRoute,
+	length3d,
 	resampleForProfile,
 	slopeNotRecommended,
 	splitByRuns,
@@ -45,6 +46,27 @@ describe('resampleForProfile', () => {
 		expect(stations.s.map((s) => Math.round(s * 100) / 100)).toEqual([0, 5, 10, 12, 17, 20]);
 		expect(stations.seg).toEqual([0, 0, 0, 1, 1]);
 		expect(stations.total).toBeCloseTo(20, 1);
+	});
+});
+
+describe('length3d (plan section 6.4: the reported metres)', () => {
+	it('the 3D length of a known inclined line is correct to 0.1 %', () => {
+		// 300 m due east with a bend, climbing 45 m evenly: sqrt(300^2 + 45^2) = 303.36 m.
+		const stations = resampleForProfile([at(0, 0), at(120, 0), at(120, 180)]);
+		const heights = stations.s.map((s) => 200 + 0.15 * s);
+		const expected = Math.hypot(stations.total, 45 * (stations.total / 300));
+		expect(Math.abs(length3d(stations.s, heights) / expected - 1)).toBeLessThan(0.001);
+		expect(Math.abs(stations.total - 300)).toBeLessThan(0.5);
+	});
+
+	it('equals the plan length on flat ground', () => {
+		const stations = resampleForProfile([at(0, 0), at(0, 77)]);
+		expect(
+			length3d(
+				stations.s,
+				stations.s.map(() => 5)
+			)
+		).toBeCloseTo(stations.total, 9);
 	});
 });
 

@@ -200,6 +200,17 @@ export function classifyRoute(
 	};
 }
 
+/**
+ * 3D length of a profiled line: Σ √(Δs² + Δh²) over its stations (`s` along
+ * the 2D line, `heights` parallel). Plan §6.4: the reported metres.
+ */
+export function length3d(s: number[], heights: number[]): number {
+	let total = 0;
+	for (let i = 0; i + 1 < s.length; i++)
+		total += Math.hypot(s[i + 1] - s[i], heights[i + 1] - heights[i]);
+	return total;
+}
+
 /** True when the slope alone makes the route "not recommended" (§6.8). */
 export function slopeNotRecommended(profile: Pick<RouteProfile, 'metersOver25' | 'metersOver50'>) {
 	return profile.metersOver50 > 0 || profile.metersOver25 > STEEP_TOTAL_LIMIT_M;

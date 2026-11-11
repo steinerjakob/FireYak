@@ -65,7 +65,11 @@ const PHASE1_LENGTHS: Record<string, Record<Mode, string>> = {
 	}
 };
 
-/** Routed length in meters from `from` to `to` in one of today's two modes. */
+/**
+ * Routed plan (2D) length in meters from `from` to `to` in one of today's two modes.
+ * Without the profile: from phase 4 a profiled route reports its 3D length, and these
+ * pins record the geometry (the 3D lengths are checked in `gridRouting.scenes.spec.ts`).
+ */
 async function routedMeters(
 	from: GeoPoint,
 	to: RouteTargetInput,
@@ -74,7 +78,8 @@ async function routedMeters(
 	invalidateRoutingContext();
 	const point = 'kind' in to ? (to.kind === 'point' ? to.point : to.fallback) : to;
 	const [result] = await computeNearbyDistances(from, [to], [distanceTo(from, point)], {
-		mode: modeOf(mode)
+		mode: modeOf(mode),
+		profile: false
 	});
 	return result.routedDistance;
 }

@@ -17,8 +17,18 @@ import {
 	CELL_CLASS,
 	CLASS_FACTOR as COST_CLASS_FACTOR,
 	ESCAPE_RADIUS_M,
+	isOnRoadClass,
+	slopeFactor,
 	type CellClass
 } from '@/mapHandler/hoseCostModel';
+import {
+	FINE_ROUTING_DEM_ZOOM,
+	baselineCells,
+	heightAtGrid,
+	stepGrade,
+	type HeightRaster,
+	type RasterFrame
+} from '@/helper/demRaster';
 
 /**
  * Cost-grid routing for hose laying. Two cost models share the grid, the
@@ -34,7 +44,11 @@ import {
  *   cores within the escape radius of an endpoint; a step costs the mean of the
  *   two cells' factors, so A to B costs exactly what B to A does; single paths
  *   use A* with the octile heuristic, the nearby list a one-to-many Dijkstra
- *   with early exit; smoothing is cost-aware.
+ *   with early exit; smoothing is cost-aware. With a height raster
+ *   ({@link setGridHeights}) every step is also priced by its slope
+ *   (`slopeFactor`, plan §6.4): capped at ×1.3 between road, path and steps
+ *   cells, 1.0 between bridge cells, never a hard block. A bridge connects only
+ *   to roads, paths, steps and other bridge cells.
  */
 
 /** Grid resolution; 8 m ≈ alley width, keeps a 3 km window under the cell cap. */
@@ -111,6 +125,16 @@ export interface TerrainGrid {
 	stepClips?: Uint8Array;
 	/** Memoised Dijkstra state of the last origin cell (see {@link solveTerrain}). */
 	solve?: SolveState;
+	/**
+	 * `optimized`: heights at the cell centres (plan §6.4); `null`/absent = no
+	 * DEM, routing without slope.
+	 */
+	heights?: HeightRaster | null;
+	/**
+	 * Specs only: off-road steps steeper than this grade are impassable (the
+	 * plan's "blocking at 60 % / 80 %" comparison). The app never sets it.
+	 */
+	slopeBlockGrade?: number;
 }
 
 function toRadians(deg: number): number {
@@ -238,6 +262,78 @@ export function buildOptimizedGrid(obstacles: ObstacleData, bounds: GeoBounds): 
 		cells: raster.cells,
 		buildings: obstacles.buildings
 	};
+}
+
+/** The placement of a grid, for the height raster ({@link setGridHeights}). */
+export function gridFrameOf(grid: TerrainGrid): RasterFrame {
+	return {
+		west: grid.west,
+		south: grid.south,
+		mPerDegLng: grid.mPerDegLng,
+		cols: grid.cols,
+		rows: grid.rows,
+		cellM: GRID_CELL_M
+	};
+}
+
+/**
+ * Attaches the height raster of {@link gridFrameOf} to an `optimized` grid
+ * (`null` = no DEM). Drops a memoised field, which was priced without it.
+ */
+export function setGridHeights(grid: TerrainGrid, heights: HeightRaster | null): void {
+	if (heights && (heights.cols !== grid.cols || heights.rows !== grid.rows)) {
+		throw new Error('Height raster does not match the grid');
+	}
+	grid.heights = heights;
+	grid.solve = undefined;
+}
+
+/**
+ * The class that governs a step's slope factor (plan §6.4): `BRIDGE` between
+ * two bridge cells (factor 1.0), `ROAD` between any two road, path, steps or
+ * bridge cells (capped at ×1.3), else none (the full curve). Symmetric in u, v.
+ */
+function slopeClass(cu: number, cv: number): CellClass | undefined {
+	if (cu === CELL_CLASS.BRIDGE && cv === CELL_CLASS.BRIDGE) return CELL_CLASS.BRIDGE;
+	if (isOnRoadClass(cu as CellClass) && isOnRoadClass(cv as CellClass)) return CELL_CLASS.ROAD;
+	return undefined;
+}
+
+/**
+ * True when a step between classes `cu` and `cv` leaves a bridge sideways: a
+ * bridge cell next to anything but a road, path, steps or bridge cell (the
+ * ground below a bridge is not on it). Symmetric.
+ */
+function leavesBridge(cu: number, cv: number): boolean {
+	const bu = cu === CELL_CLASS.BRIDGE;
+	const bv = cv === CELL_CLASS.BRIDGE;
+	if (bu === bv) return false;
+	return !isOnRoadClass((bu ? cv : cu) as CellClass);
+}
+
+/**
+ * Slope factor of the step from cell u = (ux, uy) by (dx, dy), `Infinity` when
+ * a spec's blocking grade forbids it; 1 without heights or where they are
+ * unknown.
+ */
+function stepSlopeFactor(
+	grid: TerrainGrid,
+	ux: number,
+	uy: number,
+	dx: number,
+	dy: number,
+	cu: number,
+	cv: number
+): number {
+	const heights = grid.heights;
+	if (!heights) return 1;
+	const grade = stepGrade(heights, ux, uy, dx, dy);
+	if (Number.isNaN(grade)) return 1;
+	const cls = slopeClass(cu, cv);
+	if (grid.slopeBlockGrade !== undefined && cls === undefined && grade > grid.slopeBlockGrade) {
+		return Infinity;
+	}
+	return slopeFactor(grade, cls);
 }
 
 /** A grid route target: one point, or a pond shore (every cell next to its outline). */
@@ -405,38 +501,94 @@ function lineOfSight(grid: TerrainGrid, a: number, b: number): boolean {
 /**
  * `optimized` model: priced cost of the straight segment a→b over the cells it
  * passes through (supercover; length in each cell × its factor), or `Infinity`
- * when it touches an impassable cell. Cells outside the grid count as
- * `UNKNOWN_OPEN`. Impassable cells within `lenientEndM` of `b` are priced as
- * `UNKNOWN_OPEN` (a leg ending ON a pond's shore touches the pond's own cells).
+ * when it touches an impassable cell or leaves a bridge sideways. Cells outside
+ * the grid count as `UNKNOWN_OPEN`. Impassable cells within `lenientEndM` of
+ * `b` are priced as `UNKNOWN_OPEN` (a leg ending ON a pond's shore touches the
+ * pond's own cells). With `withSlope` and a height raster, each piece is also
+ * priced by the grade of the line over one cell (z14) or the 24 m baseline
+ * (z12) around its midpoint, with the step rules' road cap and bridge factor,
+ * so a shortcut is never cheaper for ignoring the slope its cell path paid.
  */
 export function lineCost(
 	grid: TerrainGrid,
 	a: GeoPoint,
 	b: GeoPoint,
 	zone: EscapeZone = NO_ESCAPE,
-	lenientEndM = 0
+	lenientEndM = 0,
+	withSlope = true
 ): number {
 	const length = distanceTo(a, b);
 	if (length === 0) return 0;
 	const frame = { ...grid, cellM: GRID_CELL_M };
 	const outside = COST_CLASS_FACTOR[CELL_CLASS.UNKNOWN_OPEN];
+	const ax = gridX(frame, a.lng);
+	const ay = gridY(frame, a.lat);
+	const bx = gridX(frame, b.lng);
+	const by = gridY(frame, b.lat);
+	const heights = withSlope ? grid.heights : null;
+	// Grade window (in units of t along the segment) around a piece's midpoint.
+	const windowCells = heights
+		? heights.zoom >= FINE_ROUTING_DEM_ZOOM
+			? 1
+			: baselineCells(GRID_CELL_M)
+		: 0;
+	const halfT = (windowCells * GRID_CELL_M) / length / 2;
 	let cost = 0;
-	traverseSegment(
-		frame,
-		gridX(frame, a.lng),
-		gridY(frame, a.lat),
-		gridX(frame, b.lng),
-		gridY(frame, b.lat),
-		(cell, t0, t1) => {
-			let factor = cell < 0 ? outside : optimizedCellFactor(grid, zone, cell);
-			if (factor === Infinity && (1 - t0) * length <= lenientEndM) factor = outside;
-			if (factor === Infinity) {
-				cost = Infinity;
-				return false;
-			}
-			cost += (t1 - t0) * length * factor;
+	let prevClass = -1;
+	let prevCell = -1;
+	traverseSegment(frame, ax, ay, bx, by, (cell, t0, t1) => {
+		let factor = cell < 0 ? outside : optimizedCellFactor(grid, zone, cell);
+		if (factor === Infinity && (1 - t0) * length <= lenientEndM) factor = outside;
+		const cls = cell < 0 ? CELL_CLASS.UNKNOWN_OPEN : grid.cells[cell];
+		if (
+			prevClass !== -1 &&
+			leavesBridge(prevClass, cls) &&
+			!zone.endpoints.has(cell) &&
+			!zone.endpoints.has(prevCell)
+		) {
+			factor = Infinity;
 		}
-	);
+		if (factor === Infinity) {
+			cost = Infinity;
+			return false;
+		}
+		prevClass = cls;
+		prevCell = cell;
+		if (t1 <= t0) return;
+		let slope = 1;
+		if (heights) {
+			const tm = (t0 + t1) / 2;
+			const h0 = heightAtGrid(
+				heights,
+				ax + (bx - ax) * (tm - halfT),
+				ay + (by - ay) * (tm - halfT)
+			);
+			const h1 = heightAtGrid(
+				heights,
+				ax + (bx - ax) * (tm + halfT),
+				ay + (by - ay) * (tm + halfT)
+			);
+			const grade = Math.abs(h1 - h0) / (windowCells * GRID_CELL_M);
+			if (!Number.isNaN(grade)) {
+				const governing =
+					cls === CELL_CLASS.BRIDGE
+						? CELL_CLASS.BRIDGE
+						: isOnRoadClass(cls as CellClass)
+							? CELL_CLASS.ROAD
+							: undefined;
+				if (
+					grid.slopeBlockGrade !== undefined &&
+					governing === undefined &&
+					grade > grid.slopeBlockGrade
+				) {
+					cost = Infinity;
+					return false;
+				}
+				slope = slopeFactor(grade, governing);
+			}
+		}
+		cost += (t1 - t0) * length * factor * slope;
+	});
 	return cost;
 }
 
@@ -848,7 +1000,10 @@ function settleDirect(
  * step may not cut the corner of an impassable cell (a supercover wall is
  * 4-connected, so this keeps rail and water lines watertight); a step whose
  * centre line touches a footprint is priced like a core cell (escape factor
- * inside the escape zone, else impassable).
+ * inside the escape zone, else impassable); the step's slope factor multiplies
+ * the cost (symmetric too, ≥ 1, so the octile heuristic stays admissible); a
+ * step on or off a bridge must come from or go to a road, path, steps or
+ * bridge cell (endpoint cells excepted).
  */
 function settleOptimized(
 	grid: TerrainGrid,
@@ -856,7 +1011,7 @@ function settleOptimized(
 	stop: (cell: number) => boolean
 ): number {
 	const { cost, meters, prev, done, heap, zone, heuristic } = state;
-	const { cols, rows } = grid;
+	const { cols, rows, cells } = grid;
 	const straightStep = GRID_CELL_M;
 	const diagonalStep = GRID_CELL_M * Math.SQRT2;
 	const factor = (cell: number) => optimizedCellFactor(grid, zone, cell);
@@ -886,6 +1041,9 @@ function settleOptimized(
 				) {
 					continue;
 				}
+				const cu = cells[u];
+				const cv = cells[v];
+				if (leavesBridge(cu, cv) && !zone.endpoints.has(u) && !zone.endpoints.has(v)) continue;
 				let f = (fu + fv) / 2;
 				if (
 					(uBuilding || isBuildingClass(grid, v)) &&
@@ -894,7 +1052,9 @@ function settleOptimized(
 					if (!zone.cells.has(u) && !zone.cells.has(v)) continue;
 					f = BUILDING_CORE_ESCAPE_FACTOR;
 				}
-				const candidate = cost[u] + (diagonal ? diagonalStep : straightStep) * f;
+				const slope = stepSlopeFactor(grid, ux, uy, dx, dy, cu, cv);
+				if (slope === Infinity) continue;
+				const candidate = cost[u] + (diagonal ? diagonalStep : straightStep) * f * slope;
 				if (candidate < cost[v]) {
 					cost[v] = candidate;
 					meters[v] = meters[u] + (diagonal ? diagonalStep : straightStep);

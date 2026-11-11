@@ -13,6 +13,7 @@ import {
 	type FeatureEffect
 } from '@/mapHandler/hoseCostModel';
 import type { TerrainGrid } from '@/mapHandler/gridRouting';
+import { heightAt, stepGrade, type HeightRaster } from '@/helper/demRaster';
 
 /**
  * Pure helpers behind the dev-only routing debug view (`/debug/routing`,
@@ -167,6 +168,75 @@ export function costRaster(grid: TerrainGrid): {
 		}
 	}
 	return { width: grid.cols, height: grid.rows, data };
+}
+
+/** Slope colours: up to 8 %, 25 %, 50 %, 80 %, steeper (the `slopeFactor` knots). */
+export const SLOPE_COLOR: [number, number, number, number][] = [
+	[0, 0, 0, 0],
+	[250, 220, 60, 110],
+	[255, 140, 0, 150],
+	[220, 40, 40, 170],
+	[120, 0, 120, 190]
+];
+
+/** Bucket of a grade for {@link SLOPE_COLOR}. */
+export function slopeBucket(grade: number): number {
+	if (!(grade > 0.08)) return 0;
+	if (grade <= 0.25) return 1;
+	if (grade <= 0.5) return 2;
+	if (grade <= 0.8) return 3;
+	return 4;
+}
+
+/**
+ * The grid's height raster as an RGBA image (north row first). `slope`: per
+ * cell the steepest of its four straight steps as the router sees them
+ * (per step on z14, over the 24 m baseline on z12), coloured by
+ * {@link SLOPE_COLOR}. `height`: grey from the lowest (black) to the highest
+ * cell (white). Unknown cells stay clear.
+ */
+export function heightRasterImage(
+	heights: HeightRaster,
+	kind: 'slope' | 'height'
+): { width: number; height: number; data: Uint8ClampedArray<ArrayBuffer> } {
+	const { cols, rows } = heights;
+	const data = new Uint8ClampedArray(cols * rows * 4);
+	let lo = Infinity;
+	let hi = -Infinity;
+	for (let r = 0; r < rows; r++) {
+		for (let c = 0; c < cols; c++) {
+			const h = heightAt(heights, c, r);
+			if (Number.isNaN(h)) continue;
+			lo = Math.min(lo, h);
+			hi = Math.max(hi, h);
+		}
+	}
+	for (let r = 0; r < rows; r++) {
+		const offset = (rows - 1 - r) * cols;
+		for (let c = 0; c < cols; c++) {
+			const h = heightAt(heights, c, r);
+			if (Number.isNaN(h)) continue;
+			let color: [number, number, number, number];
+			if (kind === 'height') {
+				const v = hi > lo ? Math.round(((h - lo) / (hi - lo)) * 255) : 128;
+				color = [v, v, v, 160];
+			} else {
+				let grade = 0;
+				for (const [dx, dy] of [
+					[1, 0],
+					[-1, 0],
+					[0, 1],
+					[0, -1]
+				]) {
+					const g = stepGrade(heights, c, r, dx, dy);
+					if (g > grade) grade = g;
+				}
+				color = SLOPE_COLOR[slopeBucket(grade)];
+			}
+			data.set(color, (offset + c) * 4);
+		}
+	}
+	return { width: cols, height: rows, data };
 }
 
 /** Length in meters of a `[lng, lat]` polyline (local equirectangular frame). */

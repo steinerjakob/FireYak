@@ -306,7 +306,7 @@ async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
 		for (const run of leg.segments) {
 			segments.push({ ...run, from: run.from + offset, to: run.to + offset });
 		}
-		offset += leg.meters;
+		offset += leg.planMeters;
 	}
 	routedLegs = legs;
 	lineSegments = segments;
@@ -580,12 +580,12 @@ function lineWarnings(
 				h.push(leg.profile!.heights[i]);
 			});
 		}
-		offset += leg.meters;
+		offset += leg.planMeters;
 	}
 	let pressure: ReturnType<typeof evaluateDownhillPressure> = null;
 	if (complete && s.length > 0) {
-		// Pump distances are already mapped onto the drawn line; the profile's
-		// distances are along the same line.
+		// Pump distances are in the reported (3D) metres; the profile's distances
+		// run along the drawn 2D line.
 		const scale = offset > 0 && realDistance > 0 ? offset / realDistance : 1;
 		const cuts = pumpPositions.map((p) => ({
 			atM: p.distanceFromStart * scale,
@@ -740,9 +740,15 @@ export function usePumpCalculation() {
 		const calculated = getPumpLocationMarkers(elevationData, sourcePressure);
 		const { pumpPositions } = calculated;
 		// The calculation runs on the 3D length of the resampled line; every
-		// distance shown (panel, chart, segment labels) is mapped onto the drawn
-		// 2D line, so the panel, the map label and the nearby list agree.
-		const realDistance = pathMeters(path);
+		// distance shown (panel, chart, segment labels) is scaled to the routed
+		// legs' reported (3D) metres, so the panel, the map label and the nearby
+		// list agree (plan §6.4). Positions on the map use the drawn 2D line.
+		const planDistance = pathMeters(path);
+		const realDistance =
+			routedPathPoints && routedLegs
+				? routedLegs.reduce((sum, leg) => sum + leg.meters, 0)
+				: planDistance;
+		const toPlan = realDistance > 0 ? planDistance / realDistance : 1;
 		const scale = calculated.realDistance > 0 ? realDistance / calculated.realDistance : 1;
 		for (const point of elevationData) {
 			if (point.distance !== undefined) point.distance *= scale;
@@ -768,7 +774,7 @@ export function usePumpCalculation() {
 			if (segmentDistance < 1) continue;
 			const tubes = Math.ceil(segmentDistance / pumpStore.tubeLength);
 			segmentLabels.push({
-				point: pointAlongPath(path, (boundaries[i] + boundaries[i + 1]) / 2),
+				point: pointAlongPath(path, ((boundaries[i] + boundaries[i + 1]) / 2) * toPlan),
 				label: `~${tubes} ${pumpStore.hoseName}-${tubesLabel}`
 			});
 		}
