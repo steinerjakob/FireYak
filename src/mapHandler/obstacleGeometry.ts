@@ -1,6 +1,6 @@
 import type { GeoBounds, GeoPoint } from '@/types/geo';
 import type { ObstacleResult } from '@/types/obstacles';
-import { fetchTileCacheFirst } from '@/offline/offlineProtocol';
+import { fetchRoutingTile } from '@/offline/offlineProtocol';
 import {
 	getObstaclesForBounds as getObstaclesWith,
 	waterOutlineAt as waterOutlineWith,
@@ -9,8 +9,8 @@ import {
 
 /**
  * Main-thread entry to the decoded z15 basemap obstacles (`obstacleTiles.ts`),
- * fetching through the same cache-first `offline://` pipeline the map renders
- * from. The hose routing worker has its own copy of `obstacleTiles.ts`, fed by
+ * fetching cache-first through the routing pipeline (area store, routing
+ * cache, network; plan §6.9). The hose routing worker has its own copy of `obstacleTiles.ts`, fed by
  * the main thread (plan §6.10).
  */
 
@@ -24,7 +24,7 @@ export {
 /** {@link getObstaclesWith} over the app's cache-first tile pipeline by default. */
 export function getObstaclesForBounds(
 	bounds: GeoBounds,
-	fetcher: TileFetcher = fetchTileCacheFirst
+	fetcher: TileFetcher = fetchRoutingTile
 ): Promise<ObstacleResult> {
 	return getObstaclesWith(bounds, fetcher);
 }
@@ -32,7 +32,7 @@ export function getObstaclesForBounds(
 /** {@link waterOutlineWith} over the app's cache-first tile pipeline by default. */
 export function waterOutlineAt(
 	point: GeoPoint,
-	fetcher: TileFetcher = fetchTileCacheFirst
+	fetcher: TileFetcher = fetchRoutingTile
 ): Promise<GeoJSON.Geometry | null> {
 	return waterOutlineWith(point, fetcher);
 }

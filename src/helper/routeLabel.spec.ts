@@ -41,7 +41,7 @@ function route(overrides: Partial<HoseRoute> = {}): HoseRoute {
 		roadOnlyMeters: null,
 		demZoom: 14,
 		fallback: null,
-		coverage: { basemap: 'full', dem: 'z14', barriers: 'unknown' },
+		coverage: { basemap: 'full', dem: 'z14', slope: null, barriers: 'unknown' },
 		routed: true,
 		profile: null,
 		cellM: 8,
@@ -145,7 +145,9 @@ describe('routeChips: warnings and coverage (plan sections 6.8, 6.11)', () => {
 	});
 
 	it('"map data incomplete" when the basemap coverage is partial', () => {
-		const partial = route({ coverage: { basemap: 'partial', dem: 'z14', barriers: 'unknown' } });
+		const partial = route({
+			coverage: { basemap: 'partial', dem: 'z14', slope: null, barriers: 'unknown' }
+		});
 		expect(keys(routeChips(partial, null))).toEqual(['route.incomplete']);
 		expect(translator(de)('route.incomplete')).toBe('Kartendaten unvollständig');
 		expect(keys(routeChips(route(), null))).toEqual([]);
@@ -154,7 +156,7 @@ describe('routeChips: warnings and coverage (plan sections 6.8, 6.11)', () => {
 	it('thin building data: the road fallback and the incomplete chip, both visible', () => {
 		const thin = route({
 			fallback: 'thinBuildings',
-			coverage: { basemap: 'partial', dem: 'z14', barriers: 'unknown' }
+			coverage: { basemap: 'partial', dem: 'z14', slope: null, barriers: 'unknown' }
 		});
 		expect(keys(routeChips(thin, null))).toEqual([
 			'route.fallback.thinBuildings',
@@ -165,7 +167,7 @@ describe('routeChips: warnings and coverage (plan sections 6.8, 6.11)', () => {
 	it('a cut-off window says so once, not also "incomplete"', () => {
 		const cut = route({
 			fallback: 'tileCap',
-			coverage: { basemap: 'partial', dem: 'z14', barriers: 'unknown' }
+			coverage: { basemap: 'partial', dem: 'z14', slope: null, barriers: 'unknown' }
 		});
 		expect(keys(routeChips(cut, null))).toEqual(['route.fallback.tileCap']);
 	});

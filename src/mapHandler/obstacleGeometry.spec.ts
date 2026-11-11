@@ -12,7 +12,10 @@ import { isInsideOutline } from '@/helper/areaShore';
 
 // The default fetcher lives in the MapLibre-backed protocol module; every case
 // here injects its own fetcher.
-vi.mock('@/offline/offlineProtocol', () => ({ fetchTileCacheFirst: async () => null }));
+vi.mock('@/offline/offlineProtocol', () => ({
+	fetchTileCacheFirst: async () => null,
+	fetchRoutingTile: async () => null
+}));
 
 const Z = 15;
 const X = 17772;

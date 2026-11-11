@@ -42,8 +42,15 @@ export function routeChips(
 		chips.push({ key: 'route.checkPressure', color: 'warning' });
 	const reason = route?.fallback ?? fallback;
 	if (reason) chips.push({ key: `route.fallback.${reason}`, color: 'medium' });
-	if (route?.coverage.basemap === 'partial' && reason !== 'tileCap') {
+	// Per-layer coverage (plan §6.9): the route was solved without part of the
+	// map data or without heights; a silent recompute removes the chip once
+	// the data arrives.
+	const basemap = route?.coverage.basemap;
+	if ((basemap === 'partial' || basemap === 'none') && reason !== 'tileCap') {
 		chips.push({ key: 'route.incomplete', color: 'medium' });
+	}
+	if (route?.routed && route.coverage.dem === 'none') {
+		chips.push({ key: 'route.noElevation', color: 'medium' });
 	}
 	if (
 		options.coverage &&

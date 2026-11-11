@@ -25,7 +25,7 @@ import {
 // the Capacitor-backed tile store are never loaded.
 vi.mock('@/offline/offlineProtocol', async () => {
 	const { activeSceneFetcher: fetcher } = await import('@/testing/routingFixtures');
-	return { fetchTileCacheFirst: fetcher };
+	return { fetchTileCacheFirst: fetcher, fetchRoutingTile: fetcher };
 });
 
 type Mode = 'road' | 'optimized';

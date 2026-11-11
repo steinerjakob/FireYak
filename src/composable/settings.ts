@@ -20,6 +20,7 @@ const SHOW_PATH_TO_MARKER_KEY = 'show_path_to_marker';
 const OSM_AUTH_KEY = 'osm_token';
 const MARKER_FILTERS_KEY = 'marker_filters';
 const CROSS_COUNTRY_NOTE_SEEN_KEY = 'cross_country_note_seen';
+const ROUTING_CACHE_MB_KEY = 'routing_cache_mb';
 
 export function useSettings() {
 	const settingsStore = useSettingsStore();
@@ -39,7 +40,8 @@ export function useSettings() {
 			showPathToMarkerResult,
 			osmAuthKey,
 			markerFiltersResult,
-			crossCountryNoteSeenResult
+			crossCountryNoteSeenResult,
+			routingCacheMbResult
 		] = await Promise.all([
 			Preferences.get({ key: THEME_KEY }),
 			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
@@ -50,7 +52,8 @@ export function useSettings() {
 			Preferences.get({ key: SHOW_PATH_TO_MARKER_KEY }),
 			Preferences.get({ key: OSM_AUTH_KEY }),
 			Preferences.get({ key: MARKER_FILTERS_KEY }),
-			Preferences.get({ key: CROSS_COUNTRY_NOTE_SEEN_KEY })
+			Preferences.get({ key: CROSS_COUNTRY_NOTE_SEEN_KEY }),
+			Preferences.get({ key: ROUTING_CACHE_MB_KEY })
 		]);
 
 		if (themeResult.value) {
@@ -82,6 +85,11 @@ export function useSettings() {
 		}
 
 		settingsStore.setCrossCountryNoteSeen(crossCountryNoteSeenResult.value === 'true');
+
+		const routingCacheMb = Number(routingCacheMbResult.value);
+		if (routingCacheMbResult.value && Number.isFinite(routingCacheMb) && routingCacheMb > 0) {
+			settingsStore.setRoutingCacheMb(routingCacheMb);
+		}
 
 		if (showPathToMarkerResult.value) {
 			settingsStore.setShowPathToMarker(showPathToMarkerResult.value === 'true');
@@ -155,6 +163,12 @@ export function useSettings() {
 		await Preferences.set({ key: HOSE_ROUTING_KEY, value: mode });
 	};
 
+	/** Saves the routing cache budget in MB (applied to the cache by `App.vue`). */
+	const saveRoutingCacheMb = async (mb: number) => {
+		settingsStore.setRoutingCacheMb(mb);
+		await Preferences.set({ key: ROUTING_CACHE_MB_KEY, value: String(mb) });
+	};
+
 	/** Remembers that the one-time cross-country note was dismissed. */
 	const saveCrossCountryNoteSeen = async () => {
 		settingsStore.setCrossCountryNoteSeen(true);
@@ -214,6 +228,7 @@ export function useSettings() {
 
 	return {
 		loadSettings,
+		saveRoutingCacheMb,
 		saveTheme,
 		saveShowZoomButtons,
 		saveMapLayer,

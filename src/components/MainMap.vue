@@ -142,6 +142,7 @@ import { debounce } from '@/helper/helper';
 import {
 	getMarkersForView,
 	getNearbyMarkers,
+	nearbyOutlinesPending,
 	markerIconUrls,
 	isFetchingMarkers,
 	markerFetchFailed,
@@ -186,7 +187,19 @@ import {
 	type RouteTargetInput
 } from '@/mapHandler/nearbyRouting';
 import { accessTargetPoint, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
-import { addRouteLayers, routeLayerIds, routeRunFeatures } from '@/mapHandler/routeLayers';
+import {
+	addRouteLayers,
+	pulseRouteLayers,
+	routeLayerIds,
+	routeRunFeatures
+} from '@/mapHandler/routeLayers';
+import {
+	RouteFreshness,
+	isRouteDataComplete,
+	onRoutingDataArrived
+} from '@/mapHandler/routingData';
+import { prefetchMapView, prefetchRouteWindow, updateGpsRing } from '@/offline/routingPrefetch';
+import { MAP_MOVE_IDLE_MS } from '@/offline/precachePolicy';
 import { routeChips, routeLabel } from '@/helper/routeLabel';
 import { useCrossCountryNote } from '@/composable/crossCountryNote';
 import { parseHydrantPressure } from '@/helper/hosePressure';
@@ -588,6 +601,25 @@ async function handleMapMovement(options: { supersedes?: boolean } = {}) {
 	if (source) {
 		source.setData(geojson);
 	}
+	scheduleMapViewPrefetch(bounds);
+}
+
+// Map-move precache (priority 3, Wi-Fi only, plan §6.9): after the marker
+// fetch, once the view stayed put for MAP_MOVE_IDLE_MS.
+let mapViewPrefetchTimer: ReturnType<typeof setTimeout> | null = null;
+let lastMoveStartAt = 0;
+function scheduleMapViewPrefetch(bounds: GeoBounds) {
+	if (mapViewPrefetchTimer) clearTimeout(mapViewPrefetchTimer);
+	const scheduledAt = Date.now();
+	mapViewPrefetchTimer = setTimeout(() => {
+		mapViewPrefetchTimer = null;
+		if (!rootMap || lastMoveStartAt > scheduledAt) return;
+		prefetchMapView(bounds, {
+			zoom: rootMap.getZoom(),
+			idleMs: Date.now() - scheduledAt,
+			markersFetched: true
+		});
+	}, MAP_MOVE_IDLE_MS);
 }
 
 // A background cache refresh finished storing fresh markers — re-render the
@@ -915,7 +947,17 @@ function updateSelectedPath(hoseRoute: HoseRoute) {
 	}
 }
 
+/** True when a recomputed route differs visibly from the drawn one. */
+function routeChanged(before: HoseRoute, after: HoseRoute): boolean {
+	return (
+		Math.round(before.meters) !== Math.round(after.meters) ||
+		before.points.length !== after.points.length ||
+		before.notRecommended !== after.notRecommended
+	);
+}
+
 function hideSelectedPath() {
+	lineFreshness.reset();
 	selectedPathVisible.value = false;
 	selectedRoute = null;
 	selectedPathCoords.value = [];
@@ -1012,8 +1054,16 @@ const MAX_PATH_DIRECT_DISTANCE_M = 2500;
 // without await, and only the newest selection may draw its path.
 let pathRequestSeq = 0;
 
+// Late routing data (plan §6.9): the list and the line remember whether their
+// last result was complete, and recompute silently when data landed since.
+const listFreshness = new RouteFreshness();
+const lineFreshness = new RouteFreshness();
+
 const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
-	if (!selectedMarker) return;
+	if (!selectedMarker) {
+		lineFreshness.reset();
+		return;
+	}
 	const inNearbyMode = nearbyWaterSource.isActive.value;
 	// The user can turn the marker line off; the nearby view always shows it
 	// since the routed path is the point of that view.
@@ -1053,9 +1103,13 @@ const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 		hideSelectedPath();
 		return;
 	}
+	// Precache the route's window (priority 1, plan §6.9); the routing request
+	// below joins the same tile requests.
+	prefetchRouteWindow([currentLocation, targetPoint]);
 	// The routed path, or the straight line with the reason when unroutable. A newer
 	// request for the selected line cancels this one in the routing worker.
 	let hoseRoute: HoseRoute;
+	const startedAt = lineFreshness.begin();
 	try {
 		hoseRoute = await getRoutedPath(
 			currentLocation,
@@ -1074,7 +1128,13 @@ const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 		throw e;
 	}
 	if (requestId !== pathRequestSeq) return;
+	lineFreshness.finish(startedAt, isRouteDataComplete(hoseRoute));
+	const previous = selectedRoute;
 	updateSelectedPath(hoseRoute);
+	// A silent recompute that changed the line: a short width pulse, no refit.
+	if (options.silent && previous && rootMap && mapReady && routeChanged(previous, hoseRoute)) {
+		pulseRouteLayers(rootMap, SELECTED_PATH_LAYER_PREFIX);
+	}
 	// Only the nearby view refits the camera to the path; a plain marker tap
 	// keeps its usual fly-to/centering behavior and just shows the line. A
 	// silent recompute (late data) never moves the camera.
@@ -1308,6 +1368,9 @@ function updateLocationMarker(point: GeoPoint) {
 	// Keep the accuracy circle in sync with the new position/accuracy
 	updateAccuracyCircle();
 
+	// Precache the routing tiles around the position (priority 2, plan §6.9).
+	updateGpsRing(point);
+
 	// Trigger nearby search if active
 	searchNearbyMarkers();
 }
@@ -1366,7 +1429,12 @@ async function getCurrentLocation(): Promise<GeoPoint> {
 	return { lat: center.lat, lng: center.lng };
 }
 
-async function searchNearbyMarkers() {
+/**
+ * Searches the nearby list. `silent`: a recompute after late routing data
+ * (plan §6.9): the metres update in place (the order follows when the list is
+ * not in use) and the line redraws without moving the camera.
+ */
+async function searchNearbyMarkers(options: { silent?: boolean } = {}) {
 	if (!nearbyWaterSource.isActive.value) {
 		return;
 	}
@@ -1374,15 +1442,52 @@ async function searchNearbyMarkers() {
 	if (!location) {
 		return;
 	}
+	const startedAt = listFreshness.begin();
 	try {
-		nearbyWaterSource.list.value = await getNearbyMarkers(location);
+		const fresh = await getNearbyMarkers(location);
+		listFreshness.finish(
+			startedAt,
+			!nearbyOutlinesPending() && fresh.every((marker) => isRouteDataComplete(marker.route))
+		);
+		if (options.silent) nearbyWaterSource.applySilentUpdate(fresh);
+		else nearbyWaterSource.setList(fresh);
 	} catch (e) {
 		// A newer search (location update) superseded this one: it updates the list.
 		if (isRoutingCancelled(e)) return;
 		throw e;
 	}
-	await showPathToSelectedMarker();
+	await showPathToSelectedMarker({ silent: options.silent });
 }
+
+// Late basemap/DEM tiles or pond outlines: recompute what was solved without
+// them. The list search redraws the selected line too, so list, label and
+// pump panel converge on one number.
+let recomputing = false;
+let arrivedWhileRecomputing = false;
+function recomputeAfterLateData(): void {
+	if (recomputing) {
+		arrivedWhileRecomputing = true;
+		return;
+	}
+	let task: Promise<void> | null = null;
+	if (nearbyWaterSource.isActive.value && listFreshness.needsRecompute()) {
+		task = searchNearbyMarkers({ silent: true });
+	} else if (selectedPathVisible.value && lineFreshness.needsRecompute()) {
+		task = showPathToSelectedMarker({ silent: true });
+	}
+	if (!task) return;
+	recomputing = true;
+	void task
+		.catch((e) => console.warn('Silent route recompute failed:', e))
+		.finally(() => {
+			recomputing = false;
+			if (arrivedWhileRecomputing) {
+				arrivedWhileRecomputing = false;
+				recomputeAfterLateData();
+			}
+		});
+}
+const stopRoutingDataWatch = onRoutingDataArrived(recomputeAfterLateData);
 
 async function loadMarkerImages(map: maplibregl.Map) {
 	const entries = Object.entries(markerIconUrls);
@@ -1769,6 +1874,11 @@ async function initMap() {
 		// moveend already fires after dragend, zoomend, flyTo, easeTo, etc.
 		// Using only moveend avoids duplicate handler invocations per interaction.
 		rootMap.on('moveend', debouncedMapMove);
+		rootMap.on('movestart', () => {
+			lastMoveStartAt = Date.now();
+			if (mapViewPrefetchTimer) clearTimeout(mapViewPrefetchTimer);
+			mapViewPrefetchTimer = null;
+		});
 
 		rootMap.on('pitchend', updateResetViewVisibility);
 		rootMap.on('rotateend', updateResetViewVisibility);
@@ -1876,7 +1986,8 @@ onMounted(async () => {
 			if (path.includes('nearbysources') && !prevPath?.includes('nearbysources')) {
 				await searchNearbyMarkers();
 			} else if (!path.includes('nearbysources')) {
-				nearbyWaterSource.list.value = [];
+				nearbyWaterSource.setList([]);
+				listFreshness.reset();
 			}
 		},
 		{ immediate: true }
@@ -1919,6 +2030,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+	stopRoutingDataWatch();
 	stopWatchingLocation();
 	if (rootMap) {
 		rootMap.remove();

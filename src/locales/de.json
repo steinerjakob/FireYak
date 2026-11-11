@@ -415,7 +415,7 @@
 			"defaultName": "Mein Bereich",
 			"includeSatellite": "Satellitenbilder einschließen",
 			"includeTerrain": "Gelände einschließen",
-			"includeTerrainHint": "Für die Pumpenberechnung offline erforderlich — Geländekacheln liefern die Höhendaten.",
+			"includeTerrainHint": "Offline für die Pumpenberechnung und für Schlauchwege im Gelände erforderlich — Geländekacheln liefern die Höhendaten.",
 			"autoRefresh": "Automatisch über WLAN aktualisieren",
 			"autoRefreshHint": "Automatisch über WLAN aktualisieren, wenn älter als 30 Tage.",
 			"estimate": "Etwa {width} × {height} km",
@@ -466,7 +466,12 @@
 		"offline": {
 			"title": "Offline",
 			"offlineAreas": "Offline-Bereiche",
-			"pendingEdits": "Ausstehende Änderungen"
+			"pendingEdits": "Ausstehende Änderungen",
+			"routingCache": {
+				"label": "Speicher für Routendaten",
+				"description": "Karten- und Geländedaten für Schlauchwege in deiner Umgebung – Routen erscheinen schneller und funktionieren offline. Belegt: {used} MB",
+				"clear": "Leeren"
+			}
 		}
 	},
 	"pendingEdits": {
@@ -538,6 +543,7 @@
 			"noRoadNearby": "Luftlinie: keine Straße in der Nähe",
 			"gridUnreached": "Querfeldein nicht erreichbar: nur Straßen",
 			"thinBuildings": "Gebäude hier lückenhaft: nur Straßen"
-		}
+		},
+		"noElevation": "Höhendaten fehlen"
 	}
 }

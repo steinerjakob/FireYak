@@ -65,7 +65,19 @@ export type ToWorkerMessage =
 export type FromWorkerMessage =
 	/** The worker is up; `demDecode` = it decodes WebP itself. */
 	| { type: 'ready'; demDecode: boolean }
-	| { type: 'fetchTile'; reqId: number; source: string; z: number; x: number; y: number }
+	/**
+	 * Tile bytes. `localOnly`: the request's routing budget is spent, answer
+	 * from the area store and the routing cache only (plan §6.9).
+	 */
+	| {
+			type: 'fetchTile';
+			reqId: number;
+			source: string;
+			z: number;
+			x: number;
+			y: number;
+			localOnly?: boolean;
+	  }
 	| { type: 'decodeDem'; reqId: number; bytes: ArrayBuffer }
 	| { type: 'result'; id: number; ok: true; value: NearbyDistanceResult[] | HoseRoute }
 	| { type: 'result'; id: number; ok: false; cancelled: boolean; error: string };
@@ -145,8 +157,17 @@ export function serveHoseRouting(port: RoutingPort, options: ServeOptions = {}):
 			waiting.set(message.reqId, resolve);
 			post(port, message);
 		});
-	const fetchTile: TileFetcher = async (source, z, x, y) => {
-		const answer = await ask({ type: 'fetchTile', reqId: nextReqId++, source, z, x, y });
+	// The routing core bounds the wait (budget); an already spent budget asks for local tiles only.
+	const fetchTile: TileFetcher = async (source, z, x, y, signal) => {
+		const answer = await ask({
+			type: 'fetchTile',
+			reqId: nextReqId++,
+			source,
+			z,
+			x,
+			y,
+			localOnly: signal?.aborted === true
+		});
 		return answer.type === 'tile' ? answer.bytes : null;
 	};
 	const remoteDecode: DemTileDecoder = async (bytes) => {
@@ -351,7 +372,13 @@ export class HoseRoutingClient {
 				break;
 			case 'fetchTile':
 				void this.io
-					.fetchTile(message.source, message.z, message.x, message.y)
+					.fetchTile(
+						message.source,
+						message.z,
+						message.x,
+						message.y,
+						message.localOnly ? AbortSignal.abort() : undefined
+					)
 					.catch(() => null)
 					.then((bytes) =>
 						post(this.port, {

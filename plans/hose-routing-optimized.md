@@ -878,7 +878,8 @@ They ship in phase 1, before `optimized` exists.
 - The visible path is recomputed silently: the label updates in place and the
   line gets a short width pulse (~600 ms), with no camera refit.
 - The nearby list updates the metres in place and re-sorts on its next search
-  tick, not under the user's finger (OPEN).
+  tick, not under the user's finger (decided in phase 7, for the owner to
+  review: §10 question 5).
 
 **Precaching.** Only CDN sources are precached. Precaching Overpass was
 rejected. Priorities:
@@ -2339,6 +2340,91 @@ are calculated faster."
   data along your way is cached in the background."
 - `improvement`: "Offline areas now include finer elevation data for routing."
 
+**Implemented (phase 7 notes).** Where the code differs from the text above:
+
+- Modules: `offline/routingCacheIndex.ts` (pure LRU by bytes + TTL), `offline/routingCache.ts`
+  (IndexedDB `FireRoutingCache`, stores `meta` and `bytes`; the metadata stays in memory, so
+  "cached?" costs no read; buffers are copied on put and get because callers transfer them),
+  `offline/precachePolicy.ts` (pure rules + `FetchQueue`), `offline/tileFetchers.ts` (the
+  cache-first lookups with injected I/O; new, so precedence and budget are testable without
+  MapLibre/Capacitor), `offline/routingPrefetch.ts` (the three triggers wired to the app),
+  `offline/areaSizeEstimate.ts` (pure per-zoom estimate, re-exported by
+  `offlineAreaActions.ts`, which imports Ionic and cannot load in Node),
+  `helper/routingBudget.ts`, `helper/nearbyListMerge.ts`, `mapHandler/routingData.ts`.
+- Budget (deviation from "AbortSignal passed to `fetchTileCacheFirst`"): every `routeNearby`/
+  `routePath` creates one `ROUTING_DATA_BUDGET_MS` (1.5 s) signal shared by basemap, slope
+  raster and profile (`ROUTING_DEM_BUDGET_MS`/`ROUTE_DEM_BUDGET_MS` now alias it). The core
+  races each wait against it (`budgetedFetch`) instead of aborting the fetch: the main thread
+  lets the tile finish, writes it to the routing cache and reports it. After the deadline the
+  fetcher is called with the aborted signal, which means "local stores only" (the worker
+  sends `localOnly` in `fetchTile`); the main thread then starts a background fetch.
+- Lookup order: area store, routing cache, network for every tile (the map reads the routing
+  cache too, so prefetched tiles render offline); only routing and prefetch results are
+  written to the routing cache; map browsing keeps the write-through-in-downloaded-areas
+  rule. Routing and prefetch share one `FetchQueue`: 3 requests per source, routing at
+  priority 0; a request for a pending tile joins it and raises its priority; when all
+  slots are taken by less urgent work the least urgent running job is aborted and queued
+  again; a new prefetch batch drops the queued jobs of its own priority.
+- Coverage: `RoutingCoverage` gains `slope` (`z14` | `z12` | `partial` | `none`, `null` off the
+  grid) and `dem: 'off'` (profile not asked for). `isRouteDataComplete` = full basemap, slope
+  `null`/`z14`, profile `z14`/`off`. Chips: `route.incomplete` also for basemap `none`, new
+  `route.noElevation` ("Elevation data missing" / "Höhendaten fehlen") for a routed line
+  without heights.
+- `routingDataArrived`: emitted for every tile the routing/prefetch path writes to the
+  routing cache and for a pond outline that arrives in the background, coalesced over
+  250 ms. Consumers keep a `RouteFreshness`: they recompute when their last result was
+  incomplete and data landed since that request STARTED (data landing during a request may
+  or may not have been used; the extra solve then changes nothing). MainMap: the nearby list
+  (`searchNearbyMarkers({ silent: true })`, which also redraws the line silently) or, outside
+  the list, the selected line; the line pulses (width 7 for 300 ms) when its metres, shape or
+  warning changed; no refit. The pump line re-routes in place and recalculates a showing
+  result. A list search that started background pond-outline lookups counts as incomplete.
+- The cold-start fix (phase 5 known gap) is the list recompute above. Spec
+  `routingData.scenes.spec.ts` (Innsbruck "500 m north", basemap at once, DEM after 5 s, fake
+  timers): cold list 515 m (`slope: 'none'`), returned within the budget; the line after the
+  DEM landed 1,352 m; the silent recompute 1,350 m, and the line redrawn from the list's field
+  equals it (the step-3 line is an A* on the reloaded grid: within 2 %, as in phase 5).
+- Precache triggers: selection = bbox of the route (or pump markers) + max(150 m, 0.25 × its
+  diagonal) on every line request; GPS ring on each position update (`updateLocationMarker`)
+  when ≥ 500 m from the last ring centre; map move = after the marker fetch of a move, once
+  no further `movestart` came for 1.5 s, clipped to 1.5 km around the view centre. Each
+  covers basemap z15 + DEM z14 and z12.
+- Offline areas: `downloadTiles({ zooms })`; terrain downloads `[0..12, 14]`
+  (`TERRAIN_DOWNLOAD_ZOOMS`), appended after z12 so existing resume cursors stay valid and an
+  existing area picks z14 up on its next refresh/retry. Estimate: 65 kB per z14 DEM tile
+  (fixtures: ~68 kB in the Alps), 35 kB for z0–12. A 6.7 × 3.6 km area: 3–8 MB with
+  terrain, 2–6 MB without (was ~0.1 MB for terrain).
+- Settings: "Route data cache" select (25/50/100/200 MB, default 50), the bytes in use and a
+  Clear button, in the Offline section; key `routing_cache_mb`.
+- Found in the browser check: with a real GPS position the request origin is a Vue
+  reactive proxy, which `postMessage` cannot clone (`DataCloneError`); every worker request
+  then fell back to the main thread. The facade now passes plain `{ lat, lng }` points.
+- Specs: `routingCacheIndex.spec.ts` (8: LRU by bytes, oversize tile, replace, budget change,
+  settings value, TTL 30/180 d, expired first, 20 km drive within 5 MB), `routingCache.spec.ts`
+  (4, `fake-indexeddb`: copies + restart, LRU eviction persisted, TTL, budget/clear),
+  `precachePolicy.spec.ts` (12: ring 499/500 m, ring tiles, zoom/idle/marker gating,
+  Wi-Fi/unknown/cellular, offline/saveData/none, view clip, 3 per source, priority order,
+  preemption + rerun, join + raise, batch drop), `tileFetchers.spec.ts` (7: area store first,
+  routing cache before network, routing fills cache + arrival / map does not, offline, budget
+  ends the wait while the tile lands later, local-only after the budget + background fetch,
+  shared request with own copies), `tileMath.spec.ts` (3), `areaSizeEstimate.spec.ts` (2),
+  `routingData.spec.ts` (4: the 5 s tile — route within 1.5 s, `partial`, event on landing,
+  recompute finds it; freshness; coalescing; completeness), `routingData.scenes.spec.ts` (1),
+  `nearbyListMerge.spec.ts` (4).
+- Browser (dev server, headless Chrome, fresh profile, HTTP cache off, GPS faked at the
+  Innsbruck "500 m north" vehicle, `#/nearbysources/n5870424885`): with every Mapterhorn
+  response delayed 5 s the list showed 515 m with "Elevation data missing" and the map label
+  the same 515 m at 5.4 s; at 9.7 s the list (now 6 hydrants) moved to 1,348 m (z12/partial
+  z14) and at 23 s to 1,357 m with the map label 1,357 m, without user action. Without delay
+  the first list already showed the final numbers. The ring/window left 49 tiles (2.9 MB:
+  36 basemap z15, 12 DEM z14, 1 z12) in `FireRoutingCache`. A second cold start (reload, same
+  delay) made no tile request at all and showed 1,357 m in its first list. Settings show
+  "In use: 3 MB"; changing the budget persists `routing_cache_mb`.
+- **Manual (not done here):** prefetch on a phone on cellular vs Wi-Fi (priority 3 must not
+  run on cellular), iOS IndexedDB quota with a 50–200 MB cache, routing offline inside a
+  re-downloaded area showing `dem: 'z14'`, the line pulse and list highlight by eye, Protomaps
+  request volume with precaching (§10 question 6).
+
 ### Phase 8 (optional): barrier extract in `fireyak-data`
 
 **Scope.** Barriers only:
@@ -2531,8 +2617,18 @@ summarised in the second-to-last row.
    confirmed, the tiles stay gitignored and scene specs skip (§6.14).
 4. How should "Wi-Fi only" work on the web build? `navigator.connection` is
    missing in Safari, so either treat unknown as "no prefetch" or allow it.
+   **Phase 7 decision (owner to review):** unknown = no map-move prefetch
+   (priority 3); the selected route/pump window and the GPS ring still
+   prefetch on any online connection without data saver. On the web the
+   connection is read from `navigator.connection.type` only (Chrome on
+   Android); `effectiveType` ("4g") says nothing about Wi-Fi, so desktop
+   Chrome, Safari and Firefox count as unknown.
 5. Should the nearby list re-sort after a silent recompute, or only update the
    metres?
+   **Phase 7 decision (owner to review):** the metres update at once with a
+   short highlight; the order follows at once when the list has not been
+   touched (touch, pointer, wheel) for 3 s, otherwise 3 s after the last
+   touch. Regular searches (location updates) sort as before.
 6. Precaching raises Protomaps API request volume. Check the key's plan limits.
 
 ## 11. Risks

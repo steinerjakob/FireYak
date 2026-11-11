@@ -132,6 +132,39 @@
 					<ion-label>{{ $t('settings.offline.offlineAreas') }}</ion-label>
 				</ion-item>
 
+				<ion-item>
+					<ion-select
+						:label="$t('settings.offline.routingCache.label')"
+						label-placement="stacked"
+						interface="popover"
+						:value="routingCacheMb"
+						@ion-change="onRoutingCacheMbChange($event)"
+					>
+						<ion-select-option v-for="mb in ROUTING_CACHE_MB_CHOICES" :key="mb" :value="mb">
+							{{ mb }} MB
+						</ion-select-option>
+					</ion-select>
+				</ion-item>
+				<ion-item lines="full">
+					<ion-label class="ion-text-wrap">
+						<p>
+							{{
+								$t('settings.offline.routingCache.description', {
+									used: routingCacheUsedMb
+								})
+							}}
+						</p>
+					</ion-label>
+					<ion-button
+						slot="end"
+						fill="clear"
+						:disabled="routingCacheUsedMb === '0'"
+						@click="clearRoutingCache"
+					>
+						{{ $t('settings.offline.routingCache.clear') }}
+					</ion-button>
+				</ion-item>
+
 				<ion-item button detail router-link="/settings/pending-edits">
 					<ion-icon slot="start" :icon="cloudUploadOutline"></ion-icon>
 					<ion-label>{{ $t('settings.offline.pendingEdits') }}</ion-label>
@@ -201,7 +234,10 @@ import {
 	IonIcon,
 	IonBadge,
 	IonInput,
+	IonSelect,
+	IonSelectOption,
 	SegmentCustomEvent,
+	SelectCustomEvent,
 	ToggleCustomEvent,
 	InputCustomEvent
 } from '@ionic/vue';
@@ -223,6 +259,8 @@ import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { registerSegmentEffect } from '@rdlabo/ionic-theme-ios26';
+import { routingCache } from '@/offline/routingCache';
+import { MB, ROUTING_CACHE_MB_CHOICES } from '@/offline/routingCacheIndex';
 
 // Liquid-glass knob animation for the theme segment (iOS 26 theme, ios mode
 // only — Ionic reflects the active mode on the <html> element).
@@ -251,8 +289,37 @@ onBeforeUnmount(() => {
 });
 
 const settingsStore = useSettingsStore();
-const { saveTheme, saveShowZoomButtons, saveHoseRouting, saveShowPathToMarker } = useSettings();
-const { theme, showZoomButtons, clampHosesToRoads, showPathToMarker } = storeToRefs(settingsStore);
+const {
+	saveTheme,
+	saveShowZoomButtons,
+	saveHoseRouting,
+	saveShowPathToMarker,
+	saveRoutingCacheMb
+} = useSettings();
+const { theme, showZoomButtons, clampHosesToRoads, showPathToMarker, routingCacheMb } =
+	storeToRefs(settingsStore);
+
+// Routing cache (plan §6.9): budget setting, bytes in use, clear.
+const routingCacheUsedMb = ref('0');
+async function refreshRoutingCacheUsage() {
+	await routingCache.whenReady();
+	const mb = routingCache.sizeBytes() / MB;
+	routingCacheUsedMb.value = mb === 0 ? '0' : mb < 1 ? '<1' : mb.toFixed(0);
+}
+onMounted(() => void refreshRoutingCacheUsage());
+
+const onRoutingCacheMbChange = async (event: SelectCustomEvent) => {
+	const mb = Number(event.detail.value);
+	if (!Number.isFinite(mb) || mb <= 0) return;
+	await saveRoutingCacheMb(mb);
+	// App.vue applies the budget; the eviction may take a moment.
+	setTimeout(() => void refreshRoutingCacheUsage(), 300);
+};
+
+const clearRoutingCache = async () => {
+	await routingCache.clear();
+	await refreshRoutingCacheUsage();
+};
 const osmAuthStore = useOsmAuthStore();
 const pendingEditsStore = usePendingEditsStore();
 const { pendingCount } = storeToRefs(pendingEditsStore);

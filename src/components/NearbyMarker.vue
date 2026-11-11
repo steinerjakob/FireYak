@@ -11,7 +11,7 @@ import { coerceRef, toRef } from '@/helper/osmRef';
 import { markerTitleKey } from '@/helper/markerTitle';
 import { formatMeters, routeChips } from '@/helper/routeLabel';
 
-const { list } = useNearbyWaterSource();
+const { list, updatedRefs, markInteraction } = useNearbyWaterSource();
 const router = useRouter();
 const route = useRoute();
 const { t, locale } = useI18n();
@@ -65,14 +65,21 @@ const selectedMarkerRef = computed(() => {
 </script>
 
 <template>
-	<ion-list class="info-list">
+	<!-- Touch, scroll and wheel mark the list as in use: a silent recompute
+	     then updates the metres but keeps the order until it is left alone. -->
+	<ion-list
+		class="info-list"
+		@touchstart.passive="markInteraction"
+		@pointerdown="markInteraction"
+		@wheel.passive="markInteraction"
+	>
 		<!-- Nearby Water Sources -->
 		<ion-item
 			v-for="item in formattedList"
 			:key="item.ref"
 			button
 			@click="router.push(`/nearbysources/${item.ref}`)"
-			:class="{ selected: selectedMarkerRef === item.ref }"
+			:class="{ selected: selectedMarkerRef === item.ref, updated: updatedRefs.has(item.ref) }"
 		>
 			<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
 			<ion-label>
@@ -148,6 +155,19 @@ ion-label p {
 ion-item.selected {
 	--background: rgba(var(--ion-color-primary-rgb), 0.14);
 	border-left: 3px solid var(--ion-color-primary);
+}
+/* A silent recompute changed this entry's metres (late map data). */
+ion-item.updated {
+	animation: route-updated 1.2s ease-out;
+}
+@keyframes route-updated {
+	0%,
+	40% {
+		--background: rgba(var(--ion-color-warning-rgb), 0.28);
+	}
+	100% {
+		--background: transparent;
+	}
 }
 ion-item.selected h3 {
 	color: var(--ion-color-primary);

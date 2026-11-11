@@ -1,5 +1,5 @@
 import type { GeoPoint } from '@/types/geo';
-import { fetchTileCacheFirst } from '@/offline/offlineProtocol';
+import { fetchRoutingTile } from '@/offline/offlineProtocol';
 import { decodeTerrariumImage } from '@/helper/demTiles';
 import {
 	RoutingCancelledError,
@@ -20,8 +20,10 @@ import { HoseRoutingClient } from '@/mapHandler/hoseRoutingProtocol';
  * Main-thread facade of hose routing (plan §6.10): the nearby list, the
  * marker path and the pump line ask here. The solve runs in the hose routing
  * worker (`src/workers/hoseRouting.worker.ts`); this side fetches the tile
- * bytes cache-first through the `offline://` pipeline (the native tile store
- * is not reachable from a worker) and transfers them. Where a worker cannot
+ * bytes cache-first (area store, routing cache, network: `fetchRoutingTile`;
+ * the native tile store is not reachable from a worker) and transfers them.
+ * Late tiles fill the routing cache and emit `routingDataArrived`
+ * (`routingData.ts`) so callers can recompute. Where a worker cannot
  * start (no `Worker`, a WebView that refuses it, no answer within
  * {@link WORKER_READY_TIMEOUT_MS}) or fails later, the same solve
  * (`hoseRoutingCore.ts`) runs on the main thread instead.
@@ -71,7 +73,7 @@ const inlineChannels = new Map<string, { controller: AbortController; cancel: ()
 function inlineBackend(): Backend {
 	if (!inlineConfigured) {
 		// Keeps the realm's DEM decoder (the browser's, or a spec's WASM one).
-		configureRoutingIO({ fetchTile: fetchTileCacheFirst });
+		configureRoutingIO({ fetchTile: fetchRoutingTile });
 		inlineConfigured = true;
 	}
 	return { kind: 'inline' };
@@ -89,7 +91,7 @@ async function startWorker(): Promise<Backend> {
 			name: 'hose-routing'
 		});
 		const client = new HoseRoutingClient(worker, {
-			fetchTile: fetchTileCacheFirst,
+			fetchTile: fetchRoutingTile,
 			decodeDem: decodeTerrariumImage
 		});
 		const started = worker;
@@ -190,6 +192,11 @@ async function dispatch<T>(
 	}
 }
 
+/** `{ lat, lng }` without anything else (reactive proxies included). */
+function plainPoint(point: GeoPoint): GeoPoint {
+	return { lat: point.lat, lng: point.lng };
+}
+
 /**
  * Computes the routed distances (and routes) for the nearby list (see
  * `routeNearby` in `hoseRoutingCore.ts`). Rejects only with
@@ -202,6 +209,9 @@ export function computeNearbyDistances(
 	options: NearbyRoutingOptions = { mode: 'optimized' },
 	request: RoutingRequest = {}
 ): Promise<NearbyDistanceResult[]> {
+	// A plain copy: the GPS position comes from a Vue ref (a Proxy), which
+	// `postMessage` cannot clone.
+	origin = plainPoint(origin);
 	return dispatch(
 		request.channel,
 		(client) => client.nearby(origin, targets, straightDistances, options, request.channel),
@@ -220,6 +230,8 @@ export function getRoutedPath(
 	options: RoutingOptions = { mode: 'optimized' },
 	request: RoutingRequest = {}
 ): Promise<HoseRoute> {
+	origin = plainPoint(origin);
+	if (!('kind' in target)) target = plainPoint(target);
 	return dispatch(
 		request.channel,
 		(client) => client.path(origin, target, options, request.channel),

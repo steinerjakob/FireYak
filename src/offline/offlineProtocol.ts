@@ -3,6 +3,9 @@ import { tileStore } from '@/offline/tileStore';
 import { tileToBounds } from '@/offline/tileMath';
 import { getAllOfflineAreas, type OfflineArea } from '@/mapHandler/databaseHandler';
 import { GeoBounds } from '@/types/geo';
+import { routingCache } from '@/offline/routingCache';
+import { createTileFetchers } from '@/offline/tileFetchers';
+import { notifyRoutingDataArrived } from '@/mapHandler/routingData';
 
 const PROTOMAPS_API_KEY = import.meta.env.VITE_PROTOMAPS_API_KEY;
 
@@ -93,45 +96,56 @@ async function toResponse(
 	return { data: await blob.arrayBuffer() };
 }
 
-/**
- * Cache-first tile fetch shared by the `offline://` protocol handler and the
- * obstacle-geometry decoder. Returns the tile bytes, or `null` when offline and
- * uncached (callers decide how to render/skip the gap). Throws for an unknown
- * source, and rethrows if the fetch was aborted.
- *
- * Tiles write through to the store only when browsed inside a downloaded area so
- * panning there offline works even for zooms the bulk download hasn't reached
- * yet — otherwise the store would grow into an unbounded browse cache.
- */
-export async function fetchTileCacheFirst(
+async function networkTile(
 	source: string,
 	z: number,
 	x: number,
 	y: number,
 	signal?: AbortSignal
-): Promise<ArrayBuffer | null> {
-	const cached = await tileStore.get(source, z, x, y);
-	if (cached) return cached.arrayBuffer();
-
+): Promise<ArrayBuffer> {
 	const build = NETWORK_URL[source];
 	if (!build) throw new Error(`Unknown offline source: ${source}`);
-
-	try {
-		const resp = await fetch(build(z, x, y), { signal });
-		if (!resp.ok) throw new Error(`Tile ${resp.status}`);
-		const buf = await resp.arrayBuffer();
-		// Warm-cache tiles browsed inside a downloaded area so panning there
-		// offline works even for zooms the bulk download hasn't reached yet.
-		if (await isInsideDownloadedArea(z, x, y)) {
-			await tileStore.put(source, z, x, y, new Blob([buf]));
-		}
-		return buf;
-	} catch (err) {
-		if (signal?.aborted) throw err;
-		// Offline and not cached → no data (protocol renders a gap rather than erroring).
-		return null;
-	}
+	const resp = await fetch(build(z, x, y), { signal });
+	if (!resp.ok) throw new Error(`Tile ${resp.status}`);
+	return resp.arrayBuffer();
 }
+
+/**
+ * The app's tile lookups (see `tileFetchers.ts`): downloaded areas, then the
+ * routing cache, then the network.
+ */
+const fetchers = createTileFetchers({
+	areaStore: tileStore,
+	routingCache,
+	network: networkTile,
+	insideDownloadedArea: isInsideDownloadedArea,
+	isOnline: () => (typeof navigator === 'undefined' ? true : navigator.onLine),
+	onArrived: () => notifyRoutingDataArrived('tile')
+});
+
+/**
+ * Cache-first tile fetch of the `offline://` protocol handler (map
+ * browsing). Returns the tile bytes, or `null` when offline and uncached
+ * (callers decide how to render/skip the gap); rethrows if the fetch was
+ * aborted. Tiles write through to the area store only when browsed inside a
+ * downloaded area so panning there offline works even for zooms the bulk
+ * download hasn't reached yet — otherwise the store would grow into an
+ * unbounded browse cache. Tiles the routing cache holds are served from there.
+ */
+export const fetchTileCacheFirst = fetchers.fetchTileCacheFirst;
+
+/**
+ * Cache-first tile fetch for hose routing (plan §6.9): network results fill
+ * the routing cache and emit `routingDataArrived`; an aborted `signal` (the
+ * routing budget is spent) means local stores only.
+ */
+export const fetchRoutingTile = fetchers.fetchRoutingTile;
+
+/** Precaches one routing tile at a precache priority (see `routingPrefetch.ts`). */
+export const prefetchTile = fetchers.prefetchTile;
+
+/** The shared routing/precache network queue. */
+export const routingFetchQueue = fetchers.queue;
 
 /**
  * Registers the `offline://` protocol (MapLibre v5 async signature). URL scheme:

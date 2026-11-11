@@ -14,6 +14,11 @@ export const ROUTE_COLOR = '#3388ff';
 export const ROUTE_STEEP_COLOR = '#f59e0b';
 export const ROUTE_VERY_STEEP_COLOR = '#d32f2f';
 const TICK_IMAGE = 'route-steep-tick';
+/** Width of a route line, and its brief width while pulsing (plan §6.9). */
+export const ROUTE_LINE_WIDTH = 3;
+const PULSE_LINE_WIDTH = 7;
+/** Duration of the pulse after a silent recompute. */
+export const ROUTE_PULSE_MS = 600;
 
 const lineColor: maplibregl.ExpressionSpecification = [
 	'match',
@@ -65,7 +70,7 @@ export function addRouteLayers(
 		source,
 		filter: ['all', isLine, ['!=', ['get', 'offRoad'], true]],
 		layout: { visibility, 'line-cap': 'round', 'line-join': 'round' },
-		paint: { 'line-color': lineColor, 'line-width': 3 }
+		paint: { 'line-color': lineColor, 'line-width': ROUTE_LINE_WIDTH }
 	});
 	map.addLayer({
 		id: offRoad,
@@ -73,7 +78,7 @@ export function addRouteLayers(
 		source,
 		filter: ['all', isLine, ['==', ['get', 'offRoad'], true]],
 		layout: { visibility, 'line-join': 'round' },
-		paint: { 'line-color': lineColor, 'line-width': 3, 'line-dasharray': [2, 1.5] }
+		paint: { 'line-color': lineColor, 'line-width': ROUTE_LINE_WIDTH, 'line-dasharray': [2, 1.5] }
 	});
 	map.addLayer({
 		id: ticks,
@@ -112,4 +117,19 @@ export function routeRunFeatures(
 		geometry: { type: 'LineString', coordinates: run.coordinates },
 		properties: { offRoad: run.offRoad, steep: run.steep }
 	}));
+}
+
+/**
+ * A short width pulse of the route's line layers: the line was recomputed
+ * silently after late map data (no camera move, plan §6.9).
+ */
+export function pulseRouteLayers(map: maplibregl.Map, prefix: string): void {
+	const [onRoad, offRoad] = routeLayerIds(prefix);
+	const set = (width: number) => {
+		for (const layer of [onRoad, offRoad]) {
+			if (map.getLayer(layer)) map.setPaintProperty(layer, 'line-width', width);
+		}
+	};
+	set(PULSE_LINE_WIDTH);
+	setTimeout(() => set(ROUTE_LINE_WIDTH), ROUTE_PULSE_MS / 2);
 }

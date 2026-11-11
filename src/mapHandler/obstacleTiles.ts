@@ -8,6 +8,7 @@ import {
 	type TileObstacles
 } from '@/mapHandler/obstacleDecode';
 import type { FeatureBBox, ObstacleResult, WaterPolygon } from '@/types/obstacles';
+import { budgetedFetch } from '@/helper/routingBudget';
 
 /**
  * Collects the Protomaps basemap vector tiles (z15) that back hose routing and
@@ -69,10 +70,14 @@ export function invalidateObstacleCache(): void {
  * Tiles are fetched and decoded in parallel and merged.
  * @param bounds Geographic window to collect obstacles for.
  * @param fetcher Tile source.
+ * @param budget Routing data budget (plan §6.9): a tile that has not arrived
+ *   when it aborts counts as missing (and is fetched again next time); once
+ *   aborted, only local tiles are read.
  */
 export async function getObstaclesForBounds(
 	bounds: GeoBounds,
-	fetcher: TileFetcher
+	fetcher: TileFetcher,
+	budget?: AbortSignal
 ): Promise<ObstacleResult> {
 	const z = PROTOMAPS_MAX_ZOOM;
 	const tiles = [...tilesForBounds(bounds, z, z)];
@@ -85,7 +90,7 @@ export async function getObstaclesForBounds(
 		tiles.length = MAX_TILES_PER_CALL;
 	}
 
-	const results = await Promise.all(tiles.map((t) => getTileObstacles(t.x, t.y, fetcher)));
+	const results = await Promise.all(tiles.map((t) => getTileObstacles(t.x, t.y, fetcher, budget)));
 
 	const missingTiles = results.filter((result) => result.status === 'missing').length;
 	const { data, layers, thinBuildingTiles } = mergeTileObstacles(
@@ -100,7 +105,12 @@ export async function getObstaclesForBounds(
 }
 
 /** Cache-aware accessor for a single z15 tile's obstacles (LRU + in-flight dedupe). */
-function getTileObstacles(x: number, y: number, fetcher: TileFetcher): Promise<DecodedTile> {
+function getTileObstacles(
+	x: number,
+	y: number,
+	fetcher: TileFetcher,
+	budget?: AbortSignal
+): Promise<DecodedTile> {
 	const key = `${PROTOMAPS_MAX_ZOOM}/${x}/${y}`;
 	const hit = tileCache.get(key);
 	if (hit) {
@@ -110,7 +120,7 @@ function getTileObstacles(x: number, y: number, fetcher: TileFetcher): Promise<D
 		return hit;
 	}
 
-	const pending: Promise<DecodedTile> = decodeTile(x, y, fetcher).then(
+	const pending: Promise<DecodedTile> = decodeTile(x, y, fetcher, budget).then(
 		(tile) => {
 			// A missing tile must not stay cached as "empty": drop it so the next
 			// call fetches it again (e.g. once the network is back).
@@ -132,8 +142,13 @@ function getTileObstacles(x: number, y: number, fetcher: TileFetcher): Promise<D
 }
 
 /** Fetches and decodes a single z15 tile; unavailable tiles come back as `missing`. */
-async function decodeTile(x: number, y: number, fetcher: TileFetcher): Promise<DecodedTile> {
-	const buffer = await fetcher('protomaps', PROTOMAPS_MAX_ZOOM, x, y);
+async function decodeTile(
+	x: number,
+	y: number,
+	fetcher: TileFetcher,
+	budget?: AbortSignal
+): Promise<DecodedTile> {
+	const buffer = await budgetedFetch(fetcher, 'protomaps', PROTOMAPS_MAX_ZOOM, x, y, budget);
 	if (!buffer || buffer.byteLength === 0) {
 		return { status: 'missing', data: emptyTileObstacles() };
 	}

@@ -15,6 +15,12 @@ import { getRoutedPath, type HoseRoute, type RouteFallback } from '@/mapHandler/
 import { getMapNodeById } from '@/mapHandler/databaseHandler';
 import { accessTargetPoint, isPondArea, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
 import { addRouteLayers, routeRunFeatures } from '@/mapHandler/routeLayers';
+import {
+	RouteFreshness,
+	isRouteDataComplete,
+	onRoutingDataArrived
+} from '@/mapHandler/routingData';
+import { prefetchRouteWindow } from '@/offline/routingPrefetch';
 import { slopeNotRecommended, type RouteSegment } from '@/helper/routeProfile';
 import {
 	evaluateDownhillPressure,
@@ -238,6 +244,8 @@ let routingToken = 0;
 
 /** Per-segment hose-count labels (between suction point, pumps and target). */
 let segmentLabels: { point: GeoPoint; label: string }[] = [];
+/** Whether the pump line was routed on incomplete data (plan §6.9). */
+const pumpFreshness = new RouteFreshness();
 
 /** Point `targetDist` meters along the polyline (clamped to its end). */
 function pointAlongPath(path: GeoPoint[], targetDist: number): GeoPoint {
@@ -286,6 +294,7 @@ function setPumpLineGeometry(points: GeoPoint[]) {
  */
 async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
 	const token = ++routingToken;
+	const startedAt = pumpFreshness.begin();
 	const settingsStore = useSettingsStore();
 	const legs: HoseRoute[] = [];
 	for (let i = 0; i < chain.length - 1; i++) {
@@ -299,6 +308,7 @@ async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
 		);
 	}
 	if (token !== routingToken) return; // markers moved meanwhile — superseded
+	pumpFreshness.finish(startedAt, legs.every(isRouteDataComplete));
 
 	const path: GeoPoint[] = [chain[0]];
 	const segments: RouteSegment[] = [];
@@ -355,6 +365,8 @@ const updatePolyline = (options: { autoRecalc?: boolean } = {}) => {
 	lineSegments = [];
 	segmentLabels = [];
 	setPumpLineGeometry(chain);
+	// Precache the pump window (priority 1, plan §6.9).
+	prefetchRouteWindow(chain);
 	routingPromise = updateRoutedPolyline(chain).catch((e) => {
 		console.warn('Pump line routing failed, keeping straight line:', e);
 	});
@@ -362,6 +374,19 @@ const updatePolyline = (options: { autoRecalc?: boolean } = {}) => {
 		scheduleAutoRecalc();
 	}
 };
+
+/**
+ * Late routing data (plan §6.9): a pump line routed without it is routed
+ * again in place (the drawn line stays until the new one is ready) and a
+ * showing result is recalculated, so the panel shows the new metres.
+ */
+onRoutingDataArrived(() => {
+	if (!suctionPoint || !targetPoint || !rootMap || !pumpFreshness.needsRecompute()) return;
+	routingPromise = updateRoutedPolyline(markerChain()).catch((e) => {
+		console.warn('Pump line re-routing failed, keeping the line:', e);
+	});
+	scheduleAutoRecalc();
+});
 
 function createMarkerElement(iconUrl: string, size: [number, number]): HTMLImageElement {
 	const el = document.createElement('img');
@@ -839,6 +864,7 @@ export function usePumpCalculation() {
 			lineSegments = [];
 			routingPromise = null;
 			routingToken++; // invalidate any in-flight routing
+			pumpFreshness.reset();
 			segmentLabels = [];
 			sourcePressure = null;
 			pondSource = null;

@@ -49,7 +49,7 @@ import {
 // Serve the fixture tiles instead of the network/tile store (see nearbyRouting.scenes.spec.ts).
 vi.mock('@/offline/offlineProtocol', async () => {
 	const { activeSceneFetcher: fetcher } = await import('@/testing/routingFixtures');
-	return { fetchTileCacheFirst: fetcher };
+	return { fetchTileCacheFirst: fetcher, fetchRoutingTile: fetcher };
 });
 
 /**

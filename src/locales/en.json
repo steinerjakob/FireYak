@@ -415,7 +415,7 @@
 			"defaultName": "My district",
 			"includeSatellite": "Include satellite imagery",
 			"includeTerrain": "Include terrain",
-			"includeTerrainHint": "Needed for the offline pump calculation — terrain tiles provide the elevation data.",
+			"includeTerrainHint": "Needed offline for the pump calculation and for hose routes over hills — terrain tiles provide the elevation data.",
 			"autoRefresh": "Auto-refresh on Wi-Fi",
 			"autoRefreshHint": "Refresh automatically over Wi-Fi when older than 30 days.",
 			"estimate": "About {width} × {height} km",
@@ -466,7 +466,12 @@
 		"offline": {
 			"title": "Offline",
 			"offlineAreas": "Offline areas",
-			"pendingEdits": "Pending changes"
+			"pendingEdits": "Pending changes",
+			"routingCache": {
+				"label": "Route data cache",
+				"description": "Map and terrain data kept for hose routes along your way, so routes appear faster and work offline. In use: {used} MB",
+				"clear": "Clear"
+			}
 		}
 	},
 	"pendingEdits": {
@@ -538,6 +543,7 @@
 			"noRoadNearby": "Straight line: no road nearby",
 			"gridUnreached": "Not reachable off-road: roads only",
 			"thinBuildings": "Buildings incomplete here: roads only"
-		}
+		},
+		"noElevation": "Elevation data missing"
 	}
 }

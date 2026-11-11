@@ -49,8 +49,11 @@ import {
 	loadRoutingHeights,
 	sampleRouteElevations,
 	setDemTileDecoder,
-	setDemTileFetcher
+	setDemTileFetcher,
+	slopeCoverageOf,
+	type SlopeCoverage
 } from '@/helper/demTiles';
+import { ROUTING_DATA_BUDGET_MS, createBudget } from '@/helper/routingBudget';
 import type { AccessTarget } from '@/mapHandler/waterSourceAccess';
 
 /**
@@ -72,6 +75,8 @@ import type { AccessTarget } from '@/mapHandler/waterSourceAccess';
  * {@link configureRoutingIO}, so the module runs in a worker and under Node.
  * Each realm (main thread, worker) has its own routing context and LRUs.
  */
+
+export { ROUTING_DATA_BUDGET_MS };
 
 /** Only markers within this straight-line distance get the routed treatment. */
 export const ROUTING_MAX_STRAIGHT_M = 1500;
@@ -210,8 +215,13 @@ export type RouteFallback =
 
 export interface RoutingCoverage {
 	basemap: BasemapCoverage['basemap'];
-	/** DEM zoom the profile used: z14, the coarse z12, or none. */
-	dem: 'z14' | 'z12' | 'none';
+	/** DEM zoom the profile used: z14, the coarse z12, none (unavailable), or off (not asked for). */
+	dem: 'z14' | 'z12' | 'none' | 'off';
+	/**
+	 * The `optimized` grid's slope raster: z14 or z12 for every cell, partial,
+	 * none; `null` when the route was not solved on the grid (plan §6.9).
+	 */
+	slope: SlopeCoverage | null;
 	/** Fences and walls are not in the map data (until the barrier extract). */
 	barriers: 'unknown';
 }
@@ -356,12 +366,16 @@ function costGridFor(ctx: RoutingContext, cellM = GRID_CELL_M): TerrainGrid | nu
  * z14 tiles missed the budget) is loaded again on the next request, when the
  * late tiles are in the decode cache.
  */
-async function prepareCostGrid(ctx: RoutingContext, cellM: number): Promise<void> {
+async function prepareCostGrid(
+	ctx: RoutingContext,
+	cellM: number,
+	budget: AbortSignal | undefined
+): Promise<void> {
 	if (ctx.coverage.thinBuildingTiles > 0) return;
 	const slot = gridSlot(ctx, cellM);
 	const grid = slot.grid;
 	if (!grid || slot.heightsComplete) return;
-	slot.heightsLoad ??= loadRoutingHeights(gridFrameOf(grid)).then((heights) => {
+	slot.heightsLoad ??= loadRoutingHeights(gridFrameOf(grid), budget).then((heights) => {
 		slot.heightsComplete = isCompleteRoutingRaster(heights);
 		// Keep a better raster than a worse retry (z14 partial over nothing, etc.).
 		if (heights || grid.heights === undefined) setGridHeights(grid, heights);
@@ -512,7 +526,8 @@ async function routeInWindow(
 	targets: RouteTargetInput[],
 	options: RoutingOptions,
 	single: boolean,
-	signal: AbortSignal | undefined
+	signal: AbortSignal | undefined,
+	budget: AbortSignal | undefined
 ): Promise<{ ctx: RoutingContext; routed: RoutedTargets }> {
 	const mode = options.mode;
 	const points = [origin, ...targets.map(targetPoint)];
@@ -520,7 +535,7 @@ async function routeInWindow(
 	const farthest = Math.max(...points.map((p) => distanceTo(origin, p)));
 	if (mode === 'optimized') margin = Math.max(BOUNDS_MARGIN_M, OPTIMIZED_MARGIN_SHARE * farthest);
 	let bounds = boundsAround(points, margin);
-	let ctx = await getContext(bounds);
+	let ctx = await getContext(bounds, budget);
 	checkCancelled(signal);
 	let cellM: number | 'cellCap' = GRID_CELL_M;
 	if (mode === 'optimized') {
@@ -535,12 +550,12 @@ async function routeInWindow(
 			);
 			if (!boundsCover(bounds, withRoads)) {
 				bounds = withRoads;
-				ctx = await getContext(bounds);
+				ctx = await getContext(bounds, budget);
 				checkCancelled(signal);
 			}
 		}
 		cellM = solveCellSize(ctx, origin, targets, single, options.cellM);
-		if (cellM !== 'cellCap') await prepareCostGrid(ctx, cellM);
+		if (cellM !== 'cellCap') await prepareCostGrid(ctx, cellM, budget);
 		checkCancelled(signal);
 	}
 	let routed = routeAll(ctx, origin, targets, mode, single, cellM);
@@ -554,10 +569,10 @@ async function routeInWindow(
 		)
 	) {
 		bounds = growBounds(ctx.bounds, WINDOW_GROWTH);
-		ctx = await getContext(bounds);
+		ctx = await getContext(bounds, budget);
 		checkCancelled(signal);
 		cellM = solveCellSize(ctx, origin, targets, single, options.cellM);
-		if (cellM !== 'cellCap') await prepareCostGrid(ctx, cellM);
+		if (cellM !== 'cellCap') await prepareCostGrid(ctx, cellM, budget);
 		checkCancelled(signal);
 		routed = routeAll(ctx, origin, targets, mode, single, cellM);
 	}
@@ -597,7 +612,10 @@ function boundsCover(outer: GeoBounds, inner: GeoBounds): boolean {
  * and had every tile. Tile decodes are additionally cached per tile
  * downstream, so a rebuild after a small move is cheap.
  */
-async function getContext(bounds: GeoBounds): Promise<RoutingContext> {
+async function getContext(
+	bounds: GeoBounds,
+	budget: AbortSignal | undefined
+): Promise<RoutingContext> {
 	const now = Date.now();
 	if (
 		context &&
@@ -607,7 +625,7 @@ async function getContext(bounds: GeoBounds): Promise<RoutingContext> {
 	) {
 		return context;
 	}
-	const { coverage, ...decoded } = await getObstaclesForBounds(bounds, fetchTile);
+	const { coverage, ...decoded } = await getObstaclesForBounds(bounds, fetchTile, budget);
 	// Ferries, indoor corridors, tunnelled paths and military access take part in
 	// neither the graph nor the grid (plan §6.3).
 	const obstacles = { ...decoded, roads: routableRoads(decoded.roads) };
@@ -655,7 +673,8 @@ async function finishRoute(
 	options: RoutingOptions,
 	sourcePressureBar: number | undefined,
 	roadOnlyMeters: number | null,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	budget?: AbortSignal
 ): Promise<HoseRoute> {
 	const { points } = raw;
 	const stations = resampleForProfile(points);
@@ -678,7 +697,7 @@ async function finishRoute(
 	let dem: { heights: number[]; zoom: number } | null = null;
 	if (options.profile !== false) {
 		try {
-			dem = await sampleRouteElevations(stations.points);
+			dem = await sampleRouteElevations(stations.points, budget);
 		} catch (e) {
 			console.warn('Route profile elevation failed:', e);
 		}
@@ -719,7 +738,8 @@ async function finishRoute(
 		fallback: raw.fallback ?? coverageFallback,
 		coverage: {
 			basemap,
-			dem: dem ? (dem.zoom >= 14 ? 'z14' : 'z12') : 'none',
+			dem: options.profile === false ? 'off' : dem ? (dem.zoom >= 14 ? 'z14' : 'z12') : 'none',
+			slope: grid ? slopeCoverageOf(grid.heights) : null,
 			barriers: 'unknown'
 		},
 		routed: raw.routed,
@@ -895,9 +915,18 @@ export async function routeNearby(
 	for (const c of ranked.slice(MAX_ROUTED_TARGETS)) results[c.index].fallback = 'tooFar';
 	if (candidates.length === 0) return results;
 
+	// One budget for every remote wait of this request (plan §6.9).
+	const budget = createBudget(ROUTING_DATA_BUDGET_MS);
 	try {
 		const candidateTargets = candidates.map((i) => targets[i]);
-		const { ctx, routed } = await routeInWindow(origin, candidateTargets, options, false, signal);
+		const { ctx, routed } = await routeInWindow(
+			origin,
+			candidateTargets,
+			options,
+			false,
+			signal,
+			budget.signal
+		);
 
 		for (let k = 0; k < candidates.length; k++) {
 			const targetIndex = candidates[k];
@@ -909,7 +938,8 @@ export async function routeNearby(
 					options,
 					options.sourcePressureBars?.[targetIndex],
 					null,
-					signal
+					signal,
+					budget.signal
 				);
 				results[targetIndex] = {
 					routedDistance: route.meters,
@@ -934,6 +964,8 @@ export async function routeNearby(
 	} catch (e) {
 		if (isRoutingCancelled(e)) throw e;
 		console.warn('Road-aware ranking failed, falling back to straight-line order:', e);
+	} finally {
+		budget.dispose();
 	}
 
 	return results;
@@ -962,8 +994,9 @@ export async function routePath(
 		);
 	}
 	let ctx: RoutingContext | null = null;
+	const budget = createBudget(ROUTING_DATA_BUDGET_MS);
 	try {
-		const window = await routeInWindow(origin, [target], options, true, signal);
+		const window = await routeInWindow(origin, [target], options, true, signal, budget.signal);
 		ctx = window.ctx;
 		const [{ route, fallback }] = window.routed;
 		let roadOnlyMeters: number | null = null;
@@ -972,7 +1005,15 @@ export async function routePath(
 			roadOnlyMeters = road ? polylineMeters(road.points) : null;
 		}
 		const raw = route ?? straightRoute(origin, target, fallback ?? 'noRoadNearby');
-		return await finishRoute(raw, ctx, options, options.sourcePressureBar, roadOnlyMeters, signal);
+		return await finishRoute(
+			raw,
+			ctx,
+			options,
+			options.sourcePressureBar,
+			roadOnlyMeters,
+			signal,
+			budget.signal
+		);
 	} catch (e) {
 		if (isRoutingCancelled(e)) throw e;
 		console.warn('Routed path failed, falling back to straight line:', e);
@@ -983,5 +1024,7 @@ export async function routePath(
 			undefined,
 			null
 		);
+	} finally {
+		budget.dispose();
 	}
 }

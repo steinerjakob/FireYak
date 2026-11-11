@@ -8,7 +8,10 @@ import { emptyObstacleData } from '@/mapHandler/obstacleDecode';
 let coverage: BasemapCoverage;
 let obstacles: ObstacleData;
 // No `Worker` in Node: the facade routes on the main thread (the same solve).
-vi.mock('@/offline/offlineProtocol', () => ({ fetchTileCacheFirst: async () => null }));
+vi.mock('@/offline/offlineProtocol', () => ({
+	fetchTileCacheFirst: async () => null,
+	fetchRoutingTile: async () => null
+}));
 vi.mock('@/mapHandler/obstacleTiles', () => ({
 	getObstaclesForBounds: async () => ({ ...obstacles, coverage })
 }));
@@ -16,6 +19,7 @@ vi.mock('@/helper/demTiles', () => ({
 	loadRoutingHeights: async () => null,
 	isCompleteRoutingRaster: () => true,
 	sampleRouteElevations: async () => null,
+	slopeCoverageOf: () => 'none',
 	setDemTileFetcher: () => {},
 	setDemTileDecoder: () => {},
 	decodeTerrariumImage: async () => {

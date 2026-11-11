@@ -684,6 +684,17 @@ function boundsAroundPoint(center: GeoPoint, halfSizeM: number): GeoBounds {
  * @return {Promise<NearbyMarker[]>} A promise that resolves with a list of sorted markers containing their distance and icons.
  *         Rejects with `RoutingCancelledError` when a newer search superseded this one.
  */
+/** Whether the last nearby search went ahead while pond outlines were still being fetched. */
+let outlinesPending = false;
+
+/**
+ * True when the last {@link getNearbyMarkers} search routed ponds without
+ * their OSM outline (still loading): its result can improve once they land.
+ */
+export function nearbyOutlinesPending(): boolean {
+	return outlinesPending;
+}
+
 export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise<NearbyMarker[]> {
 	// Everything else is found by its position, exactly as before.
 	const pointCandidates = (await getNearbyMapNodes(latLng, radius)).filter((e) => !isPondArea(e));
@@ -705,9 +716,9 @@ export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise
 	// Ponds that came without their outline: ask Overpass in the background
 	// (online only) for the next search; this one never waits for it. Routing
 	// uses the Protomaps water polygon under the marker meanwhile.
-	if (useNetworkStatus().isOnline.value) {
-		preloadPondOutlines(pondCandidates);
-	}
+	outlinesPending = useNetworkStatus().isOnline.value
+		? preloadPondOutlines(pondCandidates) > 0
+		: false;
 	const pondOutlines = await Promise.all(
 		pondCandidates.map((element) => routingOutline(element).catch(() => null))
 	);

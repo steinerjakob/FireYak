@@ -1,3 +1,4 @@
+import { notifyRoutingDataArrived } from '@/mapHandler/routingData';
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import { GeoBounds, GeoPoint, boundsContains, distanceTo } from '@/types/geo';
 import { elementPosition, elementTypeOf, isAreaType } from '@/helper/osmElement';
@@ -133,13 +134,22 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | nul
 /**
  * Starts fetching the outlines of pond areas that don't carry one yet, in the
  * background. Nothing waits for them: late answers land in the session cache,
- * so the next search uses them.
+ * so the next search uses them, and an arrival is reported
+ * (`routingDataArrived`). Returns how many lookups were started.
  */
-export function preloadPondOutlines(elements: OverPassElement[]): void {
+export function preloadPondOutlines(elements: OverPassElement[]): number {
+	let started = 0;
 	for (const element of elements) {
 		if (!isPondArea(element) || knownOutline(element) || element.id <= 0) continue;
-		getAreaOutline(element).catch(() => undefined);
+		started++;
+		getAreaOutline(element)
+			.then((outline) => {
+				// A late outline improves the next search: routing data arrived (plan §6.9).
+				if (outline) notifyRoutingDataArrived('outline');
+			})
+			.catch(() => undefined);
 	}
+	return started;
 }
 
 /** I/O of {@link resolveAccessPoint}, injectable for specs. */

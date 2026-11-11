@@ -101,7 +101,7 @@ const route: HoseRoute = {
 	roadOnlyMeters: 240,
 	demZoom: 14,
 	fallback: null,
-	coverage: { basemap: 'partial', dem: 'z14', barriers: 'unknown' },
+	coverage: { basemap: 'partial', dem: 'z14', slope: null, barriers: 'unknown' },
 	routed: true,
 	profile: { s: [0, 5, 181.9], heights: [300, 299.5, 295.5] },
 	cellM: 4

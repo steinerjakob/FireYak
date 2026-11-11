@@ -44,6 +44,16 @@
 			"type": "feature",
 			"en": "Set the maximum working pressure of your hoses; long downhill lines warn when it could be exceeded.",
 			"de": "Der maximale Betriebsdruck der Schläuche ist einstellbar; lange Leitungen bergab warnen, wenn er überschritten werden könnte."
+		},
+		{
+			"type": "improvement",
+			"en": "Hose routes appear immediately and work better offline; map data along your way is cached in the background.",
+			"de": "Schlauchwege erscheinen sofort und funktionieren offline besser; Kartendaten entlang deines Weges werden im Hintergrund gespeichert."
+		},
+		{
+			"type": "improvement",
+			"en": "Offline areas now include finer elevation data for hose routes.",
+			"de": "Offline-Gebiete enthalten jetzt genauere Höhendaten für Schlauchwege."
 		}
 	],
 	"releases": [

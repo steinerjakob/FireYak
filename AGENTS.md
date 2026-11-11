@@ -72,7 +72,7 @@ src/
 | `osmAuthStore.ts` | OAuth2 PKCE authentication with OpenStreetMap |
 | `pendingEditsStore.ts` | Reactive facade over the offline edit queue; exposes pending edits and sync-now |
 | `pumpCalculationSettings.ts` | Pump calculation parameters (incl. max. hose working pressure) with Preferences persistence |
-| `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, hose routing mode (`hoseRouting`: `optimized` by default, `roads` with the "keep on roads" toggle), the one-time cross-country note flag (`crossCountryNoteSeen`), marker filters, zoom button visibility, system bar styling |
+| `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, hose routing mode (`hoseRouting`: `optimized` by default, `roads` with the "keep on roads" toggle), the one-time cross-country note flag (`crossCountryNoteSeen`), the routing cache budget (`routingCacheMb`, default 50 MB; `App.vue` applies it), marker filters, zoom button visibility, system bar styling |
 
 ### Composables (`src/composable/`)
 
@@ -82,7 +82,7 @@ src/
 | `darkModeDetection.ts` | Read-only reactive "is the dark palette active" flag (view of `settingsStore`) |
 | `inAppReview.ts` | Tracks active usage days and triggers the one-shot native in-app review prompt |
 | `modalBreakpointWatcher.ts` | Tracks Ionic modal breakpoint state changes |
-| `nearbyWaterSource.ts` | Reactive list of nearby water sources, ranked by routed hose length (straight line for unrouted ones) |
+| `nearbyWaterSource.ts` | Reactive list of nearby water sources, ranked by routed hose length (straight line for unrouted ones); `applySilentUpdate` takes a recompute after late routing data (metres in place with a short highlight, re-sorted once the list is not touched) |
 | `networkStatus.ts` | Singleton reactive online/offline status shared across the app |
 | `photonSearch.ts` | Address/place search against the Photon geocoding API |
 | `pumpCalculation.ts` | Relay pump calculations (waypoints, elevation, pump positioning) |
@@ -105,6 +105,8 @@ src/
 | `distanceCalculation.ts` | Haversine distance + geodetic point interpolation (20m intervals) |
 | `elevationData.ts` | Batch elevation fetching helper (legacy/fallback path) |
 | `helper.ts` | Debounce utility |
+| `nearbyListMerge.ts` | Pure merge of a silent recompute into the nearby list (order kept while the list is in use, changed entries reported) |
+| `routingBudget.ts` | The non-blocking contract of hose routing: `ROUTING_DATA_BUDGET_MS` (1.5 s) as an `AbortSignal`, `budgetedFetch` (wait raced against the budget; an aborted signal means local stores only) |
 | `hosePressure.ts` | Downhill static-pressure rule against the max. hose working pressure; hydrant pressure parsing |
 | `hoseRoutingSetting.ts` | Hose routing mode type (`optimized` \| `roads`) and the pure migration from the old `clamp_hoses_to_roads` key and the removed `direct` mode (`resolveHoseRouting`: written back once, old key removed); toggle mapping (`modeFromToggle`) |
 | `polygonGeometry.ts` | Exact segment/polygon tests (edge intersection, containment, holes) used by route smoothing |
@@ -128,11 +130,12 @@ src/
 | `hoseRoutingProtocol.ts` | Message protocol between main thread and routing worker: `serveHoseRouting` (worker side), `HoseRoutingClient` (main side: requests, supersession, tile/DEM-decode service), `transferablesOf` |
 | `hoseCostModel.ts` | Pure cost model for hose routing (drives the `optimized` grid and road-mode shore legs): cell classes and factors, `classifyRoad`/`classifyRail`/`classifyLanduse`/`classifyWaterLine`, `slopeFactor`, the thin-buildings test, UI warning thresholds |
 | `obstacleDecode.ts` | Pure decoder (bytes in, data out) of Protomaps tiles: buildings, roads with `kind_detail`/bridge/tunnel/access, rail, landuse, water polygons and lines, cliffs, per-tile residential/building area (thin-buildings safeguard); runs in Node specs and workers |
-| `obstacleGeometry.ts` | Main-thread entry to `obstacleTiles.ts` with the cache-first `offline://` fetcher as default (`getObstaclesForBounds`, `waterOutlineAt`) |
+| `obstacleGeometry.ts` | Main-thread entry to `obstacleTiles.ts` with the routing fetcher (`fetchRoutingTile`) as default (`getObstaclesForBounds`, `waterOutlineAt`) |
 | `obstacleTiles.ts` | Collects z15 Protomaps tiles through an injected fetcher and merges `obstacleDecode.ts` results (LRU, per-layer coverage); missing tiles are reported, never cached as empty; no app I/O import (runs in the routing worker) |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker (shore targets with 250 m final legs, priced per target) |
-| `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs |
+| `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs; `pulseRouteLayers` (width pulse after a silent recompute) |
+| `routingData.ts` | `routingDataArrived` (late basemap/DEM tiles and pond outlines, coalesced), `RouteFreshness` (recompute when a result was incomplete and data landed since), `isRouteDataComplete` |
 | `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster, height/slope raster, per-class area/length summary) for the dev-only routing debug view |
 | `__fixtures__/routing/` | Test data for the routing specs: five real scenes (`scene.json` committed, tiles gitignored and fetched locally, README there). Never import from app code |
 | `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
@@ -145,8 +148,14 @@ src/
 |---|---|
 | `areaDataDownloader.ts` | Downloads Overpass node data for a selected offline area, chunked to stay under API limits |
 | `editQueue.ts` | FIFO offline edit queue + sync engine; drains on reconnect, app start, or manual sync |
-| `offlineProtocol.ts` | Registers the `offline://` MapLibre protocol; cache-first tile/style-asset serving with online fallback |
-| `tileDownloader.ts` | Parallel tile + style-asset fetcher with retry/backoff, used for offline area downloads |
+| `areaSizeEstimate.ts` | Pure per-zoom download size estimates for offline areas (terrain z0–12 + routing DEM z14) |
+| `offlineProtocol.ts` | Registers the `offline://` MapLibre protocol; wires `tileFetchers.ts` to the app's stores (`fetchTileCacheFirst` for the map, `fetchRoutingTile`/`prefetchTile` for hose routing) |
+| `precachePolicy.ts` | Pure precache rules (GPS ring 2 km / 500 m, map move zoom ≥ 14 + 1.5 s idle + Wi-Fi, none offline/saveData) and `FetchQueue` (3 per source, priorities, preemption) |
+| `routingCache.ts` | `FireRoutingCache` IndexedDB store for routing/precache tiles (byte budget LRU, TTL), separate from downloaded areas |
+| `routingCacheIndex.ts` | Pure LRU-by-bytes and TTL (basemap 30 d, DEM 180 d) bookkeeping of the routing cache |
+| `routingPrefetch.ts` | The three precache triggers wired to the app (selected route/pump window, GPS ring, map view on Wi-Fi) |
+| `tileFetchers.ts` | Cache-first lookups with injected I/O: area store, then routing cache, then network; routing results fill the routing cache and report `routingDataArrived` |
+| `tileDownloader.ts` | Parallel tile + style-asset fetcher with retry/backoff, used for offline area downloads (per-source zoom lists; terrain includes z14) |
 | `tileMath.ts` | Web-Mercator tile math shared by the downloader, size estimator, and offline protocol |
 | `tileStore.ts` | Persistent store for downloaded tiles/style assets (IndexedDB on web, filesystem on native) |
 

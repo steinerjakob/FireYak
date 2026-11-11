@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { DEFAULT_HOSE_ROUTING, type HoseRoutingMode } from '@/helper/hoseRoutingSetting';
+import { DEFAULT_ROUTING_CACHE_MB } from '@/offline/routingCacheIndex';
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import {
 	initSystemColorScheme,
@@ -64,6 +65,9 @@ export const useSettingsStore = defineStore('settings', {
 		// Whether the one-time "check cross-country stretches on site" note has
 		// been dismissed (plan §6.8).
 		crossCountryNoteSeen: false,
+		// Byte budget (MB) of the routing cache: map and terrain tiles kept for
+		// hose routes along the way (plan §6.9).
+		routingCacheMb: DEFAULT_ROUTING_CACHE_MB,
 		// When true, a line from the user position to the selected marker is
 		// drawn on the map.
 		showPathToMarker: true,
@@ -95,6 +99,9 @@ export const useSettingsStore = defineStore('settings', {
 		},
 		setCrossCountryNoteSeen(seen: boolean) {
 			this.crossCountryNoteSeen = seen;
+		},
+		setRoutingCacheMb(mb: number) {
+			this.routingCacheMb = mb;
 		},
 		setShowPathToMarker(enabled: boolean) {
 			this.showPathToMarker = enabled;

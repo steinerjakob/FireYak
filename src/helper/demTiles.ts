@@ -11,6 +11,12 @@ import {
 	tilesForFrame,
 	tilesForSamples
 } from '@/helper/demRaster';
+import {
+	ROUTING_DATA_BUDGET_MS,
+	budgetedFetch,
+	createBudget,
+	whenAborted
+} from '@/helper/routingBudget';
 
 /**
  * Elevation sampling from the Mapterhorn terrain tiles (terrarium-encoded
@@ -145,7 +151,7 @@ async function loadDemTiles(
 				let tile = cacheGet(cacheKey);
 				if (!tile) {
 					const [x, y] = key.split('/').map(Number);
-					const buf = await fetchTile('terrain', z, x, y, signal);
+					const buf = await budgetedFetch(fetchTile, 'terrain', z, x, y, signal);
 					if (!buf || buf.byteLength === 0) return;
 					tile = await decodeTile(buf);
 					cachePut(cacheKey, tile);
@@ -188,8 +194,11 @@ function unknownCells(raster: HeightRaster): number {
 	return n;
 }
 
-/** Budget for the routing DEM (both zooms are fetched at once, plan §6.9). */
-export const ROUTING_DEM_BUDGET_MS = 1500;
+/**
+ * Budget for the routing DEM when the caller passes none. A routing request
+ * passes its own signal: one budget for basemap, slope DEM and profile.
+ */
+export const ROUTING_DEM_BUDGET_MS = ROUTING_DATA_BUDGET_MS;
 
 /**
  * The height raster of a cost grid (plan §6.4): z14
@@ -197,33 +206,41 @@ export const ROUTING_DEM_BUDGET_MS = 1500;
  * budget (a missing neighbour tile only degrades the edge pixels), else z12
  * (grades over the 24 m baseline), else a partial z14 raster (unknown cells
  * cost no slope), else `null` (routing without slope). Both zooms are
- * requested at once and the wait stops at `budgetMs`; the z12 tiles are few
- * and usually cached (display tiles, offline areas). Tiles still in flight at
- * the deadline are not aborted: they land in the decode cache, so the next
- * routing request finds them (see {@link isCompleteRoutingRaster}).
+ * requested at once and the wait stops when `budget` aborts (plan §6.9). Tiles
+ * still in flight then are not abandoned: they land in the decode cache (and,
+ * on the main thread, in the routing cache), so the next request finds them
+ * (see {@link isCompleteRoutingRaster}). With the budget already spent, only
+ * local tiles are read.
  */
 export async function loadRoutingHeights(
 	frame: RasterFrame,
-	budgetMs = ROUTING_DEM_BUDGET_MS
+	budget?: AbortSignal
 ): Promise<HeightRaster | null> {
+	const own = budget ? null : createBudget(ROUTING_DEM_BUDGET_MS);
+	const signal = budget ?? own!.signal;
+	// Not raced per tile while time is left (late tiles still reach the decode
+	// cache); local only once the budget is spent.
+	const fetchSignal = signal.aborted ? signal : undefined;
 	const fine = new Map<string, DecodedDemTile>();
 	const coarse = new Map<string, DecodedDemTile>();
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const deadline = new Promise<void>((resolve) => {
-		timer = setTimeout(resolve, budgetMs);
-	});
 	const all = Promise.all([
 		loadDemTiles(
 			tilesForFrame(frame, TERRAIN_ROUTING_ZOOM),
 			TERRAIN_ROUTING_ZOOM,
-			undefined,
+			fetchSignal,
 			true,
 			fine
 		),
-		loadDemTiles(tilesForFrame(frame, TERRAIN_MAX_ZOOM), TERRAIN_MAX_ZOOM, undefined, true, coarse)
+		loadDemTiles(
+			tilesForFrame(frame, TERRAIN_MAX_ZOOM),
+			TERRAIN_MAX_ZOOM,
+			fetchSignal,
+			true,
+			coarse
+		)
 	]);
 	try {
-		await Promise.race([all, deadline]);
+		await Promise.race([all, whenAborted(signal)]);
 		// Snapshot: tiles arriving later must not change a raster being built.
 		const fineRaster =
 			fine.size > 0 ? buildHeightRaster(frame, new Map(fine), TERRAIN_ROUTING_ZOOM) : null;
@@ -236,8 +253,25 @@ export async function loadRoutingHeights(
 		console.warn('Routing DEM failed, routing without slope:', e);
 		return null;
 	} finally {
-		clearTimeout(timer);
+		own?.dispose();
 	}
+}
+
+/** Coverage of a routing height raster (plan §6.9, per-layer coverage). */
+export type SlopeCoverage = 'z14' | 'z12' | 'partial' | 'none';
+
+const slopeCoverageMemo = new WeakMap<HeightRaster, SlopeCoverage>();
+
+/** How complete a grid's height raster is: z14 or z12 everywhere, partial, or none. */
+export function slopeCoverageOf(raster: HeightRaster | null | undefined): SlopeCoverage {
+	if (!raster) return 'none';
+	let coverage = slopeCoverageMemo.get(raster);
+	if (!coverage) {
+		coverage =
+			unknownCells(raster) > 0 ? 'partial' : raster.zoom >= TERRAIN_ROUTING_ZOOM ? 'z14' : 'z12';
+		slopeCoverageMemo.set(raster, coverage);
+	}
+	return coverage;
 }
 
 /**
@@ -249,29 +283,31 @@ export function isCompleteRoutingRaster(raster: HeightRaster | null): boolean {
 	return raster !== null && raster.zoom >= TERRAIN_ROUTING_ZOOM && unknownCells(raster) === 0;
 }
 
-/** Budget for the z14 attempt before the route profile falls back to z12. */
-export const ROUTE_DEM_BUDGET_MS = 1500;
+/** Budget for the z14 attempt when the caller passes none. */
+export const ROUTE_DEM_BUDGET_MS = ROUTING_DATA_BUDGET_MS;
 
 /**
  * Heights for a route profile: z14 when its tiles arrive within the budget,
- * else z12 (callers show at most the amber class then), else `null`.
+ * else z12 (callers show at most the amber class then), else `null`. Once the
+ * budget is spent, both read local tiles only (plan §6.9).
  */
 export async function sampleRouteElevations(
 	points: GeoPoint[],
-	budgetMs = ROUTE_DEM_BUDGET_MS
+	budget?: AbortSignal
 ): Promise<{ heights: number[]; zoom: number } | null> {
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), budgetMs);
+	const own = budget ? null : createBudget(ROUTE_DEM_BUDGET_MS);
+	const signal = budget ?? own!.signal;
 	try {
-		const heights = await sampleElevationsBlended(points, TERRAIN_ROUTING_ZOOM, controller.signal);
+		const heights = await sampleElevationsBlended(points, TERRAIN_ROUTING_ZOOM, signal);
 		if (heights) return { heights, zoom: TERRAIN_ROUTING_ZOOM };
 	} catch (e) {
-		if (!controller.signal.aborted) console.warn('DEM z14 sampling failed:', e);
+		if (!signal.aborted) console.warn('DEM z14 sampling failed:', e);
 	} finally {
-		clearTimeout(timer);
+		own?.dispose();
 	}
 	try {
-		const heights = await sampleElevationsBlended(points, TERRAIN_MAX_ZOOM);
+		// Without an own budget: the caller's (spent or not) bounds the wait.
+		const heights = await sampleElevationsBlended(points, TERRAIN_MAX_ZOOM, budget);
 		if (heights) return { heights, zoom: TERRAIN_MAX_ZOOM };
 	} catch (e) {
 		console.warn('DEM z12 sampling failed:', e);
