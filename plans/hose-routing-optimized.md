@@ -2091,6 +2091,58 @@ and the route redraws.
 - If a "steep stretches" entry from phase 1 is still `unreleased`, merge the
   two.
 
+**Implemented (phase 5 notes).** Where the code differs from the text above:
+
+- Already in place from phase 1: off-road dashes (both modes, also the pump line), the
+  road-only comparison (`getRoutedPath`, selected route only; the pump line passes
+  `compareRoads: false`) and the "ca." prefix. Phase 5 added the spec for them.
+- Fences chip ("Hindernisse (Zäune) unbekannt", `route.barriersUnknown`): on the map label and
+  the pump panel, for a routed line with ≥ 10 m off-road (`OFF_ROAD_SHOWN_M`), not on every
+  nearby list row; "always" read as "whenever fences could matter": a road-only line does not
+  cross fences, and a chip on 30 rows says nothing. "Kartendaten unvollständig" is the
+  existing `route.incomplete` chip (basemap `partial`, incl. the thin-buildings fallback).
+- One-time note: a top toast (`composable/crossCountryNote.ts`, en+de text with the reason:
+  fences, walls and hedges are not in the map data) for the first map or pump line with
+  ≥ 10 m off-road; flag `cross_country_note_seen` in Preferences, set in the store when shown
+  and persisted on dismiss (tap or 10 s timeout).
+- The pump panel shows the off-road metres of its legs and the line length as an estimate.
+- Map label: the climb is written "+197 m" / "-42 m" there (`climbSigns: 'plusMinus'`), and the
+  warning chips lose their "⚠": the Protomaps Noto Sans glyphs have neither arrows nor the
+  warning sign (they rendered as nothing since phase 1). The list and panel keep ↑/↓.
+- `weightedDistance.ts` is deleted. `isNearAnyRoad` moved to `routeProfile.ts` (it is the
+  off-road test); road-mode snap legs are priced by the cost model (`lineCost` without slope
+  and with the escape zone of the endpoint; a leg through water, rail or a building is priced
+  at ×30 instead of refused, so no point loses its road access; plain distance without a
+  grid); an unrouted marker in the list ranks by its straight distance. No pinned road-mode
+  length moved (5 scenes, every ring and case).
+- The grid keeps the names `TerrainGrid`/`buildOptimizedGrid`/`solveTerrain` (one model now,
+  `model` field removed); `settleDirect`, `smoothChainDirect`, the raster line-of-sight and
+  `buildTerrainGrid` are gone. `settingsStore.clampHosesToRoads` stays as a getter for the
+  toggle; the i18n keys stay `settings.map.clampToRoads.*` as the table says.
+- Specs: `hoseRoutingSetting.spec.ts` (14: from-phase-5 column, unknown values, write-back
+  once, type-level `'optimized' | 'roads'` with `@ts-expect-error` on `'direct'`, toggle),
+  `routeLabel.spec.ts` (19, new), `composable/settings.spec.ts` (6, new: Preferences mocked;
+  `'false'`/`'true'`/`'direct'`/absent, write-back once and old key removed, note flag),
+  `nearbyRouting.spec.ts` (5, new: thin buildings → roads with chip and `partial`, list =
+  line, synthetic window), `routeProfile.spec.ts` (+1 `isNearAnyRoad`). Deleted:
+  `gridRouting.spec.ts` "cell classes and costs (building 30, fringe 4, road 0.9)" (3 cases,
+  only the removed four-class factors; "origin outside" moved to "open ground"); its
+  smoothing, building-edge property, memoisation and shore specs now build the cost-model
+  grid. `nearbyRouting.scenes.spec.ts`: the terrain pins of `PHASE1_LENGTHS` (5 scenes) and
+  the terrain list = line runs are dropped; the scene-1 pond and hydrant and the Innsbruck
+  cases run in `optimized` (pond 645–720 m; hydrant 440–510 m, see below; Innsbruck "500 m
+  north" now asserts the road round the scarp: 1,250–1,450 m 3D, < 10 m over 50 %, road-only
+  1,450–1,600 m, and still the pressure warning); list = line runs road + optimized.
+- Scene 1 hydrant: the list's Dijkstra and a fresh A* tie on cost (657.5) with chains that
+  smooth to 496 m and 454 m. In the app the line after the list reuses the list's field, so
+  both show 496 m; the spec range covers both.
+- Known gap (phase 7): with a cold DEM the first nearby list over a large window can be solved
+  before the z14 raster is complete (no slope), while the selected line, requested a moment
+  later, reloads the raster: seen in the browser at Innsbruck as list 526 m (straight down the
+  scarp, "not recommended") against a 1,352 m line. Reopening the list (warm DEM) gave
+  1,357 m. Phase 7's `routingDataArrived` re-sort is the fix.
+- Bundle (`npm run build`, all JS): 3,035,508 → 3,031,108 bytes (−4.4 kB, −1.7 kB gzip).
+
 ### Phase 6: Web Worker and adaptive cell size
 
 **Files**
