@@ -46,10 +46,14 @@ import {
  *   to roads, paths, steps and other bridge cells.
  */
 
-/** Grid resolution; 8 m ≈ alley width, keeps a 3 km window under the cell cap. */
+/**
+ * Default (and coarsest) grid resolution: 8 m ≈ alley width. The nearby list
+ * and road-mode leg pricing use it; single paths choose 4 or 6 m by window
+ * size (plan §6.10, `chooseCellSize` in `hoseRoutingCore.ts`).
+ */
 export const GRID_CELL_M = 8;
-/** Hard cap on grid size; larger windows fall back to graph routing. */
-export const MAX_GRID_CELLS = 250_000;
+/** Hard cap on grid size (plan §6.10); larger windows fall back to graph routing. */
+export const MAX_GRID_CELLS = 400_000;
 /**
  * Cost-aware smoothing (plan §6.6): a shortcut may cost at most this share
  * more than the cell path it replaces, plus {@link SMOOTH_SLACK_M}.
@@ -68,6 +72,8 @@ export interface TerrainGrid {
 	mPerDegLng: number;
 	cols: number;
 	rows: number;
+	/** Cell edge in metres (plan §6.10: 4, 6 or 8). */
+	cellM: number;
 	/** Cell class per cell (row-major): a {@link CellClass} of `hoseCostModel.ts`. */
 	cells: Uint8Array;
 	/** Source footprints, kept for exact checks during path smoothing. */
@@ -99,11 +105,17 @@ function toRadians(deg: number): number {
 
 /**
  * Builds the routing cost grid over `bounds` (classes of
- * `hoseCostModel.ts`, rasterised by `costGrid.ts`), or `null` above the cell
- * cap. The caller passes only the roads that take part in routing.
+ * `hoseCostModel.ts`, rasterised by `costGrid.ts`) with `cellM` cells, or
+ * `null` above `maxCells`. The caller passes only the roads that take part in
+ * routing.
  */
-export function buildOptimizedGrid(obstacles: ObstacleData, bounds: GeoBounds): TerrainGrid | null {
-	const frame = gridFrameFor(bounds, GRID_CELL_M, MAX_GRID_CELLS);
+export function buildOptimizedGrid(
+	obstacles: ObstacleData,
+	bounds: GeoBounds,
+	cellM = GRID_CELL_M,
+	maxCells = MAX_GRID_CELLS
+): TerrainGrid | null {
+	const frame = gridFrameFor(bounds, cellM, maxCells);
 	if (!frame) return null;
 	const raster = rasterizeCostClasses(obstacles, frame);
 	return {
@@ -112,6 +124,7 @@ export function buildOptimizedGrid(obstacles: ObstacleData, bounds: GeoBounds): 
 		mPerDegLng: raster.mPerDegLng,
 		cols: raster.cols,
 		rows: raster.rows,
+		cellM: raster.cellM,
 		cells: raster.cells,
 		buildings: obstacles.buildings
 	};
@@ -125,7 +138,7 @@ export function gridFrameOf(grid: TerrainGrid): RasterFrame {
 		mPerDegLng: grid.mPerDegLng,
 		cols: grid.cols,
 		rows: grid.rows,
-		cellM: GRID_CELL_M
+		cellM: grid.cellM
 	};
 }
 
@@ -222,8 +235,8 @@ export interface TerrainSolve {
 export const terrainSolveStats = { solves: 0, astar: 0 };
 
 function cellOf(grid: TerrainGrid, p: GeoPoint): number | null {
-	const c = Math.floor(((p.lng - grid.west) * grid.mPerDegLng) / GRID_CELL_M);
-	const r = Math.floor(((p.lat - grid.south) * M_PER_DEG_LAT) / GRID_CELL_M);
+	const c = Math.floor(((p.lng - grid.west) * grid.mPerDegLng) / grid.cellM);
+	const r = Math.floor(((p.lat - grid.south) * M_PER_DEG_LAT) / grid.cellM);
 	if (c < 0 || c >= grid.cols || r < 0 || r >= grid.rows) return null;
 	return r * grid.cols + c;
 }
@@ -232,8 +245,8 @@ function cellCenter(grid: TerrainGrid, cellIdx: number): GeoPoint {
 	const c = cellIdx % grid.cols;
 	const r = Math.floor(cellIdx / grid.cols);
 	return {
-		lng: grid.west + ((c + 0.5) * GRID_CELL_M) / grid.mPerDegLng,
-		lat: grid.south + ((r + 0.5) * GRID_CELL_M) / M_PER_DEG_LAT
+		lng: grid.west + ((c + 0.5) * grid.cellM) / grid.mPerDegLng,
+		lat: grid.south + ((r + 0.5) * grid.cellM) / M_PER_DEG_LAT
 	};
 }
 
@@ -267,7 +280,7 @@ export function escapeZone(grid: TerrainGrid, points: GeoPoint[]): EscapeZone {
 }
 
 function addToEscapeZone(grid: TerrainGrid, zone: EscapeZone, points: GeoPoint[]): void {
-	const reach = Math.ceil(ESCAPE_RADIUS_M / GRID_CELL_M) + 1;
+	const reach = Math.ceil(ESCAPE_RADIUS_M / grid.cellM) + 1;
 	for (const p of points) {
 		const cell = cellOf(grid, p);
 		if (cell === null) continue;
@@ -321,7 +334,7 @@ export function lineCost(
 ): number {
 	const length = distanceTo(a, b);
 	if (length === 0) return 0;
-	const frame = { ...grid, cellM: GRID_CELL_M };
+	const frame = grid;
 	const outside = COST_CLASS_FACTOR[CELL_CLASS.UNKNOWN_OPEN];
 	const ax = gridX(frame, a.lng);
 	const ay = gridY(frame, a.lat);
@@ -332,9 +345,9 @@ export function lineCost(
 	const windowCells = heights
 		? heights.zoom >= FINE_ROUTING_DEM_ZOOM
 			? 1
-			: baselineCells(GRID_CELL_M)
+			: baselineCells(grid.cellM)
 		: 0;
-	const halfT = (windowCells * GRID_CELL_M) / length / 2;
+	const halfT = (windowCells * grid.cellM) / length / 2;
 	let cost = 0;
 	let prevClass = -1;
 	let prevCell = -1;
@@ -370,7 +383,7 @@ export function lineCost(
 				ax + (bx - ax) * (tm + halfT),
 				ay + (by - ay) * (tm + halfT)
 			);
-			const grade = Math.abs(h1 - h0) / (windowCells * GRID_CELL_M);
+			const grade = Math.abs(h1 - h0) / (windowCells * grid.cellM);
 			if (!Number.isNaN(grade)) {
 				const governing =
 					cls === CELL_CLASS.BRIDGE
@@ -401,8 +414,8 @@ const BUCKET_M = 32;
 
 /** Buckets building indexes by the {@link BUCKET_M} squares their bbox touches. */
 function buildBuildingIndex(grid: TerrainGrid): void {
-	const bcols = Math.max(1, Math.ceil((grid.cols * GRID_CELL_M) / BUCKET_M));
-	const brows = Math.max(1, Math.ceil((grid.rows * GRID_CELL_M) / BUCKET_M));
+	const bcols = Math.max(1, Math.ceil((grid.cols * grid.cellM) / BUCKET_M));
+	const brows = Math.max(1, Math.ceil((grid.rows * grid.cellM) / BUCKET_M));
 	const buckets = new Map<number, number[]>();
 	grid.buildings.forEach((building, index) => {
 		const [west, south, east, north] = building.bbox;
@@ -626,7 +639,7 @@ export function shoreGoalCells(
 			const a = line[i];
 			const b = line[Math.min(i + 1, line.length - 1)];
 			const lengthM = Math.hypot((b[0] - a[0]) * grid.mPerDegLng, (b[1] - a[1]) * M_PER_DEG_LAT);
-			const steps = Math.max(1, Math.ceil(lengthM / (GRID_CELL_M / 4)));
+			const steps = Math.max(1, Math.ceil(lengthM / (grid.cellM / 4)));
 			for (let s = 0; s <= steps; s++) {
 				const f = s / steps;
 				const cell = cellOf(grid, { lng: a[0] + (b[0] - a[0]) * f, lat: a[1] + (b[1] - a[1]) * f });
@@ -736,8 +749,8 @@ function settleUntil(
 ): number {
 	const { cost, meters, prev, done, heap, zone, heuristic } = state;
 	const { cols, rows, cells } = grid;
-	const straightStep = GRID_CELL_M;
-	const diagonalStep = GRID_CELL_M * Math.SQRT2;
+	const straightStep = grid.cellM;
+	const diagonalStep = grid.cellM * Math.SQRT2;
 	const factor = (cell: number) => optimizedCellFactor(grid, zone, cell);
 	for (;;) {
 		const u = heap.pop();
@@ -792,10 +805,18 @@ function settleUntil(
 }
 
 /** Octile distance in metres between cell (x0, y0) and the box [x1..x2] × [y1..y2]. */
-function octileToBox(x0: number, y0: number, x1: number, x2: number, y1: number, y2: number) {
+function octileToBox(
+	x0: number,
+	y0: number,
+	x1: number,
+	x2: number,
+	y1: number,
+	y2: number,
+	cellM: number
+) {
 	const dx = Math.max(x1 - x0, 0, x0 - x2);
 	const dy = Math.max(y1 - y0, 0, y0 - y2);
-	return (Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy)) * GRID_CELL_M;
+	return (Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy)) * cellM;
 }
 
 /**
@@ -817,7 +838,8 @@ function octileHeuristic(grid: TerrainGrid, goals: Iterable<number>): (cell: num
 		if (y < y1) y1 = y;
 		if (y > y2) y2 = y;
 	}
-	return (cell) => octileToBox(cell % grid.cols, Math.floor(cell / grid.cols), x1, x2, y1, y2);
+	return (cell) =>
+		octileToBox(cell % grid.cols, Math.floor(cell / grid.cols), x1, x2, y1, y2, grid.cellM);
 }
 
 /** Cell chain from the state's origin to `cell`. */
@@ -975,6 +997,19 @@ export function astarRoute(grid: TerrainGrid, origin: GeoPoint, goal: GridGoal):
 }
 
 /**
+ * True when the grid's memoised field (the nearby list's solve) answers
+ * `origin` → `goal`: same origin cell, and a point goal whose escape zone the
+ * field was set up with (any shore goal).
+ */
+export function memoCovers(grid: TerrainGrid, origin: GeoPoint, goal: GridGoal): boolean {
+	const memo = grid.solve;
+	if (memo === undefined || memo.originCell !== cellOf(grid, origin)) return false;
+	if (goal.kind === 'shore') return true;
+	const targetCell = cellOf(grid, goal.point);
+	return targetCell !== null && memo.zone.endpoints.has(targetCell);
+}
+
+/**
  * One route `origin` → `goal`: answered from the memoised field of the same
  * origin when it covers the goal (the selected marker after the list search,
  * so list and line agree), else by A*.
@@ -984,14 +1019,7 @@ export function gridRouteSingle(
 	origin: GeoPoint,
 	goal: GridGoal
 ): GridRoute | null {
-	const memo = grid.solve;
-	const originCell = cellOf(grid, origin);
-	const targetCell = goal.kind === 'point' ? cellOf(grid, goal.point) : null;
-	const covered =
-		memo !== undefined &&
-		memo.originCell === originCell &&
-		(goal.kind === 'shore' || (targetCell !== null && memo.zone.endpoints.has(targetCell)));
-	if (!covered) return astarRoute(grid, origin, goal);
+	if (!memoCovers(grid, origin, goal)) return astarRoute(grid, origin, goal);
 	const solve = solveTerrain(grid, origin, goal.kind === 'point' ? [goal.point] : []);
 	return solve ? solve.routeTo(goal) : null;
 }

@@ -24,7 +24,16 @@
 							<option v-for="p in presets" :key="p.key" :value="p.key">{{ p.label }}</option>
 						</select>
 					</label>
-					<p class="hint">Drag the green (origin) and red (target) marker.</p>
+					<label>
+						Router
+						<select v-model="backendChoice" @change="onBackendChange">
+							<option value="auto">worker (main thread if it fails)</option>
+							<option value="inline">main thread</option>
+						</select>
+					</label>
+					<p class="hint">
+						Drag the green (origin) and red (target) marker. Solving in: {{ backendKind }}.
+					</p>
 
 					<table class="stats">
 						<thead>
@@ -157,6 +166,9 @@ import {
 	computeNearbyDistances,
 	getRoutedPath,
 	invalidateRoutingContext,
+	routingBackendKind,
+	setRoutingBackend,
+	type RoutingBackendChoice,
 	type RoutingOptions
 } from '@/mapHandler/nearbyRouting';
 import { getObstaclesForBounds } from '@/mapHandler/obstacleGeometry';
@@ -238,6 +250,14 @@ const rasterHint = computed(() => {
 	}
 });
 const ringRows = ref<(RatioRow & { mode: string })[]>([]);
+const backendChoice = ref<RoutingBackendChoice>('auto');
+const backendKind = ref('...');
+
+/** Switches between the routing worker and the main thread, then routes again. */
+async function onBackendChange(): Promise<void> {
+	setRoutingBackend(backendChoice.value);
+	await recompute();
+}
 const ringProgress = ref('');
 
 let map: maplibregl.Map | null = null;
@@ -349,6 +369,7 @@ async function recompute(): Promise<void> {
 					route.climbM === null
 						? 'no DEM'
 						: `climb ${route.climbM.toFixed(0)} m (z${route.demZoom})`,
+					route.cellM === null ? '' : `${route.cellM} m cells`,
 					route.notRecommended ? 'NOT RECOMMENDED' : '',
 					route.fallback ?? ''
 				]
@@ -358,6 +379,7 @@ async function recompute(): Promise<void> {
 		}
 	}
 	if (token !== runToken) return;
+	backendKind.value = await routingBackendKind();
 	results.value = next;
 	busy.value = false;
 	await updateCostOverlay();

@@ -7,16 +7,23 @@ import { emptyObstacleData } from '@/mapHandler/obstacleDecode';
 // is set per test (the thin-buildings flag is what this file is about).
 let coverage: BasemapCoverage;
 let obstacles: ObstacleData;
-vi.mock('@/mapHandler/obstacleGeometry', () => ({
+// No `Worker` in Node: the facade routes on the main thread (the same solve).
+vi.mock('@/offline/offlineProtocol', () => ({ fetchTileCacheFirst: async () => null }));
+vi.mock('@/mapHandler/obstacleTiles', () => ({
 	getObstaclesForBounds: async () => ({ ...obstacles, coverage })
 }));
-vi.mock('@/helper/demElevation', () => ({
+vi.mock('@/helper/demTiles', () => ({
 	loadRoutingHeights: async () => null,
 	isCompleteRoutingRaster: () => true,
-	sampleRouteElevations: async () => null
+	sampleRouteElevations: async () => null,
+	setDemTileFetcher: () => {},
+	setDemTileDecoder: () => {},
+	decodeTerrariumImage: async () => {
+		throw new Error('no DEM in this spec');
+	}
 }));
 
-const { computeNearbyDistances, getRoutedPath, invalidateRoutingContext } =
+const { computeNearbyDistances, getRoutedPath, invalidateRoutingContext, isRoutingCancelled } =
 	await import('@/mapHandler/nearbyRouting');
 const { routeChips } = await import('@/helper/routeLabel');
 
@@ -117,5 +124,67 @@ describe('defaults', () => {
 		coverage = fullCoverage(0);
 		const route = await getRoutedPath(origin, target);
 		expect(route.meters).toBeLessThan(320);
+	});
+});
+
+describe('adaptive cell size and the cell cap (plan section 6.10)', () => {
+	it('a single path in a small window runs on 4 m cells, the list on 8 m', async () => {
+		coverage = fullCoverage(0);
+		const line = await getRoutedPath(origin, target, { mode: 'optimized', profile: false });
+		expect(line.cellM).toBe(4);
+		invalidateRoutingContext();
+		const [listed] = await computeNearbyDistances(origin, [target], [distanceTo(origin, target)], {
+			mode: 'optimized',
+			profile: false
+		});
+		expect(listed.route!.cellM).toBe(8);
+	});
+
+	it('the line after the list stays on the list field: one number for list and line', async () => {
+		coverage = fullCoverage(0);
+		const options = { mode: 'optimized' as const, profile: false };
+		const [listed] = await computeNearbyDistances(
+			origin,
+			[target],
+			[distanceTo(origin, target)],
+			options
+		);
+		const line = await getRoutedPath(origin, target, options);
+		expect(line.cellM).toBe(8);
+		expect(line.meters).toBe(listed.routedDistance);
+	});
+
+	it('a grid over the cell cap routes on the road graph and says so', async () => {
+		coverage = fullCoverage(0);
+		// 0.5 m cells over a ~500 m window: about a million cells, over the 400k cap.
+		const route = await getRoutedPath(origin, target, {
+			mode: 'optimized',
+			profile: false,
+			cellM: 0.5
+		});
+		expect(route.routed).toBe(true);
+		expect(route.fallback).toBe('cellCap');
+		expect(route.cellM).toBeNull();
+		expect(route.meters).toBeGreaterThan(380);
+	});
+});
+
+describe('supersession on the main thread (no worker in Node)', () => {
+	it('a newer request on the same channel cancels the older one', async () => {
+		coverage = fullCoverage(0);
+		const options = { mode: 'optimized' as const, profile: false };
+		const first = computeNearbyDistances(origin, [target], [283], options, { channel: 'list' });
+		const second = computeNearbyDistances(origin, [target], [283], options, { channel: 'list' });
+		const [a, b] = await Promise.allSettled([first, second]);
+		expect(a.status).toBe('rejected');
+		expect(isRoutingCancelled((a as PromiseRejectedResult).reason)).toBe(true);
+		expect(b.status).toBe('fulfilled');
+		// Other channels and requests without one are left alone.
+		const [c, d] = await Promise.allSettled([
+			getRoutedPath(origin, target, options, { channel: 'path' }),
+			computeNearbyDistances(origin, [target], [283], options, { channel: 'list' })
+		]);
+		expect(c.status).toBe('fulfilled');
+		expect(d.status).toBe('fulfilled');
 	});
 });

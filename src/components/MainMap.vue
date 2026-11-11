@@ -179,7 +179,12 @@ import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
-import { getRoutedPath, type HoseRoute, type RouteTargetInput } from '@/mapHandler/nearbyRouting';
+import {
+	getRoutedPath,
+	isRoutingCancelled,
+	type HoseRoute,
+	type RouteTargetInput
+} from '@/mapHandler/nearbyRouting';
 import { accessTargetPoint, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
 import { addRouteLayers, routeLayerIds, routeRunFeatures } from '@/mapHandler/routeLayers';
 import { routeChips, routeLabel } from '@/helper/routeLabel';
@@ -1048,13 +1053,26 @@ const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 		hideSelectedPath();
 		return;
 	}
-	// The routed path, or the straight line with the reason when unroutable.
-	const hoseRoute = await getRoutedPath(currentLocation, target, {
-		mode: settingsStore.hoseRouting,
-		maxHosePressureBar: pumpCalculationStore.maxHosePressure,
-		// A pressurised hydrant feeds the line; otherwise a pump at the source.
-		sourcePressureBar: parseHydrantPressure(element?.tags) ?? pumpCalculationStore.outputPressure
-	});
+	// The routed path, or the straight line with the reason when unroutable. A newer
+	// request for the selected line cancels this one in the routing worker.
+	let hoseRoute: HoseRoute;
+	try {
+		hoseRoute = await getRoutedPath(
+			currentLocation,
+			target,
+			{
+				mode: settingsStore.hoseRouting,
+				maxHosePressureBar: pumpCalculationStore.maxHosePressure,
+				// A pressurised hydrant feeds the line; otherwise a pump at the source.
+				sourcePressureBar:
+					parseHydrantPressure(element?.tags) ?? pumpCalculationStore.outputPressure
+			},
+			{ channel: 'selected-path' }
+		);
+	} catch (e) {
+		if (isRoutingCancelled(e)) return;
+		throw e;
+	}
 	if (requestId !== pathRequestSeq) return;
 	updateSelectedPath(hoseRoute);
 	// Only the nearby view refits the camera to the path; a plain marker tap
@@ -1356,7 +1374,13 @@ async function searchNearbyMarkers() {
 	if (!location) {
 		return;
 	}
-	nearbyWaterSource.list.value = await getNearbyMarkers(location);
+	try {
+		nearbyWaterSource.list.value = await getNearbyMarkers(location);
+	} catch (e) {
+		// A newer search (location update) superseded this one: it updates the list.
+		if (isRoutingCancelled(e)) return;
+		throw e;
+	}
 	await showPathToSelectedMarker();
 }
 

@@ -23,7 +23,11 @@ import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useSettingsStore, type MarkerFilterKey } from '@/store/settingsStore';
 import { isSuctionHydrant } from '@/helper/markerTitle';
 import { NearbyMarker } from '@/composable/nearbyWaterSource';
-import { computeNearbyDistances, NearbyDistanceResult } from '@/mapHandler/nearbyRouting';
+import {
+	computeNearbyDistances,
+	isRoutingCancelled,
+	NearbyDistanceResult
+} from '@/mapHandler/nearbyRouting';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { parseHydrantPressure } from '@/helper/hosePressure';
 import {
@@ -567,6 +571,9 @@ export async function getMarkersForView(
 	return { type: 'FeatureCollection', features };
 }
 
+/** Routing channel of the nearby search: a newer search cancels the running one. */
+const NEARBY_ROUTING_CHANNEL = 'nearby-list';
+
 /**
  * Sorts a list of map markers by their road-aware distance from a specified
  * geographic location. Nearby markers are ranked by the routed distance along
@@ -591,16 +598,24 @@ async function sortElementsByDistance(
 
 	let ranking: NearbyDistanceResult[];
 	try {
-		ranking = await computeNearbyDistances(latLng, targets, straightDistances, {
-			mode: useSettingsStore().hoseRouting,
-			maxHosePressureBar: pumpStore.maxHosePressure,
-			// A pressurised hydrant feeds the line itself; otherwise a pump at the
-			// source does, at its outlet pressure (plan §6.13).
-			sourcePressureBars: elements.map(
-				(element) => parseHydrantPressure(element.tags) ?? pumpStore.outputPressure
-			)
-		});
+		ranking = await computeNearbyDistances(
+			latLng,
+			targets,
+			straightDistances,
+			{
+				mode: useSettingsStore().hoseRouting,
+				maxHosePressureBar: pumpStore.maxHosePressure,
+				// A pressurised hydrant feeds the line itself; otherwise a pump at the
+				// source does, at its outlet pressure (plan §6.13).
+				sourcePressureBars: elements.map(
+					(element) => parseHydrantPressure(element.tags) ?? pumpStore.outputPressure
+				)
+			},
+			{ channel: NEARBY_ROUTING_CHANNEL }
+		);
 	} catch (e) {
+		// Superseded by a newer search: the caller drops this one.
+		if (isRoutingCancelled(e)) throw e;
 		// computeNearbyDistances fails open internally; this is a last-resort guard.
 		console.warn('Road-aware ranking failed, using straight-line order:', e);
 		ranking = straightDistances.map((distance) => ({
@@ -667,6 +682,7 @@ function boundsAroundPoint(center: GeoPoint, halfSizeM: number): GeoBounds {
  * @param {GeoPoint} latLng - The latitude and longitude coordinates used as the center point.
  * @param {number} radius - The search radius in meters around the center point (default: 2000 meters).
  * @return {Promise<NearbyMarker[]>} A promise that resolves with a list of sorted markers containing their distance and icons.
+ *         Rejects with `RoutingCancelledError` when a newer search superseded this one.
  */
 export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise<NearbyMarker[]> {
 	// Everything else is found by its position, exactly as before.

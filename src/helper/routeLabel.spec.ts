@@ -44,6 +44,7 @@ function route(overrides: Partial<HoseRoute> = {}): HoseRoute {
 		coverage: { basemap: 'full', dem: 'z14', barriers: 'unknown' },
 		routed: true,
 		profile: null,
+		cellM: 8,
 		...overrides
 	};
 }

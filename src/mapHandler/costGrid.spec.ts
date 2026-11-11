@@ -9,6 +9,8 @@ import type {
 } from '@/types/obstacles';
 import { pointInPolygon, segmentsIntersect, type LngLat } from '@/helper/polygonGeometry';
 import {
+	ROAD_BAND_HALF_WIDTH_M,
+	bandCells,
 	gridFrameFor,
 	rasterizeCostClasses,
 	routableRoads,
@@ -494,3 +496,87 @@ describe('escape radius (plan section 6.3)', () => {
 		expect(optimizedCellFactor(wet, wetZone, cellNear)).toBe(Infinity);
 	});
 });
+
+describe('ways on grids finer than 8 m (plan section 6.10)', () => {
+	const fine: GridFrame = gridFrameFor(BOUNDS, 4, 1e6)!;
+	const fineCentre = (cell: number): LngLat => {
+		const c = cell % fine.cols;
+		const r = Math.floor(cell / fine.cols);
+		return at((c + 0.5) * 4, (r + 0.5) * 4);
+	};
+	const fineRaster = (obstacles: Partial<ObstacleData>) =>
+		rasterizeCostClasses({ ...emptyObstacleData(), ...obstacles }, fine);
+	const fineClassAt = (cells: Uint8Array, x: number, y: number) =>
+		cells[Math.floor(y / 4) * fine.cols + Math.floor(x / 4)];
+
+	it('bandCells visits exactly the cells whose centre is within the half width', () => {
+		const pts = [at(20, 37), at(180, 121)];
+		const seen = new Set<number>();
+		bandCells(fine, pts, ROAD_BAND_HALF_WIDTH_M, (cell) => seen.add(cell));
+		for (let cell = 0; cell < fine.cols * fine.rows; cell++) {
+			const [lng, lat] = fineCentre(cell);
+			const d = pointToSegmentM([lng, lat], pts[0], pts[1]);
+			if (d < ROAD_BAND_HALF_WIDTH_M - 0.01) expect(seen.has(cell), `cell ${cell}`).toBe(true);
+			if (d > ROAD_BAND_HALF_WIDTH_M + 0.01) expect(seen.has(cell), `cell ${cell}`).toBe(false);
+		}
+	});
+
+	it('a road is 8 m wide on 4 m cells over open ground and landuse', () => {
+		const road = line('minor_road', 'residential', [
+			[0, 101],
+			[200, 101]
+		]);
+		const { cells } = fineRaster({
+			roads: [road],
+			landuse: [area('forest', 40_000, rect(0, 0, 200, 200))]
+		});
+		// Centreline at y = 101: the cell centres at 98 and 102 lie within 4 m (the line
+		// itself is in the 100-104 cell); 94 and 106 do not.
+		expect(fineClassAt(cells, 50, 97)).toBe(CELL_CLASS.ROAD);
+		expect(fineClassAt(cells, 50, 101)).toBe(CELL_CLASS.ROAD);
+		expect(fineClassAt(cells, 50, 93)).toBe(CELL_CLASS.FOREST);
+		expect(fineClassAt(cells, 50, 105)).toBe(CELL_CLASS.FOREST);
+	});
+
+	it('the band never paints over buildings, water or walls', () => {
+		const road = line('minor_road', 'residential', [
+			[0, 101],
+			[200, 101]
+		]);
+		const { cells } = fineRaster({
+			roads: [road],
+			buildings: [building(rect(40, 80, 70, 98.5))],
+			waterAreas: [{ ...area('water', 900, rect(100, 60, 130, 98.5)), tile: '15/0/0' }]
+		});
+		// The 96-100 cells lie in the band (centre 98, 3 m from the centreline) but belong
+		// to a house and a pond: they keep their class. The line's own cells are road.
+		expect(fineClassAt(cells, 50, 97)).toBe(CELL_CLASS.BUILDING_CORE);
+		expect(fineClassAt(cells, 110, 97)).toBe(CELL_CLASS.BLOCKED);
+		expect(fineClassAt(cells, 50, 101)).toBe(CELL_CLASS.ROAD);
+		expect(fineClassAt(cells, 110, 101)).toBe(CELL_CLASS.ROAD);
+	});
+
+	it('8 m grids draw ways as the plain supercover (phases 3-5 unchanged)', () => {
+		const road = line('minor_road', 'residential', [
+			[0, 101],
+			[200, 101]
+		]);
+		const { cells } = raster({ roads: [road] });
+		expect(classAt(cells, 50, 101)).toBe(CELL_CLASS.ROAD);
+		expect(classAt(cells, 50, 95)).toBe(CELL_CLASS.UNKNOWN_OPEN);
+		expect(classAt(cells, 50, 105)).toBe(CELL_CLASS.UNKNOWN_OPEN);
+	});
+});
+
+/** Distance in metres from p to segment a-b (local frame of this spec). */
+function pointToSegmentM(p: LngLat, a: LngLat, b: LngLat): number {
+	const x = (q: LngLat) => (q[0] - LNG) * mPerDegLng;
+	const y = (q: LngLat) => (q[1] - LAT) * M_PER_DEG_LAT;
+	const dx = x(b) - x(a);
+	const dy = y(b) - y(a);
+	const t = Math.max(
+		0,
+		Math.min(1, ((x(p) - x(a)) * dx + (y(p) - y(a)) * dy) / (dx * dx + dy * dy))
+	);
+	return Math.hypot(x(p) - x(a) - t * dx, y(p) - y(a) - t * dy);
+}

@@ -26,6 +26,9 @@ import {
  * 6. passable roads and paths that are not bridges;
  * 7. bridges `BRIDGE`.
  *
+ * On grids finer than 8 m (single paths, plan §6.10) ways are drawn 8 m wide
+ * over open ground and landuse ({@link ROAD_BAND_HALF_WIDTH_M}).
+ *
  * Roads go last, so level crossings, underpasses and bridges stay passable.
  * Features `classifyRoad` excludes (ferries, corridors, tunnelled paths,
  * military access) and those it draws nowhere (tram, subway, bridged or
@@ -309,13 +312,90 @@ export function rasterizeCostClasses(obstacles: ObstacleData, frame: GridFrame):
 		CELL_CLASS.ROAD,
 		CELL_CLASS.BRIDGE
 	];
+	// Below 8 m cells a one-cell line is narrower than the road it stands for,
+	// so ways also take the cells whose centre is within ROAD_BAND_HALF_WIDTH_M,
+	// but only over open ground and landuse (never a building, water or wall).
+	const widen = frame.cellM < 2 * ROAD_BAND_HALF_WIDTH_M;
 	for (const cls of order) {
 		for (const way of passable) {
-			if (way.cls === cls) supercoverLine(frame, way.road.points, paint(cls));
+			if (way.cls !== cls) continue;
+			supercoverLine(frame, way.road.points, paint(cls));
+			if (widen) {
+				bandCells(frame, way.road.points, ROAD_BAND_HALF_WIDTH_M, (cell) => {
+					if (WIDENABLE[cells[cell]]) cells[cell] = cls;
+				});
+			}
 		}
 	}
 
 	return { ...frame, cells };
+}
+
+/**
+ * Half width (m) of the band a road, path, steps or bridge line paints on
+ * grids finer than 8 m (plan §6.10): 8 m wide, as one 8 m cell, which is what
+ * phases 3-5 were tuned on. Without it a 4 m grid prices a hose a metre beside
+ * the centreline as forest or field, and routes along roads come out zigzagged
+ * and up to 7 % longer than on 8 m cells.
+ */
+export const ROAD_BAND_HALF_WIDTH_M = 4;
+
+/** Classes a widened way may paint over: open ground and landuse, and narrower ways. */
+const WIDENABLE: boolean[] = (() => {
+	const table: boolean[] = [];
+	for (const cls of [
+		CELL_CLASS.UNKNOWN_OPEN,
+		CELL_CLASS.OPEN,
+		CELL_CLASS.FOREST,
+		CELL_CLASS.YARD,
+		CELL_CLASS.RAIL_LANDUSE,
+		CELL_CLASS.STEPS,
+		CELL_CLASS.PATH
+	]) {
+		table[cls] = true;
+	}
+	return table;
+})();
+
+/**
+ * Calls `visit` for every cell whose centre lies within `halfWidthM` of the
+ * polyline (cells next to its supercover; may repeat a cell).
+ */
+export function bandCells(
+	frame: GridFrame,
+	points: [number, number][],
+	halfWidthM: number,
+	visit: (cell: number) => void
+): void {
+	const reach = Math.ceil(halfWidthM / frame.cellM);
+	const limit = (halfWidthM / frame.cellM) ** 2;
+	for (let i = 0; i + 1 < points.length; i++) {
+		const ax = gridX(frame, points[i][0]);
+		const ay = gridY(frame, points[i][1]);
+		const bx = gridX(frame, points[i + 1][0]);
+		const by = gridY(frame, points[i + 1][1]);
+		const dx = bx - ax;
+		const dy = by - ay;
+		const lenSq = dx * dx + dy * dy;
+		traverseSegment(frame, ax, ay, bx, by, (_cell, t0, t1) => {
+			// The cell at the middle of the piece (the one traverseSegment is in).
+			const tm = (t0 + t1) / 2;
+			const cx = Math.floor(ax + dx * tm);
+			const cy = Math.floor(ay + dy * tm);
+			for (let y = cy - reach; y <= cy + reach; y++) {
+				if (y < 0 || y >= frame.rows) continue;
+				for (let x = cx - reach; x <= cx + reach; x++) {
+					if (x < 0 || x >= frame.cols) continue;
+					const px = x + 0.5 - ax;
+					const py = y + 0.5 - ay;
+					const t = lenSq > 0 ? Math.max(0, Math.min(1, (px * dx + py * dy) / lenSq)) : 0;
+					const ex = px - t * dx;
+					const ey = py - t * dy;
+					if (ex * ex + ey * ey <= limit) visit(y * frame.cols + x);
+				}
+			}
+		});
+	}
 }
 
 /** Roads that take part in routing at all: everything `classifyRoad` does not exclude. */
