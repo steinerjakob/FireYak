@@ -33,7 +33,7 @@ import {
 	segmentIntersectsPolygon,
 	segmentsIntersect
 } from '@/helper/polygonGeometry';
-import { isNearAnyRoad } from '@/helper/weightedDistance';
+import { isNearAnyRoad } from '@/helper/routeProfile';
 import type { AccessTarget } from '@/mapHandler/waterSourceAccess';
 import type { ObstacleResult } from '@/types/obstacles';
 import {

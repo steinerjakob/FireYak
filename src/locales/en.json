@@ -452,11 +452,7 @@
 			},
 			"clampToRoads": {
 				"label": "Keep hose route on roads",
-				"description": "When off, routes may cut through gardens and open ground (buildings are always avoided)"
-			},
-			"hoseRoutingPreview": {
-				"label": "Optimized routing (preview)",
-				"description": "Only when “Keep hose route on roads” is off: routes weigh roads, fields, water, railways and obstacles instead of only avoiding buildings. Test feature."
+				"description": "Off: the route weighs roads, fields, slopes and obstacles. On: roads and paths only, with short connections at both ends."
 			}
 		},
 		"pumpCalculation": {
@@ -532,6 +528,9 @@
 		"notRecommended": "Not recommended",
 		"checkPressure": "Check pressure",
 		"incomplete": "Map data incomplete",
+		"barriersUnknown": "Obstacles (fences) unknown",
+		"crossCountryNote": "Check cross-country stretches on site: fences, walls and hedges are not in the map data.",
+		"ok": "OK",
 		"fallback": {
 			"cellCap": "Area too large: roads only",
 			"tileCap": "Map data cut off",

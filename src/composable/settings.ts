@@ -8,7 +8,6 @@ import { Preferences } from '@capacitor/preferences';
 import {
 	CLAMP_HOSES_TO_ROADS_KEY,
 	HOSE_ROUTING_KEY,
-	HOSE_ROUTING_PREVIEW_AVAILABLE,
 	resolveHoseRouting,
 	type HoseRoutingMode
 } from '@/helper/hoseRoutingSetting';
@@ -20,6 +19,7 @@ const TERRAIN_3D_KEY = 'terrain_3d';
 const SHOW_PATH_TO_MARKER_KEY = 'show_path_to_marker';
 const OSM_AUTH_KEY = 'osm_token';
 const MARKER_FILTERS_KEY = 'marker_filters';
+const CROSS_COUNTRY_NOTE_SEEN_KEY = 'cross_country_note_seen';
 
 export function useSettings() {
 	const settingsStore = useSettingsStore();
@@ -38,7 +38,8 @@ export function useSettings() {
 			clampHosesToRoadsResult,
 			showPathToMarkerResult,
 			osmAuthKey,
-			markerFiltersResult
+			markerFiltersResult,
+			crossCountryNoteSeenResult
 		] = await Promise.all([
 			Preferences.get({ key: THEME_KEY }),
 			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
@@ -48,7 +49,8 @@ export function useSettings() {
 			Preferences.get({ key: CLAMP_HOSES_TO_ROADS_KEY }),
 			Preferences.get({ key: SHOW_PATH_TO_MARKER_KEY }),
 			Preferences.get({ key: OSM_AUTH_KEY }),
-			Preferences.get({ key: MARKER_FILTERS_KEY })
+			Preferences.get({ key: MARKER_FILTERS_KEY }),
+			Preferences.get({ key: CROSS_COUNTRY_NOTE_SEEN_KEY })
 		]);
 
 		if (themeResult.value) {
@@ -67,21 +69,19 @@ export function useSettings() {
 			settingsStore.setTerrain3d(terrain3dResult.value === 'true');
 		}
 
-		// Phases 3-4: the migrated mode is applied but not written back (plan §6.7).
-		const hoseRouting = resolveHoseRouting(
-			{
-				hoseRouting: hoseRoutingResult.value ?? null,
-				clampHosesToRoads: clampHosesToRoadsResult.value ?? null
-			},
-			'transitional',
-			HOSE_ROUTING_PREVIEW_AVAILABLE
-		);
+		// Plan §6.7 (from phase 5): the migrated mode is final; it is written once
+		// and the old boolean key is removed.
+		const hoseRouting = resolveHoseRouting({
+			hoseRouting: hoseRoutingResult.value ?? null,
+			clampHosesToRoads: clampHosesToRoadsResult.value ?? null
+		});
 		settingsStore.setHoseRouting(hoseRouting.mode);
-		settingsStore.setHoseRoutingPreview(hoseRoutingResult.value === 'optimized');
 		if (hoseRouting.shouldPersist) {
 			await Preferences.set({ key: HOSE_ROUTING_KEY, value: hoseRouting.mode });
 			await Preferences.remove({ key: CLAMP_HOSES_TO_ROADS_KEY });
 		}
+
+		settingsStore.setCrossCountryNoteSeen(crossCountryNoteSeenResult.value === 'true');
 
 		if (showPathToMarkerResult.value) {
 			settingsStore.setShowPathToMarker(showPathToMarkerResult.value === 'true');
@@ -149,15 +149,16 @@ export function useSettings() {
 		});
 	};
 
-	/**
-	 * Saves the hose routing mode (an explicit choice; see `hoseRouting` in the
-	 * settings store). The old boolean key is kept in step while both exist, so
-	 * an older app version reading it after a downgrade agrees on `roads`.
-	 */
+	/** Saves the hose routing mode (see `hoseRouting` in the settings store). */
 	const saveHoseRouting = async (mode: HoseRoutingMode) => {
 		settingsStore.setHoseRouting(mode);
 		await Preferences.set({ key: HOSE_ROUTING_KEY, value: mode });
-		await Preferences.set({ key: CLAMP_HOSES_TO_ROADS_KEY, value: String(mode === 'roads') });
+	};
+
+	/** Remembers that the one-time cross-country note was dismissed. */
+	const saveCrossCountryNoteSeen = async () => {
+		settingsStore.setCrossCountryNoteSeen(true);
+		await Preferences.set({ key: CROSS_COUNTRY_NOTE_SEEN_KEY, value: 'true' });
 	};
 
 	/**
@@ -218,6 +219,7 @@ export function useSettings() {
 		saveMapLayer,
 		saveTerrain3d,
 		saveHoseRouting,
+		saveCrossCountryNoteSeen,
 		saveShowPathToMarker,
 		saveOsmAuthToken,
 		removeOsmAuthToken,

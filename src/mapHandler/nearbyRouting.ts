@@ -13,8 +13,8 @@ import {
 	GridRoute,
 	TerrainGrid,
 	buildOptimizedGrid,
-	buildTerrainGrid,
 	cellClassAt,
+	escapeZone,
 	gridFrameOf,
 	gridRouteSingle,
 	lineCost,
@@ -22,15 +22,19 @@ import {
 	solveTerrain
 } from '@/mapHandler/gridRouting';
 import { routableRoads } from '@/mapHandler/costGrid';
-import { isOnRoadClass, type CellClass } from '@/mapHandler/hoseCostModel';
+import {
+	BUILDING_CORE_ESCAPE_FACTOR,
+	isOnRoadClass,
+	type CellClass
+} from '@/mapHandler/hoseCostModel';
 import type { HoseRoutingMode } from '@/helper/hoseRoutingSetting';
-import { effectiveDistanceMeters, isNearAnyRoad } from '@/helper/weightedDistance';
 import { sampleShore } from '@/helper/areaShore';
 import {
 	OFF_ROAD_NEAR_M,
 	OffRoadTest,
 	RouteSegment,
 	classifyRoute,
+	isNearAnyRoad,
 	length3d,
 	resampleForProfile,
 	slopeNotRecommended
@@ -45,10 +49,9 @@ import type { AccessTarget } from '@/mapHandler/waterSourceAccess';
 
 /**
  * Hose routing for the nearby water sources list, the marker path and the
- * pump line. The `mode` option picks the router: `roads` (road graph),
- * `direct` (terrain grid that may cross gardens/open ground while avoiding
- * buildings) or `optimized` (the weighted cost grid of `hoseCostModel.ts`,
- * a preview until phase 5). Every route comes back as a
+ * pump line. The `mode` option picks the router: `optimized` (the default:
+ * the weighted cost grid of `hoseCostModel.ts`, with slope) or `roads` (road
+ * graph, short connections at both ends). Every route comes back as a
  * {@link HoseRoute}: one polyline whose length is the one number shown
  * everywhere, its steep/off-road runs, the slope and pressure warnings, and
  * the reason when it fell back to something simpler. Fails open: any error
@@ -125,7 +128,7 @@ export interface HoseRoute {
 	pressureLevel: PressureLevel | null;
 	/** Any slope trigger or the pressure warning. */
 	notRecommended: boolean;
-	/** Road-only length, for the label comparison in terrain mode. */
+	/** Road-only length (2D), for the label comparison in `optimized` mode. */
 	roadOnlyMeters: number | null;
 	demZoom: number | null;
 	fallback: RouteFallback | null;
@@ -143,7 +146,7 @@ export type { HoseRoutingMode };
 
 /** Router selection and inputs for the profile and pressure rule. */
 export interface RoutingOptions {
-	/** `roads`: road network only; `direct`: terrain grid; `optimized`: weighted cost grid. */
+	/** `optimized`: weighted cost grid; `roads`: road network only. */
 	mode: HoseRoutingMode;
 	/** Sample the DEM for steep runs and the pressure rule (default true). */
 	profile?: boolean;
@@ -165,9 +168,7 @@ interface RoutingContext {
 	obstacles: ObstacleData;
 	coverage: BasemapCoverage;
 	graph: RoadGraph;
-	/** Lazily built `direct` terrain grid; `null` = build failed (window too large). */
-	terrain?: TerrainGrid | null;
-	/** Lazily built `optimized` cost grid; `null` = build failed (window too large). */
+	/** Lazily built cost grid; `null` = build failed (window too large). */
 	costGrid?: TerrainGrid | null;
 	/** The DEM load in flight for the cost grid's height raster. */
 	heightsLoad?: Promise<void>;
@@ -207,15 +208,7 @@ function roadTarget(target: RouteTargetInput): RoadTarget {
 	return targetPoint(target);
 }
 
-/** Lazily builds (once) and returns the context's terrain grid, if feasible. */
-function terrainFor(ctx: RoutingContext): TerrainGrid | null {
-	if (ctx.terrain === undefined) {
-		ctx.terrain = buildTerrainGrid(ctx.obstacles, ctx.bounds);
-	}
-	return ctx.terrain;
-}
-
-/** Lazily builds (once) and returns the context's `optimized` cost grid, if feasible. */
+/** Lazily builds (once) and returns the context's cost grid, if feasible. */
 function costGridFor(ctx: RoutingContext): TerrainGrid | null {
 	if (ctx.costGrid === undefined) {
 		ctx.costGrid = buildOptimizedGrid(ctx.obstacles, ctx.bounds);
@@ -285,7 +278,7 @@ function nearRoadFor(ctx: RoutingContext): (p: GeoPoint) => boolean {
 export interface NearbyDistanceResult {
 	/** Length of the routed polyline in meters, when routable. */
 	routedDistance: number | null;
-	/** Ranking key: routed distance, else weighted heuristic, else straight-line. */
+	/** Ranking key: routed distance, else the straight-line distance. */
 	sortDistance: number;
 	/** The routed line with its profile and warnings; `null` when not routed. */
 	route: HoseRoute | null;
@@ -347,8 +340,8 @@ function touchesEdge(points: GeoPoint[], bounds: GeoBounds): boolean {
 type RoutedTargets = { route: RawRoute | null; fallback: RouteFallback | null }[];
 
 /**
- * Routes in a window around `origin` and the targets. `direct` and `roads` keep
- * today's window (bbox + 150 m). `optimized` uses bbox + max(150 m, 0.25 × the
+ * Routes in a window around `origin` and the targets. `roads` keeps the window
+ * bbox + 150 m. `optimized` uses bbox + max(150 m, 0.25 × the
  * longest straight distance) and, when a grid route touches the window edge or
  * a target is not reached on the grid, re-solves once in a window
  * {@link WINDOW_GROWTH} times larger (plan §6.5): the detour may lie outside.
@@ -450,7 +443,7 @@ async function getContext(bounds: GeoBounds): Promise<RoutingContext> {
 	}
 	const { coverage, ...decoded } = await getObstaclesForBounds(bounds);
 	// Ferries, indoor corridors, tunnelled paths and military access take part in
-	// neither the graph nor the grids (plan §6.3).
+	// neither the graph nor the grid (plan §6.3).
 	const obstacles = { ...decoded, roads: routableRoads(decoded.roads) };
 	context = {
 		bounds,
@@ -566,21 +559,36 @@ async function finishRoute(
 }
 
 /**
- * Road-graph routes for the given targets (one Dijkstra), as raw routes. The
- * snap legs are priced by the weighted heuristic; a pond's final shore leg (up
- * to 250 m) by the cost model along the straight line (plan §6.1, §6.5), so it
- * cannot run through water, rail or a building.
+ * Price of a straight snap leg from an endpoint `a` (vehicle or water source)
+ * to its road position `b`: the cost model along the line without slope, with
+ * the escape zone around `a` (a hydrant at a wall, a vehicle in a yard). A leg
+ * through water, rail or a building is not refused but priced at the escape
+ * factor, so a point never loses its road access; without a grid (window over
+ * the cell cap) the plain distance.
+ */
+function snapLegCost(grid: TerrainGrid | null, a: GeoPoint, b: GeoPoint): number {
+	const straight = distanceTo(a, b);
+	if (!grid) return straight;
+	const cost = lineCost(grid, a, b, escapeZone(grid, [a]), 0, false);
+	return Number.isFinite(cost) ? cost : straight * BUILDING_CORE_ESCAPE_FACTOR;
+}
+
+/**
+ * Road-graph routes for the given targets (one Dijkstra), as raw routes. Snap
+ * legs are priced by the cost model ({@link snapLegCost}); a pond's final shore
+ * leg (up to 250 m) by the cost model along the straight line (plan §6.1,
+ * §6.5), where a leg through water, rail or a building is not used.
  */
 function roadRoutes(
 	ctx: RoutingContext,
 	origin: GeoPoint,
 	targets: RouteTargetInput[]
 ): (RawRoute | null)[] {
-	const legCost = (a: GeoPoint, b: GeoPoint) => effectiveDistanceMeters(a, b, ctx.obstacles);
+	const grid = costGridFor(ctx);
+	const legCost = (a: GeoPoint, b: GeoPoint) => snapLegCost(grid, a, b);
 	const roadTargets = targets.map((target) => {
 		const road = roadTarget(target);
 		if (!('points' in road)) return road;
-		const grid = costGridFor(ctx);
 		if (!grid) return road;
 		// From the road position to the shore point, lenient at the shore end.
 		const shoreLeg = (shorePoint: GeoPoint, roadPoint: GeoPoint) =>
@@ -604,8 +612,8 @@ function straightRoute(
 /**
  * Routes `origin` to every target in the selected mode, downgrading like the
  * single path does: grid too large → road graph (`cellCap`); a target the grid
- * does not reach → road graph (`gridUnreached`); `optimized` over a tile with
- * thin building data → road graph (`thinBuildings`); no road → `null`
+ * does not reach → road graph (`gridUnreached`); a tile with thin building
+ * data in the window → road graph (`thinBuildings`); no road → `null`
  * (`noRoadNearby`). `single` marks a one-target path request: `optimized` then
  * runs A* unless the list search already solved this origin.
  */
@@ -623,23 +631,7 @@ function routeAll(
 	let pending = targets.map((_, i) => i);
 	let downgrade: RouteFallback | null = null;
 
-	if (mode === 'direct') {
-		const terrain = terrainFor(ctx);
-		const solve = terrain ? solveTerrain(terrain, origin) : null;
-		if (!solve) {
-			downgrade = terrain ? 'gridUnreached' : 'cellCap';
-		} else {
-			const left: number[] = [];
-			for (const i of pending) {
-				const route = solve.routeTo(gridGoal(targets[i]));
-				if (route)
-					out[i].route = { points: route.points, roadLegs: false, routed: true, fallback: null };
-				else left.push(i);
-			}
-			pending = left;
-			downgrade = 'gridUnreached';
-		}
-	} else if (mode === 'optimized') {
+	if (mode === 'optimized') {
 		const thin = ctx.coverage.thinBuildingTiles > 0;
 		const grid = thin ? null : costGridFor(ctx);
 		if (!grid) {
@@ -711,7 +703,7 @@ export async function computeNearbyDistances(
 	origin: GeoPoint,
 	targets: RouteTargetInput[],
 	straightDistances: number[],
-	options: NearbyRoutingOptions = { mode: 'direct' }
+	options: NearbyRoutingOptions = { mode: 'optimized' }
 ): Promise<NearbyDistanceResult[]> {
 	const results: NearbyDistanceResult[] = straightDistances.map((d) => ({
 		routedDistance: null,
@@ -755,14 +747,10 @@ export async function computeNearbyDistances(
 					fallback: route.fallback
 				};
 			} else {
-				// Off-network marker: weighted straight-line heuristic instead.
+				// Off-network marker: ranked by its straight-line distance.
 				results[targetIndex] = {
 					routedDistance: null,
-					sortDistance: effectiveDistanceMeters(
-						origin,
-						targetPoint(targets[targetIndex]),
-						ctx.obstacles
-					),
+					sortDistance: straightDistances[targetIndex],
 					route: null,
 					fallback
 				};
@@ -783,7 +771,7 @@ export async function computeNearbyDistances(
 export async function getRoutedPath(
 	origin: GeoPoint,
 	target: RouteTargetInput,
-	options: RoutingOptions = { mode: 'direct' }
+	options: RoutingOptions = { mode: 'optimized' }
 ): Promise<HoseRoute> {
 	const end = targetPoint(target);
 	if (distanceTo(origin, end) > PATH_MAX_STRAIGHT_M) {

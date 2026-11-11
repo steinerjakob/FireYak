@@ -88,7 +88,6 @@
 						Cost raster
 						<select v-model="rasterModel" @change="updateCostOverlay">
 							<option value="optimized">optimized classes</option>
-							<option value="direct">direct (terrain) classes</option>
 							<option value="slope">optimized slope (routing DEM)</option>
 							<option value="height">optimized heights (routing DEM)</option>
 						</select>
@@ -161,12 +160,7 @@ import {
 	type RoutingOptions
 } from '@/mapHandler/nearbyRouting';
 import { getObstaclesForBounds } from '@/mapHandler/obstacleGeometry';
-import {
-	buildOptimizedGrid,
-	buildTerrainGrid,
-	gridFrameOf,
-	setGridHeights
-} from '@/mapHandler/gridRouting';
+import { buildOptimizedGrid, gridFrameOf, setGridHeights } from '@/mapHandler/gridRouting';
 import { loadRoutingHeights } from '@/helper/demElevation';
 import { routableRoads } from '@/mapHandler/costGrid';
 import {
@@ -181,10 +175,9 @@ import {
 	type RingSample
 } from '@/mapHandler/routingDebug';
 
-/** The routing modes drawn and compared (phases 3-4: all three; from phase 5 two). */
+/** The routing modes drawn and compared (plan §6.7: optimized and roads). */
 const MODES: { id: string; label: string; color: string; options: RoutingOptions }[] = [
 	{ id: 'roads', label: 'Road graph', color: '#0050ff', options: { mode: 'roads' } },
-	{ id: 'terrain', label: 'Terrain grid (direct)', color: '#d02020', options: { mode: 'direct' } },
 	{ id: 'optimized', label: 'Optimized grid', color: '#0a9a3a', options: { mode: 'optimized' } }
 ];
 
@@ -226,15 +219,13 @@ const busy = ref(false);
 const summary = shallowRef<ClassSummary | null>(null);
 const showCost = ref(false);
 /** Which grid the cost raster shows; `slope`/`height`: the optimized grid's height raster. */
-const rasterModel = ref<'optimized' | 'direct' | 'slope' | 'height'>('optimized');
+const rasterModel = ref<'optimized' | 'slope' | 'height'>('optimized');
 /** DEM zoom of the last height raster drawn (`null` = none available). */
 const rasterDemZoom = ref<number | null>(null);
 const rasterHint = computed(() => {
 	switch (rasterModel.value) {
 		case 'optimized':
 			return 'Blue road, light blue path, violet steps, cyan bridge, dark blocked, red building core, orange fringe, green open/forest, tan yard, purple rail ground, turquoise stream; clear = unknown open.';
-		case 'direct':
-			return 'Red building, orange fringe, blue road.';
 		default: {
 			const dem =
 				rasterDemZoom.value === null
@@ -383,10 +374,7 @@ async function updateCostOverlay(): Promise<void> {
 	);
 	const decoded = await getObstaclesForBounds(bounds);
 	const obstacles = { ...decoded, roads: routableRoads(decoded.roads) };
-	const grid =
-		rasterModel.value === 'direct'
-			? buildTerrainGrid(obstacles, bounds)
-			: buildOptimizedGrid(obstacles, bounds);
+	const grid = buildOptimizedGrid(obstacles, bounds);
 	if (!grid) return;
 	let raster = costRaster(grid);
 	if (rasterModel.value === 'slope' || rasterModel.value === 'height') {

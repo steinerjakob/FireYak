@@ -1,4 +1,5 @@
 import { GeoPoint, distanceTo } from '@/types/geo';
+import type { RoadLine } from '@/types/obstacles';
 
 /**
  * Steepness and off-road classification of a hose route (plan §6.8), shared by
@@ -8,7 +9,9 @@ import { GeoPoint, distanceTo } from '@/types/geo';
  * {@link MIN_RUN_M} are dropped. With only the coarse z12 DEM the grade is
  * taken over {@link GRADE_WINDOW_Z12_M} and at most "steep" is shown.
  *
- * Pure module: heights and the off-road test come from the caller.
+ * Pure module: heights and the off-road test come from the caller;
+ * {@link isNearAnyRoad} is the road proximity test the off-road display uses
+ * where no cost-grid class is at hand.
  */
 
 export const PROFILE_STEP_M = 5;
@@ -249,4 +252,57 @@ export function splitByRuns(
 		coordinates.push([end.lng, end.lat]);
 		return { coordinates, offRoad: segment.offRoad, steep: segment.steep };
 	});
+}
+
+const METERS_PER_DEG_LAT = 110540;
+const METERS_PER_DEG_LNG_AT_EQUATOR = 111320;
+
+/**
+ * Distance in metres from `point` to the segment a–b, in a local
+ * equirectangular frame centred on the point.
+ */
+function distanceToSegmentMeters(
+	point: GeoPoint,
+	a: [number, number],
+	b: [number, number]
+): number {
+	const kx = Math.cos((point.lat * Math.PI) / 180) * METERS_PER_DEG_LNG_AT_EQUATOR;
+	const ax = (a[0] - point.lng) * kx;
+	const ay = (a[1] - point.lat) * METERS_PER_DEG_LAT;
+	const dx = (b[0] - point.lng) * kx - ax;
+	const dy = (b[1] - point.lat) * METERS_PER_DEG_LAT - ay;
+	const lengthSq = dx * dx + dy * dy;
+	const t = lengthSq === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSq));
+	return Math.hypot(ax + t * dx, ay + t * dy);
+}
+
+/**
+ * True when `point` lies within `maxDistanceM` of any road centreline (each
+ * road's bbox, grown by the distance, is a cheap prefilter).
+ */
+export function isNearAnyRoad(
+	point: GeoPoint,
+	roads: RoadLine[],
+	maxDistanceM: number = OFF_ROAD_NEAR_M
+): boolean {
+	const latGrow = maxDistanceM / METERS_PER_DEG_LAT;
+	const lngGrow =
+		maxDistanceM / (METERS_PER_DEG_LNG_AT_EQUATOR * Math.cos((point.lat * Math.PI) / 180));
+	for (const road of roads) {
+		const [west, south, east, north] = road.bbox;
+		if (
+			point.lng < west - lngGrow ||
+			point.lng > east + lngGrow ||
+			point.lat < south - latGrow ||
+			point.lat > north + latGrow
+		) {
+			continue;
+		}
+		for (let i = 0; i < road.points.length - 1; i++) {
+			if (distanceToSegmentMeters(point, road.points[i], road.points[i + 1]) <= maxDistanceM) {
+				return true;
+			}
+		}
+	}
+	return false;
 }

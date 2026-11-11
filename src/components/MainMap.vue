@@ -183,6 +183,7 @@ import { getRoutedPath, type HoseRoute, type RouteTargetInput } from '@/mapHandl
 import { accessTargetPoint, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
 import { addRouteLayers, routeLayerIds, routeRunFeatures } from '@/mapHandler/routeLayers';
 import { routeChips, routeLabel } from '@/helper/routeLabel';
+import { useCrossCountryNote } from '@/composable/crossCountryNote';
 import { parseHydrantPressure } from '@/helper/hosePressure';
 import { detectWaterAt } from '@/mapHandler/waterDetection';
 import { getAreaOutline, cachedOutline, getContainingWaterOutline } from '@/mapHandler/areaOutline';
@@ -820,18 +821,19 @@ const selectedPathDistanceText = ref('');
 /** The displayed route: runs, steep classes and warnings for the label. */
 let selectedRoute: HoseRoute | null = null;
 const pumpCalculationStore = usePumpCalculationStore();
+const { maybeShowCrossCountryNote } = useCrossCountryNote();
 
-/** Label text: the route line plus its warning chips on a second line. */
+/** Label text: the route line plus its warning and coverage chips on a second line. */
 function routeLabelText(hoseRoute: HoseRoute): string {
 	const main = routeLabel(hoseRoute, {
 		t,
 		locale: locale.value,
 		tubeLength: pumpCalculationStore.tubeLength,
-		hoseName: pumpCalculationStore.hoseName
+		hoseName: pumpCalculationStore.hoseName,
+		// The label font has no arrow or warning-sign glyphs.
+		climbSigns: 'plusMinus'
 	});
-	const chips = routeChips(hoseRoute, null).map((chip) =>
-		chip.color === 'medium' ? t(chip.key) : `⚠ ${t(chip.key)}`
-	);
+	const chips = routeChips(hoseRoute, null, { coverage: true }).map((chip) => t(chip.key));
 	return chips.length > 0 ? `${main}\n${chips.join(' · ')}` : main;
 }
 
@@ -897,6 +899,7 @@ function updateSelectedPath(hoseRoute: HoseRoute) {
 	// The same metres as the nearby list: the length of this polyline.
 	selectedPathDistanceText.value = routeLabelText(hoseRoute);
 	selectedPathVisible.value = true;
+	if (hoseRoute.routed) void maybeShowCrossCountryNote(hoseRoute.offRoadMeters);
 
 	if (rootMap && mapReady) {
 		const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;

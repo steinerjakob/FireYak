@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { emptyObstacleData } from '@/mapHandler/obstacleDecode';
 import { classSummary, lineLengthM } from '@/mapHandler/routingDebug';
 import type { RoadLine } from '@/types/obstacles';
-import { buildOptimizedGrid, buildTerrainGrid } from '@/mapHandler/gridRouting';
+import { buildOptimizedGrid } from '@/mapHandler/gridRouting';
 import { CELL_CLASS } from '@/mapHandler/hoseCostModel';
 import {
 	OPTIMIZED_CLASS_COLOR,
@@ -92,7 +92,7 @@ describe('costRaster', () => {
 			north: LAT + 80 / 110_540,
 			east: LNG + 80 / mPerDegLng
 		};
-		const grid = buildTerrainGrid(
+		const grid = buildOptimizedGrid(
 			{ ...emptyObstacleData(), roads: [road([0, 4], [80, 4])] },
 			bounds
 		)!;
@@ -107,7 +107,7 @@ describe('costRaster', () => {
 	});
 });
 
-describe('costRaster, optimized grid', () => {
+describe('costRaster, cost-model classes', () => {
 	it('colours the cost-model classes (road blue, blocked dark)', () => {
 		const bounds = {
 			south: LAT,

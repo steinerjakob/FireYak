@@ -36,9 +36,9 @@
 			"de": "Schlauchwege zum Hydranten führen nicht mehr durch Gebäude, und Liste und Karte zeigen dieselbe Länge."
 		},
 		{
-			"type": "improvement",
-			"en": "Steep stretches of a hose route are highlighted, with a warning when the route is not recommended.",
-			"de": "Steile Abschnitte eines Schlauchwegs werden hervorgehoben, mit einem Hinweis, wenn der Weg nicht zu empfehlen ist."
+			"type": "feature",
+			"en": "Hose routes now weigh roads, fields, slopes and obstacles; off-road and steep stretches are marked, with warnings where needed.",
+			"de": "Schlauchwege wägen jetzt Straßen, Felder, Steigungen und Hindernisse ab; Querfeldein- und Steilstücke werden markiert, mit Warnhinweis, wo nötig."
 		},
 		{
 			"type": "feature",

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { HoseRoutingMode } from '@/helper/hoseRoutingSetting';
+import { DEFAULT_HOSE_ROUTING, type HoseRoutingMode } from '@/helper/hoseRoutingSetting';
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import {
 	initSystemColorScheme,
@@ -57,14 +57,13 @@ export const useSettingsStore = defineStore('settings', {
 		showZoomButtons: true,
 		mapLayer: 'standard' as MapLayerSetting,
 		terrain3d: false,
-		// How hose routes are laid (plan §6.7): `roads` sticks to the road
-		// network; `direct` (default until phase 5) may cut through gardens and
-		// open ground (buildings always avoided); `optimized` (preview) weighs
-		// roads, land use and obstacles.
-		hoseRouting: 'direct' as HoseRoutingMode,
-		// The "optimized routing (preview)" toggle (dev builds and
-		// VITE_HOSE_ROUTING_OPTIMIZED=1 only); picks `optimized` over `direct`.
-		hoseRoutingPreview: false,
+		// How hose routes are laid (plan §6.7): `optimized` (default) weighs
+		// roads, land use, slope and obstacles; `roads` sticks to the road
+		// network with short connections at both ends.
+		hoseRouting: DEFAULT_HOSE_ROUTING as HoseRoutingMode,
+		// Whether the one-time "check cross-country stretches on site" note has
+		// been dismissed (plan §6.8).
+		crossCountryNoteSeen: false,
 		// When true, a line from the user position to the selected marker is
 		// drawn on the map.
 		showPathToMarker: true,
@@ -94,8 +93,8 @@ export const useSettingsStore = defineStore('settings', {
 		setHoseRouting(mode: HoseRoutingMode) {
 			this.hoseRouting = mode;
 		},
-		setHoseRoutingPreview(enabled: boolean) {
-			this.hoseRoutingPreview = enabled;
+		setCrossCountryNoteSeen(seen: boolean) {
+			this.crossCountryNoteSeen = seen;
 		},
 		setShowPathToMarker(enabled: boolean) {
 			this.showPathToMarker = enabled;

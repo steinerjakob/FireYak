@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
-	modeFromToggles,
+	modeFromToggle,
 	resolveHoseRouting,
 	type HoseRoutingMode,
 	type StoredHoseRouting
@@ -14,60 +14,65 @@ const stored = (
 	clampHosesToRoads
 });
 
-// Plan section 6.7, migration table: [stored state, phases 3-4 with the preview flag,
-// phases 3-4 without it, from phase 5].
-const TABLE: [string, StoredHoseRouting, HoseRoutingMode, HoseRoutingMode, HoseRoutingMode][] = [
-	["hose_routing = 'optimized'", stored('optimized', null), 'optimized', 'direct', 'optimized'],
-	["hose_routing = 'roads'", stored('roads', null), 'roads', 'roads', 'roads'],
-	["hose_routing = 'direct'", stored('direct', null), 'direct', 'direct', 'optimized'],
-	["no hose_routing, clamp 'true'", stored(null, 'true'), 'roads', 'roads', 'roads'],
-	["no hose_routing, clamp 'false'", stored(null, 'false'), 'direct', 'direct', 'optimized'],
-	['no hose_routing, clamp absent', stored(null, null), 'direct', 'direct', 'optimized'],
-	['any other value', stored('fastest', null), 'direct', 'direct', 'optimized'],
-	['any other value, clamp true', stored('', 'true'), 'direct', 'direct', 'optimized'],
-	['hose_routing wins over the old key', stored('direct', 'true'), 'direct', 'direct', 'optimized']
+// Plan section 6.7, migration table, "from phase 5" column.
+const TABLE: [string, StoredHoseRouting, HoseRoutingMode][] = [
+	["hose_routing = 'optimized'", stored('optimized', null), 'optimized'],
+	["hose_routing = 'roads'", stored('roads', null), 'roads'],
+	["hose_routing = 'direct' (removed mode)", stored('direct', null), 'optimized'],
+	["no hose_routing, clamp 'true'", stored(null, 'true'), 'roads'],
+	["no hose_routing, clamp 'false'", stored(null, 'false'), 'optimized'],
+	['no hose_routing, clamp absent', stored(null, null), 'optimized'],
+	['any other value', stored('fastest', null), 'optimized'],
+	['any other value, clamp true', stored('', 'true'), 'optimized'],
+	['hose_routing wins over the old key', stored('direct', 'true'), 'optimized']
 ];
 
-describe('resolveHoseRouting (plan section 6.7)', () => {
-	it.each(TABLE)('%s: phases 3-4', (_name, input, withFlag, withoutFlag) => {
-		expect(resolveHoseRouting(input, 'transitional', true)).toEqual({
-			mode: withFlag,
-			shouldPersist: false
-		});
-		expect(resolveHoseRouting(input, 'transitional', false)).toEqual({
-			mode: withoutFlag,
-			shouldPersist: false
-		});
+describe('resolveHoseRouting (plan section 6.7, from phase 5)', () => {
+	it.each(TABLE)('%s', (_name, input, mode) => {
+		expect(resolveHoseRouting(input).mode).toBe(mode);
 	});
 
-	it('phases 3-4: the migrated value is never persisted', () => {
-		for (const [, input] of TABLE) {
-			for (const flag of [true, false]) {
-				expect(resolveHoseRouting(input, 'transitional', flag).shouldPersist).toBe(false);
+	it('never yields a mode outside optimized | roads', () => {
+		const values = [null, '', 'direct', 'terrain', 'OPTIMIZED', 'Roads', 'true', 'false', '1'];
+		for (const h of values) {
+			for (const c of values) {
+				expect(['optimized', 'roads']).toContain(resolveHoseRouting(stored(h, c)).mode);
 			}
 		}
 	});
 
-	it.each(TABLE)('%s: from phase 5', (_name, input, _withFlag, _withoutFlag, final) => {
-		expect(resolveHoseRouting(input, 'final').mode).toBe(final);
+	it('shouldPersist is true exactly once: after the write-back nothing is written again', () => {
+		for (const [, input, mode] of TABLE) {
+			const first = resolveHoseRouting(input);
+			// After the write-back the store holds the mode and no old key.
+			const second = resolveHoseRouting(stored(first.mode, null));
+			expect(second).toEqual({ mode, shouldPersist: false });
+		}
 	});
 
-	it('from phase 5 the default is written once and the old key dropped', () => {
-		expect(resolveHoseRouting(stored(null, null), 'final').shouldPersist).toBe(true);
-		expect(resolveHoseRouting(stored('direct', null), 'final').shouldPersist).toBe(true);
-		expect(resolveHoseRouting(stored('roads', 'true'), 'final').shouldPersist).toBe(true);
-		expect(resolveHoseRouting(stored('optimized', null), 'final').shouldPersist).toBe(false);
-		expect(resolveHoseRouting(stored('roads', null), 'final').shouldPersist).toBe(false);
+	it('writes the default and drops the old key when needed', () => {
+		expect(resolveHoseRouting(stored(null, null)).shouldPersist).toBe(true);
+		expect(resolveHoseRouting(stored(null, 'false')).shouldPersist).toBe(true);
+		expect(resolveHoseRouting(stored(null, 'true')).shouldPersist).toBe(true);
+		expect(resolveHoseRouting(stored('direct', null)).shouldPersist).toBe(true);
+		expect(resolveHoseRouting(stored('roads', 'true')).shouldPersist).toBe(true);
+		expect(resolveHoseRouting(stored('optimized', null)).shouldPersist).toBe(false);
+		expect(resolveHoseRouting(stored('roads', null)).shouldPersist).toBe(false);
 	});
 });
 
-describe('modeFromToggles (phases 3-4)', () => {
-	it('the road toggle wins; off maps to direct unless the preview picks optimized', () => {
-		expect(modeFromToggles(true, true, true)).toBe('roads');
-		expect(modeFromToggles(true, false, false)).toBe('roads');
-		expect(modeFromToggles(false, false, true)).toBe('direct');
-		expect(modeFromToggles(false, true, true)).toBe('optimized');
-		// Production build: no preview, the toggle keeps today's behaviour.
-		expect(modeFromToggles(false, true, false)).toBe('direct');
+describe('HoseRoutingMode', () => {
+	it('has exactly two modes; direct is gone (type level, checked by the typecheck)', () => {
+		expectTypeOf<HoseRoutingMode>().toEqualTypeOf<'optimized' | 'roads'>();
+		// @ts-expect-error 'direct' was removed in phase 5
+		const removed: HoseRoutingMode = 'direct';
+		expect(resolveHoseRouting(stored(removed, null)).mode).toBe('optimized');
+	});
+});
+
+describe('modeFromToggle', () => {
+	it('on = roads, off = optimized', () => {
+		expect(modeFromToggle(true)).toBe('roads');
+		expect(modeFromToggle(false)).toBe('optimized');
 	});
 });

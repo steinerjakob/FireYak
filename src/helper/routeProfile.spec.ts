@@ -1,20 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { GeoPoint } from '@/types/geo';
 import type { RoadLine } from '@/types/obstacles';
 import {
 	OFF_ROAD_NEAR_M,
 	classifyRoute,
+	isNearAnyRoad,
 	length3d,
 	resampleForProfile,
 	slopeNotRecommended,
 	splitByRuns,
 	type RouteProfile
 } from '@/helper/routeProfile';
-import { isNearAnyRoad } from '@/helper/weightedDistance';
-
-// weightedDistance pulls in the elevation helpers, whose DEM module imports the
-// MapLibre-backed tile protocol; specs never fetch tiles here.
-vi.mock('@/offline/offlineProtocol', () => ({ fetchTileCacheFirst: async () => null }));
 
 const LAT = 48;
 const LNG = 15;
@@ -171,5 +167,28 @@ describe('classifyRoute: off-road runs', () => {
 		expect(lines).toHaveLength(3);
 		expect(lines[1].coordinates).toHaveLength(3); // passes the vertex at 100 m
 		expect(lines[1].offRoad).toBe(true);
+	});
+});
+
+describe('isNearAnyRoad (off-road test without cost-grid classes)', () => {
+	const road: RoadLine = {
+		bbox: [at(0, 0).lng, at(0, 0).lat, at(100, 0).lng, at(100, 0).lat],
+		points: [
+			[at(0, 0).lng, at(0, 0).lat],
+			[at(100, 0).lng, at(100, 0).lat]
+		],
+		kind: 'minor_road',
+		kindDetail: 'residential',
+		isBridge: false,
+		isTunnel: false
+	};
+
+	it('is near within 6 m of the centreline, also past the ends, and not beyond', () => {
+		expect(isNearAnyRoad(at(50, 5.9), [road])).toBe(true);
+		expect(isNearAnyRoad(at(50, 6.2), [road])).toBe(false);
+		expect(isNearAnyRoad(at(104, 3), [road])).toBe(true);
+		expect(isNearAnyRoad(at(108, 0), [road])).toBe(false);
+		expect(isNearAnyRoad(at(50, 7.5), [road], 8)).toBe(true);
+		expect(isNearAnyRoad(at(50, 0), [])).toBe(false);
 	});
 });

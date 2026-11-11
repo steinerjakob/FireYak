@@ -5,15 +5,11 @@ import type { BuildingPolygon, ObstacleData, RoadLine } from '@/types/obstacles'
 import { segmentIntersectsPolygon } from '@/helper/polygonGeometry';
 import { distanceToOutline, nearestPointOnOutline } from '@/helper/areaShore';
 import {
-	GRID_BUILDING_FACTOR,
-	GRID_BUILDING_FRINGE_FACTOR,
 	GRID_CELL_M,
-	GRID_ROAD_FACTOR,
 	SMOOTH_COST_TOLERANCE,
 	SMOOTH_SLACK_M,
 	astarRoute,
 	buildOptimizedGrid,
-	buildTerrainGrid,
 	escapeZone,
 	gridFrameOf,
 	gridRouteFromOrigin,
@@ -102,75 +98,17 @@ function centreOf(grid: TerrainGrid, col: number, row: number) {
 }
 
 function build(obstacles: Partial<ObstacleData>): TerrainGrid {
-	const grid = buildTerrainGrid({ ...emptyObstacleData(), ...obstacles }, BOUNDS);
+	const grid = buildOptimizedGrid({ ...emptyObstacleData(), ...obstacles }, BOUNDS);
 	if (!grid) throw new Error('grid not built');
 	return grid;
 }
 
-describe('cell classes and costs (today: building 30, fringe 4, road 0.9)', () => {
-	it('uses the documented factors', () => {
-		expect(GRID_BUILDING_FACTOR).toBe(30);
-		expect(GRID_BUILDING_FRINGE_FACTOR).toBe(4);
-		expect(GRID_ROAD_FACTOR).toBe(0.9);
-	});
-
-	it('classifies a building: core where the centre is inside, fringe where only a corner is', () => {
-		const grid = build({
-			buildings: [
-				polygon([
-					[60, 60],
-					[100, 60],
-					[100, 100],
-					[60, 100]
-				])
-			]
-		});
-		const cells = [...grid.cells];
-		expect(cells.filter((c) => c === 2).length).toBeGreaterThan(10);
-		expect(cells.filter((c) => c === 3).length).toBeGreaterThan(0);
-	});
-
-	it('prices one step into a building cell at 30x, a fringe cell at 4x, a road cell at 0.9x', () => {
-		// Walls 1 m off the cell centres (61/99): a step onto a centre that lies
-		// exactly on a wall touches the building and is priced as one (phase 1).
-		const grid = build({
-			buildings: [
-				polygon([
-					[61, 61],
-					[99, 61],
-					[99, 99],
-					[61, 99]
-				])
-			],
-			roads: [roadLine([0, 20], [200, 20])]
-		});
-		const stepInto = (targetClass: number) => {
-			for (let row = 1; row < grid.rows; row++) {
-				for (let col = 0; col < grid.cols; col++) {
-					if (grid.cells[row * grid.cols + col] !== targetClass) continue;
-					// Open neighbour to the south (a core cell is ringed by fringe cells now).
-					const south = grid.cells[(row - 1) * grid.cols + col];
-					if (south !== 0 && !(targetClass === 2 && south === 3)) continue;
-					const solve = solveTerrain(grid, centreOf(grid, col, row - 1))!;
-					return solve.distanceTo(centreOf(grid, col, row))!;
-				}
-			}
-			throw new Error(`no open cell next to class ${targetClass}`);
-		};
-		expect(stepInto(2).cost).toBeCloseTo(GRID_CELL_M * 30, 1);
-		expect(stepInto(3).cost).toBeCloseTo(GRID_CELL_M * 4, 1);
-		expect(stepInto(1).cost).toBeCloseTo(GRID_CELL_M * 0.9, 1);
-		// The geometric length is the plain step in every case.
-		expect(stepInto(2).meters).toBeCloseTo(GRID_CELL_M, 1);
-	});
-
+describe('open ground', () => {
 	it('returns null when the origin lies outside the window', () => {
 		const grid = build({});
 		expect(solveTerrain(grid, at(-500, -500))).toBeNull();
 	});
-});
 
-describe('open ground', () => {
 	it('routes straight across empty ground: path is the two endpoints', () => {
 		const grid = build({});
 		const from = at(20, 20);

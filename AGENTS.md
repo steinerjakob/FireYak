@@ -71,22 +71,23 @@ src/
 | `osmAuthStore.ts` | OAuth2 PKCE authentication with OpenStreetMap |
 | `pendingEditsStore.ts` | Reactive facade over the offline edit queue; exposes pending edits and sync-now |
 | `pumpCalculationSettings.ts` | Pump calculation parameters (incl. max. hose working pressure) with Preferences persistence |
-| `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, hose routing mode (`hoseRouting`: `roads`/`direct`, `optimized` as a dev/preview option), marker filters, zoom button visibility, system bar styling |
+| `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, hose routing mode (`hoseRouting`: `optimized` by default, `roads` with the "keep on roads" toggle), the one-time cross-country note flag (`crossCountryNoteSeen`), marker filters, zoom button visibility, system bar styling |
 
 ### Composables (`src/composable/`)
 
 | File | Purpose |
 |---|---|
+| `crossCountryNote.ts` | The one-time "check cross-country stretches on site" toast for the first hose line with an off-road stretch (flag persisted in Preferences) |
 | `darkModeDetection.ts` | Read-only reactive "is the dark palette active" flag (view of `settingsStore`) |
 | `inAppReview.ts` | Tracks active usage days and triggers the one-shot native in-app review prompt |
 | `modalBreakpointWatcher.ts` | Tracks Ionic modal breakpoint state changes |
-| `nearbyWaterSource.ts` | Reactive list of nearby water sources, ranked by road-aware distance |
+| `nearbyWaterSource.ts` | Reactive list of nearby water sources, ranked by routed hose length (straight line for unrouted ones) |
 | `networkStatus.ts` | Singleton reactive online/offline status shared across the app |
 | `photonSearch.ts` | Address/place search against the Photon geocoding API |
 | `pumpCalculation.ts` | Relay pump calculations (waypoints, elevation, pump positioning) |
 | `screenDetection.ts` | Mobile/desktop breakpoint detection (768px) |
 | `screenOrientation.ts` | Device orientation monitoring via Capacitor |
-| `settings.ts` | Loads/saves persistent settings via Capacitor Preferences |
+| `settings.ts` | Loads/saves persistent settings via Capacitor Preferences (incl. the one-time hose routing migration write-back) |
 | `systemColorScheme.ts` | Single source of truth for the OS `prefers-color-scheme` preference; re-polls on every foreground transition because Android's WebView drops the `change` event while backgrounded |
 | `whatsNew.ts` | Loads `whats-new.json`, tracks last-seen app version, drives the What's New modal |
 
@@ -103,25 +104,24 @@ src/
 | `elevationData.ts` | Batch elevation fetching helper (legacy/fallback path) |
 | `helper.ts` | Debounce utility |
 | `hosePressure.ts` | Downhill static-pressure rule against the max. hose working pressure; hydrant pressure parsing |
-| `hoseRoutingSetting.ts` | Hose routing mode type and the pure migration from the old `clamp_hoses_to_roads` key (`resolveHoseRouting`); the `optimized` preview flag (`VITE_HOSE_ROUTING_OPTIMIZED=1` or dev) |
+| `hoseRoutingSetting.ts` | Hose routing mode type (`optimized` \| `roads`) and the pure migration from the old `clamp_hoses_to_roads` key and the removed `direct` mode (`resolveHoseRouting`: written back once, old key removed); toggle mapping (`modeFromToggle`) |
 | `polygonGeometry.ts` | Exact segment/polygon tests (edge intersection, containment, holes) used by route smoothing |
-| `routeLabel.ts` | Route label line and warning/fallback chips shared by the nearby list, map label and pump panel |
-| `routeProfile.ts` | Steep (>25 %/>50 %) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres |
+| `routeLabel.ts` | Route label line (estimate prefix, hoses, signed climb, off-road metres, road-only length when > 15 % off) and the warning/fallback/coverage chips shared by the nearby list, map label and pump panel; when the one-time cross-country note is due |
+| `routeProfile.ts` | Steep (>25 %/>50 %) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
-| `weightedDistance.ts` | Tuning constants for the road-aware weighted-distance heuristic (building penalty, road bonus, sampling) |
 
 ### Map Handlers (`src/mapHandler/`)
 
 | File | Purpose |
 |---|---|
 | `databaseHandler.ts` | IndexedDB wrapper for marker caching, offline areas, pending edits, and spatial queries |
-| `gridRouting.ts` | Cost-grid routing for hose laying in two models: `direct` (terrain grid, buildings avoided) and `optimized` (cost-model classes, symmetric step cost, escape radius, A* for single paths, early-exit Dijkstra for the list, cost-aware smoothing; with a height raster each step is also priced by its slope, capped ×1.3 on roads/paths/steps, 1.0 on bridges, and a bridge connects only to roads/paths/steps) |
+| `gridRouting.ts` | Cost-grid routing for hose laying over the `hoseCostModel.ts` classes (symmetric step cost, escape radius, A* for single paths, early-exit Dijkstra for the list, cost-aware smoothing; with a height raster each step is also priced by its slope, capped ×1.3 on roads/paths/steps, 1.0 on bridges, and a bridge connects only to roads/paths/steps) |
 | `costGrid.ts` | Pure rasteriser of the `optimized` grid: scanline polygon fill and supercover lines, drawn in the cost model's order (landuse, water, buildings, walls, roads, bridges); `routableRoads` drops what `classifyRoad` excludes |
 | `cellHeap.ts` | Typed-array binary min-heap (cost, cell) used by the grid searches |
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
 | `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
-| `nearbyRouting.ts` | Hose routing for the nearby list, marker path and pump line (`RoutingOptions.mode`: `roads`, `direct`, `optimized`): returns a `HoseRoute` (one length, 3D over the DEM profile, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |
+| `nearbyRouting.ts` | Hose routing for the nearby list, marker path and pump line (`RoutingOptions.mode`: `optimized`, the default, or `roads`; road snap legs priced by the cost model): returns a `HoseRoute` (one length, 3D over the DEM profile, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |
 | `hoseCostModel.ts` | Pure cost model for hose routing (drives the `optimized` grid and road-mode shore legs): cell classes and factors, `classifyRoad`/`classifyRail`/`classifyLanduse`/`classifyWaterLine`, `slopeFactor`, the thin-buildings test, UI warning thresholds |
 | `obstacleDecode.ts` | Pure decoder (bytes in, data out) of Protomaps tiles: buildings, roads with `kind_detail`/bridge/tunnel/access, rail, landuse, water polygons and lines, cliffs, per-tile residential/building area (thin-buildings safeguard); runs in Node specs and workers |
 | `obstacleGeometry.ts` | Fetches z15 Protomaps tiles and merges `obstacleDecode.ts` results (LRU, per-layer coverage); missing tiles are reported, never cached as empty |
@@ -327,7 +327,7 @@ Rules:
 
 ## 7. Important Notes for AI Agents
 
-- **Tests run with Vitest** (`npm test`, Node environment). Spec files sit next to the source they test (`foo.ts` → `foo.spec.ts`) and cover pure modules; modules under test import only pure modules and take I/O through injectable fetchers. Scene specs over real map tiles are named `*.scenes.spec.ts`. Shared test-only helpers live in `src/testing/` (eslint forbids importing it, `vitest` or any `__fixtures__` path from app code). Import `describe`, `it`, `expect`, `vi` from `'vitest'` explicitly.
+- **Tests run with Vitest** (`npm test`, Node environment). Spec files sit next to the source they test (`foo.ts` → `foo.spec.ts`) and cover pure modules; modules under test import only pure modules and take I/O through injectable fetchers. Scene specs over real map tiles are named `*.scenes.spec.ts`. Shared test-only helpers live in `src/testing/` (eslint forbids importing it, `vitest` or any `__fixtures__` path from app code). Import `describe`, `it`, `expect`, `vi` from `'vitest'` explicitly. Where a module reaches I/O directly (Capacitor Preferences in `composable/settings.ts`, the tile and DEM loaders behind `nearbyRouting.ts`), its spec replaces that module with `vi.mock` instead.
 - **Routing fixtures** live in `src/mapHandler/__fixtures__/routing/` (see the README there): `scene.json` and the README are committed, the tile files are gitignored and fetched with `scripts/fetch-routing-fixtures.mjs`. Scene specs skip cleanly (`describe.skipIf(!fixturesPresent)`) when the tiles are absent, so in a fresh checkout a green `npm test` does not exercise them: fetch the fixtures first when you change routing code. Expected values in specs are tolerant ranges.
 - **Run `npm test` and `npm run typecheck` before committing** changes to tested modules (CI runs eslint, typecheck and tests on every PR; `release.yml` runs the tests before tagging).
 - **Areas get tag-only edits.** Fire water ponds can be ways or multipolygon relations. For those, FireYak only changes tags: never coordinates, member nodes or members, and it never deletes them (that would remove the water body). "Delete" on a pond area removes only the `emergency=fire_water_pond` flag. Helpers live in `src/helper/osmElement.ts`; the edit queue rejects area deletes.

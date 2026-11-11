@@ -21,10 +21,13 @@ import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
 import pumpIcon from '@/assets/markers/markerpump.png'; // Add pump icon import
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
+import { BARRIERS_UNKNOWN_CHIP, OFF_ROAD_SHOWN_M, formatMeters } from '@/helper/routeLabel';
+import { useCrossCountryNote } from '@/composable/crossCountryNote';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const pumpCalculation = usePumpCalculation();
 const pumpCalculationStore = usePumpCalculationStore();
+const { maybeShowCrossCountryNote } = useCrossCountryNote();
 
 const calculationAllowed = computed(() => {
 	return pumpCalculation.firePointSet.value && pumpCalculation.suctionPointSet.value;
@@ -68,8 +71,24 @@ const lineChips = computed(() => {
 		chips.push({ key: `route.fallback.${fallback}`, color: 'medium' });
 	}
 	if (warnings.incomplete) chips.push({ key: 'route.incomplete', color: 'medium' });
+	if (warnings.offRoadMeters >= OFF_ROAD_SHOWN_M) chips.push(BARRIERS_UNKNOWN_CHIP);
 	return chips;
 });
+
+/** "340 m off-road" for the line, or empty below the display threshold. */
+const offRoadText = computed(() => {
+	const meters = pumpCalculation.calculationResult.value?.warnings.offRoadMeters ?? 0;
+	return meters >= OFF_ROAD_SHOWN_M
+		? t('route.offRoad', { distance: formatMeters(meters, locale.value) })
+		: '';
+});
+
+watch(
+	() => pumpCalculation.calculationResult.value?.warnings.offRoadMeters,
+	(meters) => {
+		if (meters !== undefined) void maybeShowCrossCountryNote(meters);
+	}
+);
 
 // Reserve material per doctrine: 1 spare B-hose per 100 m of line,
 // 1 spare pump per 4 pumps in use.
@@ -311,13 +330,20 @@ watch(pumpCalculation.selectedResultEntry, (id) => {
 					<div class="stat-tile">
 						<div class="stat-label">{{ t('pumpCalculation.pump.distanceFromStart') }}</div>
 						<div class="stat-value">
-							~{{ pumpCalculation.calculationResult.value.lineMeters.toFixed(0) }} m
+							{{
+								t('route.estimate', {
+									distance: formatMeters(pumpCalculation.calculationResult.value.lineMeters, locale)
+								})
+							}}
 						</div>
 					</div>
 					<div class="stat-tile">
 						<div class="stat-label">{{ t('pumpCalculation.pump.elevationDifference') }}</div>
 						<div class="stat-value">{{ elevationDiffLabel }}</div>
 					</div>
+				</div>
+				<div v-if="offRoadText" class="reserve-row">
+					<span class="reserve-value">{{ offRoadText }}</span>
 				</div>
 				<div class="reserve-row">
 					<span class="reserve-label">{{ t('pumpCalculation.pump.reserve') }}:</span>

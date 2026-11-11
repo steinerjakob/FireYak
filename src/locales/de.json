@@ -451,12 +451,8 @@
 				"description": "Zeichnet eine Linie mit der Entfernung vom eigenen Standort zur ausgewählten Wasserentnahmestelle"
 			},
 			"clampToRoads": {
-				"label": "Schlauchweg an Straßen ausrichten",
-				"description": "Wenn deaktiviert, darf die Route durch Gärten und offenes Gelände führen (Gebäude werden immer umgangen)"
-			},
-			"hoseRoutingPreview": {
-				"label": "Optimierte Route (Vorschau)",
-				"description": "Nur wenn „an Straßen ausrichten“ aus ist: Die Route wägt Straßen, Felder, Gewässer, Bahnlinien und Hindernisse ab, statt nur Gebäude zu meiden. Testfunktion."
+				"label": "Schlauchweg nur auf Straßen und Wegen",
+				"description": "Aus: Die Route wägt Straßen, Felder, Steigungen und Hindernisse ab. Ein: nur Straßen und Wege, mit kurzen Anbindungen an beiden Enden."
 			}
 		},
 		"pumpCalculation": {
@@ -532,6 +528,9 @@
 		"notRecommended": "Nicht empfohlen",
 		"checkPressure": "Druck prüfen",
 		"incomplete": "Kartendaten unvollständig",
+		"barriersUnknown": "Hindernisse (Zäune) unbekannt",
+		"crossCountryNote": "Querfeldein-Abschnitte vor Ort prüfen: Zäune, Mauern und Hecken fehlen in den Kartendaten.",
+		"ok": "OK",
 		"fallback": {
 			"cellCap": "Gebiet zu groß: nur Straßen",
 			"tileCap": "Kartendaten abgeschnitten",

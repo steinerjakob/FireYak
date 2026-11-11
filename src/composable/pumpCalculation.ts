@@ -75,6 +75,8 @@ export interface PumpLineWarnings {
 	fallbacks: RouteFallback[];
 	/** True when some leg had only part of the map data. */
 	incomplete: boolean;
+	/** Off-road metres of the routed legs (straight fallback legs not counted). */
+	offRoadMeters: number;
 }
 
 const calculationResult = ref<CalculationResult | null>(null);
@@ -278,7 +280,7 @@ function setPumpLineGeometry(points: GeoPoint[]) {
 
 /**
  * Routes each leg of the marker chain like the nearby-marker path does
- * (terrain or road routing per the clamp-to-roads setting), falling back to
+ * (`optimized` or `roads` per the hose routing setting), falling back to
  * the straight segment for unroutable/too-long legs. Legs run sequentially so
  * they reuse the cached routing context instead of racing to rebuild it.
  */
@@ -563,6 +565,7 @@ function lineWarnings(
 	const legs = routedLegs ?? [];
 	const fallbacks = [...new Set(legs.map((l) => l.fallback).filter((f) => f !== null))];
 	const incomplete = legs.some((l) => l.coverage.basemap === 'partial');
+	const offRoadMeters = legs.reduce((sum, l) => sum + (l.routed ? l.offRoadMeters : 0), 0);
 	const slope = slopeNotRecommended({
 		metersOver25: legs.reduce((sum, l) => sum + l.metersOver25, 0),
 		metersOver50: legs.reduce((sum, l) => sum + l.metersOver50, 0)
@@ -601,7 +604,8 @@ function lineWarnings(
 		pressureLevel: pressure?.level ?? null,
 		staticPressureMaxBar: pressure?.staticPressureMaxBar ?? null,
 		fallbacks,
-		incomplete
+		incomplete,
+		offRoadMeters
 	};
 }
 

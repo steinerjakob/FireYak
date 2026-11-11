@@ -28,45 +28,38 @@ vi.mock('@/offline/offlineProtocol', async () => {
 	return { fetchTileCacheFirst: fetcher };
 });
 
-type Mode = 'road' | 'terrain';
-const modeOf = (mode: Mode) => (mode === 'road' ? ('roads' as const) : ('direct' as const));
+type Mode = 'road' | 'optimized';
+const modeOf = (mode: Mode) => (mode === 'road' ? ('roads' as const) : ('optimized' as const));
 
 /**
- * Routed lengths in meters (rounded) per ring position, then per named case, as the code
+ * Road-mode lengths in meters (rounded) per ring position, then per named case, as the code
  * produced them at the end of phase 1 (`-` = unrouted), with the changes phase 3 made on
- * purpose: from phase 3 the graph and the grids leave out what `classifyRoad` excludes.
- * Scene 4 only: dropping the indoor `path/corridor` ways moves two road-mode rings
- * (483 to 479 m, 569 to 565 m); dropping tunnelled footways (owner decision) moves the last
- * 300 m ring in both modes (road 644 to 708 m, terrain 581 to 598 m).
+ * purpose: from phase 3 the graph and the grid leave out what `classifyRoad` excludes.
+ * Scene 4 only: dropping the indoor `path/corridor` ways moves two rings (483 to 479 m,
+ * 569 to 565 m); dropping tunnelled footways (owner decision) moves the last 300 m ring
+ * (644 to 708 m). Phase 5 removed the terrain-only mode and its pins; the `optimized`
+ * ranges live in `gridRouting.scenes.spec.ts`.
  */
-const PHASE1_LENGTHS: Record<string, Record<Mode, string>> = {
+const PHASE1_LENGTHS: Record<string, { road: string }> = {
 	'1-rural-pond': {
-		road: '790 462',
-		terrain: '680 403'
+		road: '790 462'
 	},
 	'2-melk': {
-		road: '555 613 617 712 694 381 340 282 225 227 408 415 644 750 858 1024 870 575 491 422 390 422 454 735 926 1035 1440 1081 1183 867 822 1011 785 614 596 623 694 733',
-		terrain:
-			'271 306 250 166 146 179 152 155 170 172 148 202 392 450 359 330 322 317 262 307 315 314 340 572 607 539 537 540 500 523 468 521 541 484 526 522 531 583'
+		road: '555 613 617 712 694 381 340 282 225 227 408 415 644 750 858 1024 870 575 491 422 390 422 454 735 926 1035 1440 1081 1183 867 822 1011 785 614 596 623 694 733'
 	},
 	'3-persenbeug': {
-		road: '130 1063 797 725 667 135 165 297 354 413 471 155 326 864 782 669 551 435 307 317 526 1067 1027 1237 867 741 648 707 813 919 895 1149 851',
-		terrain:
-			'126 192 151 151 178 133 160 168 147 149 180 148 305 324 340 335 324 317 276 257 498 533 515 549 586 526 522 552 521 484 499 563 549'
+		road: '130 1063 797 725 667 135 165 297 354 413 471 155 326 864 782 669 551 435 307 317 526 1067 1027 1237 867 741 648 707 813 919 895 1149 851'
 	},
 	'4-vienna': {
-		road: '272 269 259 221 240 158 381 249 198 256 223 168 150 168 144 462 420 354 421 351 308 413 413 334 440 487 479 565 620 708',
-		terrain:
-			'255 243 227 201 165 152 220 195 174 223 209 158 143 157 128 446 396 336 398 307 303 360 316 309 367 314 299 339 505 598'
+		road: '272 269 259 221 240 158 381 249 198 256 223 168 150 168 144 462 420 354 421 351 308 413 413 334 440 487 479 565 620 708'
 	},
 	'5-innsbruck': {
-		road: '233 253 181 156 435 327 1503 1604',
-		terrain: '136 155 155 132 349 290 515 502'
+		road: '233 253 181 156 435 327 1503 1604'
 	}
 };
 
 /**
- * Routed plan (2D) length in meters from `from` to `to` in one of today's two modes.
+ * Routed plan (2D) length in meters from `from` to `to` in one of the two modes.
  * Without the profile: from phase 4 a profiled route reports its 3D length, and these
  * pins record the geometry (the 3D lengths are checked in `gridRouting.scenes.spec.ts`).
  */
@@ -121,12 +114,10 @@ async function ringRatios(scene: RoutingScene, radius: number): Promise<number[]
 // - pond, road mode: the shore is now a goal set with 250 m final legs, so the
 //   route attaches via the farm track (research: about 842 m) instead of the
 //   1.75 km cycleway detour;
-// - pond, terrain mode: the shore point is chosen by routing and the length is
-//   the smoothed polyline (was the cell chain, 708 m);
-// - hydrant, terrain mode: the length is the smoothed polyline and the line no
-//   longer squeezes past walls (was the cell chain, 381 m). The plan's
-//   232-295 m came from an unrecorded vehicle position; with this one the
-//   straight line alone is 300 m.
+// - the terrain-only mode of phases 0-4 is gone (phase 5); its pond and hydrant
+//   cases now run in `optimized`, the default. The plan's 232-295 m for the
+//   hydrant came from an unrecorded vehicle position; with this one the straight
+//   line alone is 300 m.
 describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () => {
 	describe('scene 1: rural pond', () => {
 		let scene: RoutingScene;
@@ -144,15 +135,15 @@ describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () =>
 			expect(distanceToOutline(scene.pond, route.points[route.points.length - 1])!).toBeLessThan(1);
 		});
 
-		it('pond, terrain mode: across the farmland to the shore point routing picks', async () => {
+		it('pond, optimized: across the farmland to the shore point routing picks', async () => {
 			const { from, straightM } = scene.cases!.pond;
-			const meters = await routedMeters(from, pondShore(scene), 'terrain');
+			const meters = await routedMeters(from, pondShore(scene), 'optimized');
 			expect(straightM).toBeGreaterThan(640);
 			// The owner's screenshot showed 528 m, which this vehicle position cannot
 			// reproduce (the shore is 645 m away); see the README of the fixtures.
 			expect(meters).toBeGreaterThanOrEqual(645);
 			expect(meters).toBeLessThanOrEqual(720);
-			const route = await getRoutedPath(from, pondShore(scene), { mode: 'direct' });
+			const route = await getRoutedPath(from, pondShore(scene), { mode: 'optimized' });
 			expect(distanceToOutline(scene.pond, route.points[route.points.length - 1])!).toBeLessThan(1);
 		});
 
@@ -163,12 +154,15 @@ describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () =>
 			expect(meters).toBeLessThanOrEqual(490);
 		});
 
-		it('hydrant node 4477703437 (300 m), terrain mode: no building-edge intersection', async () => {
+		it('hydrant node 4477703437 (300 m), optimized: no building-edge intersection', async () => {
 			const { from, to } = scene.cases!.hydrantEast;
-			const meters = await routedMeters(from, to, 'terrain');
-			expect(meters).toBeGreaterThanOrEqual(300);
-			expect(meters).toBeLessThanOrEqual(430);
-			const route = await getRoutedPath(from, to, { mode: 'direct' });
+			// The list's Dijkstra and the line's A* tie on cost here (657.5) with two
+			// chains that smooth to 496 m and 454 m; in the app the line after the list
+			// reuses the list's field, so both show the same one.
+			const meters = await routedMeters(from, to, 'optimized');
+			expect(meters).toBeGreaterThanOrEqual(440);
+			expect(meters).toBeLessThanOrEqual(510);
+			const route = await getRoutedPath(from, to, { mode: 'optimized' });
 			const { buildings } = await getObstaclesForBounds({
 				south: Math.min(from.lat, to.lat) - 0.002,
 				north: Math.max(from.lat, to.lat) + 0.002,
@@ -193,19 +187,22 @@ describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () =>
 			vehicle = scene.rings!.find((r) => r.radius === 500 && r.bearing === 0)!.vehicle;
 		});
 
-		it('terrain mode goes straight down the scarp: a red run and "not recommended"', async () => {
+		it('optimized takes the road round the scarp, with the road-only length for the label', async () => {
 			invalidateRoutingContext();
-			const route = await getRoutedPath(vehicle, scene.anchor, { mode: 'direct' });
+			const route = await getRoutedPath(vehicle, scene.anchor, { mode: 'optimized' });
 			expect(route.demZoom).toBe(14);
-			expect(runMeters(route, (s) => s.steep === 2)).toBeGreaterThanOrEqual(10);
-			expect(route.metersOver50).toBeGreaterThanOrEqual(10);
-			expect(route.notRecommended).toBe(true);
+			expect(route.metersOver50).toBeLessThan(10);
+			expect(route.meters).toBeGreaterThanOrEqual(1250);
+			expect(route.meters).toBeLessThanOrEqual(1450);
+			expect(route.roadOnlyMeters).toBeGreaterThanOrEqual(1450);
+			expect(route.roadOnlyMeters).toBeLessThanOrEqual(1600);
+			expect(route.coverage.barriers).toBe('unknown');
 		});
 
-		it('terrain mode: the downhill pressure rule warns (drop 177-220 m)', async () => {
+		it('optimized: the downhill pressure rule warns (drop 177-220 m)', async () => {
 			invalidateRoutingContext();
 			const route = await getRoutedPath(vehicle, scene.anchor, {
-				mode: 'direct',
+				mode: 'optimized',
 				maxHosePressureBar: 16,
 				sourcePressureBar: 0
 			});
@@ -239,7 +236,7 @@ describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () =>
 				useScene(id);
 			});
 
-			it.each(['road', 'terrain'] as Mode[])(
+			it.each(['road', 'optimized'] as Mode[])(
 				'%s mode: list metres equal the polyline metres at every ring target',
 				async (mode) => {
 					const scene = loadScene(id);
@@ -273,9 +270,9 @@ describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () =>
 		}
 	);
 
-	// Phase 2 changes the decoder, not the routes: the routed length (rounded to 1 m) of
-	// every ring position and named case must stay what phase 1 produced (phase 3: see
-	// PHASE1_LENGTHS for the listed scene-4 changes of the road filter).
+	// Phase 2 changed the decoder, not the routes: the road-mode length (rounded to 1 m) of
+	// every ring position and named case must stay what phase 1 produced (see
+	// PHASE1_LENGTHS for the listed changes).
 	describe.each(['1-rural-pond', '2-melk', '3-persenbeug', '4-vienna', '5-innsbruck'])(
 		'%s: lengths as after phase 1',
 		(id) => {
@@ -283,18 +280,18 @@ describe.skipIf(!fixturesPresent)('nearbyRouting over the fixture scenes', () =>
 				useScene(id);
 			});
 
-			it.each(['road', 'terrain'] as Mode[])('%s mode: all rings and cases', async (mode) => {
+			it('road mode: all rings and cases', async () => {
 				const scene = loadScene(id);
 				const lengths: string[] = [];
 				const measure = async (from: GeoPoint, to: RouteTargetInput) => {
-					const meters = await routedMeters(from, to, mode);
+					const meters = await routedMeters(from, to, 'road');
 					lengths.push(meters === null ? '-' : String(Math.round(meters)));
 				};
 				for (const ring of scene.rings ?? []) await measure(ring.vehicle, scene.anchor);
 				for (const [name, c] of Object.entries(scene.cases ?? {})) {
 					await measure(c.from, name === 'pond' ? pondShore(scene) : c.to);
 				}
-				expect(lengths.join(' ')).toBe(PHASE1_LENGTHS[id][mode]);
+				expect(lengths.join(' ')).toBe(PHASE1_LENGTHS[id].road);
 			});
 		}
 	);

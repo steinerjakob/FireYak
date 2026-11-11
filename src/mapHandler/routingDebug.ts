@@ -122,15 +122,7 @@ export function ratioTable(samples: RingSample[]): RatioRow[] {
 	});
 }
 
-/** RGBA per `direct` grid cell class: 0 open, 1 road, 2 building core, 3 building fringe. */
-const CLASS_COLOR: [number, number, number, number][] = [
-	[0, 0, 0, 0],
-	[30, 120, 255, 150],
-	[220, 40, 40, 170],
-	[255, 150, 0, 150]
-];
-
-/** RGBA per `optimized` cell class (`CELL_CLASS` of `hoseCostModel.ts`). */
+/** RGBA per cell class (`CELL_CLASS` of `hoseCostModel.ts`). */
 export const OPTIMIZED_CLASS_COLOR: Record<number, [number, number, number, number]> = {
 	[CELL_CLASS.UNKNOWN_OPEN]: [0, 0, 0, 0],
 	[CELL_CLASS.OPEN]: [140, 200, 90, 90],
@@ -148,9 +140,9 @@ export const OPTIMIZED_CLASS_COLOR: Record<number, [number, number, number, numb
 };
 
 /**
- * The terrain grid as an RGBA raster, north row first (image order), ready for
- * a canvas `ImageData` and a MapLibre `image` source. A `direct` grid shows its
- * four classes, an `optimized` grid its cost-model classes.
+ * The cost grid as an RGBA raster, north row first (image order), ready for a
+ * canvas `ImageData` and a MapLibre `image` source, one colour per cost-model
+ * class.
  */
 export function costRaster(grid: TerrainGrid): {
 	width: number;
@@ -158,8 +150,7 @@ export function costRaster(grid: TerrainGrid): {
 	data: Uint8ClampedArray<ArrayBuffer>;
 } {
 	const data = new Uint8ClampedArray(grid.cols * grid.rows * 4);
-	const palette =
-		grid.model === 'optimized' ? OPTIMIZED_CLASS_COLOR : (CLASS_COLOR as Record<number, number[]>);
+	const palette = OPTIMIZED_CLASS_COLOR;
 	for (let row = 0; row < grid.rows; row++) {
 		const imageRow = grid.rows - 1 - row;
 		for (let col = 0; col < grid.cols; col++) {
