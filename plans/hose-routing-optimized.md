@@ -2180,6 +2180,108 @@ and the route redraws.
 **What's New:** only if the speed-up is noticeable: `improvement`: "Hose routes
 are calculated faster."
 
+**Implemented (phase 6 notes).** Where the code differs from the text above:
+
+- Modules: `hoseRoutingCore.ts` is the former `nearbyRouting.ts` solve (git keeps the
+  history) with its I/O injected (`configureRoutingIO`); `nearbyRouting.ts` is the
+  main-thread facade with the old API; `hoseRoutingProtocol.ts` holds both ends of the
+  message protocol (`serveHoseRouting` in the worker, `HoseRoutingClient` on the main
+  thread, `transferablesOf`); `src/workers/hoseRouting.worker.ts` is a two-line shell. To
+  run in a worker without `maplibre-gl`/Capacitor, the I/O-free parts moved out:
+  `obstacleTiles.ts` (decode LRU + merge, fetcher required) behind `obstacleGeometry.ts`,
+  and `demTiles.ts` (DEM LRU, raster, profile; `setDemTileFetcher`) behind
+  `demElevation.ts`. Each realm (worker, main thread) has its own context and LRUs.
+- Bytes: the worker asks the main thread per tile (`fetchTile`); the main thread fetches
+  with `fetchTileCacheFirst` (tile store, then network: the native tile store is
+  Capacitor Filesystem, not reachable from a worker, CONFIRMED by design, not tried on a
+  device) and transfers the `ArrayBuffer`. Fetching on demand rather than up front keeps
+  the window logic (road widening, the ×1.5 retry) in one place. DEM WebP is decoded in
+  the worker when it has `createImageBitmap` + 2D `OffscreenCanvas` (probed on a 1×1
+  WebP at start); otherwise the worker sends the image bytes to the main thread
+  (`decodeDem`) and gets the elevations back as a transferred `Float32Array`. Only when no
+  worker starts (no `Worker`, constructor throws, no `ready` within 5 s, a later worker
+  error) does the facade run the same core on the main thread; a failed worker request is
+  retried there once. `VITE_HOSE_ROUTING_WORKER=0` forces the main thread (measurement).
+- Supersession: a request may name a `channel` (`nearby-list` in `markerHandler.ts`,
+  `selected-path` in `MainMap.vue`). A newer request on the channel cancels the older one:
+  its promise rejects at once with `RoutingCancelledError` (callers drop it silently), and
+  the worker aborts it at its next await (tile, DEM, profile). A synchronous solve cannot
+  be interrupted; its result is discarded. The pump line and debug view use no channel.
+- Adaptive cells: `chooseCellSize({ widthM, heightM }, 'list' | 'path')` over the context
+  window's longer side: path ≤ 1.2 km → 4 m, ≤ 2.5 km → 6 m, else 8 m; list 8 m;
+  `'cellCap'` above 400k cells (only 8 m windows over ~5 km). The grid carries `cellM`;
+  the context keeps one grid per cell size. Road-mode legs, the road widening and the
+  road-only comparison keep pricing on the 8 m grid, so no road-mode pin moved.
+  `HoseRoute.cellM` (new) says which grid a route was solved on.
+- list = label = pump: a single path whose origin/target the list's memoised 8 m field
+  answers stays on that field (`memoCovers`), so the line after the list shows the list's
+  number (spec'd inline and through the worker). A marker tapped outside the list is
+  solved on 4/6 m; opening the list then re-draws the line from the list field.
+- Deviation, rasterisation: on 4 m cells a road is a one-cell (4 m) supercover line, so a
+  hose a metre beside the centreline is priced as forest/field; routes along roads came
+  out zig-zagged, median +2 % and up to +7 % against 8 m (Vienna, Innsbruck). Below 8 m,
+  ways now also paint the cells whose centre is within 4 m of the line
+  (`ROAD_BAND_HALF_WIDTH_M`, an 8 m band like one 8 m cell), but only over open ground,
+  landuse and narrower ways, never buildings, water or walls. 8 m grids are unchanged.
+- Deviation, "within 3 % of the 8 m results": medians are within 0.6 % (scenes 2-5: 0.998,
+  1.006, 0.998, 1.000), but single routes move where the finer grid changes the route
+  (gaps between buildings 8 m cells close, forest edges they blur): Melk 150 m / 90°
+  604 → 480 m, Persenbeug 300 m / 157.5° 488 → 357 m, Innsbruck 150 m / 202.5° 138 → 150
+  m. Share within 3 %: 0.82, 0.73, 0.93, 0.93; scene 1: pond 681 → 670 m, hydrant 454 →
+  439 m. The spec asserts median within 2 %, ≥ 70 % within 3 % (scene 1: each within 5 %).
+- Ranges re-checked with 4/6 m single paths: all phase-3/4/5 ranges hold except Melk
+  "notably off-road", 14 of 38 (was 11): the finer grid opens a 100 m shortcut west of the
+  hydrant for 150 m / 67.5° and 90° (596 → 488 m, 604 → 480 m) and 150 m / 22.5° sits on
+  the 10 % threshold (40 → 50 m of 458 m). Range now 5-15. Vienna's "29 of 30 within 5 %
+  of phase 3" holds again with the band (27 without it).
+- Node timings (4-core 2.1 GHz Xeon, Node 22, median of 3), ±650 m window (Vienna ±480 m):
+
+  | Scene | cells 8 / 6 / 4 m | build ms 8/6/4 | raster ms 8/6/4 | full Dijkstra ms 8/6/4 | list e2e cold/warm | path e2e cold/warm |
+  |---|---|---|---|---|---|---|
+  | 1 | 27k / 47k / 106k | 7 / 10 / 15 | 4 / 6 / 14 | 24 / 42 / 90 | 154 / 101 ms (1 target) | 262 / 213 ms (roads: anchor in the pond) |
+  | 2 | same | 13 / 18 / 27 | 4 / 7 / 19 | 31 / 54 / 121 | 199 / 152 ms (30) | 93 / 60 ms (4 m) |
+  | 3 | same | 7 / 10 / 14 | 5 / 6 / 12 | 22 / 34 / 90 | 104 / 89 ms (30) | 45 / 39 ms (4 m) |
+  | 4 | 14k / 26k / 58k | 18 / 24 / 33 | 2 / 3 / 7 | 22 / 38 / 75 | 157 / 129 ms (30) | 113 / 82 ms (4 m) |
+  | 5 | 27k / 47k / 106k | 4 / 7 / 10 | 3 / 6 / 14 | 30 / 50 / 124 | 703 / 653 ms (29) | 162 / 138 ms (4 m) |
+
+  "e2e" = `routeNearby`/`routePath` with profile from the farthest ring vehicle; "cold" =
+  decode caches dropped (WASM WebP decode in Node). A* to the farthest case on 4 m: 3-99 ms.
+- Headless Chromium (dev server, live tiles, this container): through the facade, list of
+  25 targets + line, worker vs main thread. Worker: Melk list 967 ms cold (first network
+  fetch) / 201 ms warm, line after the list 8-11 ms, line alone (4 m) 54-96 ms; Innsbruck
+  list 597 / 281 ms, line after list 20 ms, alone 115-138 ms; **no long task** (> 50 ms)
+  on the main thread in any of these. Main thread: the same wall times (list 197-526 ms,
+  line 56-108 ms; its "cold" ran on an HTTP-warm cache), with one long task per solve of
+  55-274 ms (list) and 55-108 ms (line). The app flow (Innsbruck, nearby list → select)
+  shows the list's 672 m on the map label in both modes; there the long tasks are
+  dominated by headless software-WebGL map rendering in both modes (up to 500 ms on the
+  route change), so the routing share is read from the facade numbers above. The worker
+  answered `ready` with `demDecode: true` (Chrome decodes WebP in the worker).
+- Build: the worker is emitted as `assets/hoseRouting.worker-<hash>.js` (58 kB, IIFE, no
+  maplibre/Capacitor code) by `npm run build` and `build:native`; the web service worker
+  precaches it (47 entries). Offline check (`vite preview`, SW controlling, network off,
+  reload): the app starts and the precached worker answers `ready`. Native builds have no
+  precache (as before); Capacitor serves `dist`. All JS 3,031,108 → 3,067,827 bytes (the
+  routing code is in the worker and, for the fallback and the debug view, in the main
+  chunk).
+- Debug view: "Router" select (worker / main thread) and the cell size per route.
+- Specs: `hoseRoutingCore.spec.ts` (9: cell size at 1.2/2.5 km, longer side, list, cell
+  cap at 5,000 vs 5,064 m, window size, structuredClone of requests/results, transfers
+  detach, aborted signal → `RoutingCancelledError`), `hoseRoutingProtocol.spec.ts` (5, over
+  a `MessageChannel`: ready + main-thread DEM decode, tile bytes transferred, worker =
+  inline on a synthetic tile, supersession incl. the worker's cancelled reply, failAll),
+  `hoseRoutingProtocol.scenes.spec.ts` (5: worker = inline, list and profiled line, three
+  origins per scene), `costGrid.spec.ts` (+4: band cells, 8 m road on 4 m cells, band never
+  over buildings/water, 8 m unchanged), `nearbyRouting.spec.ts` (+4: 4 m path / 8 m list,
+  line after list on the list field, cell cap → `cellCap`, inline supersession),
+  `gridRouting.scenes.spec.ts` (+5 adaptive vs 8 m; runs through `hoseRoutingCore`).
+- **Manual (not done here):** worker start and the `OffscreenCanvas` fallback on a
+  mid-range Android and an iPhone (Capacitor WebView: module worker from
+  `https://localhost` / `capacitor://localhost`), main-thread long tasks there, and cold
+  device timings.
+- **What's New:** none. Wall times did not drop (the gain is a main thread without
+  100-275 ms freezes, not faster numbers), so "calculated faster" would not be true.
+
 ### Phase 7: routing cache, non-blocking contract, precache, offline DEM z14
 
 **Files**

@@ -55,6 +55,7 @@ src/
 ├── theme/           # SCSS variables and Material Design 3 CSS overrides
 ├── types/           # Shared TypeScript types (geo, obstacles)
 ├── views/           # Top-level page components
+├── workers/         # Web Workers (`hoseRouting.worker.ts`: the hose routing solve, a thin shell over `mapHandler/hoseRoutingProtocol.ts`)
 ├── App.vue          # Root component
 └── main.ts          # Application entry point
 ```
@@ -98,7 +99,8 @@ src/
 | `appStoreInfos.ts` | App Store / Play Store URLs for the current app |
 | `areaShore.ts` | Outline geometry for water areas: nearest shore point, point-in-area, outline bounds |
 | `calculatePumpPosition.ts` | Optimal pump positioning along routes (pressure/elevation/flow) |
-| `demElevation.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo); route profiles try z14 within a budget, else z12; `loadRoutingHeights` loads the `optimized` grid's height raster (z14, else z12, within the routing DEM budget) |
+| `demElevation.ts` | Main-thread entry to `demTiles.ts`: wires it to the cache-first `offline://` tile pipeline and re-exports it |
+| `demTiles.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo) with a decode LRU and an injected tile fetcher (no app I/O import, so it also runs in the routing worker); route profiles try z14 within a budget, else z12; `loadRoutingHeights` loads the `optimized` grid's height raster (z14, else z12, within the routing DEM budget) |
 | `demRaster.ts` | Pure DEM helpers: terrarium decode, bilinear sampling across tile edges, the cost grid's height raster (`buildHeightRaster`: one-cell halo, 3×3 smoothing) and step grades (`stepGrade`: per step on z14, 24 m baseline on z12) |
 | `distanceCalculation.ts` | Haversine distance + geodetic point interpolation (20m intervals) |
 | `elevationData.ts` | Batch elevation fetching helper (legacy/fallback path) |
@@ -117,14 +119,17 @@ src/
 |---|---|
 | `databaseHandler.ts` | IndexedDB wrapper for marker caching, offline areas, pending edits, and spatial queries |
 | `gridRouting.ts` | Cost-grid routing for hose laying over the `hoseCostModel.ts` classes (symmetric step cost, escape radius, A* for single paths, early-exit Dijkstra for the list, cost-aware smoothing; with a height raster each step is also priced by its slope, capped ×1.3 on roads/paths/steps, 1.0 on bridges, and a bridge connects only to roads/paths/steps) |
-| `costGrid.ts` | Pure rasteriser of the `optimized` grid: scanline polygon fill and supercover lines, drawn in the cost model's order (landuse, water, buildings, walls, roads, bridges); `routableRoads` drops what `classifyRoad` excludes |
+| `costGrid.ts` | Pure rasteriser of the `optimized` grid: scanline polygon fill and supercover lines, drawn in the cost model's order (landuse, water, buildings, walls, roads, bridges); on grids finer than 8 m ways are drawn 8 m wide over open ground and landuse; `routableRoads` drops what `classifyRoad` excludes |
 | `cellHeap.ts` | Typed-array binary min-heap (cost, cell) used by the grid searches |
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
 | `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
-| `nearbyRouting.ts` | Hose routing for the nearby list, marker path and pump line (`RoutingOptions.mode`: `optimized`, the default, or `roads`; road snap legs priced by the cost model): returns a `HoseRoute` (one length, 3D over the DEM profile, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |
+| `nearbyRouting.ts` | Main-thread facade of hose routing (nearby list, marker path, pump line): runs the solve in the routing worker, fetching tile bytes cache-first and transferring them; falls back to the same solve on the main thread when no worker starts; a request `channel` lets a newer request supersede (cancel) the running one (`RoutingCancelledError`) |
+| `hoseRoutingCore.ts` | The hose routing solve (pure, I/O injected via `configureRoutingIO`; runs in the worker and on the main thread): `RoutingOptions.mode` `optimized` (default) or `roads`, adaptive cell size (`chooseCellSize`: 4/6 m single paths, 8 m list, 400k cell cap), returns a `HoseRoute` (one length, 3D over the DEM profile, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |
+| `hoseRoutingProtocol.ts` | Message protocol between main thread and routing worker: `serveHoseRouting` (worker side), `HoseRoutingClient` (main side: requests, supersession, tile/DEM-decode service), `transferablesOf` |
 | `hoseCostModel.ts` | Pure cost model for hose routing (drives the `optimized` grid and road-mode shore legs): cell classes and factors, `classifyRoad`/`classifyRail`/`classifyLanduse`/`classifyWaterLine`, `slopeFactor`, the thin-buildings test, UI warning thresholds |
 | `obstacleDecode.ts` | Pure decoder (bytes in, data out) of Protomaps tiles: buildings, roads with `kind_detail`/bridge/tunnel/access, rail, landuse, water polygons and lines, cliffs, per-tile residential/building area (thin-buildings safeguard); runs in Node specs and workers |
-| `obstacleGeometry.ts` | Fetches z15 Protomaps tiles and merges `obstacleDecode.ts` results (LRU, per-layer coverage); missing tiles are reported, never cached as empty |
+| `obstacleGeometry.ts` | Main-thread entry to `obstacleTiles.ts` with the cache-first `offline://` fetcher as default (`getObstaclesForBounds`, `waterOutlineAt`) |
+| `obstacleTiles.ts` | Collects z15 Protomaps tiles through an injected fetcher and merges `obstacleDecode.ts` results (LRU, per-layer coverage); missing tiles are reported, never cached as empty; no app I/O import (runs in the routing worker) |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
 | `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker (shore targets with 250 m final legs, priced per target) |
 | `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs |
@@ -327,7 +332,7 @@ Rules:
 
 ## 7. Important Notes for AI Agents
 
-- **Tests run with Vitest** (`npm test`, Node environment). Spec files sit next to the source they test (`foo.ts` → `foo.spec.ts`) and cover pure modules; modules under test import only pure modules and take I/O through injectable fetchers. Scene specs over real map tiles are named `*.scenes.spec.ts`. Shared test-only helpers live in `src/testing/` (eslint forbids importing it, `vitest` or any `__fixtures__` path from app code). Import `describe`, `it`, `expect`, `vi` from `'vitest'` explicitly. Where a module reaches I/O directly (Capacitor Preferences in `composable/settings.ts`, the tile and DEM loaders behind `nearbyRouting.ts`), its spec replaces that module with `vi.mock` instead.
+- **Tests run with Vitest** (`npm test`, Node environment). Spec files sit next to the source they test (`foo.ts` → `foo.spec.ts`) and cover pure modules; modules under test import only pure modules and take I/O through injectable fetchers. Scene specs over real map tiles are named `*.scenes.spec.ts`. Shared test-only helpers live in `src/testing/` (eslint forbids importing it, `vitest` or any `__fixtures__` path from app code). Import `describe`, `it`, `expect`, `vi` from `'vitest'` explicitly. Where a module reaches I/O directly (Capacitor Preferences in `composable/settings.ts`, the tile and DEM loaders behind `hoseRoutingCore.ts`), its spec replaces that module with `vi.mock` instead. Node has no `Worker` for Vite's worker, so `nearbyRouting.ts` routes on the main thread in specs; the worker protocol is tested over a `node:worker_threads` `MessageChannel` (`hoseRoutingProtocol*.spec.ts`).
 - **Routing fixtures** live in `src/mapHandler/__fixtures__/routing/` (see the README there): `scene.json` and the README are committed, the tile files are gitignored and fetched with `scripts/fetch-routing-fixtures.mjs`. Scene specs skip cleanly (`describe.skipIf(!fixturesPresent)`) when the tiles are absent, so in a fresh checkout a green `npm test` does not exercise them: fetch the fixtures first when you change routing code. Expected values in specs are tolerant ranges.
 - **Run `npm test` and `npm run typecheck` before committing** changes to tested modules (CI runs eslint, typecheck and tests on every PR; `release.yml` runs the tests before tagging).
 - **Areas get tag-only edits.** Fire water ponds can be ways or multipolygon relations. For those, FireYak only changes tags: never coordinates, member nodes or members, and it never deletes them (that would remove the water body). "Delete" on a pond area removes only the `emergency=fire_water_pond` flag. Helpers live in `src/helper/osmElement.ts`; the edit queue rejects area deletes.
@@ -335,5 +340,5 @@ Rules:
 - **Web changes get a Cloudflare Pages preview per branch** (see §3 "Preview deployments"); point reviewers to the PR's preview link for UI checks.
 - **The PWA manifest is generated by `vite-plugin-pwa`** from `vite.config.ts`, not a static file.
 - **Marker icons** are in `src/assets/` as SVG/PNG files with type-specific variants.
-- **Elevation data** comes from the Mapterhorn terrain DEM tiles the map already loads (`src/helper/demElevation.ts`), not a separate API — this keeps pump calculation working offline inside a downloaded area.
+- **Elevation data** comes from the Mapterhorn terrain DEM tiles the map already loads (`src/helper/demElevation.ts` / `demTiles.ts`), not a separate API — this keeps pump calculation working offline inside a downloaded area.
 - **`scripts/stamp-whats-new.mjs`** moves `whats-new.json`'s `unreleased` entries into `releases` with a version/date; run only by `release.yml`, not manually during feature work.
