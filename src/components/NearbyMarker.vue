@@ -335,10 +335,10 @@ ion-accordion {
 }
 
 /* Selected entry: highlight on every platform (items use <img>, not ion-icon,
-   so tinting the icon alone would leave iOS without any visible highlight). */
+   so tinting the icon alone would leave iOS without any visible highlight).
+   No left accent bar: the accordion's open state already marks the row. */
 ion-item.selected {
 	--background: rgba(var(--ion-color-primary-rgb), 0.14);
-	border-left: 3px solid var(--ion-color-primary);
 }
 /* A silent recompute changed this entry's metres (late map data). */
 ion-item.updated {
