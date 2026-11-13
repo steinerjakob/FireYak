@@ -571,6 +571,8 @@
 			}
 		},
 		"section": {
+			"showDetails": "Show route details",
+			"hideDetails": "Hide route details",
 			"loading": "Computing the hose route …",
 			"updating": "Updating",
 			"noRoute": "No hose route available",

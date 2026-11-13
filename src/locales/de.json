@@ -571,6 +571,8 @@
 			}
 		},
 		"section": {
+			"showDetails": "Routendetails anzeigen",
+			"hideDetails": "Routendetails ausblenden",
 			"loading": "Schlauchweg wird berechnet …",
 			"updating": "Wird aktualisiert",
 			"noRoute": "Kein Schlauchweg verfügbar",

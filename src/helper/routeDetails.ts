@@ -464,22 +464,40 @@ export function sheetGrowTarget(breakpoints: readonly number[], current: number)
 
 /*
  * The nearby list (owner feedback): the selected entry's row expands in place
- * to the route details, instead of a section on top of the list that
- * scrolls away.
+ * to the route details (opened with its arrow button, a tap on the row only
+ * selects it), instead of a section on top of the list that scrolls away.
  */
 
+/** What happened to a nearby row; see `rowExpansionAfter`. */
+export type RowAction =
+	| { type: 'select'; ref: string }
+	| { type: 'toggle'; ref: string }
+	| { type: 'stretch'; ref: string };
+
 /**
- * The row that is expanded after a tap on `tapped`: a tap on another row
- * selects and expands it (the previous one collapses); a tap on the selected
- * row toggles it (it stays selected). Only one row is expanded at a time.
+ * The row that is expanded after `action` (only one row at a time, and only
+ * ever the selected one):
+ * - `select` (a tap on a row, a marker, a link) never expands: a new
+ *   selection starts collapsed and the previous row collapses; selecting the
+ *   row that already is selected keeps its state;
+ * - `toggle` (the arrow button of the selected row) expands or collapses it;
+ * - `stretch` (a tap on a coloured run of the map line) expands the row.
+ * A toggle or stretch for a row that is not the selected one changes nothing.
  */
 export function rowExpansionAfter(
 	expanded: string | null,
 	selected: string | null,
-	tapped: string
+	action: RowAction
 ): string | null {
-	if (tapped !== selected) return tapped;
-	return expanded === tapped ? null : tapped;
+	switch (action.type) {
+		case 'select':
+			return action.ref === selected ? expanded : null;
+		case 'toggle':
+			if (action.ref !== selected) return expanded;
+			return expanded === action.ref ? null : action.ref;
+		case 'stretch':
+			return action.ref === selected ? action.ref : expanded;
+	}
 }
 
 /**

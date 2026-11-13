@@ -486,16 +486,32 @@ describe('pump panel chips: warnings stay below the numbers, coverage goes into 
 	});
 });
 
-describe('rowExpansionAfter: the nearby list expands the selected row in place', () => {
-	it('a tap on another row selects and expands it; the previous one collapses', () => {
-		expect(rowExpansionAfter(null, null, 'n1')).toBe('n1');
-		expect(rowExpansionAfter('n1', 'n1', 'n2')).toBe('n2');
-		expect(rowExpansionAfter(null, 'n1', 'n2')).toBe('n2');
+describe('rowExpansionAfter: the nearby list expands the selected row via its arrow', () => {
+	it('selecting a row never expands it; the previous one collapses', () => {
+		expect(rowExpansionAfter(null, null, { type: 'select', ref: 'n1' })).toBeNull();
+		expect(rowExpansionAfter('n1', 'n1', { type: 'select', ref: 'n2' })).toBeNull();
+		expect(rowExpansionAfter(null, 'n1', { type: 'select', ref: 'n2' })).toBeNull();
 	});
 
-	it('a tap on the selected row toggles it (it stays selected)', () => {
-		expect(rowExpansionAfter('n1', 'n1', 'n1')).toBeNull();
-		expect(rowExpansionAfter(null, 'n1', 'n1')).toBe('n1');
+	it('selecting the selected row again keeps its expanded or collapsed state', () => {
+		expect(rowExpansionAfter('n1', 'n1', { type: 'select', ref: 'n1' })).toBe('n1');
+		expect(rowExpansionAfter(null, 'n1', { type: 'select', ref: 'n1' })).toBeNull();
+	});
+
+	it('the arrow of the selected row toggles it (it stays selected)', () => {
+		expect(rowExpansionAfter(null, 'n1', { type: 'toggle', ref: 'n1' })).toBe('n1');
+		expect(rowExpansionAfter('n1', 'n1', { type: 'toggle', ref: 'n1' })).toBeNull();
+	});
+
+	it('a toggle for a row that is not selected changes nothing', () => {
+		expect(rowExpansionAfter(null, 'n1', { type: 'toggle', ref: 'n2' })).toBeNull();
+		expect(rowExpansionAfter('n1', 'n1', { type: 'toggle', ref: 'n2' })).toBe('n1');
+	});
+
+	it('a tap on a stretch of the map line expands the selected row (and keeps it open)', () => {
+		expect(rowExpansionAfter(null, 'n1', { type: 'stretch', ref: 'n1' })).toBe('n1');
+		expect(rowExpansionAfter('n1', 'n1', { type: 'stretch', ref: 'n1' })).toBe('n1');
+		expect(rowExpansionAfter(null, 'n1', { type: 'stretch', ref: 'n2' })).toBeNull();
 	});
 });
 

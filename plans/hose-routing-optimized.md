@@ -921,21 +921,36 @@ a sixth). The line shows a short **badge**, the card holds the rest:
     details (`pumpLineDetailsView` with the legs' off-road metres). Without a
     section (desktop, or an unrouted straight line) the notes and the
     off-road line show under the warnings as before.
-  - **Nearby list rows (owner feedback, second round):** a section on top of
-    the list scrolled away. Instead the selected entry's row expands in
-    place (`NearbyMarker.vue`, phone and side panel): a row tap selects it
-    and expands it (`rowExpansionAfter`); a tap on the selected row
-    collapses or expands it again (it stays selected); another selection
-    collapses the previous row; only the selected row can be expanded. The
-    expanded row shows `RouteDetailsContent` (rows, chips, stretches,
-    direction note, legend folded) below the row's text; its own compact
-    chips step aside while the details show (the details have them all).
-    Not selected rows keep their compact look and chips. The row scrolls
-    into view (`scrollIntoView` nearest) and the sheet grows to 0.5 as for
-    the section. The rows are an Ionic `ion-accordion-group` (value = the
-    expanded row, `ionChange` feeds `rowExpansionAfter`; its built-in toggle
-    icon and aria replace a custom chevron); the expanded content has no left
-    accent bar (the header row keeps the selected style). A tap on the line expands the selected row; on a coloured or
+  - **Nearby list rows (owner feedback, second and third round):** a section
+    on top of the list scrolled away. Instead the selected entry's row
+    expands in place (`NearbyMarker.vue`, phone and side panel). An
+    unexpanded row looks exactly as the list did before the route details
+    (same item, text, chips, selected highlight with the 3 px left accent
+    bar, no toggle icon). A tap on a row only selects it (route drawn, URL
+    updated) and never expands it; tapping the selected row again does
+    nothing. The selected row alone shows an arrow button at its end
+    (44 x 44 px, theme primary colour, rotates 180 degrees when open,
+    `aria-expanded`, `aria-label` "Show/Hide route details" en + de) that
+    expands and collapses it. Selecting another row collapses the previous
+    one and leaves the new one collapsed; only the selected row can be
+    expanded. All of it is `rowExpansionAfter(expanded, selected, action)`
+    with the actions `select`, `toggle` (arrow) and `stretch` (a tap on a
+    coloured run of the map line, which expands the selected row and
+    focuses its stretch row). The expanded row shows `RouteDetailsContent`
+    (rows, chips, stretches, direction note, legend folded) below the row's
+    text; its own compact chips step aside while the details show. The row
+    scrolls into view (`scrollIntoView` nearest) and the sheet grows to 0.5
+    when it is expanded (not when it is only selected). The rows are an
+    Ionic `ion-accordion-group` kept for the open/close animation and the
+    content region: its value is only ever set from our state (the group is
+    never toggled by Ionic: the header item stops its click before it
+    reaches the accordion header, `ionChange` is not used, the accordion's
+    own toggle icon is hidden) and the arrow is a real `button` placed next
+    to the header item (not inside it: no button in a button) and laid over
+    its end; the md3 theme's card styling of accordion groups is reset for
+    this list. The expanded content has no left accent bar (the header row
+    keeps the selected style). A tap on the line expands the selected row;
+    on a coloured or
     dashed run it also focuses and scrolls to its stretch row. While the
     row's route is computed the expanded area shows a small spinner and
     "Schlauchweg wird berechnet …"; while a drawn route of that row is

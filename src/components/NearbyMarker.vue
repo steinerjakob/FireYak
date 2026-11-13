@@ -3,11 +3,13 @@ import {
 	IonAccordion,
 	IonAccordionGroup,
 	IonChip,
+	IonIcon,
 	IonItem,
 	IonLabel,
 	IonList,
 	IonSpinner
 } from '@ionic/vue';
+import { chevronDown } from 'ionicons/icons';
 
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { computed, inject, nextTick, ref, watch } from 'vue';
@@ -77,14 +79,15 @@ const selectedMarkerRef = computed(() => {
 /*
  * The selected entry's row expands in place to its route details (owner
  * feedback, plan §6.8): a section above the list scrolled away. Phone and
- * side panel alike; a tap on the selected row collapses or expands it again.
+ * side panel alike. A tap on a row only selects it; the arrow button at the
+ * end of the selected row expands and collapses it (`rowExpansionAfter`).
  */
 const details = useRouteDetails();
 const sheet = inject(ROUTE_SHEET_KEY, null);
 const view = useRouteDetailsView(() => 'selected');
 
 /** The expanded row (only ever the selected one), for as long as the list is open. */
-const expandedRef = ref<string | null>(selectedMarkerRef.value);
+const expandedRef = ref<string | null>(null);
 
 const expandedState = computed(() =>
 	expandedRef.value
@@ -133,25 +136,25 @@ async function revealRow() {
 	rowElement(id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-/**
- * The accordion group reports a tap on a header (`ionChange`, user input only):
- * its value is the opened row, or empty when the open row was collapsed.
- */
-function onAccordionChange(event: CustomEvent<{ value?: string | string[] | null }>) {
-	const raw = event.detail.value;
-	const value = Array.isArray(raw) ? raw[0] : raw;
-	const tapped = value || expandedRef.value;
-	if (!tapped) return;
-	const selected = selectedMarkerRef.value;
-	expandedRef.value = rowExpansionAfter(expandedRef.value, selected, tapped);
-	if (tapped !== selected) void router.push(`/nearbysources/${tapped}`);
-	else if (expandedRef.value) void revealRow();
+/** A tap on a row only selects it (the route is drawn, the URL follows). */
+function onRowTap(id: string) {
+	if (id !== selectedMarkerRef.value) void router.push(`/nearbysources/${id}`);
 }
 
-// A new selection (row tap, marker tap, link) expands its row; the previous collapses.
-watch(selectedMarkerRef, (id) => {
-	expandedRef.value = id;
-	if (id) void revealRow();
+/** The arrow button of the selected row expands or collapses its details. */
+function onToggle(id: string) {
+	expandedRef.value = rowExpansionAfter(expandedRef.value, selectedMarkerRef.value, {
+		type: 'toggle',
+		ref: id
+	});
+	if (expandedRef.value) void revealRow();
+}
+
+// A new selection (row tap, marker tap, link) starts collapsed; the previous row collapses.
+watch(selectedMarkerRef, (id, before) => {
+	expandedRef.value = id
+		? rowExpansionAfter(expandedRef.value, before, { type: 'select', ref: id })
+		: null;
 });
 
 // The details replaced the loading note: the taller row may need scrolling.
@@ -162,8 +165,12 @@ watch(expandedState, (state, before) => {
 // A tap on the line or its badge expands the selected row; a coloured or
 // dashed run also focuses its stretch row.
 watch(details.focusRequest, async () => {
-	if (details.source.value !== 'selected' || !selectedMarkerRef.value) return;
-	expandedRef.value = selectedMarkerRef.value;
+	const selected = selectedMarkerRef.value;
+	if (details.source.value !== 'selected' || !selected) return;
+	expandedRef.value = rowExpansionAfter(expandedRef.value, selected, {
+		type: 'stretch',
+		ref: selected
+	});
 	await revealRow();
 	if (focusId.value) await content.value?.scrollToFocused();
 });
@@ -178,9 +185,9 @@ watch(details.focusRequest, async () => {
 		@pointerdown="markInteraction"
 		@wheel.passive="markInteraction"
 	>
-		<!-- Nearby Water Sources; the selected row opens to its route details. -->
+		<!-- Nearby Water Sources; the arrow of the selected row opens its route details. -->
 		<div ref="groupEl">
-			<ion-accordion-group :value="expandedRef ?? undefined" @ionChange="onAccordionChange">
+			<ion-accordion-group :value="expandedRef ?? ''">
 				<ion-accordion
 					v-for="item in formattedList"
 					:key="item.ref"
@@ -190,10 +197,13 @@ watch(details.focusRequest, async () => {
 				>
 					<ion-item
 						slot="header"
+						lines="inset"
+						:detail="false"
 						:class="{
 							selected: selectedMarkerRef === item.ref,
 							updated: updatedRefs.has(item.ref)
 						}"
+						@click.stop="onRowTap(item.ref)"
 					>
 						<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
 						<ion-label>
@@ -214,6 +224,24 @@ watch(details.focusRequest, async () => {
 							</div>
 						</ion-label>
 					</ion-item>
+					<!-- A sibling of the item (no button inside a button), laid over its end:
+					     only the selected row has it. The click must not reach the accordion
+					     header (its own toggle is never used; the state is ours). -->
+					<button
+						v-if="selectedMarkerRef === item.ref"
+						slot="header"
+						type="button"
+						class="row-toggle"
+						:aria-expanded="expandedRef === item.ref"
+						:aria-label="
+							t(
+								expandedRef === item.ref ? 'route.section.hideDetails' : 'route.section.showDetails'
+							)
+						"
+						@click.stop="onToggle(item.ref)"
+					>
+						<ion-icon :icon="chevronDown" aria-hidden="true" />
+					</button>
 					<div slot="content" class="row-details">
 						<template v-if="expandedRef === item.ref && expandedState">
 							<div v-if="expandedState === 'loading'" class="row-status" role="status">
@@ -294,8 +322,78 @@ ion-label p {
 	--padding-end: 8px;
 }
 
+/* Flat full-width rows like the plain list: not the md3 theme's accordion card
+   (`:root` only raises the specificity over `theme/md3/ionic/accordion.css`). */
+:root .info-list ion-accordion-group {
+	margin: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+}
+
 ion-accordion {
 	background: transparent;
+}
+
+/* The accordion's own toggle icon and header tap are not used: a tap on a row
+   only selects it, the arrow button below expands the selected row. */
+ion-item:deep(.ion-accordion-toggle-icon) {
+	display: none;
+}
+
+/* The header part is the arrow button's positioning box (the item's height). */
+ion-accordion::part(header) {
+	position: relative;
+}
+
+ion-item.selected {
+	--inner-padding-end: 44px;
+}
+
+.row-toggle {
+	position: absolute;
+	top: 50%;
+	right: 2px;
+	transform: translateY(-50%);
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--ion-color-primary);
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.row-toggle:hover {
+	background: rgba(var(--ion-color-primary-rgb), 0.12);
+}
+
+.row-toggle:focus-visible {
+	outline: 2px solid var(--ion-color-primary);
+	outline-offset: -2px;
+}
+
+.row-toggle ion-icon {
+	margin: 0;
+	font-size: 24px;
+	transition: transform 300ms cubic-bezier(0.25, 0.8, 0.5, 1);
+}
+
+.row-toggle[aria-expanded='true'] ion-icon {
+	transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.row-toggle ion-icon {
+		transition: none;
+	}
 }
 
 /* The expanded details: no left bar (the header row keeps the selected style). */
@@ -336,9 +434,10 @@ ion-accordion {
 
 /* Selected entry: highlight on every platform (items use <img>, not ion-icon,
    so tinting the icon alone would leave iOS without any visible highlight).
-   No left accent bar: the accordion's open state already marks the row. */
+   The accent bar marks the row itself; the expanded details below have none. */
 ion-item.selected {
 	--background: rgba(var(--ion-color-primary-rgb), 0.14);
+	border-left: 3px solid var(--ion-color-primary);
 }
 /* A silent recompute changed this entry's metres (late map data). */
 ion-item.updated {

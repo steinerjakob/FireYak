@@ -113,7 +113,7 @@ src/
 | `hoseRoutingSetting.ts` | Hose routing mode type (`optimized` \| `roads`) and the pure migration from the old `clamp_hoses_to_roads` key and the removed `direct` mode (`resolveHoseRouting`: written back once, old key removed); toggle mapping (`modeFromToggle`) |
 | `polygonGeometry.ts` | Exact segment/polygon tests (edge intersection, containment, holes) used by route smoothing |
 | `routeLabel.ts` | Route label line of the nearby list (estimate prefix, hoses, signed climb, off-road metres, road-only length when > 15 % off) and the warning/fallback/coverage chips shared by the list, the details card and the pump panel; when the one-time cross-country note is due |
-| `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line, the phone sheet section's header (`routeSummary`, `headerChip`, `stretchSummary`), expanded state and sheet growth (`sectionStateAfter`, `sheetGrowTarget`), the pump panel's chips and which stay outside the section (`pumpLineChips`, `splitCoverageChips`), and the nearby row expansion (`rowExpansionAfter`, `rowRouteState`) |
+| `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line, the phone sheet section's header (`routeSummary`, `headerChip`, `stretchSummary`), expanded state and sheet growth (`sectionStateAfter`, `sheetGrowTarget`), the pump panel's chips and which stay outside the section (`pumpLineChips`, `splitCoverageChips`), and the nearby row expansion (`rowExpansionAfter` with the select, arrow-toggle and stretch actions, `rowRouteState`) |
 | `routeProfile.ts` | Steep (>25 %/>50 %, grade over deck heights on bridges) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
@@ -176,7 +176,7 @@ src/
 | `MarkerInfoHeader.vue` | Header with title and action buttons (navigate, share, edit) |
 | `MarkerInfoPanel.vue` | Bottom sheet wrapper for MarkerInfo |
 | `NativeAppInstallPrompt.vue` | Modal nudging mobile web users to install the native app |
-| `NearbyMarker.vue` | Nearby list rows (distance + B-tube count, route chips); rows are an `ion-accordion-group`; the selected row opens in place to its route details (phone and side panel), with a loading state while its route is computed |
+| `NearbyMarker.vue` | Nearby list rows (distance + B-tube count, route chips); a tap on a row only selects it; the selected row has an arrow button that opens it in place to its route details (phone and side panel, an `ion-accordion-group` driven by our state), with a loading state while its route is computed |
 | `NearbyMarkerHeader.vue` | Header for nearby markers section |
 | `NearbyMarkerPanel.vue` | Bottom sheet listing nearby water sources within radius |
 | `PondAreaCandidates.vue` | Add-mode list of OSM water areas at the pin: mark an existing pond, edit an existing fire pond, or suggest a suction point |
