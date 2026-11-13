@@ -571,6 +571,9 @@
 			}
 		},
 		"section": {
+			"loading": "Schlauchweg wird berechnet …",
+			"updating": "Wird aktualisiert",
+			"noRoute": "Kein Schlauchweg verfügbar",
 			"noStretches": "Keine steilen oder querfeldein verlaufenden Abschnitte",
 			"more": "+{count} weitere",
 			"count": {

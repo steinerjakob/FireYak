@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { IonChip, IonItem, IonLabel, IonList } from '@ionic/vue';
+import { IonChip, IonIcon, IonItem, IonLabel, IonList, IonSpinner } from '@ionic/vue';
+import { chevronDown, chevronUp } from 'ionicons/icons';
 
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
-import { computed } from 'vue';
+import { computed, inject, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { useI18n } from 'vue-i18n';
@@ -10,6 +11,9 @@ import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { coerceRef, toRef } from '@/helper/osmRef';
 import { markerTitleKey } from '@/helper/markerTitle';
 import { formatMeters, routeChips } from '@/helper/routeLabel';
+import RouteDetailsContent from '@/components/RouteDetailsContent.vue';
+import { ROUTE_SHEET_KEY, useRouteDetails, useRouteDetailsView } from '@/composable/routeDetails';
+import { rowExpansionAfter, rowRouteState } from '@/helper/routeDetails';
 
 const { list, updatedRefs, markInteraction } = useNearbyWaterSource();
 const router = useRouter();
@@ -62,6 +66,84 @@ const selectedMarkerRef = computed(() => {
 		: route.params.markerId;
 	return param ? coerceRef(param) : null;
 });
+
+/*
+ * The selected entry's row expands in place to its route details (owner
+ * feedback, plan §6.8): a section above the list scrolled away. Phone and
+ * side panel alike; a tap on the selected row collapses or expands it again.
+ */
+const details = useRouteDetails();
+const sheet = inject(ROUTE_SHEET_KEY, null);
+const view = useRouteDetailsView(() => 'selected');
+
+/** The expanded row (only ever the selected one), for as long as the list is open. */
+const expandedRef = ref<string | null>(selectedMarkerRef.value);
+
+const expandedState = computed(() =>
+	expandedRef.value
+		? rowRouteState(expandedRef.value, {
+				routeRef: details.selectedRouteRef.value,
+				hasRoute: details.selectedRoute.value !== null,
+				pendingRef: details.pendingRouteRef.value
+			})
+		: null
+);
+
+/** The expanded row shows the details (its own compact chips would repeat them). */
+const showsDetails = computed(
+	() => expandedState.value === 'ready' || expandedState.value === 'updating'
+);
+
+const focusId = computed(() =>
+	details.source.value === 'selected' ? details.focusId.value : null
+);
+
+const rowEls = new Map<string, HTMLElement>();
+function setRowEl(id: string, el: unknown) {
+	if (el) rowEls.set(id, el as HTMLElement);
+	else rowEls.delete(id);
+}
+
+const content = ref<InstanceType<typeof RouteDetailsContent> | null>(null);
+function setContent(el: unknown) {
+	content.value = el as InstanceType<typeof RouteDetailsContent> | null;
+}
+
+/** Grows the sheet (phone) and brings the expanded row into view. */
+async function revealRow() {
+	const id = expandedRef.value;
+	if (!id) return;
+	await sheet?.grow();
+	await nextTick();
+	rowEls.get(id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function onRowTap(id: string) {
+	const selected = selectedMarkerRef.value;
+	expandedRef.value = rowExpansionAfter(expandedRef.value, selected, id);
+	if (id !== selected) void router.push(`/nearbysources/${id}`);
+	else if (expandedRef.value) void revealRow();
+}
+
+// A new selection (row tap, marker tap, link) expands its row; the previous collapses.
+watch(selectedMarkerRef, (id) => {
+	expandedRef.value = id;
+	if (id) void revealRow();
+});
+
+// The details replaced the loading note: the taller row may need scrolling.
+watch(expandedState, (state, before) => {
+	if (state === 'ready' && before === 'loading') void revealRow();
+});
+
+// A tap on the line or its badge expands the selected row; a coloured or
+// dashed run also focuses its stretch row.
+watch(details.focusRequest, async () => {
+	if (details.source.value !== 'selected' || !selectedMarkerRef.value) return;
+	expandedRef.value = selectedMarkerRef.value;
+	await revealRow();
+	if (focusId.value) await content.value?.scrollToFocused();
+});
 </script>
 
 <template>
@@ -73,30 +155,74 @@ const selectedMarkerRef = computed(() => {
 		@pointerdown="markInteraction"
 		@wheel.passive="markInteraction"
 	>
-		<!-- Nearby Water Sources -->
-		<ion-item
+		<!-- Nearby Water Sources; the selected row expands to its route details. -->
+		<div
 			v-for="item in formattedList"
 			:key="item.ref"
-			button
-			@click="router.push(`/nearbysources/${item.ref}`)"
-			:class="{ selected: selectedMarkerRef === item.ref, updated: updatedRefs.has(item.ref) }"
+			:ref="(el) => setRowEl(item.ref, el)"
+			class="nearby-row"
 		>
-			<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
-			<ion-label>
-				<h3>{{ item.title }}</h3>
-				<p>{{ item.distanceText }}</p>
-				<div v-if="item.chips.length > 0" class="route-chips">
-					<ion-chip
-						v-for="chip in item.chips"
-						:key="chip.key"
-						:color="chip.color"
-						:outline="chip.color === 'medium'"
+			<ion-item
+				button
+				:detail="false"
+				:aria-expanded="selectedMarkerRef === item.ref ? expandedRef === item.ref : undefined"
+				@click="onRowTap(item.ref)"
+				:class="{ selected: selectedMarkerRef === item.ref, updated: updatedRefs.has(item.ref) }"
+			>
+				<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
+				<ion-label>
+					<h3>{{ item.title }}</h3>
+					<p>{{ item.distanceText }}</p>
+					<div
+						v-if="item.chips.length > 0 && !(expandedRef === item.ref && showsDetails)"
+						class="route-chips"
 					>
-						{{ t(chip.key) }}
-					</ion-chip>
+						<ion-chip
+							v-for="chip in item.chips"
+							:key="chip.key"
+							:color="chip.color"
+							:outline="chip.color === 'medium'"
+						>
+							{{ t(chip.key) }}
+						</ion-chip>
+					</div>
+				</ion-label>
+				<ion-icon
+					v-if="selectedMarkerRef === item.ref"
+					slot="end"
+					class="row-chevron"
+					:icon="expandedRef === item.ref ? chevronUp : chevronDown"
+					aria-hidden="true"
+				/>
+			</ion-item>
+			<div v-if="expandedRef === item.ref && expandedState" class="row-details">
+				<div v-if="expandedState === 'loading'" class="row-status" role="status">
+					<ion-spinner name="crescent" />
+					<span>{{ t('route.section.loading') }}</span>
 				</div>
-			</ion-label>
-		</ion-item>
+				<p v-else-if="expandedState === 'none' || !view" class="row-status">
+					{{ t('route.section.noRoute') }}
+				</p>
+				<template v-else>
+					<span
+						v-if="expandedState === 'updating'"
+						class="row-updating"
+						role="status"
+						:title="t('route.section.updating')"
+						:aria-label="t('route.section.updating')"
+					>
+						<ion-spinner name="crescent" />
+					</span>
+					<RouteDetailsContent
+						:ref="setContent"
+						:view="view"
+						:focus-id="focusId"
+						:legend-open="false"
+						@select="(id) => details.selectStretch('selected', id)"
+					/>
+				</template>
+			</div>
+		</div>
 	</ion-list>
 </template>
 
@@ -143,6 +269,44 @@ ion-label p {
 	font-size: 0.75rem;
 	--padding-start: 8px;
 	--padding-end: 8px;
+}
+
+.row-chevron {
+	font-size: 22px;
+	margin: 0 0 0 4px;
+	color: var(--md-sys-on-surface-variant, inherit);
+}
+
+/* The expanded row's details continue the selected row's highlight. */
+.row-details {
+	position: relative;
+	padding: 0 12px 12px 15px;
+	border-left: 3px solid var(--ion-color-primary);
+	background: rgba(var(--ion-color-primary-rgb), 0.06);
+	color: var(--md-sys-on-surface, var(--ion-text-color));
+}
+
+.row-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 40px;
+	margin: 0;
+	font: var(--md-sys-body-medium, 14px / 20px sans-serif);
+	color: var(--md-sys-on-surface-variant, inherit);
+}
+
+.row-status ion-spinner,
+.row-updating ion-spinner {
+	width: 18px;
+	height: 18px;
+}
+
+/* A recompute of the shown route: a small spinner, nothing moves. */
+.row-updating {
+	position: absolute;
+	top: 6px;
+	right: 12px;
 }
 
 .loading-note {

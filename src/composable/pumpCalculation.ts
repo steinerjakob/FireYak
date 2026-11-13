@@ -38,6 +38,17 @@ const PUMP_LINE_SOURCE = 'pump-line';
 /** Route runs (on-road, off-road dashed, steep ticks) share this prefix. */
 export const PUMP_LINE_LAYER_PREFIX = 'pump-line';
 const PUMP_LINE_LABEL_LAYER = 'pump-line-label-layer';
+/**
+ * Invisible symbols where the line's markers (suction point, waypoints,
+ * pumps, fire object) sit: the markers are DOM elements the label placement
+ * does not know about, so these reserve their space and the hose-count labels
+ * move around them (and around each other) instead of covering them.
+ */
+const PUMP_LINE_BLOCKER_LAYER = 'pump-line-marker-blocker-layer';
+const PUMP_LINE_BLOCKER_IMAGE = 'pump-line-marker-blocker';
+/** Pin markers are 48 px, anchored at the bottom; waypoints 32 px, centred. */
+const PIN_MARKER_PX = 48;
+const WAYPOINT_MARKER_PX = 32;
 
 let rootMap: maplibregl.Map | null = null;
 let suctionPoint: maplibregl.Marker | null = null;
@@ -163,19 +174,33 @@ function setMap(map: maplibregl.Map) {
 		addRouteLayers(map, PUMP_LINE_SOURCE, PUMP_LINE_LAYER_PREFIX);
 		// Hose-count label per segment, anchored to point symbols like the
 		// nearby-marker path label (line-center placement drops labels on
-		// short/bent lines).
+		// short/bent lines). Labels take part in collision: each tries the
+		// spot above its point, then below and beside it, so it neither covers
+		// a marker (blocker layer) nor another label; one that fits nowhere at
+		// this zoom shows again when zooming in.
 		map.addLayer({
 			id: PUMP_LINE_LABEL_LAYER,
 			type: 'symbol',
 			source: PUMP_LINE_SOURCE,
-			filter: ['==', ['geometry-type'], 'Point'],
+			filter: ['all', ['==', ['geometry-type'], 'Point'], ['has', 'label']],
 			layout: {
 				'text-field': ['get', 'label'],
 				'text-font': ['Noto Sans Medium'],
 				'text-size': 13,
-				'text-offset': [0, -0.9],
-				'text-allow-overlap': true,
-				'text-ignore-placement': true
+				'text-variable-anchor': [
+					'bottom',
+					'top',
+					'left',
+					'right',
+					'bottom-left',
+					'bottom-right',
+					'top-left',
+					'top-right'
+				],
+				'text-radial-offset': 0.9,
+				'text-padding': 4,
+				'text-allow-overlap': false,
+				'text-ignore-placement': false
 			},
 			paint: {
 				'text-color': '#3388ff',
@@ -184,6 +209,49 @@ function setMap(map: maplibregl.Map) {
 			}
 		});
 	}
+	if (!map.hasImage(PUMP_LINE_BLOCKER_IMAGE)) {
+		map.addImage(PUMP_LINE_BLOCKER_IMAGE, {
+			width: PIN_MARKER_PX,
+			height: PIN_MARKER_PX,
+			data: new Uint8Array(PIN_MARKER_PX * PIN_MARKER_PX * 4)
+		});
+	}
+	// Above the labels: symbols are placed top layer first, so the markers'
+	// space is taken before the labels look for theirs.
+	if (!map.getLayer(PUMP_LINE_BLOCKER_LAYER)) {
+		map.addLayer({
+			id: PUMP_LINE_BLOCKER_LAYER,
+			type: 'symbol',
+			source: PUMP_LINE_SOURCE,
+			filter: ['all', ['==', ['geometry-type'], 'Point'], ['has', 'blocker']],
+			layout: {
+				'icon-image': PUMP_LINE_BLOCKER_IMAGE,
+				'icon-anchor': ['match', ['get', 'blocker'], 'center', 'center', 'bottom'],
+				'icon-size': ['match', ['get', 'blocker'], 'center', WAYPOINT_MARKER_PX / PIN_MARKER_PX, 1],
+				'icon-allow-overlap': true,
+				'icon-ignore-placement': false
+			},
+			paint: { 'icon-opacity': 0 }
+		});
+	}
+}
+
+/** The line's DOM markers as blocker points: `pin` (bottom anchored) or `center` (waypoints). */
+function markerBlockerFeatures(): GeoJSON.Feature[] {
+	const blockers: [maplibregl.Marker, 'pin' | 'center'][] = [
+		...(suctionPoint ? [[suctionPoint, 'pin'] as [maplibregl.Marker, 'pin']] : []),
+		...(targetPoint ? [[targetPoint, 'pin'] as [maplibregl.Marker, 'pin']] : []),
+		...wayPoints.map((m) => [m, 'center'] as [maplibregl.Marker, 'center']),
+		...pumpMarkers.map((m) => [m, 'pin'] as [maplibregl.Marker, 'pin'])
+	];
+	return blockers.map(([marker, blocker]) => {
+		const { lng, lat } = marker.getLngLat();
+		return {
+			type: 'Feature',
+			geometry: { type: 'Point', coordinates: [lng, lat] },
+			properties: { blocker }
+		};
+	});
 }
 
 const suctionPointSet = ref(false);
@@ -276,6 +344,8 @@ function pumpLineFeatures(points: GeoPoint[]): GeoJSON.FeatureCollection {
 			properties: { label }
 		});
 	}
+	// Only with labels: they are what has to keep clear of the markers.
+	if (segmentLabels.length > 0) features.push(...markerBlockerFeatures());
 	return { type: 'FeatureCollection', features };
 }
 
@@ -324,7 +394,10 @@ async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
 	routedLegs = legs;
 	lineSegments = segments;
 	routedPathPoints = path;
-	useRouteDetails().setPumpSegments(segments);
+	useRouteDetails().setPumpSegments(
+		segments,
+		legs.reduce((sum, l) => sum + (l.routed ? l.offRoadMeters : 0), 0)
+	);
 	setPumpLineGeometry(path);
 }
 
@@ -810,7 +883,6 @@ export function usePumpCalculation() {
 				label: `~${tubes} ${pumpStore.hoseName}-${tubesLabel}`
 			});
 		}
-		setPumpLineGeometry(path);
 
 		// Remove old pump markers
 		pumpMarkers.forEach((m) => m.remove());
@@ -824,6 +896,8 @@ export function usePumpCalculation() {
 			});
 			pumpMarkers.push(marker);
 		});
+		// After the pump markers: the labels keep clear of them.
+		setPumpLineGeometry(path);
 
 		selectedResultEntry.value = null;
 

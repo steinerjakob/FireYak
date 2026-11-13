@@ -1,6 +1,7 @@
 import type { HoseRoute } from '@/mapHandler/nearbyRouting';
 import { STEEP_GRADE, VERY_STEEP_GRADE, type RouteSegment } from '@/helper/routeProfile';
 import {
+	BARRIERS_UNKNOWN_CHIP,
 	OFF_ROAD_SHOWN_M,
 	formatMeters,
 	routeChips,
@@ -275,16 +276,28 @@ export function routeDetailsView(route: HoseRoute, options: HoseOptions): RouteD
 }
 
 /**
- * The card for the pump line: only its stretches and the legend. Length,
- * hoses, height difference and chips are in the pump panel already.
+ * The card for the pump line: its off-road metres (≥ {@link OFF_ROAD_SHOWN_M};
+ * the panel has no separate line for them), the stretches and the legend.
+ * Length, hoses, height difference and chips are in the pump panel already.
  */
 export function pumpLineDetailsView(
 	segments: RouteSegment[],
-	options: TextOptions
+	options: TextOptions,
+	offRoadMeters = 0
 ): RouteDetailsView {
+	const rows: RouteDetailRow[] =
+		offRoadMeters >= OFF_ROAD_SHOWN_M
+			? [
+					{
+						key: 'offRoad',
+						label: options.t('route.details.offRoad'),
+						value: formatMeters(offRoadMeters, options.locale)
+					}
+				]
+			: [];
 	return {
 		title: options.t('route.details.titlePump'),
-		rows: [],
+		rows,
 		chips: [],
 		...stretchesAndLegend(segments, options, 'route.details.directionPump')
 	};
@@ -335,20 +348,81 @@ export function headerChip<C extends RouteChip>(chips: C[]): { chip: C | null; m
 }
 
 /**
- * Header line of the pump line's sheet section: the stretches by kind, e.g.
- * "1× sehr steil · 2× steil · 1× querfeldein" (length, hoses, height and chips
- * are in the pump panel already), or "no coloured stretches".
+ * Header line of the pump line's sheet section: the stretches by kind,
+ * steepest first, and the off-road metres, e.g. "1× sehr steil · 2× steil ·
+ * 427 m querfeldein" (length, hoses, height and chips are in the pump panel
+ * already), or "no coloured stretches". Without off-road metres (below
+ * {@link OFF_ROAD_SHOWN_M}) the off-road stretches are counted instead.
  */
 export function stretchSummary(
 	stretches: Pick<RouteStretch, 'kind'>[],
-	options: TextOptions
+	options: TextOptions,
+	offRoadMeters = 0
 ): string {
 	const kinds: StretchKind[] = ['verySteep', 'steep', 'offRoad'];
 	const parts = kinds
 		.map((kind) => ({ kind, count: stretches.filter((s) => s.kind === kind).length }))
 		.filter((part) => part.count > 0)
-		.map((part) => options.t(`route.section.count.${part.kind}`, { count: part.count }));
+		.map((part) =>
+			part.kind === 'offRoad' && offRoadMeters >= OFF_ROAD_SHOWN_M
+				? options.t('route.offRoad', { distance: formatMeters(offRoadMeters, options.locale) })
+				: options.t(`route.section.count.${part.kind}`, { count: part.count })
+		);
 	return parts.length > 0 ? parts.join(' · ') : options.t('route.section.noStretches');
+}
+
+/** The warnings of the pump line the chips are built from (`PumpLineWarnings`). */
+export interface PumpChipWarnings {
+	notRecommended: boolean;
+	pressureLevel: string | null;
+	fallbacks: readonly string[];
+	incomplete: boolean;
+	offRoadMeters: number;
+}
+
+/**
+ * The chips of the pump line: not recommended, check pressure, the legs'
+ * fallbacks, then the coverage notes (incomplete map data, fences unknown
+ * when the line runs off-road).
+ */
+export function pumpLineChips(warnings: PumpChipWarnings): RouteChip[] {
+	const chips: RouteChip[] = [];
+	if (warnings.notRecommended) chips.push({ key: 'route.notRecommended', color: 'danger' });
+	if (warnings.pressureLevel === 'caution') {
+		chips.push({ key: 'route.checkPressure', color: 'warning' });
+	}
+	for (const fallback of warnings.fallbacks) {
+		chips.push({ key: `route.fallback.${fallback}`, color: 'medium' });
+	}
+	if (warnings.incomplete) chips.push({ key: 'route.incomplete', color: 'medium' });
+	if (warnings.offRoadMeters >= OFF_ROAD_SHOWN_M) chips.push(BARRIERS_UNKNOWN_CHIP);
+	return chips;
+}
+
+/** The low-priority coverage notes: what the map data may lack, not a warning about the line. */
+const COVERAGE_CHIP_KEYS: readonly string[] = [
+	BARRIERS_UNKNOWN_CHIP.key,
+	'route.incomplete',
+	'route.noElevation'
+];
+
+export function isCoverageChip(chip: Pick<RouteChip, 'key'>): boolean {
+	return COVERAGE_CHIP_KEYS.includes(chip.key);
+}
+
+/**
+ * Splits chips for the pump panel (owner feedback): the warnings (not
+ * recommended, check pressure, fallbacks such as a straight line) stay
+ * visible right below the numbers; the coverage notes move into the line's
+ * route section on phones.
+ */
+export function splitCoverageChips<C extends Pick<RouteChip, 'key'>>(
+	chips: C[]
+): { warnings: C[]; coverage: C[] } {
+	return {
+		warnings: chips.filter((chip) => !isCoverageChip(chip)),
+		coverage: chips.filter(isCoverageChip)
+	};
 }
 
 /** Expanded (true) or collapsed per sheet section; collapsed at the start of a session. */
@@ -386,4 +460,48 @@ export function sheetGrowTarget(breakpoints: readonly number[], current: number)
 		.sort((a, b) => a - b)
 		.find((b) => b >= SECTION_SHEET_BREAKPOINT - 1e-6 && b > current);
 	return target ?? null;
+}
+
+/*
+ * The nearby list (owner feedback): the selected entry's row expands in place
+ * to the route details, instead of a section on top of the list that
+ * scrolls away.
+ */
+
+/**
+ * The row that is expanded after a tap on `tapped`: a tap on another row
+ * selects and expands it (the previous one collapses); a tap on the selected
+ * row toggles it (it stays selected). Only one row is expanded at a time.
+ */
+export function rowExpansionAfter(
+	expanded: string | null,
+	selected: string | null,
+	tapped: string
+): string | null {
+	if (tapped !== selected) return tapped;
+	return expanded === tapped ? null : tapped;
+}
+
+/**
+ * What an expanded row shows: `loading` while its route is computed (or not
+ * started yet), `updating` while a drawn route of this row is recomputed
+ * (the details stay, with a small indicator), `ready`, or `none` when the
+ * attempt for this row ended without a line.
+ */
+export type RowRouteState = 'loading' | 'updating' | 'ready' | 'none';
+
+export interface SelectedRouteStatus {
+	/** The marker the last finished request was for (with or without a line). */
+	routeRef: string | null;
+	/** Whether a line is drawn for `routeRef`. */
+	hasRoute: boolean;
+	/** The marker a running request is for. */
+	pendingRef: string | null;
+}
+
+export function rowRouteState(row: string, status: SelectedRouteStatus): RowRouteState {
+	const drawn = status.routeRef === row && status.hasRoute;
+	if (status.pendingRef === row) return drawn ? 'updating' : 'loading';
+	if (status.routeRef === row) return drawn ? 'ready' : 'none';
+	return 'loading';
 }

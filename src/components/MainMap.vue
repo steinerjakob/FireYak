@@ -933,11 +933,17 @@ function setSelectedPathVisibility(visible: boolean) {
 	}
 }
 
-function updateSelectedPath(hoseRoute: HoseRoute) {
+/** OSM ref of the selected marker: which nearby row the selected route belongs to. */
+function selectedMarkerRef(): string | null {
+	const element = markerStore.selectedMarker;
+	return element ? toRef(element.type, element.id) : null;
+}
+
+function updateSelectedPath(hoseRoute: HoseRoute, forRef: string | null) {
 	selectedRoute = hoseRoute;
 	selectedPathCoords.value = hoseRoute.points.map((p) => [p.lng, p.lat] as [number, number]);
 	selectedPathVisible.value = true;
-	routeDetails.setSelectedRoute(hoseRoute);
+	routeDetails.setSelectedRoute(hoseRoute, forRef);
 	if (hoseRoute.routed) void maybeShowCrossCountryNote(hoseRoute.offRoadMeters);
 
 	if (rootMap && mapReady) {
@@ -958,12 +964,13 @@ function routeChanged(before: HoseRoute, after: HoseRoute): boolean {
 	);
 }
 
-function hideSelectedPath() {
+/** Hides the line; `forRef` is the marker the attempt was for (its nearby row says "no line"). */
+function hideSelectedPath(forRef: string | null = selectedMarkerRef()) {
 	lineFreshness.reset();
 	selectedPathVisible.value = false;
 	selectedRoute = null;
 	selectedPathCoords.value = [];
-	routeDetails.setSelectedRoute(null);
+	routeDetails.setSelectedRoute(null, forRef);
 	if (rootMap && mapReady) {
 		setSelectedPathVisibility(false);
 	}
@@ -1075,6 +1082,9 @@ const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 		return;
 	}
 	const requestId = ++pathRequestSeq;
+	// The nearby list's expanded row shows the route as computing (or updating).
+	const forRef = selectedMarkerRef();
+	routeDetails.beginSelectedRoute(forRef);
 	// Outside the nearby view the map-center fallback would draw a confusing
 	// line out of the screen center, so a real user location is required there.
 	const currentLocation = inNearbyMode ? await getCurrentLocation() : currentUserLocation.value;
@@ -1128,12 +1138,18 @@ const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
 		);
 	} catch (e) {
 		if (isRoutingCancelled(e)) return;
+		// A failed new line hides the previous marker's; a failed silent
+		// recompute keeps the drawn one. Either way the request is over.
+		if (requestId === pathRequestSeq) {
+			if (options.silent) routeDetails.setSelectedRoute(selectedRoute, forRef);
+			else hideSelectedPath(forRef);
+		}
 		throw e;
 	}
 	if (requestId !== pathRequestSeq) return;
 	lineFreshness.finish(startedAt, isRouteDataComplete(hoseRoute));
 	const previous = selectedRoute;
-	updateSelectedPath(hoseRoute);
+	updateSelectedPath(hoseRoute, forRef);
 	// A silent recompute that changed the line: a short width pulse, no refit.
 	if (options.silent && previous && rootMap && mapReady && routeChanged(previous, hoseRoute)) {
 		pulseRouteLayers(rootMap, SELECTED_PATH_LAYER_PREFIX);
@@ -1816,11 +1832,12 @@ function setupMapEventListeners(map: maplibregl.Map) {
 		if (!markerEditStore.isActive && openRouteDetailsAt(map, e.point)) return;
 
 		// With the card open, a tap on the map only closes it (the badge stays).
-		// Phones have no card (the details are in the sheet): the tap clears a
-		// focused stretch and then behaves as before.
+		// Phones have no card (the details are in the sheet), nor has the
+		// nearby list (its selected row expands): the tap clears a focused
+		// stretch and then behaves as before.
 		if (routeDetails.isOpen.value) {
 			routeDetails.closeDetails();
-			if (!isMobile.value) return;
+			if (!isMobile.value && !nearbyWaterSource.isActive.value) return;
 		}
 
 		// Click on empty map area

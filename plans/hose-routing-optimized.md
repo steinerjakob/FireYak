@@ -865,24 +865,31 @@ a sixth). The line shows a short **badge**, the card holds the rest:
   beside the side panel, 360 px wide; when the marker info shows its photo
   thumbnail (also bottom left there) the card moves right of it
   (`useMarkerThumbnail`), so the photo never covers it.
-- Pump line: the same card on a tap on the line, with only the stretches and
-  the legend (length, hoses, height and chips are in the pump panel already).
+- Pump line: the same card on a tap on the line, with the off-road metres,
+  the stretches and the legend (length, hoses, height and chips are in the
+  pump panel already).
+- Desktop nearby list: no card either; the selected row expands in the side
+  panel as on phones (below). The card stays for the marker info's route and
+  the pump line. A map tap then clears a focused stretch and behaves as
+  before (as on phones).
 - **Phone (sheet layout, < 768 px; owner feedback):** no floating card. A
   card above the sheet covered most of the map, and the marker's photo
   thumbnail covered the card. The details move into the bottom sheets as a
   route section (`RouteSheetSection.vue`; the details themselves are
   `RouteDetailsContent.vue`, shared with the card; the view model stays in
   `routeDetails.ts`):
-  - where: the marker info sheet (route to that marker) and the nearby list
-    sheet (selected entry's route) at the top of the sheet content, visible
-    at the first breakpoint; the pump sheet right below its chips, with only
-    the stretches and the legend (no chips or numbers twice).
+  - where: the marker info sheet (route to that marker) at the top of the
+    sheet content, visible at the first breakpoint; the pump sheet below its
+    numbers (see "Pump sheet order"), with the off-road metres, the
+    stretches and the legend (no chips or numbers twice). The nearby list has
+    no section: its selected row expands (see "Nearby list rows").
   - collapsed header (button with `aria-expanded`, chevron): title and
     `routeSummary` ("ca. 828 m · 42 B-Schläuche · ↑13 m"; DOM text, so the
     arrows are fine), plus the most important chip (`headerChip`: not
     recommended, else check pressure, else a fallback; coverage notes only
     as "+n weitere"). Pump: `stretchSummary` ("1× sehr steil · 2× steil ·
-    1× querfeldein").
+    427 m querfeldein"; the off-road metres replace the off-road count when
+    ≥ 10 m).
   - expanded: rows, all chips, stretches, direction note, legend (folded).
     Collapsed at the start of a session; the state is kept per section
     (`selected`, `pump`) for the session (`sectionStateAfter`), not stored.
@@ -901,6 +908,50 @@ a sixth). The line shows a short **badge**, the card holds the rest:
     so this does not occur in normal use; should it, the tap only highlights
     the stretch on the map (no card appears).
   - the badge on the line stays.
+  - **Pump sheet order (owner feedback, second round):** the four number
+    tiles first, the reserve right under them (it is about the tiles'
+    numbers), then the warnings that must stay visible without expanding
+    ("Höhenunterschied ignoriert (offline)", "Nicht empfohlen", "Druck
+    prüfen", fallbacks such as "Luftlinie"), then the route section, then the
+    elevation profile and the entries. The low-priority coverage notes
+    (`isCoverageChip`: fences unknown, map data incomplete, no heights) sit
+    under the section's header row, expanded or not (`splitCoverageChips`,
+    `pumpLineChips`). The separate "427 m querfeldein" line under the tiles
+    is gone: the metres are in the section header and as a row of the
+    details (`pumpLineDetailsView` with the legs' off-road metres). Without a
+    section (desktop, or an unrouted straight line) the notes and the
+    off-road line show under the warnings as before.
+  - **Nearby list rows (owner feedback, second round):** a section on top of
+    the list scrolled away. Instead the selected entry's row expands in
+    place (`NearbyMarker.vue`, phone and side panel): a row tap selects it
+    and expands it (`rowExpansionAfter`); a tap on the selected row
+    collapses or expands it again (it stays selected); another selection
+    collapses the previous row; only the selected row can be expanded. The
+    expanded row shows `RouteDetailsContent` (rows, chips, stretches,
+    direction note, legend folded) below the row's text; its own compact
+    chips step aside while the details show (the details have them all).
+    Not selected rows keep their compact look and chips. The row scrolls
+    into view (`scrollIntoView` nearest) and the sheet grows to 0.5 as for
+    the section. A tap on the line expands the selected row; on a coloured or
+    dashed run it also focuses and scrolls to its stretch row. While the
+    row's route is computed the expanded area shows a small spinner and
+    "Schlauchweg wird berechnet …"; while a drawn route of that row is
+    recomputed the details stay with a small spinner in the corner
+    (`rowRouteState` over which marker the drawn route goes to and which one
+    is being routed, `beginSelectedRoute`/`setSelectedRoute` in
+    `composable/routeDetails.ts`); an attempt that ended without a line says
+    "Kein Schlauchweg verfügbar". The details never show the previous row's
+    route.
+  - **Pump line labels:** the hose-count labels ("~25 B-Schläuche") of the
+    pump legs no longer overlap the markers or each other. The markers are
+    DOM elements the label placement does not see, so an invisible symbol
+    layer above the labels reserves each marker's box (48 px pins anchored
+    at the bottom, 32 px waypoints centred, `icon-allow-overlap` true,
+    `icon-ignore-placement` false), and the labels take part in collision
+    (`text-allow-overlap`/`text-ignore-placement` false) with
+    `text-variable-anchor` (above, below, beside the leg's midpoint) and
+    `text-radial-offset`. A label that fits nowhere at a zoom level shows
+    again when zooming in.
 - The list keeps its line (`routeLabel` with ↑/↓) and chips; list, badge, card
   and pump panel show the one `route.meters`.
 

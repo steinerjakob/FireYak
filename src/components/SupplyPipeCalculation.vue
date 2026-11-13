@@ -23,14 +23,17 @@ import firepointIcon from '@/assets/markers/firepoint.png';
 import wayPointIcon from '@/assets/markers/waypoint.png';
 import pumpIcon from '@/assets/markers/markerpump.png'; // Add pump icon import
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
-import { BARRIERS_UNKNOWN_CHIP, OFF_ROAD_SHOWN_M, formatMeters } from '@/helper/routeLabel';
+import { OFF_ROAD_SHOWN_M, formatMeters } from '@/helper/routeLabel';
+import { pumpLineChips, splitCoverageChips } from '@/helper/routeDetails';
 import { useCrossCountryNote } from '@/composable/crossCountryNote';
+import { useRouteDetails } from '@/composable/routeDetails';
 
 const { t, locale } = useI18n();
 const pumpCalculation = usePumpCalculation();
 const pumpCalculationStore = usePumpCalculationStore();
 const { maybeShowCrossCountryNote } = useCrossCountryNote();
 const { isMobile } = useScreenDetection();
+const routeDetails = useRouteDetails();
 
 const calculationAllowed = computed(() => {
 	return pumpCalculation.firePointSet.value && pumpCalculation.suctionPointSet.value;
@@ -61,24 +64,24 @@ const tubeCount = computed(() => {
 	);
 });
 
-/** Warning and fallback chips of the line (not recommended, check pressure, …). */
+/**
+ * Chips of the line: the warnings (not recommended, check pressure, fallbacks)
+ * stay visible right below the numbers; the coverage notes (fences unknown,
+ * incomplete map data) go into the route section on phones (owner feedback).
+ */
 const lineChips = computed(() => {
 	const warnings = pumpCalculation.calculationResult.value?.warnings;
-	if (!warnings) return [];
-	const chips: { key: string; color: 'danger' | 'warning' | 'medium' }[] = [];
-	if (warnings.notRecommended) chips.push({ key: 'route.notRecommended', color: 'danger' });
-	if (warnings.pressureLevel === 'caution') {
-		chips.push({ key: 'route.checkPressure', color: 'warning' });
-	}
-	for (const fallback of warnings.fallbacks) {
-		chips.push({ key: `route.fallback.${fallback}`, color: 'medium' });
-	}
-	if (warnings.incomplete) chips.push({ key: 'route.incomplete', color: 'medium' });
-	if (warnings.offRoadMeters >= OFF_ROAD_SHOWN_M) chips.push(BARRIERS_UNKNOWN_CHIP);
-	return chips;
+	const chips = (warnings ? pumpLineChips(warnings) : []).map((chip) => ({
+		...chip,
+		text: t(chip.key)
+	}));
+	return splitCoverageChips(chips);
 });
 
-/** "340 m off-road" for the line, or empty below the display threshold. */
+/** The route section (phone, routed line): it holds the coverage notes and the off-road metres. */
+const sectionShown = computed(() => isMobile.value && routeDetails.pumpSegments.value.length > 0);
+
+/** "340 m off-road" for the line, or empty below the display threshold (without the section). */
 const offRoadText = computed(() => {
 	const meters = pumpCalculation.calculationResult.value?.warnings.offRoadMeters ?? 0;
 	return meters >= OFF_ROAD_SHOWN_M
@@ -296,32 +299,7 @@ watch(pumpCalculation.selectedResultEntry, (id) => {
 	</ion-list>
 
 	<ion-list v-else>
-		<ion-item v-if="pumpCalculation.calculationResult.value.elevationIgnored" lines="none">
-			<ion-chip color="warning" class="elevation-ignored-chip">
-				<ion-icon :icon="cloudOfflineOutline"></ion-icon>
-				{{ t('pumpCalculation.elevationIgnored') }}
-			</ion-chip>
-		</ion-item>
-		<ion-item v-if="lineChips.length > 0" lines="none">
-			<div class="line-chips">
-				<ion-chip
-					v-for="chip in lineChips"
-					:key="chip.key"
-					:color="chip.color"
-					:outline="chip.color === 'medium'"
-				>
-					<ion-icon v-if="chip.color !== 'medium'" :icon="warningOutline"></ion-icon>
-					{{ t(chip.key) }}
-				</ion-chip>
-			</div>
-		</ion-item>
-
-		<!-- The line's coloured stretches (phone), next to its chips and visible at
-		     the sheet's first breakpoint; length, hoses, height and chips stay in
-		     this panel, so the section adds only the stretches and the legend. -->
-		<RouteSheetSection v-if="isMobile" host="pump" />
-
-		<!-- Summary stat grid -->
+		<!-- Summary stat grid first (owner feedback), then the reserve for it -->
 		<ion-item lines="none">
 			<ion-label>
 				<div class="stat-grid">
@@ -350,9 +328,6 @@ watch(pumpCalculation.selectedResultEntry, (id) => {
 						<div class="stat-value">{{ elevationDiffLabel }}</div>
 					</div>
 				</div>
-				<div v-if="offRoadText" class="reserve-row">
-					<span class="reserve-value">{{ offRoadText }}</span>
-				</div>
 				<div class="reserve-row">
 					<span class="reserve-label">{{ t('pumpCalculation.pump.reserve') }}:</span>
 					<span class="reserve-value"
@@ -361,6 +336,45 @@ watch(pumpCalculation.selectedResultEntry, (id) => {
 						}}
 						· +{{ reservePumps }} {{ t('pumpCalculation.pump.title') }}</span
 					>
+				</div>
+			</ion-label>
+		</ion-item>
+
+		<!-- Warnings stay visible right below the numbers they qualify. -->
+		<ion-item v-if="pumpCalculation.calculationResult.value.elevationIgnored" lines="none">
+			<ion-chip color="warning" class="elevation-ignored-chip">
+				<ion-icon :icon="cloudOfflineOutline"></ion-icon>
+				{{ t('pumpCalculation.elevationIgnored') }}
+			</ion-chip>
+		</ion-item>
+		<ion-item v-if="lineChips.warnings.length > 0" lines="none">
+			<div class="line-chips">
+				<ion-chip
+					v-for="chip in lineChips.warnings"
+					:key="chip.key"
+					:color="chip.color"
+					:outline="chip.color === 'medium'"
+				>
+					<ion-icon v-if="chip.color !== 'medium'" :icon="warningOutline"></ion-icon>
+					{{ chip.text }}
+				</ion-chip>
+			</div>
+		</ion-item>
+
+		<!-- The line (phone): stretches with the off-road metres in the header,
+		     the coverage notes under it, the details when expanded. Without it
+		     (desktop, or a line that is not routed) the notes and the off-road
+		     metres show here. -->
+		<RouteSheetSection v-if="sectionShown" host="pump" :notes="lineChips.coverage" />
+		<ion-item v-else-if="lineChips.coverage.length > 0 || offRoadText" lines="none">
+			<ion-label>
+				<div v-if="lineChips.coverage.length > 0" class="line-chips">
+					<ion-chip v-for="chip in lineChips.coverage" :key="chip.key" :color="chip.color" outline>
+						{{ chip.text }}
+					</ion-chip>
+				</div>
+				<div v-if="offRoadText" class="reserve-row">
+					<span class="reserve-value">{{ offRoadText }}</span>
 				</div>
 			</ion-label>
 		</ion-item>

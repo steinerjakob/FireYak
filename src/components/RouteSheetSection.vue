@@ -12,6 +12,7 @@ import {
 	stretchSummary,
 	type RouteSectionHost
 } from '@/helper/routeDetails';
+import type { RouteChip } from '@/helper/routeLabel';
 
 /**
  * The route section of a bottom sheet (phone layout, plan §6.8): a compact
@@ -19,10 +20,16 @@ import {
  * expands it to the details (the card's content) inside the sheet, which
  * grows to its next breakpoint when it is lower than half the screen.
  * Nothing floats over the map. A tap on a coloured or dashed run of the line
- * expands it on that stretch.
+ * expands it on that stretch. The pump panel passes its coverage notes
+ * (fences unknown, incomplete map data), shown under the header row; its
+ * warnings stay above the section, right below the numbers.
  */
 
-const props = defineProps<{ host: RouteSectionHost }>();
+const props = defineProps<{
+	host: RouteSectionHost;
+	/** Low-priority chips shown under the header row, expanded or not (pump panel). */
+	notes?: (RouteChip & { text: string })[];
+}>();
 
 const { t, locale } = useI18n();
 const details = useRouteDetails();
@@ -54,7 +61,11 @@ const summary = computed(() => {
 			hoseName: pumpStore.hoseName
 		});
 	}
-	return stretchSummary(view.value?.stretches ?? [], { t, locale: locale.value });
+	return stretchSummary(
+		view.value?.stretches ?? [],
+		{ t, locale: locale.value },
+		details.pumpOffRoadMeters.value
+	);
 });
 
 /** The pump panel shows its chips itself; the pump view has none. */
@@ -127,6 +138,11 @@ const bodyId = `route-section-body-${Math.random().toString(36).slice(2, 8)}`;
 			</span>
 			<ion-icon class="chevron" :icon="expanded ? chevronUp : chevronDown" aria-hidden="true" />
 		</button>
+		<div v-if="notes && notes.length > 0" class="section-notes">
+			<ion-chip v-for="note in notes" :key="note.key" :color="note.color" outline>
+				{{ note.text }}
+			</ion-chip>
+		</div>
 		<div v-if="expanded" :id="bodyId" class="route-sheet-body">
 			<RouteDetailsContent
 				ref="content"
@@ -211,6 +227,21 @@ const bodyId = `route-section-body-${Math.random().toString(36).slice(2, 8)}`;
 	flex-shrink: 0;
 	font-size: 22px;
 	color: var(--md-sys-on-surface-variant, inherit);
+}
+
+.section-notes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 0 12px 8px;
+}
+
+.section-notes ion-chip {
+	margin: 0;
+	height: 24px;
+	font-size: 0.75rem;
+	--padding-start: 8px;
+	--padding-end: 8px;
 }
 
 .route-sheet-body {

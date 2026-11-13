@@ -8,6 +8,7 @@ import RouteDetailsContent from '@/components/RouteDetailsContent.vue';
 import { useRouteDetails, useRouteDetailsView } from '@/composable/routeDetails';
 import { useDefaultStore } from '@/store/defaultStore';
 import { MARKER_THUMBNAIL_PX, useMarkerThumbnail } from '@/composable/markerThumbnail';
+import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 
 /**
  * The floating route details card of the side-panel layout (plan §6.8):
@@ -15,12 +16,17 @@ import { MARKER_THUMBNAIL_PX, useMarkerThumbnail } from '@/composable/markerThum
  * coloured or dashed run opens it focused on that stretch. Sits bottom left
  * beside the side panel and the marker's photo thumbnail. On phones the
  * details live in the bottom sheet instead (`RouteSheetSection.vue`), so
- * nothing floats over the map there.
+ * nothing floats over the map there. The nearby list shows the selected
+ * route in its expanded row (`NearbyMarker.vue`) in both layouts, so the
+ * card only shows the marker info's route and the pump line.
  */
 
 const { t } = useI18n();
 const details = useRouteDetails();
-const view = useRouteDetailsView(() => details.source.value);
+const { isActive: nearbyActive } = useNearbyWaterSource();
+const view = useRouteDetailsView(() =>
+	details.source.value === 'selected' && nearbyActive.value ? null : details.source.value
+);
 const { visibleMapView } = storeToRefs(useDefaultStore());
 
 const { thumbnailShown } = useMarkerThumbnail();

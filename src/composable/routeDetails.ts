@@ -18,11 +18,13 @@ import {
 
 /**
  * State of the route details (plan §6.8), shared by the map, the pump
- * calculation, the floating card (desktop) and the sheet sections (phone):
- * which line was opened last (`selected`: the nearby / marker route; `pump`:
- * the pump line), the data of both lines, the focused stretch and whether
- * each sheet section is expanded (for the session, not persisted). A module
- * singleton like the other map composables.
+ * calculation, the floating card (desktop marker info), the sheet sections
+ * (phone) and the expanded row of the nearby list: which line was opened
+ * last (`selected`: the nearby / marker route; `pump`: the pump line), the
+ * data of both lines (which marker the selected route goes to, and which one
+ * is being routed), the focused stretch and whether each sheet section is
+ * expanded (for the session, not persisted). A module singleton like the
+ * other map composables.
  */
 
 export type RouteDetailsSource = RouteSectionHost;
@@ -31,11 +33,19 @@ export type RouteDetailsSource = RouteSectionHost;
 export type TappedRun = Pick<RouteSegment, 'from' | 'to' | 'steep' | 'offRoad'>;
 
 const selectedRoute = shallowRef<HoseRoute | null>(null);
+/** The marker the drawn selected route goes to (OSM ref), and the one a running request is for. */
+const selectedRouteRef = ref<string | null>(null);
+const pendingRouteRef = ref<string | null>(null);
 const pumpSegments = shallowRef<RouteSegment[]>([]);
+/** Off-road metres of the routed pump legs (the panel's number). */
+const pumpOffRoadMeters = ref(0);
 const source = ref<RouteDetailsSource | null>(null);
 const focusId = ref<string | null>(null);
 const sectionState = ref<RouteSectionState>(INITIAL_SECTION_STATE);
-/** Counts taps on a line: its sheet section grows the sheet and shows the focused row on each. */
+/**
+ * Counts taps on a line: its sheet section (or the nearby list's selected
+ * row) expands, grows the sheet and shows the focused row on each.
+ */
 const focusRequest = ref(0);
 
 const stretches = computed<RouteStretch[]>(() => {
@@ -93,23 +103,37 @@ function toggleSection(which: RouteSectionHost) {
 	sectionState.value = sectionStateAfter(sectionState.value, which, 'toggle');
 }
 
-/** The selected route changed (or is gone): a gone route closes its card. */
-function setSelectedRoute(route: HoseRoute | null) {
+/** A request for the selected route (to the marker `forRef`) started; its row shows it. */
+function beginSelectedRoute(forRef: string | null) {
+	pendingRouteRef.value = forRef;
+}
+
+/**
+ * The selected route changed (or is gone) for the marker `forRef`: ends a
+ * running request; a gone route closes its card.
+ */
+function setSelectedRoute(route: HoseRoute | null, forRef: string | null = null) {
 	selectedRoute.value = route;
+	selectedRouteRef.value = forRef;
+	pendingRouteRef.value = null;
 	if (!route && source.value === 'selected') closeDetails();
 	else if (focusId.value && !focusedStretch.value) focusId.value = null;
 }
 
 /** The pump line's runs changed (empty when it is cleared or straight). */
-function setPumpSegments(segments: RouteSegment[]) {
+function setPumpSegments(segments: RouteSegment[], offRoadMeters = 0) {
 	pumpSegments.value = segments;
+	pumpOffRoadMeters.value = offRoadMeters;
 	if (focusId.value && !focusedStretch.value) focusId.value = null;
 }
 
 export function useRouteDetails() {
 	return {
 		selectedRoute,
+		selectedRouteRef,
+		pendingRouteRef,
 		pumpSegments,
+		pumpOffRoadMeters,
 		source,
 		focusId,
 		stretches,
@@ -122,6 +146,7 @@ export function useRouteDetails() {
 		sectionState,
 		focusRequest,
 		toggleSection,
+		beginSelectedRoute,
 		setSelectedRoute,
 		setPumpSegments
 	};
@@ -149,7 +174,9 @@ export function useRouteDetailsView(
 				hoseName: pumpStore.hoseName
 			});
 		}
-		if (line === 'pump') return pumpLineDetailsView(pumpSegments.value, options);
+		if (line === 'pump') {
+			return pumpLineDetailsView(pumpSegments.value, options, pumpOffRoadMeters.value);
+		}
 		return null;
 	});
 }

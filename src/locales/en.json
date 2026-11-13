@@ -571,6 +571,9 @@
 			}
 		},
 		"section": {
+			"loading": "Computing the hose route …",
+			"updating": "Updating",
+			"noRoute": "No hose route available",
 			"noStretches": "No steep or off-road stretches",
 			"more": "+{count} more",
 			"count": {

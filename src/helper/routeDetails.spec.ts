@@ -11,13 +11,18 @@ import {
 	badgeTone,
 	formatClimb,
 	headerChip,
+	isCoverageChip,
 	legendEntryOf,
+	pumpLineChips,
 	pumpLineDetailsView,
 	routeBadge,
 	routeDetailsView,
 	routeStretches,
 	routeSummary,
+	rowExpansionAfter,
+	rowRouteState,
 	sectionStateAfter,
+	splitCoverageChips,
 	sheetGrowTarget,
 	stretchForRun,
 	stretchSummary,
@@ -303,6 +308,15 @@ describe('pumpLineDetailsView: the card for the pump line', () => {
 		expect(view.stretches.map((s) => s.text)).toEqual(['Sehr steil: 61 % bergauf auf 40 m']);
 		expect(view.directionNote).toMatch(/Ansaugstelle/);
 	});
+
+	it('the off-road metres as a row (the panel has no line for them any more)', () => {
+		const segments = [seg(0, 100, 0), seg(100, 527, 0, true)];
+		expect(pumpLineDetailsView(segments, deText, 427.4).rows).toEqual([
+			{ key: 'offRoad', label: 'Querfeldein', value: '427 m' }
+		]);
+		expect(pumpLineDetailsView(segments, enText, 1427).rows[0].value).toBe('1,427 m');
+		expect(pumpLineDetailsView(segments, deText, 9).rows).toEqual([]);
+	});
 });
 
 describe('formatClimb', () => {
@@ -391,10 +405,123 @@ describe('stretchSummary: the header of the pump line section', () => {
 		expect(stretchSummary(stretches, enText)).toBe('1× very steep · 2× steep · 1× off-road');
 	});
 
+	it('with off-road metres: the metres instead of the off-road count', () => {
+		const stretches = [
+			{ kind: 'offRoad' as const },
+			{ kind: 'steep' as const },
+			{ kind: 'offRoad' as const },
+			{ kind: 'steep' as const }
+		];
+		expect(stretchSummary(stretches, deText, 427)).toBe('2× steil · 427 m querfeldein');
+		expect(stretchSummary(stretches, enText, 1427)).toBe('2× steep · 1,427 m off-road');
+		// Below the display threshold the count stays.
+		expect(stretchSummary(stretches, deText, 5)).toBe('2× steil · 2× querfeldein');
+	});
+
 	it('no stretches', () => {
 		expect(stretchSummary([], deText)).toBe(
 			'Keine steilen oder querfeldein verlaufenden Abschnitte'
 		);
+	});
+});
+
+describe('pump panel chips: warnings stay below the numbers, coverage goes into the section', () => {
+	const warnings = {
+		notRecommended: false,
+		pressureLevel: null,
+		fallbacks: [] as string[],
+		incomplete: false,
+		offRoadMeters: 0
+	};
+
+	it('chips in order: not recommended, check pressure, fallbacks, incomplete, fences', () => {
+		const chips = pumpLineChips({
+			notRecommended: true,
+			pressureLevel: 'caution',
+			fallbacks: ['tooFar'],
+			incomplete: true,
+			offRoadMeters: 427
+		});
+		expect(chips.map((c) => c.key)).toEqual([
+			'route.notRecommended',
+			'route.checkPressure',
+			'route.fallback.tooFar',
+			'route.incomplete',
+			'route.barriersUnknown'
+		]);
+		expect(chips.map((c) => c.color)).toEqual(['danger', 'warning', 'medium', 'medium', 'medium']);
+	});
+
+	it('fences only with an off-road stretch; nothing for a clean line', () => {
+		expect(pumpLineChips(warnings)).toEqual([]);
+		expect(pumpLineChips({ ...warnings, offRoadMeters: 9 })).toEqual([]);
+		expect(pumpLineChips({ ...warnings, offRoadMeters: 10 }).map((c) => c.key)).toEqual([
+			'route.barriersUnknown'
+		]);
+		expect(pumpLineChips({ ...warnings, pressureLevel: 'warning' })).toEqual([]);
+	});
+
+	it('safety warnings and fallbacks stay outside; coverage notes go into the section', () => {
+		const chips = pumpLineChips({
+			notRecommended: true,
+			pressureLevel: 'caution',
+			fallbacks: ['noRoadNearby'],
+			incomplete: true,
+			offRoadMeters: 427
+		});
+		const { warnings: outside, coverage } = splitCoverageChips(chips);
+		expect(outside.map((c) => c.key)).toEqual([
+			'route.notRecommended',
+			'route.checkPressure',
+			'route.fallback.noRoadNearby'
+		]);
+		expect(coverage.map((c) => c.key)).toEqual(['route.incomplete', 'route.barriersUnknown']);
+		expect(isCoverageChip({ key: 'route.noElevation' })).toBe(true);
+		expect(isCoverageChip({ key: 'route.fallback.tileCap' })).toBe(false);
+	});
+
+	it('the split keeps the chips (with text)', () => {
+		const chips = [{ key: 'route.barriersUnknown', color: 'medium' as const, text: 'Zäune' }];
+		expect(splitCoverageChips(chips)).toEqual({ warnings: [], coverage: chips });
+	});
+});
+
+describe('rowExpansionAfter: the nearby list expands the selected row in place', () => {
+	it('a tap on another row selects and expands it; the previous one collapses', () => {
+		expect(rowExpansionAfter(null, null, 'n1')).toBe('n1');
+		expect(rowExpansionAfter('n1', 'n1', 'n2')).toBe('n2');
+		expect(rowExpansionAfter(null, 'n1', 'n2')).toBe('n2');
+	});
+
+	it('a tap on the selected row toggles it (it stays selected)', () => {
+		expect(rowExpansionAfter('n1', 'n1', 'n1')).toBeNull();
+		expect(rowExpansionAfter(null, 'n1', 'n1')).toBe('n1');
+	});
+});
+
+describe('rowRouteState: what the expanded row shows', () => {
+	const status = (routeRef: string | null, hasRoute: boolean, pendingRef: string | null) => ({
+		routeRef,
+		hasRoute,
+		pendingRef
+	});
+
+	it("loading while its route is computed or not started; the previous row's line is not shown", () => {
+		expect(rowRouteState('n2', status('n1', true, 'n2'))).toBe('loading');
+		expect(rowRouteState('n2', status('n1', true, null))).toBe('loading');
+		expect(rowRouteState('n2', status(null, false, null))).toBe('loading');
+	});
+
+	it('ready when its line is drawn; updating while that line is recomputed', () => {
+		expect(rowRouteState('n2', status('n2', true, null))).toBe('ready');
+		expect(rowRouteState('n2', status('n2', true, 'n2'))).toBe('updating');
+		// Another row's request does not touch this row's line.
+		expect(rowRouteState('n2', status('n2', true, 'n3'))).toBe('ready');
+	});
+
+	it('none when the attempt for this row ended without a line', () => {
+		expect(rowRouteState('n2', status('n2', false, null))).toBe('none');
+		expect(rowRouteState('n2', status('n2', false, 'n2'))).toBe('loading');
 	});
 });
 
@@ -462,6 +589,9 @@ describe('i18n', () => {
 			),
 			'route.section.noStretches',
 			'route.section.more',
+			'route.section.loading',
+			'route.section.updating',
+			'route.section.noRoute',
 			...['verySteep', 'steep', 'offRoad'].map((k) => `route.section.count.${k}`),
 			...ROUTE_LEGEND.map((e) => e.key)
 		];
