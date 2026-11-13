@@ -932,7 +932,10 @@ a sixth). The line shows a short **badge**, the card holds the rest:
     chips step aside while the details show (the details have them all).
     Not selected rows keep their compact look and chips. The row scrolls
     into view (`scrollIntoView` nearest) and the sheet grows to 0.5 as for
-    the section. A tap on the line expands the selected row; on a coloured or
+    the section. The rows are an Ionic `ion-accordion-group` (value = the
+    expanded row, `ionChange` feeds `rowExpansionAfter`; its built-in toggle
+    icon and aria replace a custom chevron); the expanded content has no left
+    accent bar (the header row keeps the selected style). A tap on the line expands the selected row; on a coloured or
     dashed run it also focuses and scrolls to its stretch row. While the
     row's route is computed the expanded area shows a small spinner and
     "Schlauchweg wird berechnet …"; while a drawn route of that row is

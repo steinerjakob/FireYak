@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { IonChip, IonIcon, IonItem, IonLabel, IonList, IonSpinner } from '@ionic/vue';
-import { chevronDown, chevronUp } from 'ionicons/icons';
+import {
+	IonAccordion,
+	IonAccordionGroup,
+	IonChip,
+	IonItem,
+	IonLabel,
+	IonList,
+	IonSpinner
+} from '@ionic/vue';
 
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { computed, inject, nextTick, ref, watch } from 'vue';
@@ -98,10 +105,14 @@ const focusId = computed(() =>
 	details.source.value === 'selected' ? details.focusId.value : null
 );
 
-const rowEls = new Map<string, HTMLElement>();
-function setRowEl(id: string, el: unknown) {
-	if (el) rowEls.set(id, el as HTMLElement);
-	else rowEls.delete(id);
+/** Plain wrapper of the accordion group: its rows are found by `data-ref`. */
+const groupEl = ref<HTMLElement | null>(null);
+function rowElement(id: string): HTMLElement | null {
+	return (
+		Array.from(groupEl.value?.querySelectorAll<HTMLElement>('ion-accordion') ?? []).find(
+			(el) => el.dataset.ref === id
+		) ?? null
+	);
 }
 
 const content = ref<InstanceType<typeof RouteDetailsContent> | null>(null);
@@ -109,19 +120,31 @@ function setContent(el: unknown) {
 	content.value = el as InstanceType<typeof RouteDetailsContent> | null;
 }
 
+const ACCORDION_SETTLE_MS = 320;
+
 /** Grows the sheet (phone) and brings the expanded row into view. */
 async function revealRow() {
 	const id = expandedRef.value;
 	if (!id) return;
 	await sheet?.grow();
 	await nextTick();
-	rowEls.get(id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+	// The accordion animates its height open; scroll once it has settled.
+	await new Promise((resolve) => setTimeout(resolve, ACCORDION_SETTLE_MS));
+	rowElement(id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-function onRowTap(id: string) {
+/**
+ * The accordion group reports a tap on a header (`ionChange`, user input only):
+ * its value is the opened row, or empty when the open row was collapsed.
+ */
+function onAccordionChange(event: CustomEvent<{ value?: string | string[] | null }>) {
+	const raw = event.detail.value;
+	const value = Array.isArray(raw) ? raw[0] : raw;
+	const tapped = value || expandedRef.value;
+	if (!tapped) return;
 	const selected = selectedMarkerRef.value;
-	expandedRef.value = rowExpansionAfter(expandedRef.value, selected, id);
-	if (id !== selected) void router.push(`/nearbysources/${id}`);
+	expandedRef.value = rowExpansionAfter(expandedRef.value, selected, tapped);
+	if (tapped !== selected) void router.push(`/nearbysources/${tapped}`);
 	else if (expandedRef.value) void revealRow();
 }
 
@@ -155,73 +178,73 @@ watch(details.focusRequest, async () => {
 		@pointerdown="markInteraction"
 		@wheel.passive="markInteraction"
 	>
-		<!-- Nearby Water Sources; the selected row expands to its route details. -->
-		<div
-			v-for="item in formattedList"
-			:key="item.ref"
-			:ref="(el) => setRowEl(item.ref, el)"
-			class="nearby-row"
-		>
-			<ion-item
-				button
-				:detail="false"
-				:aria-expanded="selectedMarkerRef === item.ref ? expandedRef === item.ref : undefined"
-				@click="onRowTap(item.ref)"
-				:class="{ selected: selectedMarkerRef === item.ref, updated: updatedRefs.has(item.ref) }"
-			>
-				<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
-				<ion-label>
-					<h3>{{ item.title }}</h3>
-					<p>{{ item.distanceText }}</p>
-					<div
-						v-if="item.chips.length > 0 && !(expandedRef === item.ref && showsDetails)"
-						class="route-chips"
+		<!-- Nearby Water Sources; the selected row opens to its route details. -->
+		<div ref="groupEl">
+			<ion-accordion-group :value="expandedRef ?? undefined" @ionChange="onAccordionChange">
+				<ion-accordion
+					v-for="item in formattedList"
+					:key="item.ref"
+					:value="item.ref"
+					:data-ref="item.ref"
+					class="nearby-row"
+				>
+					<ion-item
+						slot="header"
+						:class="{
+							selected: selectedMarkerRef === item.ref,
+							updated: updatedRefs.has(item.ref)
+						}"
 					>
-						<ion-chip
-							v-for="chip in item.chips"
-							:key="chip.key"
-							:color="chip.color"
-							:outline="chip.color === 'medium'"
-						>
-							{{ t(chip.key) }}
-						</ion-chip>
+						<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
+						<ion-label>
+							<h3>{{ item.title }}</h3>
+							<p>{{ item.distanceText }}</p>
+							<div
+								v-if="item.chips.length > 0 && !(expandedRef === item.ref && showsDetails)"
+								class="route-chips"
+							>
+								<ion-chip
+									v-for="chip in item.chips"
+									:key="chip.key"
+									:color="chip.color"
+									:outline="chip.color === 'medium'"
+								>
+									{{ t(chip.key) }}
+								</ion-chip>
+							</div>
+						</ion-label>
+					</ion-item>
+					<div slot="content" class="row-details">
+						<template v-if="expandedRef === item.ref && expandedState">
+							<div v-if="expandedState === 'loading'" class="row-status" role="status">
+								<ion-spinner name="crescent" />
+								<span>{{ t('route.section.loading') }}</span>
+							</div>
+							<p v-else-if="expandedState === 'none' || !view" class="row-status">
+								{{ t('route.section.noRoute') }}
+							</p>
+							<template v-else>
+								<span
+									v-if="expandedState === 'updating'"
+									class="row-updating"
+									role="status"
+									:title="t('route.section.updating')"
+									:aria-label="t('route.section.updating')"
+								>
+									<ion-spinner name="crescent" />
+								</span>
+								<RouteDetailsContent
+									:ref="setContent"
+									:view="view"
+									:focus-id="focusId"
+									:legend-open="false"
+									@select="(id) => details.selectStretch('selected', id)"
+								/>
+							</template>
+						</template>
 					</div>
-				</ion-label>
-				<ion-icon
-					v-if="selectedMarkerRef === item.ref"
-					slot="end"
-					class="row-chevron"
-					:icon="expandedRef === item.ref ? chevronUp : chevronDown"
-					aria-hidden="true"
-				/>
-			</ion-item>
-			<div v-if="expandedRef === item.ref && expandedState" class="row-details">
-				<div v-if="expandedState === 'loading'" class="row-status" role="status">
-					<ion-spinner name="crescent" />
-					<span>{{ t('route.section.loading') }}</span>
-				</div>
-				<p v-else-if="expandedState === 'none' || !view" class="row-status">
-					{{ t('route.section.noRoute') }}
-				</p>
-				<template v-else>
-					<span
-						v-if="expandedState === 'updating'"
-						class="row-updating"
-						role="status"
-						:title="t('route.section.updating')"
-						:aria-label="t('route.section.updating')"
-					>
-						<ion-spinner name="crescent" />
-					</span>
-					<RouteDetailsContent
-						:ref="setContent"
-						:view="view"
-						:focus-id="focusId"
-						:legend-open="false"
-						@select="(id) => details.selectStretch('selected', id)"
-					/>
-				</template>
-			</div>
+				</ion-accordion>
+			</ion-accordion-group>
 		</div>
 	</ion-list>
 </template>
@@ -271,17 +294,14 @@ ion-label p {
 	--padding-end: 8px;
 }
 
-.row-chevron {
-	font-size: 22px;
-	margin: 0 0 0 4px;
-	color: var(--md-sys-on-surface-variant, inherit);
+ion-accordion {
+	background: transparent;
 }
 
-/* The expanded row's details continue the selected row's highlight. */
+/* The expanded details: no left bar (the header row keeps the selected style). */
 .row-details {
 	position: relative;
-	padding: 0 12px 12px 15px;
-	border-left: 3px solid var(--ion-color-primary);
+	padding: 0 12px 12px;
 	background: rgba(var(--ion-color-primary-rgb), 0.06);
 	color: var(--md-sys-on-surface, var(--ion-text-color));
 }

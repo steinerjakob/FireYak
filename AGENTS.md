@@ -176,7 +176,7 @@ src/
 | `MarkerInfoHeader.vue` | Header with title and action buttons (navigate, share, edit) |
 | `MarkerInfoPanel.vue` | Bottom sheet wrapper for MarkerInfo |
 | `NativeAppInstallPrompt.vue` | Modal nudging mobile web users to install the native app |
-| `NearbyMarker.vue` | Nearby list rows (distance + B-tube count, route chips); the selected row expands in place to its route details (phone and side panel), with a loading state while its route is computed |
+| `NearbyMarker.vue` | Nearby list rows (distance + B-tube count, route chips); rows are an `ion-accordion-group`; the selected row opens in place to its route details (phone and side panel), with a loading state while its route is computed |
 | `NearbyMarkerHeader.vue` | Header for nearby markers section |
 | `NearbyMarkerPanel.vue` | Bottom sheet listing nearby water sources within radius |
 | `PondAreaCandidates.vue` | Add-mode list of OSM water areas at the pin: mark an existing pond, edit an existing fire pond, or suggest a suction point |
