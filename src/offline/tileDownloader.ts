@@ -1,6 +1,6 @@
 import { GeoBounds } from '@/types/geo';
 import { tileStore } from '@/offline/tileStore';
-import { tilesForBounds } from '@/offline/tileMath';
+import { tilesForZooms } from '@/offline/tileMath';
 import { NETWORK_URL } from '@/offline/offlineProtocol';
 
 /** Parallel tile fetches per source. Kept modest to stay polite to the CDNs. */
@@ -123,8 +123,13 @@ export interface DownloadTilesOptions {
 	bounds: GeoBounds;
 	/** Source key into {@link NETWORK_URL} (`protomaps` | `satellite` | `terrain`). */
 	source: string;
-	/** Inclusive max zoom to download (min is always 0). */
-	zMax: number;
+	/**
+	 * Zooms to download, in order (terrain: 0–12 and the routing DEM 14). The
+	 * order is the resume order: zooms are only ever appended, so a cursor from
+	 * an earlier run stays valid and an existing area picks up a new zoom on its
+	 * next refresh or retry.
+	 */
+	zooms: readonly number[];
 	areaId: number;
 	signal: AbortSignal;
 	/**
@@ -144,8 +149,8 @@ export interface DownloadTilesOptions {
  * so overlapping areas are nearly free.
  */
 export async function downloadTiles(opts: DownloadTilesOptions): Promise<void> {
-	const { bounds, source, zMax, areaId, signal, onProgress } = opts;
-	const it = tilesForBounds(bounds, 0, zMax)[Symbol.iterator]();
+	const { bounds, source, zooms, areaId, signal, onProgress } = opts;
+	const it = tilesForZooms(bounds, zooms)[Symbol.iterator]();
 
 	// Fast-forward the shared iterator past tiles handled in a previous run.
 	for (let skipped = 0; skipped < (opts.resumeFrom ?? 0); skipped++) {

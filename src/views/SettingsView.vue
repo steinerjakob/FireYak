@@ -110,6 +110,18 @@
 					></ion-input>
 				</ion-item>
 
+				<ion-item>
+					<ion-input
+						:label="$t('settings.pumpCalculation.maxHosePressure')"
+						:helper-text="$t('settings.pumpCalculation.maxHosePressureHelp')"
+						label-placement="stacked"
+						type="number"
+						inputmode="decimal"
+						:value="pumpCalculationStore.maxHosePressure"
+						@ion-change="onMaxHosePressureChange($event)"
+					></ion-input>
+				</ion-item>
+
 				<!-- Offline Section -->
 				<ion-list-header>
 					<ion-label>{{ $t('settings.offline.title') }}</ion-label>
@@ -118,6 +130,39 @@
 				<ion-item button detail router-link="/settings/offline-areas">
 					<ion-icon slot="start" :icon="cloudDownloadOutline"></ion-icon>
 					<ion-label>{{ $t('settings.offline.offlineAreas') }}</ion-label>
+				</ion-item>
+
+				<ion-item>
+					<ion-select
+						:label="$t('settings.offline.routingCache.label')"
+						label-placement="stacked"
+						interface="popover"
+						:value="routingCacheMb"
+						@ion-change="onRoutingCacheMbChange($event)"
+					>
+						<ion-select-option v-for="mb in ROUTING_CACHE_MB_CHOICES" :key="mb" :value="mb">
+							{{ mb }} MB
+						</ion-select-option>
+					</ion-select>
+				</ion-item>
+				<ion-item lines="full">
+					<ion-label class="ion-text-wrap">
+						<p>
+							{{
+								$t('settings.offline.routingCache.description', {
+									used: routingCacheUsedMb
+								})
+							}}
+						</p>
+					</ion-label>
+					<ion-button
+						slot="end"
+						fill="clear"
+						:disabled="routingCacheUsedMb === '0'"
+						@click="clearRoutingCache"
+					>
+						{{ $t('settings.offline.routingCache.clear') }}
+					</ion-button>
 				</ion-item>
 
 				<ion-item button detail router-link="/settings/pending-edits">
@@ -143,7 +188,7 @@
 				</ion-item>
 
 				<ion-item v-if="osmAuthStore.isAuthenticated" lines="none">
-					<ion-button fill="primary" @click="openOsmProfile()">
+					<ion-button fill="solid" @click="openOsmProfile()">
 						<ion-icon slot="start" :icon="openOutline"></ion-icon>
 						{{ $t('settings.account.manageAccount') }}
 					</ion-button>
@@ -189,7 +234,10 @@ import {
 	IonIcon,
 	IonBadge,
 	IonInput,
+	IonSelect,
+	IonSelectOption,
 	SegmentCustomEvent,
+	SelectCustomEvent,
 	ToggleCustomEvent,
 	InputCustomEvent
 } from '@ionic/vue';
@@ -203,6 +251,7 @@ import {
 import { useSettingsStore, type ThemeSetting } from '@/store/settingsStore';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { useSettings } from '@/composable/settings';
+import { modeFromToggle } from '@/helper/hoseRoutingSetting';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import { OSM_WEB_URL } from '@/services/osmConfig';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
@@ -210,6 +259,8 @@ import { storeToRefs } from 'pinia';
 import { Capacitor } from '@capacitor/core';
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { registerSegmentEffect } from '@rdlabo/ionic-theme-ios26';
+import { routingCache } from '@/offline/routingCache';
+import { MB, ROUTING_CACHE_MB_CHOICES } from '@/offline/routingCacheIndex';
 
 // Liquid-glass knob animation for the theme segment (iOS 26 theme, ios mode
 // only — Ionic reflects the active mode on the <html> element).
@@ -238,9 +289,37 @@ onBeforeUnmount(() => {
 });
 
 const settingsStore = useSettingsStore();
-const { saveTheme, saveShowZoomButtons, saveClampHosesToRoads, saveShowPathToMarker } =
-	useSettings();
-const { theme, showZoomButtons, clampHosesToRoads, showPathToMarker } = storeToRefs(settingsStore);
+const {
+	saveTheme,
+	saveShowZoomButtons,
+	saveHoseRouting,
+	saveShowPathToMarker,
+	saveRoutingCacheMb
+} = useSettings();
+const { theme, showZoomButtons, clampHosesToRoads, showPathToMarker, routingCacheMb } =
+	storeToRefs(settingsStore);
+
+// Routing cache (plan §6.9): budget setting, bytes in use, clear.
+const routingCacheUsedMb = ref('0');
+async function refreshRoutingCacheUsage() {
+	await routingCache.whenReady();
+	const mb = routingCache.sizeBytes() / MB;
+	routingCacheUsedMb.value = mb === 0 ? '0' : mb < 1 ? '<1' : mb.toFixed(0);
+}
+onMounted(() => void refreshRoutingCacheUsage());
+
+const onRoutingCacheMbChange = async (event: SelectCustomEvent) => {
+	const mb = Number(event.detail.value);
+	if (!Number.isFinite(mb) || mb <= 0) return;
+	await saveRoutingCacheMb(mb);
+	// App.vue applies the budget; the eviction may take a moment.
+	setTimeout(() => void refreshRoutingCacheUsage(), 300);
+};
+
+const clearRoutingCache = async () => {
+	await routingCache.clear();
+	await refreshRoutingCacheUsage();
+};
 const osmAuthStore = useOsmAuthStore();
 const pendingEditsStore = usePendingEditsStore();
 const { pendingCount } = storeToRefs(pendingEditsStore);
@@ -253,8 +332,9 @@ const onShowZoomButtonsChange = (event: ToggleCustomEvent) => {
 	saveShowZoomButtons(event.detail.checked);
 };
 
+// On = roads only, off = optimized (plan §6.7).
 const onClampToRoadsChange = (event: ToggleCustomEvent) => {
-	saveClampHosesToRoads(event.detail.checked);
+	saveHoseRouting(modeFromToggle(event.detail.checked));
 };
 
 const onShowPathToMarkerChange = (event: ToggleCustomEvent) => {
@@ -275,6 +355,13 @@ const onHoseDiameterChange = (event: InputCustomEvent) => {
 	const value = Number(event.detail.value);
 	if (Number.isFinite(value) && value > 0) {
 		pumpCalculationStore.tubeDiameter = value;
+	}
+};
+
+const onMaxHosePressureChange = (event: InputCustomEvent) => {
+	const value = Number(event.detail.value);
+	if (Number.isFinite(value) && value > 0) {
+		pumpCalculationStore.maxHosePressure = value;
 	}
 };
 

@@ -415,7 +415,7 @@
 			"defaultName": "Mein Bereich",
 			"includeSatellite": "Satellitenbilder einschließen",
 			"includeTerrain": "Gelände einschließen",
-			"includeTerrainHint": "Für die Pumpenberechnung offline erforderlich — Geländekacheln liefern die Höhendaten.",
+			"includeTerrainHint": "Offline für die Pumpenberechnung und für Schlauchwege im Gelände erforderlich — Geländekacheln liefern die Höhendaten.",
 			"autoRefresh": "Automatisch über WLAN aktualisieren",
 			"autoRefreshHint": "Automatisch über WLAN aktualisieren, wenn älter als 30 Tage.",
 			"estimate": "Etwa {width} × {height} km",
@@ -451,20 +451,27 @@
 				"description": "Zeichnet eine Linie mit der Entfernung vom eigenen Standort zur ausgewählten Wasserentnahmestelle"
 			},
 			"clampToRoads": {
-				"label": "Schlauchweg an Straßen ausrichten",
-				"description": "Wenn deaktiviert, darf die Route durch Gärten und offenes Gelände führen (Gebäude werden immer umgangen)"
+				"label": "Schlauchweg nur auf Straßen und Wegen",
+				"description": "Aus: Die Route wägt Straßen, Felder, Steigungen und Hindernisse ab. Ein: nur Straßen und Wege, mit kurzen Anbindungen an beiden Enden."
 			}
 		},
 		"pumpCalculation": {
 			"title": "Pumpenberechnung",
 			"hoseLength": "Schlauchlänge (m)",
 			"hoseDiameter": "Schlauchdurchmesser (mm)",
-			"hoseName": "Schlauchbezeichnung"
+			"hoseName": "Schlauchbezeichnung",
+			"maxHosePressure": "Max. Betriebsdruck der Schläuche (bar)",
+			"maxHosePressureHelp": "Lange Leitungen bergab warnen, wenn der Ruhedruck ihn erreichen könnte"
 		},
 		"offline": {
 			"title": "Offline",
 			"offlineAreas": "Offline-Bereiche",
-			"pendingEdits": "Ausstehende Änderungen"
+			"pendingEdits": "Ausstehende Änderungen",
+			"routingCache": {
+				"label": "Speicher für Routendaten",
+				"description": "Karten- und Geländedaten für Schlauchwege in deiner Umgebung – Routen erscheinen schneller und funktionieren offline. Belegt: {used} MB",
+				"clear": "Leeren"
+			}
 		}
 	},
 	"pendingEdits": {
@@ -518,5 +525,70 @@
 		},
 		"aboutLink": "Neuigkeiten",
 		"support": "Projekt unterstützen"
+	},
+	"route": {
+		"estimate": "ca. {distance}",
+		"offRoad": "{distance} querfeldein",
+		"roadOnly": "Straße {distance}",
+		"notRecommended": "Nicht empfohlen",
+		"checkPressure": "Druck prüfen",
+		"incomplete": "Kartendaten unvollständig",
+		"barriersUnknown": "Hindernisse (Zäune) unbekannt",
+		"crossCountryNote": "Querfeldein-Abschnitte vor Ort prüfen: Zäune, Mauern und Hecken fehlen in den Kartendaten.",
+		"ok": "OK",
+		"fallback": {
+			"cellCap": "Gebiet zu groß: nur Straßen",
+			"tileCap": "Kartendaten abgeschnitten",
+			"tooFar": "Luftlinie: zu weit für eine Route",
+			"noRoadNearby": "Luftlinie: keine Straße in der Nähe",
+			"gridUnreached": "Querfeldein nicht erreichbar: nur Straßen",
+			"thinBuildings": "Gebäude hier lückenhaft: nur Straßen"
+		},
+		"noElevation": "Höhendaten fehlen",
+		"details": {
+			"title": "Schlauchweg",
+			"titlePump": "Schlauchleitung",
+			"close": "Schließen",
+			"length": "Länge",
+			"hoses": "Schläuche",
+			"climb": "Höhenunterschied",
+			"climbTowardsSource": "{climb} zur Entnahmestelle",
+			"offRoad": "Querfeldein",
+			"roadOnly": "Nur auf Straßen",
+			"stretches": "Farbige Abschnitte",
+			"noStretches": "Keine steilen oder querfeldein verlaufenden Abschnitte.",
+			"legend": "Legende",
+			"uphill": "bergauf",
+			"downhill": "bergab",
+			"directionSource": "Bergauf und bergab gesehen vom Standort zur Wasserentnahmestelle.",
+			"directionPump": "Bergauf und bergab gesehen von der Ansaugstelle zum Brandobjekt.",
+			"stretch": {
+				"steep": "Steil: {grade} % {direction} auf {distance}",
+				"verySteep": "Sehr steil: {grade} % {direction} auf {distance}",
+				"steepPlain": "Steil auf {distance}",
+				"verySteepPlain": "Sehr steil auf {distance}",
+				"offRoad": "Querfeldein: {distance}"
+			}
+		},
+		"section": {
+			"showDetails": "Routendetails anzeigen",
+			"hideDetails": "Routendetails ausblenden",
+			"loading": "Schlauchweg wird berechnet …",
+			"updating": "Wird aktualisiert",
+			"noRoute": "Kein Schlauchweg verfügbar",
+			"noStretches": "Keine steilen oder querfeldein verlaufenden Abschnitte",
+			"more": "+{count} weitere",
+			"count": {
+				"verySteep": "{count}× sehr steil",
+				"steep": "{count}× steil",
+				"offRoad": "{count}× querfeldein"
+			}
+		},
+		"legend": {
+			"road": "Auf Straßen und Wegen",
+			"offRoad": "Querfeldein (gestrichelt)",
+			"steep": "Steil: über 25 %",
+			"verySteep": "Sehr steil: über 50 % (Querstriche)"
+		}
 	}
 }

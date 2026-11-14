@@ -1,0 +1,421 @@
+{
+	"id": "5-innsbruck",
+	"name": "Innsbruck",
+	"fetched": "2026-11-10",
+	"anchor": {
+		"lat": 47.2446305,
+		"lng": 11.3724783,
+		"label": "Hydrant, OSM node 5870424885"
+	},
+	"tiles": {
+		"basemap": {
+			"z": 15,
+			"x": [
+				17418,
+				17419
+			],
+			"y": [
+				11491,
+				11493
+			]
+		},
+		"dem": [
+			{
+				"z": 14,
+				"x": [
+					8709,
+					8709
+				],
+				"y": [
+					5745,
+					5746
+				]
+			},
+			{
+				"z": 12,
+				"x": [
+					2177,
+					2177
+				],
+				"y": [
+					1436,
+					1436
+				]
+			}
+		]
+	},
+	"rings": [
+		{
+			"radius": 150,
+			"bearing": 90,
+			"vehicle": {
+				"lat": 47.244309,
+				"lng": 11.374213
+			},
+			"straightM": 136,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 112.5,
+			"vehicle": {
+				"lat": 47.244204,
+				"lng": 11.374431
+			},
+			"straightM": 155,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 247.5,
+			"vehicle": {
+				"lat": 47.244232,
+				"lng": 11.370515
+			},
+			"straightM": 155,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 270,
+			"vehicle": {
+				"lat": 47.244364,
+				"lng": 11.370778
+			},
+			"straightM": 132,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 300,
+			"bearing": 225,
+			"vehicle": {
+				"lat": 47.242597,
+				"lng": 11.368961
+			},
+			"straightM": 348,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 300,
+			"bearing": 247.5,
+			"vehicle": {
+				"lat": 47.243479,
+				"lng": 11.369025
+			},
+			"straightM": 290,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 500,
+			"bearing": 0,
+			"vehicle": {
+				"lat": 47.249258,
+				"lng": 11.372409
+			},
+			"straightM": 512,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 500,
+			"bearing": 337.5,
+			"vehicle": {
+				"lat": 47.248773,
+				"lng": 11.369954
+			},
+			"straightM": 496,
+			"vehicleKind": "minor_road/residential"
+		}
+	],
+	"ringsRelaxed": [
+		{
+			"radius": 150,
+			"bearing": 0,
+			"vehicle": {
+				"lat": 47.244788,
+				"lng": 11.372159
+			},
+			"straightM": 30,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 22.5,
+			"vehicle": {
+				"lat": 47.244753,
+				"lng": 11.372365
+			},
+			"straightM": 16,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 45,
+			"vehicle": {
+				"lat": 47.244489,
+				"lng": 11.373443
+			},
+			"straightM": 75,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 67.5,
+			"vehicle": {
+				"lat": 47.24439,
+				"lng": 11.373921
+			},
+			"straightM": 112,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 90,
+			"vehicle": {
+				"lat": 47.244309,
+				"lng": 11.374213
+			},
+			"straightM": 136,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 112.5,
+			"vehicle": {
+				"lat": 47.244204,
+				"lng": 11.374431
+			},
+			"straightM": 155,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 135,
+			"vehicle": {
+				"lat": 47.244157,
+				"lng": 11.374509
+			},
+			"straightM": 162,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 157.5,
+			"vehicle": {
+				"lat": 47.244439,
+				"lng": 11.373692
+			},
+			"straightM": 94,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 180,
+			"vehicle": {
+				"lat": 47.244551,
+				"lng": 11.372998
+			},
+			"straightM": 40,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 202.5,
+			"vehicle": {
+				"lat": 47.244326,
+				"lng": 11.370703
+			},
+			"straightM": 138,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 225,
+			"vehicle": {
+				"lat": 47.244219,
+				"lng": 11.370489
+			},
+			"straightM": 157,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 247.5,
+			"vehicle": {
+				"lat": 47.244232,
+				"lng": 11.370515
+			},
+			"straightM": 155,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 270,
+			"vehicle": {
+				"lat": 47.244364,
+				"lng": 11.370778
+			},
+			"straightM": 132,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 292.5,
+			"vehicle": {
+				"lat": 47.244579,
+				"lng": 11.371221
+			},
+			"straightM": 95,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 315,
+			"vehicle": {
+				"lat": 47.244763,
+				"lng": 11.371694
+			},
+			"straightM": 61,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 150,
+			"bearing": 337.5,
+			"vehicle": {
+				"lat": 47.244806,
+				"lng": 11.371965
+			},
+			"straightM": 43,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 300,
+			"bearing": 90,
+			"vehicle": {
+				"lat": 47.243952,
+				"lng": 11.374849
+			},
+			"straightM": 194,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 300,
+			"bearing": 112.5,
+			"vehicle": {
+				"lat": 47.24356,
+				"lng": 11.375184
+			},
+			"straightM": 236,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 300,
+			"bearing": 135,
+			"vehicle": {
+				"lat": 47.243338,
+				"lng": 11.375256
+			},
+			"straightM": 254,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 300,
+			"bearing": 225,
+			"vehicle": {
+				"lat": 47.242597,
+				"lng": 11.368961
+			},
+			"straightM": 348,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 300,
+			"bearing": 247.5,
+			"vehicle": {
+				"lat": 47.243479,
+				"lng": 11.369025
+			},
+			"straightM": 290,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 300,
+			"bearing": 270,
+			"vehicle": {
+				"lat": 47.243886,
+				"lng": 11.369466
+			},
+			"straightM": 242,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 500,
+			"bearing": 0,
+			"vehicle": {
+				"lat": 47.249258,
+				"lng": 11.372409
+			},
+			"straightM": 512,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 500,
+			"bearing": 22.5,
+			"vehicle": {
+				"lat": 47.249889,
+				"lng": 11.374253
+			},
+			"straightM": 597,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 500,
+			"bearing": 202.5,
+			"vehicle": {
+				"lat": 47.240558,
+				"lng": 11.369119
+			},
+			"straightM": 517,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 500,
+			"bearing": 225,
+			"vehicle": {
+				"lat": 47.241522,
+				"lng": 11.368943
+			},
+			"straightM": 435,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 500,
+			"bearing": 247.5,
+			"vehicle": {
+				"lat": 47.243027,
+				"lng": 11.367947
+			},
+			"straightM": 386,
+			"vehicleKind": "minor_road/service"
+		},
+		{
+			"radius": 500,
+			"bearing": 315,
+			"vehicle": {
+				"lat": 47.248797,
+				"lng": 11.368607
+			},
+			"straightM": 546,
+			"vehicleKind": "minor_road/residential"
+		},
+		{
+			"radius": 500,
+			"bearing": 337.5,
+			"vehicle": {
+				"lat": 47.248773,
+				"lng": 11.369954
+			},
+			"straightM": 496,
+			"vehicleKind": "minor_road/residential"
+		}
+	]
+}

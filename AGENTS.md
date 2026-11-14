@@ -28,7 +28,8 @@ FireYak is a hybrid mobile and web application designed for firefighters and eme
 - **OSM Editing**: osm-api with OAuth2 PKCE; edits queue offline and sync when back online
 - **In-App Review**: `@capacitor-community/in-app-review`, gated by a usage-based composable
 - **Styling**: SCSS, Material Design 3 custom theme
-- **Code Quality**: ESLint, Prettier, Stylelint, Commitlint (Conventional Commits), Husky + lint-staged
+- **Code Quality**: ESLint, Prettier, Stylelint, Commitlint (Conventional Commits), Husky + lint-staged, `vue-tsc` type check
+- **Testing**: Vitest (Node environment) for pure modules; routing scene specs read real map tiles from `src/mapHandler/__fixtures__/routing/`
 - **Changelog/Release Tooling**: git-cliff (CHANGELOG.md generation), custom `scripts/stamp-whats-new.mjs`
 - **CI/CD**: GitHub Actions (GitHub Pages deploy, Google Play via Fastlane, TestFlight via Fastlane, unified release pipeline)
 
@@ -50,9 +51,11 @@ src/
 ├── router/          # Route definitions
 ├── services/        # External auth service integration (OSM OAuth) and OSM endpoint config (`osmConfig.ts`)
 ├── store/           # Pinia stores
+├── testing/         # Test-only helpers for specs (fixture loading, tile decoding); never imported by app code
 ├── theme/           # SCSS variables and Material Design 3 CSS overrides
 ├── types/           # Shared TypeScript types (geo, obstacles)
 ├── views/           # Top-level page components
+├── workers/         # Web Workers (`hoseRouting.worker.ts`: the hose routing solve, a thin shell over `mapHandler/hoseRoutingProtocol.ts`)
 ├── App.vue          # Root component
 └── main.ts          # Application entry point
 ```
@@ -68,23 +71,26 @@ src/
 | `offlineAreasStore.ts` | Manages downloaded offline map areas (download/refresh/delete, size estimates, auto-refresh) |
 | `osmAuthStore.ts` | OAuth2 PKCE authentication with OpenStreetMap |
 | `pendingEditsStore.ts` | Reactive facade over the offline edit queue; exposes pending edits and sync-now |
-| `pumpCalculationSettings.ts` | Pump calculation parameters with localStorage persistence |
-| `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, marker filters, zoom button visibility, system bar styling |
+| `pumpCalculationSettings.ts` | Pump calculation parameters (incl. max. hose working pressure) with Preferences persistence |
+| `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, hose routing mode (`hoseRouting`: `optimized` by default, `roads` with the "keep on roads" toggle), the one-time cross-country note flag (`crossCountryNoteSeen`), the routing cache budget (`routingCacheMb`, default 50 MB; `App.vue` applies it), marker filters, zoom button visibility, system bar styling |
 
 ### Composables (`src/composable/`)
 
 | File | Purpose |
 |---|---|
+| `crossCountryNote.ts` | The one-time "check cross-country stretches on site" toast for the first hose line with an off-road stretch (flag persisted in Preferences) |
+| `routeDetails.ts` | State of the route details (desktop card, phone sheet sections, the expanded nearby row): which line was opened (selected route or pump line), both lines' data (which marker the selected route goes to and which one is being routed, the pump line's off-road metres), the focused stretch (tap on a coloured run or a row), the session-only expanded state of each sheet section, the shared view model (`useRouteDetailsView`) and the sheet-grow injection key |
+| `markerThumbnail.ts` | Whether the marker info shows and its floating photo thumbnail (shared by the marker info panel and the desktop route card, which keeps clear of it) |
 | `darkModeDetection.ts` | Read-only reactive "is the dark palette active" flag (view of `settingsStore`) |
 | `inAppReview.ts` | Tracks active usage days and triggers the one-shot native in-app review prompt |
-| `modalBreakpointWatcher.ts` | Tracks Ionic modal breakpoint state changes |
-| `nearbyWaterSource.ts` | Reactive list of nearby water sources, ranked by road-aware distance |
+| `modalBreakpointWatcher.ts` | Tracks Ionic modal breakpoint state changes; `provideRouteSheet` lets a sheet's route section grow the sheet |
+| `nearbyWaterSource.ts` | Reactive list of nearby water sources, ranked by routed hose length (straight line for unrouted ones); `applySilentUpdate` takes a recompute after late routing data (metres in place with a short highlight, re-sorted once the list is not touched) |
 | `networkStatus.ts` | Singleton reactive online/offline status shared across the app |
 | `photonSearch.ts` | Address/place search against the Photon geocoding API |
 | `pumpCalculation.ts` | Relay pump calculations (waypoints, elevation, pump positioning) |
 | `screenDetection.ts` | Mobile/desktop breakpoint detection (768px) |
 | `screenOrientation.ts` | Device orientation monitoring via Capacitor |
-| `settings.ts` | Loads/saves persistent settings via Capacitor Preferences |
+| `settings.ts` | Loads/saves persistent settings via Capacitor Preferences (incl. the one-time hose routing migration write-back) |
 | `systemColorScheme.ts` | Single source of truth for the OS `prefers-color-scheme` preference; re-polls on every foreground transition because Android's WebView drops the `change` event while backgrounded |
 | `whatsNew.ts` | Loads `whats-new.json`, tracks last-seen app version, drives the What's New modal |
 
@@ -95,29 +101,49 @@ src/
 | `appStoreInfos.ts` | App Store / Play Store URLs for the current app |
 | `areaShore.ts` | Outline geometry for water areas: nearest shore point, point-in-area, outline bounds |
 | `calculatePumpPosition.ts` | Optimal pump positioning along routes (pressure/elevation/flow) |
-| `demElevation.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo) |
+| `demElevation.ts` | Main-thread entry to `demTiles.ts`: wires it to the cache-first `offline://` tile pipeline and re-exports it |
+| `demTiles.ts` | Elevation sampling from the Mapterhorn terrain DEM tiles (offline-capable, replaces Open-Meteo) with a decode LRU and an injected tile fetcher (no app I/O import, so it also runs in the routing worker); route profiles try z14 within a budget, else z12; `loadRoutingHeights` loads the `optimized` grid's height raster (z14, else z12, within the routing DEM budget) |
+| `demRaster.ts` | Pure DEM helpers: terrarium decode, bilinear sampling across tile edges, the cost grid's height raster (`buildHeightRaster`: one-cell halo, 3×3 smoothing) and step grades (`stepGrade`: per step on z14, 24 m baseline on z12) |
 | `distanceCalculation.ts` | Haversine distance + geodetic point interpolation (20m intervals) |
 | `elevationData.ts` | Batch elevation fetching helper (legacy/fallback path) |
 | `helper.ts` | Debounce utility |
+| `nearbyListMerge.ts` | Pure merge of a silent recompute into the nearby list (order kept while the list is in use, changed entries reported) |
+| `routingBudget.ts` | The non-blocking contract of hose routing: `ROUTING_DATA_BUDGET_MS` (1.5 s) as an `AbortSignal`, `budgetedFetch` (wait raced against the budget; an aborted signal means local stores only) |
+| `hosePressure.ts` | Downhill static-pressure rule against the max. hose working pressure; hydrant pressure parsing |
+| `hoseRoutingSetting.ts` | Hose routing mode type (`optimized` \| `roads`) and the pure migration from the old `clamp_hoses_to_roads` key and the removed `direct` mode (`resolveHoseRouting`: written back once, old key removed); toggle mapping (`modeFromToggle`) |
+| `polygonGeometry.ts` | Exact segment/polygon tests (edge intersection, containment, holes) used by route smoothing |
+| `routeLabel.ts` | Route label line of the nearby list (estimate prefix, hoses, signed climb, off-road metres, road-only length when > 15 % off) and the warning/fallback/coverage chips shared by the list, the details card and the pump panel; when the one-time cross-country note is due |
+| `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line, the phone sheet section's header (`routeSummary`, `headerChip`, `stretchSummary`), expanded state and sheet growth (`sectionStateAfter`, `sheetGrowTarget`), the pump panel's chips and which stay outside the section (`pumpLineChips`, `splitCoverageChips`), and the nearby row expansion (`rowExpansionAfter` with the select, arrow-toggle and stretch actions, `rowRouteState`) |
+| `routeProfile.ts` | Steep (>25 %/>50 %, grade over deck heights on bridges) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
-| `weightedDistance.ts` | Tuning constants for the road-aware weighted-distance heuristic (building penalty, road bonus, sampling) |
 
 ### Map Handlers (`src/mapHandler/`)
 
 | File | Purpose |
 |---|---|
 | `databaseHandler.ts` | IndexedDB wrapper for marker caching, offline areas, pending edits, and spatial queries |
-| `gridRouting.ts` | Cost-grid Dijkstra terrain routing for hose laying (not clamped to roads, avoids buildings) |
+| `gridRouting.ts` | Cost-grid routing for hose laying over the `hoseCostModel.ts` classes (symmetric step cost, escape radius, A* for single paths, early-exit Dijkstra for the list, cost-aware smoothing; with a height raster each step is also priced by its slope, capped ×1.3 on roads/paths/steps, 1.0 on bridges, and a bridge connects only to roads/paths/steps) |
+| `costGrid.ts` | Pure rasteriser of the `optimized` grid: scanline polygon fill and supercover lines, drawn in the cost model's order (landuse, water, buildings, walls, roads, bridges); on grids finer than 8 m ways are drawn 8 m wide over open ground and landuse; `routableRoads` drops what `classifyRoad` excludes |
+| `cellHeap.ts` | Typed-array binary min-heap (cost, cell) used by the grid searches |
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
 | `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
-| `nearbyRouting.ts` | Road-aware ranking for the nearby water sources list (routed distance → weighted heuristic → straight-line) |
-| `obstacleGeometry.ts` | Decodes building footprints and road centerlines from Protomaps vector tiles for routing |
+| `nearbyRouting.ts` | Main-thread facade of hose routing (nearby list, marker path, pump line): runs the solve in the routing worker, fetching tile bytes cache-first and transferring them; falls back to the same solve on the main thread when no worker starts; a request `channel` lets a newer request supersede (cancel) the running one (`RoutingCancelledError`) |
+| `hoseRoutingCore.ts` | The hose routing solve (pure, I/O injected via `configureRoutingIO`; runs in the worker and on the main thread): `RoutingOptions.mode` `optimized` (default) or `roads`, adaptive cell size (`chooseCellSize`: 4/6 m single paths, 8 m list, 400k cell cap), returns a `HoseRoute` (one length, 3D over the DEM profile, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |
+| `hoseRoutingProtocol.ts` | Message protocol between main thread and routing worker: `serveHoseRouting` (worker side), `HoseRoutingClient` (main side: requests, supersession, tile/DEM-decode service), `transferablesOf` |
+| `hoseCostModel.ts` | Pure cost model for hose routing (drives the `optimized` grid and road-mode shore legs): cell classes and factors, `classifyRoad`/`classifyRail`/`classifyLanduse`/`classifyWaterLine`, `slopeFactor`, the thin-buildings test, UI warning thresholds |
+| `obstacleDecode.ts` | Pure decoder (bytes in, data out) of Protomaps tiles: buildings, roads with `kind_detail`/bridge/tunnel/access, rail, landuse, water polygons and lines, cliffs, per-tile residential/building area (thin-buildings safeguard); runs in Node specs and workers |
+| `obstacleGeometry.ts` | Main-thread entry to `obstacleTiles.ts` with the routing fetcher (`fetchRoutingTile`) as default (`getObstaclesForBounds`, `waterOutlineAt`) |
+| `obstacleTiles.ts` | Collects z15 Protomaps tiles through an injected fetcher and merges `obstacleDecode.ts` results (LRU, per-layer coverage); missing tiles are reported, never cached as empty; no app I/O import (runs in the routing worker) |
 | `overPassApi.ts` | Queries Overpass API (web fetch or native transport) for emergency infrastructure within bounds |
-| `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker |
+| `roadRouting.ts` | Shortest-path routing over decoded road centerlines for hose-laying distance to a marker (shore targets with 250 m final legs, priced per target) |
+| `routeLayers.ts` | MapLibre layers for a route: solid/dashed (off-road) runs coloured by steepness, ticks on very steep runs, focused-stretch highlight, tap target, the badge pill; `pulseRouteLayers` (width pulse after a silent recompute) |
+| `routingData.ts` | `routingDataArrived` (late basemap/DEM tiles and pond outlines, coalesced), `RouteFreshness` (recompute when a result was incomplete and data landed since), `isRouteDataComplete` |
+| `routingDebug.ts` | Pure helpers (route stats, ring-simulation ratio table, cost raster, height/slope raster, per-class area/length summary) for the dev-only routing debug view |
+| `__fixtures__/routing/` | Test data for the routing specs: five real scenes (`scene.json` committed, tiles gitignored and fetched locally, README there). Never import from app code |
 | `waterDetection.ts` | Protomaps `water` layer pre-check under the edit pin (water/no water, pond vs. large; no OSM ids) |
 | `areaOutline.ts` | Session cache + Overpass `out geom` lookup for pond-area outlines (map highlight) |
-| `waterSourceAccess.ts` | Where a hose reaches a water source: pond areas use a mapped suction point at the pond or the nearest shore point instead of the center (nearby list, path, pump calculation) |
+| `waterSourceAccess.ts` | Where a hose reaches a water source: a mapped suction point at a pond, else the whole shore as a routing goal (outline from the extract, else the Protomaps water polygon; Overpass only in the background) |
 
 ### Offline mode (`src/offline/`)
 
@@ -125,8 +151,14 @@ src/
 |---|---|
 | `areaDataDownloader.ts` | Downloads Overpass node data for a selected offline area, chunked to stay under API limits |
 | `editQueue.ts` | FIFO offline edit queue + sync engine; drains on reconnect, app start, or manual sync |
-| `offlineProtocol.ts` | Registers the `offline://` MapLibre protocol; cache-first tile/style-asset serving with online fallback |
-| `tileDownloader.ts` | Parallel tile + style-asset fetcher with retry/backoff, used for offline area downloads |
+| `areaSizeEstimate.ts` | Pure per-zoom download size estimates for offline areas (terrain z0–12 + routing DEM z14) |
+| `offlineProtocol.ts` | Registers the `offline://` MapLibre protocol; wires `tileFetchers.ts` to the app's stores (`fetchTileCacheFirst` for the map, `fetchRoutingTile`/`prefetchTile` for hose routing) |
+| `precachePolicy.ts` | Pure precache rules (GPS ring 2 km / 500 m, map move zoom ≥ 14 + 1.5 s idle + Wi-Fi, none offline/saveData) and `FetchQueue` (3 per source, priorities, preemption) |
+| `routingCache.ts` | `FireRoutingCache` IndexedDB store for routing/precache tiles (byte budget LRU, TTL), separate from downloaded areas |
+| `routingCacheIndex.ts` | Pure LRU-by-bytes and TTL (basemap 30 d, DEM 180 d) bookkeeping of the routing cache |
+| `routingPrefetch.ts` | The three precache triggers wired to the app (selected route/pump window, GPS ring, map view on Wi-Fi) |
+| `tileFetchers.ts` | Cache-first lookups with injected I/O: area store, then routing cache, then network; routing results fill the routing cache and report `routingDataArrived` |
+| `tileDownloader.ts` | Parallel tile + style-asset fetcher with retry/backoff, used for offline area downloads (per-source zoom lists; terrain includes z14) |
 | `tileMath.ts` | Web-Mercator tile math shared by the downloader, size estimator, and offline protocol |
 | `tileStore.ts` | Persistent store for downloaded tiles/style assets (IndexedDB on web, filesystem on native) |
 
@@ -144,10 +176,13 @@ src/
 | `MarkerInfoHeader.vue` | Header with title and action buttons (navigate, share, edit) |
 | `MarkerInfoPanel.vue` | Bottom sheet wrapper for MarkerInfo |
 | `NativeAppInstallPrompt.vue` | Modal nudging mobile web users to install the native app |
-| `NearbyMarker.vue` | List item showing nearby source with distance + B-tube count |
+| `NearbyMarker.vue` | Nearby list rows (distance + B-tube count, route chips); a tap on a row only selects it; the selected row has an arrow button that opens it in place to its route details (phone and side panel, an `ion-accordion-group` driven by our state), with a loading state while its route is computed |
 | `NearbyMarkerHeader.vue` | Header for nearby markers section |
 | `NearbyMarkerPanel.vue` | Bottom sheet listing nearby water sources within radius |
 | `PondAreaCandidates.vue` | Add-mode list of OSM water areas at the pin: mark an existing pond, edit an existing fire pond, or suggest a suction point |
+| `RouteDetailsCard.vue` | Floating route details card of the desktop layout (marker info route, pump line; not the nearby list, whose row expands), beside the side panel (and the marker photo thumbnail) |
+| `RouteDetailsContent.vue` | The route details themselves (length, hoses, height, chips, coloured stretches, legend), shared by the card and the sheet section |
+| `RouteSheetSection.vue` | Phone layout: the route section inside the marker info and pump sheets; a compact header row (pump: with its coverage notes under it) that expands to the details and grows the sheet |
 | `ReloadPrompt.vue` | PWA update notification with reload button |
 | `SupplyPipeCalculation.vue` | Pump supply line UI (suction/fire points, waypoints, profile) |
 | `SupplyPipeCalculationHeader.vue` | Header for pump calculation panel |
@@ -165,6 +200,7 @@ src/
 | `OfflineAreasView.vue` | Manage downloaded offline map areas (add/refresh/delete, size, online-only gating) |
 | `PendingEditsView.vue` | List queued offline edits and trigger manual sync |
 | `SettingsView.vue` | Theme selector, map layer/terrain, zoom toggle, OSM account login/logout |
+| `RoutingDebugView.vue` | Dev-only routing tuning view (scene picker, draggable origin/target, per-mode length/timing, cost raster, ring simulation); registered only in dev builds or with `VITE_ROUTING_DEBUG=1` |
 
 ### Routes
 
@@ -181,6 +217,7 @@ src/
 | `/settings/pending-edits` | PendingEditsView | Offline edit queue |
 | `/markerimages/:relatedId` | MarkerImageViewer | Image gallery |
 | `/osm-callback` | - | OAuth callback handler |
+| `/debug/routing` | RoutingDebugView | Dev-only routing tuning view (`import.meta.env.DEV` or `VITE_ROUTING_DEBUG=1`) |
 
 ### Public Assets (`public/`)
 
@@ -193,7 +230,8 @@ src/
 
 | Workflow | Trigger | Description |
 |---|---|---|
-| `release.yml` | Manual (`workflow_dispatch`) | Unified release pipeline. `prepare` job computes the next semver from Conventional Commits, bumps `package.json`/Android version, generates `CHANGELOG.md` via git-cliff, stamps `src/assets/whats-new.json`, commits, tags `v<version>`, and creates the GitHub Release; then fans out to `main.yml`/`android.yml`/`ios.yml` (each checks out that tag, read-only). **A release publishes to production**: GitHub Pages, Google Play production, and App Store review with automatic release on approval. Test builds are reviewed beforehand via `dev-builds.yml` |
+| `ci.yml` | Pull requests and pushes to `main` | Quality gate: `npm ci`, `npx eslint .`, `npm run typecheck`, `npm test` |
+| `release.yml` | Manual (`workflow_dispatch`) | Unified release pipeline. `prepare` job runs `npm test`, then computes the next semver from Conventional Commits, bumps `package.json`/Android version, generates `CHANGELOG.md` via git-cliff, stamps `src/assets/whats-new.json`, commits, tags `v<version>`, and creates the GitHub Release; then fans out to `main.yml`/`android.yml`/`ios.yml` (each checks out that tag, read-only). **A release publishes to production**: GitHub Pages, Google Play production, and App Store review with automatic release on approval. Test builds are reviewed beforehand via `dev-builds.yml` |
 | `main.yml` | `workflow_call` (from `release.yml`) or manual | Builds the web app and deploys to GitHub Pages |
 | `android.yml` | `workflow_call` or manual | Two-job pipeline: `build` runs `npm ci`/Gradle to produce an **unsigned** AAB+APK (no secrets); `deploy` downloads those artifacts, signs them with the keystore, uploads the signed APK to the GitHub Release, and pushes the AAB via Fastlane: tagged versions (`version` input set) to the **production** track (`android production` lane), everything else to the **internal** track |
 | `ios.yml` | `workflow_call` or manual | Builds and archives via Xcode/Fastlane. Tagged versions run the `ios release` lane (upload, wait for processing, submit for App Store review with automatic release, only `release_notes.txt` from `fastlane/metadata/ios` sent); everything else runs `ios beta` (TestFlight internal only) |
@@ -227,6 +265,17 @@ npm run buildAndSync
 
 # Lint and auto-fix
 npm run lint
+
+# Type check (vue-tsc; the build does not type-check)
+npm run typecheck
+
+# Run the unit tests once / in watch mode
+npm test
+npm run test:watch
+
+# Fetch the (gitignored) routing fixture tiles locally; the key comes from the
+# environment only and must never be written to a file
+VITE_PROTOMAPS_API_KEY=<key> node scripts/fetch-routing-fixtures.mjs [--scene <id>]
 
 # Generate native app icons and splash screens
 npm run generate:assets
@@ -298,11 +347,13 @@ Rules:
 
 ## 7. Important Notes for AI Agents
 
-- **No test suite exists.** There are no unit or integration tests.
+- **Tests run with Vitest** (`npm test`, Node environment). Spec files sit next to the source they test (`foo.ts` → `foo.spec.ts`) and cover pure modules; modules under test import only pure modules and take I/O through injectable fetchers. Scene specs over real map tiles are named `*.scenes.spec.ts`. Shared test-only helpers live in `src/testing/` (eslint forbids importing it, `vitest` or any `__fixtures__` path from app code). Import `describe`, `it`, `expect`, `vi` from `'vitest'` explicitly. Where a module reaches I/O directly (Capacitor Preferences in `composable/settings.ts`, the tile and DEM loaders behind `hoseRoutingCore.ts`), its spec replaces that module with `vi.mock` instead. Node has no `Worker` for Vite's worker, so `nearbyRouting.ts` routes on the main thread in specs; the worker protocol is tested over a `node:worker_threads` `MessageChannel` (`hoseRoutingProtocol*.spec.ts`).
+- **Routing fixtures** live in `src/mapHandler/__fixtures__/routing/` (see the README there): `scene.json` and the README are committed, the tile files are gitignored and fetched with `scripts/fetch-routing-fixtures.mjs`. Scene specs skip cleanly (`describe.skipIf(!fixturesPresent)`) when the tiles are absent, so in a fresh checkout a green `npm test` does not exercise them: fetch the fixtures first when you change routing code. Expected values in specs are tolerant ranges.
+- **Run `npm test` and `npm run typecheck` before committing** changes to tested modules (CI runs eslint, typecheck and tests on every PR; `release.yml` runs the tests before tagging).
 - **Areas get tag-only edits.** Fire water ponds can be ways or multipolygon relations. For those, FireYak only changes tags: never coordinates, member nodes or members, and it never deletes them (that would remove the water body). "Delete" on a pond area removes only the `emergency=fire_water_pond` flag. Helpers live in `src/helper/osmElement.ts`; the edit queue rejects area deletes.
 - **OSM OAuth2 uses PKCE flow** — see `osmAuthStore.ts` for the implementation. Never hard-code `www.openstreetmap.org` or the client ID; use `OSM_WEB_URL`/`OSM_CLIENT_ID` from `src/services/osmConfig.ts` so preview builds hit the OSM dev server.
 - **Web changes get a Cloudflare Pages preview per branch** (see §3 "Preview deployments"); point reviewers to the PR's preview link for UI checks.
 - **The PWA manifest is generated by `vite-plugin-pwa`** from `vite.config.ts`, not a static file.
 - **Marker icons** are in `src/assets/` as SVG/PNG files with type-specific variants.
-- **Elevation data** comes from the Mapterhorn terrain DEM tiles the map already loads (`src/helper/demElevation.ts`), not a separate API — this keeps pump calculation working offline inside a downloaded area.
+- **Elevation data** comes from the Mapterhorn terrain DEM tiles the map already loads (`src/helper/demElevation.ts` / `demTiles.ts`), not a separate API — this keeps pump calculation working offline inside a downloaded area.
 - **`scripts/stamp-whats-new.mjs`** moves `whats-new.json`'s `unreleased` entries into `releases` with a version/date; run only by `release.yml`, not manually during feature work.

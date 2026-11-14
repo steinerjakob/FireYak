@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, watch } from 'vue';
 import { IonApp, IonRouterOutlet } from '@ionic/vue';
 import { App as CapacitorApp } from '@capacitor/app';
 import type { PluginListenerHandle } from '@capacitor/core';
@@ -22,10 +22,21 @@ import { pruneStaleMapNodes } from '@/mapHandler/databaseHandler';
 import { useOfflineAreasStore } from '@/store/offlineAreasStore';
 import { usePendingEditsStore } from '@/store/pendingEditsStore';
 import { useNetworkStatus } from '@/composable/networkStatus';
+import { useSettingsStore } from '@/store/settingsStore';
+import { routingCache } from '@/offline/routingCache';
+import { budgetBytesFromMb } from '@/offline/routingCacheIndex';
 
 // Load user settings from storage on app startup
 const { loadSettings } = useSettings();
 loadSettings();
+
+// The routing cache follows its budget setting (plan §6.9).
+const settingsStore = useSettingsStore();
+watch(
+	() => settingsStore.routingCacheMb,
+	(mb) => void routingCache.setBudget(budgetBytesFromMb(mb)),
+	{ immediate: true }
+);
 
 // Number of days a cached water source is kept before it is pruned.
 const CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;

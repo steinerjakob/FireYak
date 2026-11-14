@@ -1,5 +1,14 @@
 # Road-aware ranking for nearby water sources
 
+> **Status: partly stale.** Routing is now planned in `plans/hose-routing-optimized.md`.
+> The following no longer holds (line references are to `origin/feature/110-pond-shore` at commit `558308a`):
+> - Real routing is listed as a future extension, but it exists. The routers are `roadRouting.ts` (road graph) and `gridRouting.ts` (terrain grid), wired up in `nearbyRouting.ts`.
+> - The list no longer shows the straight-line distance. It shows the routed distance (`NearbyMarker.vue:47`).
+> - Roads are not filtered to drivable or layable kinds. Only `rail` and `ferry` are dropped (`obstacleGeometry.ts:21`).
+> - Two line references have moved: `sortElementsByDistance` is now at `markerHandler.ts:578`, and `searchNearbyMarkers` at `MainMap.vue:1328`.
+> - The step-5 setting `roadAwareSorting` was never added. The only routing setting is `clampHosesToRoads`, which the new plan replaces with `hoseRouting`.
+> - The heuristic's `ROAD_WEIGHT = 0.75` (`weightedDistance.ts:13`) differs from the grid's `GRID_ROAD_FACTOR = 0.9` (`gridRouting.ts:20`). The new plan sets roads to 1.0.
+
 ## Context
 
 Reddit feedback (r/openstreetmap, thread `1pcc97i`): the nearby-sources list ranks by pure

@@ -31,3 +31,9 @@ tsconfig.tsbuildinfo
 # Claude Code local state (project skills stay shared)
 .claude/*
 !.claude/skills/
+
+# Routing test fixture tiles (redistribution terms still open, see
+# src/mapHandler/__fixtures__/routing/README.md). Fetch with
+# scripts/fetch-routing-fixtures.mjs; README and scene.json stay committed.
+src/mapHandler/__fixtures__/routing/**/*.mvt
+src/mapHandler/__fixtures__/routing/**/*.webp

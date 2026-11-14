@@ -11,17 +11,44 @@ import { useI18n } from 'vue-i18n';
 import { usePumpCalculationStore } from '@/store/pumpCalculationSettings';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useDefaultStore } from '@/store/defaultStore';
-import { getRoutedPath } from '@/mapHandler/nearbyRouting';
+import { getRoutedPath, type HoseRoute, type RouteFallback } from '@/mapHandler/nearbyRouting';
 import { getMapNodeById } from '@/mapHandler/databaseHandler';
-import { isPondArea, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
+import { accessTargetPoint, isPondArea, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
+import { addRouteLayers, routeRunFeatures } from '@/mapHandler/routeLayers';
+import {
+	RouteFreshness,
+	isRouteDataComplete,
+	onRoutingDataArrived
+} from '@/mapHandler/routingData';
+import { prefetchRouteWindow } from '@/offline/routingPrefetch';
+import { slopeNotRecommended, type RouteSegment } from '@/helper/routeProfile';
+import {
+	evaluateDownhillPressure,
+	parseHydrantPressure,
+	stretchesAlongLine,
+	type PressureLevel
+} from '@/helper/hosePressure';
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import { alertController } from '@ionic/vue';
 import { GeoPoint, distanceTo } from '@/types/geo';
 import { OsmRef } from '@/helper/osmRef';
+import { useRouteDetails } from '@/composable/routeDetails';
 
 const PUMP_LINE_SOURCE = 'pump-line';
-const PUMP_LINE_LAYER = 'pump-line-layer';
+/** Route runs (on-road, off-road dashed, steep ticks) share this prefix. */
+export const PUMP_LINE_LAYER_PREFIX = 'pump-line';
 const PUMP_LINE_LABEL_LAYER = 'pump-line-label-layer';
+/**
+ * Invisible symbols where the line's markers (suction point, waypoints,
+ * pumps, fire object) sit: the markers are DOM elements the label placement
+ * does not know about, so these reserve their space and the hose-count labels
+ * move around them (and around each other) instead of covering them.
+ */
+const PUMP_LINE_BLOCKER_LAYER = 'pump-line-marker-blocker-layer';
+const PUMP_LINE_BLOCKER_IMAGE = 'pump-line-marker-blocker';
+/** Pin markers are 48 px, anchored at the bottom; waypoints 32 px, centred. */
+const PIN_MARKER_PX = 48;
+const WAYPOINT_MARKER_PX = 32;
 
 let rootMap: maplibregl.Map | null = null;
 let suctionPoint: maplibregl.Marker | null = null;
@@ -38,6 +65,7 @@ let pondSource: OverPassElement | null = null;
 let pondSnapToken = 0;
 
 export interface CalculationResult {
+	/** Length of the drawn line in metres; pump distances are along it. */
 	realDistance: number;
 	elevation: number;
 	wayPoints: maplibregl.Marker[];
@@ -50,6 +78,23 @@ export interface CalculationResult {
 	elevationIgnored: boolean;
 	/** Hydrant pressure (bar) feeding the line, or `null` = pump at the source. */
 	sourcePressure: number | null;
+	/** Length of the drawn line in metres (2D): the same number the map label shows. */
+	lineMeters: number;
+	/** Steep-run and pressure warnings for the drawn line. */
+	warnings: PumpLineWarnings;
+}
+
+/** Warnings of the pump line (plan §6.8, §6.13). */
+export interface PumpLineWarnings {
+	notRecommended: boolean;
+	pressureLevel: PressureLevel | null;
+	staticPressureMaxBar: number | null;
+	/** Fallback reasons of the line's legs, without duplicates. */
+	fallbacks: RouteFallback[];
+	/** True when some leg had only part of the map data. */
+	incomplete: boolean;
+	/** Off-road metres of the routed legs (straight fallback legs not counted). */
+	offRoadMeters: number;
 }
 
 const calculationResult = ref<CalculationResult | null>(null);
@@ -126,30 +171,36 @@ function setMap(map: maplibregl.Map) {
 			// Holds the hose line plus one labeled midpoint per pump-to-pump segment.
 			data: { type: 'FeatureCollection', features: [] }
 		});
-		map.addLayer({
-			id: PUMP_LINE_LAYER,
-			type: 'line',
-			source: PUMP_LINE_SOURCE,
-			paint: {
-				'line-color': '#3388ff',
-				'line-width': 3
-			}
-		});
+		addRouteLayers(map, PUMP_LINE_SOURCE, PUMP_LINE_LAYER_PREFIX);
 		// Hose-count label per segment, anchored to point symbols like the
 		// nearby-marker path label (line-center placement drops labels on
-		// short/bent lines).
+		// short/bent lines). Labels take part in collision: each tries the
+		// spot above its point, then below and beside it, so it neither covers
+		// a marker (blocker layer) nor another label; one that fits nowhere at
+		// this zoom shows again when zooming in.
 		map.addLayer({
 			id: PUMP_LINE_LABEL_LAYER,
 			type: 'symbol',
 			source: PUMP_LINE_SOURCE,
-			filter: ['==', ['geometry-type'], 'Point'],
+			filter: ['all', ['==', ['geometry-type'], 'Point'], ['has', 'label']],
 			layout: {
 				'text-field': ['get', 'label'],
 				'text-font': ['Noto Sans Medium'],
 				'text-size': 13,
-				'text-offset': [0, -0.9],
-				'text-allow-overlap': true,
-				'text-ignore-placement': true
+				'text-variable-anchor': [
+					'bottom',
+					'top',
+					'left',
+					'right',
+					'bottom-left',
+					'bottom-right',
+					'top-left',
+					'top-right'
+				],
+				'text-radial-offset': 0.9,
+				'text-padding': 4,
+				'text-allow-overlap': false,
+				'text-ignore-placement': false
 			},
 			paint: {
 				'text-color': '#3388ff',
@@ -158,6 +209,49 @@ function setMap(map: maplibregl.Map) {
 			}
 		});
 	}
+	if (!map.hasImage(PUMP_LINE_BLOCKER_IMAGE)) {
+		map.addImage(PUMP_LINE_BLOCKER_IMAGE, {
+			width: PIN_MARKER_PX,
+			height: PIN_MARKER_PX,
+			data: new Uint8Array(PIN_MARKER_PX * PIN_MARKER_PX * 4)
+		});
+	}
+	// Above the labels: symbols are placed top layer first, so the markers'
+	// space is taken before the labels look for theirs.
+	if (!map.getLayer(PUMP_LINE_BLOCKER_LAYER)) {
+		map.addLayer({
+			id: PUMP_LINE_BLOCKER_LAYER,
+			type: 'symbol',
+			source: PUMP_LINE_SOURCE,
+			filter: ['all', ['==', ['geometry-type'], 'Point'], ['has', 'blocker']],
+			layout: {
+				'icon-image': PUMP_LINE_BLOCKER_IMAGE,
+				'icon-anchor': ['match', ['get', 'blocker'], 'center', 'center', 'bottom'],
+				'icon-size': ['match', ['get', 'blocker'], 'center', WAYPOINT_MARKER_PX / PIN_MARKER_PX, 1],
+				'icon-allow-overlap': true,
+				'icon-ignore-placement': false
+			},
+			paint: { 'icon-opacity': 0 }
+		});
+	}
+}
+
+/** The line's DOM markers as blocker points: `pin` (bottom anchored) or `center` (waypoints). */
+function markerBlockerFeatures(): GeoJSON.Feature[] {
+	const blockers: [maplibregl.Marker, 'pin' | 'center'][] = [
+		...(suctionPoint ? [[suctionPoint, 'pin'] as [maplibregl.Marker, 'pin']] : []),
+		...(targetPoint ? [[targetPoint, 'pin'] as [maplibregl.Marker, 'pin']] : []),
+		...wayPoints.map((m) => [m, 'center'] as [maplibregl.Marker, 'center']),
+		...pumpMarkers.map((m) => [m, 'pin'] as [maplibregl.Marker, 'pin'])
+	];
+	return blockers.map(([marker, blocker]) => {
+		const { lng, lat } = marker.getLngLat();
+		return {
+			type: 'Feature',
+			geometry: { type: 'Point', coordinates: [lng, lat] },
+			properties: { blocker }
+		};
+	});
 }
 
 const suctionPointSet = ref(false);
@@ -209,12 +303,18 @@ function markerChain(): GeoPoint[] {
  * uses this so distances/pump positions match the displayed line.
  */
 let routedPathPoints: GeoPoint[] | null = null;
+/** The routed legs of the drawn line (profile, runs, fallbacks), or `null`. */
+let routedLegs: HoseRoute[] | null = null;
+/** Runs of the drawn line in metres along it (legs joined). */
+let lineSegments: RouteSegment[] = [];
 /** Resolves when the latest routing attempt has been drawn (or superseded). */
 let routingPromise: Promise<void> | null = null;
 let routingToken = 0;
 
 /** Per-segment hose-count labels (between suction point, pumps and target). */
 let segmentLabels: { point: GeoPoint; label: string }[] = [];
+/** Whether the pump line was routed on incomplete data (plan §6.9). */
+const pumpFreshness = new RouteFreshness();
 
 /** Point `targetDist` meters along the polyline (clamped to its end). */
 function pointAlongPath(path: GeoPoint[], targetDist: number): GeoPoint {
@@ -235,11 +335,7 @@ function pointAlongPath(path: GeoPoint[], targetDist: number): GeoPoint {
 
 function pumpLineFeatures(points: GeoPoint[]): GeoJSON.FeatureCollection {
 	const features: GeoJSON.Feature[] = [
-		{
-			type: 'Feature',
-			geometry: { type: 'LineString', coordinates: points.map((p) => [p.lng, p.lat]) },
-			properties: {}
-		}
+		...routeRunFeatures(points, points === routedPathPoints ? lineSegments : [])
 	];
 	for (const { point, label } of segmentLabels) {
 		features.push({
@@ -248,6 +344,8 @@ function pumpLineFeatures(points: GeoPoint[]): GeoJSON.FeatureCollection {
 			properties: { label }
 		});
 	}
+	// Only with labels: they are what has to keep clear of the markers.
+	if (segmentLabels.length > 0) features.push(...markerBlockerFeatures());
 	return { type: 'FeatureCollection', features };
 }
 
@@ -261,29 +359,45 @@ function setPumpLineGeometry(points: GeoPoint[]) {
 
 /**
  * Routes each leg of the marker chain like the nearby-marker path does
- * (terrain or road routing per the clamp-to-roads setting), falling back to
+ * (`optimized` or `roads` per the hose routing setting), falling back to
  * the straight segment for unroutable/too-long legs. Legs run sequentially so
  * they reuse the cached routing context instead of racing to rebuild it.
  */
 async function updateRoutedPolyline(chain: GeoPoint[]): Promise<void> {
 	const token = ++routingToken;
+	const startedAt = pumpFreshness.begin();
 	const settingsStore = useSettingsStore();
-	const legs: (GeoPoint[] | null)[] = [];
+	const legs: HoseRoute[] = [];
 	for (let i = 0; i < chain.length - 1; i++) {
+		// The pressure rule needs the pump positions, so it runs after the
+		// calculation over the joined profile (see calculatePumpRequirements).
 		legs.push(
 			await getRoutedPath(chain[i], chain[i + 1], {
-				clampToRoads: settingsStore.clampHosesToRoads
+				mode: settingsStore.hoseRouting,
+				compareRoads: false
 			})
 		);
 	}
 	if (token !== routingToken) return; // markers moved meanwhile — superseded
+	pumpFreshness.finish(startedAt, legs.every(isRouteDataComplete));
 
 	const path: GeoPoint[] = [chain[0]];
-	legs.forEach((leg, i) => {
-		const points = leg ?? [chain[i], chain[i + 1]];
-		path.push(...points.slice(1));
-	});
+	const segments: RouteSegment[] = [];
+	let offset = 0;
+	for (const leg of legs) {
+		path.push(...leg.points.slice(1));
+		for (const run of leg.segments) {
+			segments.push({ ...run, from: run.from + offset, to: run.to + offset });
+		}
+		offset += leg.planMeters;
+	}
+	routedLegs = legs;
+	lineSegments = segments;
 	routedPathPoints = path;
+	useRouteDetails().setPumpSegments(
+		segments,
+		legs.reduce((sum, l) => sum + (l.routed ? l.offRoadMeters : 0), 0)
+	);
 	setPumpLineGeometry(path);
 }
 
@@ -322,8 +436,13 @@ const updatePolyline = (options: { autoRecalc?: boolean } = {}) => {
 	// swap in the routed geometry once it resolves. Moving markers invalidates
 	// the calculated segment labels.
 	routedPathPoints = null;
+	routedLegs = null;
+	lineSegments = [];
+	useRouteDetails().setPumpSegments([]);
 	segmentLabels = [];
 	setPumpLineGeometry(chain);
+	// Precache the pump window (priority 1, plan §6.9).
+	prefetchRouteWindow(chain);
 	routingPromise = updateRoutedPolyline(chain).catch((e) => {
 		console.warn('Pump line routing failed, keeping straight line:', e);
 	});
@@ -331,6 +450,19 @@ const updatePolyline = (options: { autoRecalc?: boolean } = {}) => {
 		scheduleAutoRecalc();
 	}
 };
+
+/**
+ * Late routing data (plan §6.9): a pump line routed without it is routed
+ * again in place (the drawn line stays until the new one is ready) and a
+ * showing result is recalculated, so the panel shows the new metres.
+ */
+onRoutingDataArrived(() => {
+	if (!suctionPoint || !targetPoint || !rootMap || !pumpFreshness.needsRecompute()) return;
+	routingPromise = updateRoutedPolyline(markerChain()).catch((e) => {
+		console.warn('Pump line re-routing failed, keeping the line:', e);
+	});
+	scheduleAutoRecalc();
+});
 
 function createMarkerElement(iconUrl: string, size: [number, number]): HTMLImageElement {
 	const el = document.createElement('img');
@@ -371,16 +503,41 @@ function hasPolyline(): boolean {
 }
 
 /**
- * Moves a pond-sourced suction point to the shore point nearest to the fire
- * point. No-op unless the suction point came from a pond area.
+ * The suction point for a pond target: a mapped suction point as is; for a
+ * shore, the shore point the hose route from the fire point reaches (routing
+ * picks it, plan §6.5), else the straight-line nearest one.
+ */
+async function suctionPointOnShore(
+	target: Awaited<ReturnType<typeof resolveAccessPoint>> & object,
+	firePoint: GeoPoint
+): Promise<GeoPoint> {
+	if (target.kind === 'point') return target.point;
+	const route = await getRoutedPath(firePoint, target, {
+		mode: useSettingsStore().hoseRouting,
+		profile: false,
+		compareRoads: false
+	});
+	return route.routed ? route.points[route.points.length - 1] : accessTargetPoint(target);
+}
+
+/**
+ * Moves a pond-sourced suction point to the shore point the route from the
+ * fire point reaches. No-op unless the suction point came from a pond area.
  */
 async function snapPondSuctionToFirePoint(): Promise<void> {
 	if (!pondSource || !suctionPoint || !targetPoint) return;
 	const token = ++pondSnapToken;
 	const source = pondSource;
-	const access = await resolveAccessPoint(source, getMarkerLngLat(targetPoint));
+	const target = await resolveAccessPoint(source, getMarkerLngLat(targetPoint), {
+		// A late pond outline moves the suction point once more.
+		onOutlineArrived: () => {
+			if (token === pondSnapToken) void snapPondSuctionToFirePoint();
+		}
+	});
 	// Superseded, torn down, or the user took over the suction point meanwhile.
-	if (token !== pondSnapToken || pondSource !== source || !suctionPoint || !access) return;
+	if (token !== pondSnapToken || pondSource !== source || !suctionPoint || !target) return;
+	const access = await suctionPointOnShore(target, getMarkerLngLat(targetPoint));
+	if (token !== pondSnapToken || pondSource !== source || !suctionPoint) return;
 	const current = getMarkerLngLat(suctionPoint);
 	if (current.lat === access.lat && current.lng === access.lng) return;
 	suctionPoint.setLngLat([access.lng, access.lat]);
@@ -489,12 +646,68 @@ const setWayPoint = (latlng?: GeoPoint) => {
  */
 let sourcePressure: number | null = null;
 
-/** Numeric `fire_hydrant:pressure` in bar, or `null` ("suction", 0, absent). */
-function parseHydrantPressure(tags: Record<string, string> | undefined): number | null {
-	const raw = tags?.['fire_hydrant:pressure'];
-	if (!raw) return null;
-	const value = parseFloat(raw);
-	return Number.isFinite(value) && value > 0 ? value : null;
+function pathMeters(path: GeoPoint[]): number {
+	let total = 0;
+	for (let i = 0; i < path.length - 1; i++) total += distanceTo(path[i], path[i + 1]);
+	return total;
+}
+
+/**
+ * Slope and pressure warnings of the drawn line. The pressure rule runs per
+ * stretch: from the source (hydrant pressure or the source pump's outlet
+ * pressure) to the first booster pump, then from each pump with its outlet
+ * pressure (plan §6.13). Heights come from the joined route profile.
+ */
+function lineWarnings(
+	pumpStore: ReturnType<typeof usePumpCalculationStore>,
+	pumpPositions: PumpPosition[],
+	realDistance: number
+): PumpLineWarnings {
+	const legs = routedLegs ?? [];
+	const fallbacks = [...new Set(legs.map((l) => l.fallback).filter((f) => f !== null))];
+	const incomplete = legs.some((l) => l.coverage.basemap === 'partial');
+	const offRoadMeters = legs.reduce((sum, l) => sum + (l.routed ? l.offRoadMeters : 0), 0);
+	const slope = slopeNotRecommended({
+		metersOver25: legs.reduce((sum, l) => sum + l.metersOver25, 0),
+		metersOver50: legs.reduce((sum, l) => sum + l.metersOver50, 0)
+	});
+	// Joined profile along the line (legs in order, distances offset).
+	const s: number[] = [];
+	const h: number[] = [];
+	let offset = 0;
+	let complete = legs.length > 0;
+	for (const leg of legs) {
+		if (!leg.profile) complete = false;
+		else {
+			leg.profile.s.forEach((d, i) => {
+				s.push(d + offset);
+				h.push(leg.profile!.heights[i]);
+			});
+		}
+		offset += leg.planMeters;
+	}
+	let pressure: ReturnType<typeof evaluateDownhillPressure> = null;
+	if (complete && s.length > 0) {
+		// Pump distances are in the reported (3D) metres; the profile's distances
+		// run along the drawn 2D line.
+		const scale = offset > 0 && realDistance > 0 ? offset / realDistance : 1;
+		const cuts = pumpPositions.map((p) => ({
+			atM: p.distanceFromStart * scale,
+			sourceBar: pumpStore.outputPressure
+		}));
+		pressure = evaluateDownhillPressure(
+			stretchesAlongLine(s, h, sourcePressure ?? pumpStore.outputPressure, cuts),
+			pumpStore.maxHosePressure
+		);
+	}
+	return {
+		notRecommended: slope || pressure?.level === 'warning',
+		pressureLevel: pressure?.level ?? null,
+		staticPressureMaxBar: pressure?.staticPressureMaxBar ?? null,
+		fallbacks,
+		incomplete,
+		offRoadMeters
+	};
 }
 
 export function usePumpCalculation() {
@@ -577,7 +790,12 @@ export function usePumpCalculation() {
 		const isPond = isPondArea(node);
 		if (isPond) {
 			const reference = targetPoint ? getMarkerLngLat(targetPoint) : point;
-			point = (await resolveAccessPoint(node, reference)) ?? point;
+			const target = await resolveAccessPoint(node, reference);
+			if (target) {
+				point = targetPoint
+					? await suctionPointOnShore(target, reference)
+					: accessTargetPoint(target);
+			}
 		}
 
 		const alert = await alertController.create({
@@ -624,7 +842,29 @@ export function usePumpCalculation() {
 		const path = routedPathPoints ?? markerChain();
 		const { points } = resamplePolyline(path);
 		const { points: elevationData, elevationIgnored } = await getElevationDataForPoints(points);
-		const { realDistance, pumpPositions } = getPumpLocationMarkers(elevationData, sourcePressure);
+		const calculated = getPumpLocationMarkers(elevationData, sourcePressure);
+		const { pumpPositions } = calculated;
+		// The calculation runs on the 3D length of the resampled line; every
+		// distance shown (panel, chart, segment labels) is scaled to the routed
+		// legs' reported (3D) metres, so the panel, the map label and the nearby
+		// list agree (plan §6.4). Positions on the map use the drawn 2D line.
+		const planDistance = pathMeters(path);
+		const realDistance =
+			routedPathPoints && routedLegs
+				? routedLegs.reduce((sum, leg) => sum + leg.meters, 0)
+				: planDistance;
+		const toPlan = realDistance > 0 ? planDistance / realDistance : 1;
+		const scale = calculated.realDistance > 0 ? realDistance / calculated.realDistance : 1;
+		for (const point of elevationData) {
+			if (point.distance !== undefined) point.distance *= scale;
+		}
+		let previousStart = 0;
+		for (const pump of pumpPositions) {
+			pump.distanceFromStart = Math.round(pump.distanceFromStart * scale);
+			pump.distanceFromPrev = pump.distanceFromStart - previousStart;
+			pump.neededBTubes = Math.ceil(pump.distanceFromPrev / pumpStore.tubeLength);
+			previousStart = pump.distanceFromStart;
+		}
 
 		// The panel lists all marker details now — no popups in the result view
 		// (tapping a marker selects its panel entry instead).
@@ -639,11 +879,10 @@ export function usePumpCalculation() {
 			if (segmentDistance < 1) continue;
 			const tubes = Math.ceil(segmentDistance / pumpStore.tubeLength);
 			segmentLabels.push({
-				point: pointAlongPath(path, (boundaries[i] + boundaries[i + 1]) / 2),
+				point: pointAlongPath(path, ((boundaries[i] + boundaries[i + 1]) / 2) * toPlan),
 				label: `~${tubes} ${pumpStore.hoseName}-${tubesLabel}`
 			});
 		}
-		setPumpLineGeometry(path);
 
 		// Remove old pump markers
 		pumpMarkers.forEach((m) => m.remove());
@@ -657,10 +896,14 @@ export function usePumpCalculation() {
 			});
 			pumpMarkers.push(marker);
 		});
+		// After the pump markers: the labels keep clear of them.
+		setPumpLineGeometry(path);
 
 		selectedResultEntry.value = null;
 
 		calculationResult.value = {
+			lineMeters: realDistance,
+			warnings: lineWarnings(pumpStore, pumpPositions, realDistance),
 			pumpPositions,
 			elevationData,
 			// The source pump only exists when the line isn't hydrant-fed.
@@ -694,8 +937,12 @@ export function usePumpCalculation() {
 			pumpMarkers.forEach((m) => m.remove());
 			pumpMarkers.length = 0;
 			routedPathPoints = null;
+			routedLegs = null;
+			lineSegments = [];
+			useRouteDetails().setPumpSegments([]);
 			routingPromise = null;
 			routingToken++; // invalidate any in-flight routing
+			pumpFreshness.reset();
 			segmentLabels = [];
 			sourcePressure = null;
 			pondSource = null;

@@ -125,6 +125,8 @@
 				<ion-icon :icon="addOutline"></ion-icon>
 			</ion-fab-button>
 		</ion-fab>
+		<!-- Side-panel layout only; on phones the details are in the bottom sheet. -->
+		<RouteDetailsCard v-if="!isMobile" />
 		<LayerSelectorModal
 			:is-open="layerModalOpen"
 			:event="layerSelectorEvent"
@@ -142,6 +144,7 @@ import { debounce } from '@/helper/helper';
 import {
 	getMarkersForView,
 	getNearbyMarkers,
+	nearbyOutlinesPending,
 	markerIconUrls,
 	isFetchingMarkers,
 	markerFetchFailed,
@@ -154,6 +157,7 @@ import { useDarkMode } from '@/composable/darkModeDetection';
 import { IonFab, IonFabButton, IonIcon, IonSpinner, toastController } from '@ionic/vue';
 import LayerSelectorModal from '@/components/LayerSelectorModal.vue';
 import AddressSearchBar from '@/components/AddressSearchBar.vue';
+import RouteDetailsCard from '@/components/RouteDetailsCard.vue';
 import { useScreenDetection } from '@/composable/screenDetection';
 import { usePhotonSearch, type PhotonFeature } from '@/composable/photonSearch';
 import {
@@ -168,7 +172,7 @@ import {
 	layers,
 	compass
 } from 'ionicons/icons';
-import { usePumpCalculation } from '@/composable/pumpCalculation';
+import { PUMP_LINE_LAYER_PREFIX, usePumpCalculation } from '@/composable/pumpCalculation';
 import nearbyMarker from '@/assets/icons/nearbyMarker.svg';
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
 import { useDefaultStore } from '@/store/defaultStore';
@@ -179,8 +183,33 @@ import { useMarkerEditStore } from '@/store/markerEditStore';
 import { storeToRefs } from 'pinia';
 import { useI18n } from 'vue-i18n';
 import { GeoPoint, GeoBounds, distanceTo } from '@/types/geo';
-import { getRoutedPath } from '@/mapHandler/nearbyRouting';
-import { resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
+import {
+	getRoutedPath,
+	isRoutingCancelled,
+	type HoseRoute,
+	type RouteTargetInput
+} from '@/mapHandler/nearbyRouting';
+import { accessTargetPoint, resolveAccessPoint } from '@/mapHandler/waterSourceAccess';
+import {
+	addRouteBadgeLayer,
+	addRouteLayers,
+	pulseRouteLayers,
+	routeHitLayerId,
+	routeLayerIds,
+	routeRunFeatures,
+	setRouteHighlight
+} from '@/mapHandler/routeLayers';
+import {
+	RouteFreshness,
+	isRouteDataComplete,
+	onRoutingDataArrived
+} from '@/mapHandler/routingData';
+import { prefetchMapView, prefetchRouteWindow, updateGpsRing } from '@/offline/routingPrefetch';
+import { MAP_MOVE_IDLE_MS } from '@/offline/precachePolicy';
+import { badgeTone, routeBadge } from '@/helper/routeDetails';
+import { useCrossCountryNote } from '@/composable/crossCountryNote';
+import { useRouteDetails, type TappedRun } from '@/composable/routeDetails';
+import { parseHydrantPressure } from '@/helper/hosePressure';
 import { detectWaterAt } from '@/mapHandler/waterDetection';
 import { getAreaOutline, cachedOutline, getContainingWaterOutline } from '@/mapHandler/areaOutline';
 import { toRef } from '@/helper/osmRef';
@@ -197,7 +226,9 @@ const DISABLE_CLUSTERING_ZOOM = 14;
 const CLUSTER_RADIUS = 50;
 const MARKER_SOURCE_ID = 'markers';
 const SELECTED_PATH_SOURCE = 'selected-path';
-const SELECTED_PATH_LAYER = 'selected-path-layer';
+// Route runs (on-road, off-road dashed, steep ticks) share this prefix.
+const SELECTED_PATH_LAYER_PREFIX = 'selected-path';
+// The short badge ("ca. 156 m · 8 B") on the line; the details are in the card.
 const SELECTED_PATH_LABEL_LAYER = 'selected-path-label-layer';
 const MAP_VIEW_STORAGE_KEY = 'mapView';
 // Fallback center used only until the device location resolves on a fresh
@@ -331,6 +362,9 @@ function createUserLocationMarker(): maplibregl.Marker {
 	return new maplibregl.Marker({ element: el, anchor: 'center' });
 }
 
+const MAPLIBRE_ATTRIBUTION = '<a href="https://maplibre.org/" target="_blank">MapLibre</a>';
+const MAPTERHORN_ATTRIBUTION = "<a href='https://mapterhorn.com/attribution'>© Mapterhorn</a>";
+
 function getProtomapsStyle(): maplibregl.StyleSpecification {
 	const lang = locale.value || 'en';
 	const flavor = isSatellite.value
@@ -367,7 +401,7 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 			encoding: 'terrarium',
 			tileSize: 512,
 			maxzoom: 12,
-			attribution: "<a href='https://mapterhorn.com/attribution'>© Mapterhorn</a>"
+			attribution: MAPTERHORN_ATTRIBUTION
 		};
 		sources['terrainSource'] = terrainSource;
 		sources['hillshadeSource'] = terrainSource;
@@ -578,6 +612,25 @@ async function handleMapMovement(options: { supersedes?: boolean } = {}) {
 	if (source) {
 		source.setData(geojson);
 	}
+	scheduleMapViewPrefetch(bounds);
+}
+
+// Map-move precache (priority 3, Wi-Fi only, plan §6.9): after the marker
+// fetch, once the view stayed put for MAP_MOVE_IDLE_MS.
+let mapViewPrefetchTimer: ReturnType<typeof setTimeout> | null = null;
+let lastMoveStartAt = 0;
+function scheduleMapViewPrefetch(bounds: GeoBounds) {
+	if (mapViewPrefetchTimer) clearTimeout(mapViewPrefetchTimer);
+	const scheduledAt = Date.now();
+	mapViewPrefetchTimer = setTimeout(() => {
+		mapViewPrefetchTimer = null;
+		if (!rootMap || lastMoveStartAt > scheduledAt) return;
+		prefetchMapView(bounds, {
+			zoom: rootMap.getZoom(),
+			idleMs: Date.now() - scheduledAt,
+			markersFetched: true
+		});
+	}, MAP_MOVE_IDLE_MS);
 }
 
 // A background cache refresh finished storing fresh markers — re-render the
@@ -811,17 +864,23 @@ function fitMapToLayer() {
 // Selected path state
 const selectedPathCoords = ref<[number, number][]>([]);
 const selectedPathVisible = ref(false);
-// Length of the displayed path (routed or straight), rendered as a label on the line.
-const selectedPathDistanceText = ref('');
+/** The displayed route: runs, steep classes and warnings for the badge and the card. */
+let selectedRoute: HoseRoute | null = null;
 const pumpCalculationStore = usePumpCalculationStore();
+const { maybeShowCrossCountryNote } = useCrossCountryNote();
+const routeDetails = useRouteDetails();
 
-function formatPathDistance(meters: number): string {
-	const distance = meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
-	const tubes = Math.ceil(meters / pumpCalculationStore.tubeLength);
-	return `${distance} · ~${tubes} ${pumpCalculationStore.hoseName}-${t('pumpCalculation.pump.tubes')}`;
+/** Badge text on the line: the same metres as the list and the card. */
+function routeBadgeText(hoseRoute: HoseRoute): string {
+	return routeBadge(hoseRoute.meters, {
+		t,
+		locale: locale.value,
+		tubeLength: pumpCalculationStore.tubeLength,
+		hoseName: pumpCalculationStore.hoseName
+	});
 }
 
-/** Point halfway along the polyline (by length) — anchors the distance label. */
+/** Point halfway along the polyline (by length) — anchors the badge. */
 function pathMidpoint(coords: [number, number][]): [number, number] {
 	let total = 0;
 	const segment: number[] = [];
@@ -848,24 +907,20 @@ function pathMidpoint(coords: [number, number][]): [number, number] {
 }
 
 /**
- * The path line plus a midpoint anchor for the label. The label sits on a
+ * The path line plus a midpoint anchor for the badge. The badge sits on a
  * point symbol (not line-center placement): line-center labels are dropped
  * whenever the text doesn't fit along the rendered line, so short or sharply
- * bent paths would intermittently lose their distance text.
+ * bent paths would intermittently lose it.
  */
 function selectedPathFeatures(): GeoJSON.FeatureCollection {
-	const features: GeoJSON.Feature[] = [
-		{
-			type: 'Feature',
-			geometry: { type: 'LineString', coordinates: selectedPathCoords.value },
-			properties: {}
-		}
-	];
-	if (selectedPathCoords.value.length >= 2) {
+	const features: GeoJSON.Feature[] = selectedRoute
+		? routeRunFeatures(selectedRoute.points, selectedRoute.segments)
+		: [];
+	if (selectedRoute && selectedPathCoords.value.length >= 2) {
 		features.push({
 			type: 'Feature',
 			geometry: { type: 'Point', coordinates: pathMidpoint(selectedPathCoords.value) },
-			properties: { distanceText: selectedPathDistanceText.value }
+			properties: { badge: routeBadgeText(selectedRoute), tone: badgeTone(selectedRoute) }
 		});
 	}
 	return { type: 'FeatureCollection', features };
@@ -874,21 +929,25 @@ function selectedPathFeatures(): GeoJSON.FeatureCollection {
 function setSelectedPathVisibility(visible: boolean) {
 	if (!rootMap) return;
 	const visibility = visible ? 'visible' : 'none';
-	for (const layer of [SELECTED_PATH_LAYER, SELECTED_PATH_LABEL_LAYER]) {
+	for (const layer of [...routeLayerIds(SELECTED_PATH_LAYER_PREFIX), SELECTED_PATH_LABEL_LAYER]) {
 		if (rootMap.getLayer(layer)) {
 			rootMap.setLayoutProperty(layer, 'visibility', visibility);
 		}
 	}
 }
 
-function updateSelectedPath(points: GeoPoint[]) {
-	selectedPathCoords.value = points.map((p) => [p.lng, p.lat] as [number, number]);
-	let pathLengthM = 0;
-	for (let i = 0; i < points.length - 1; i++) {
-		pathLengthM += distanceTo(points[i], points[i + 1]);
-	}
-	selectedPathDistanceText.value = formatPathDistance(pathLengthM);
+/** OSM ref of the selected marker: which nearby row the selected route belongs to. */
+function selectedMarkerRef(): string | null {
+	const element = markerStore.selectedMarker;
+	return element ? toRef(element.type, element.id) : null;
+}
+
+function updateSelectedPath(hoseRoute: HoseRoute, forRef: string | null) {
+	selectedRoute = hoseRoute;
+	selectedPathCoords.value = hoseRoute.points.map((p) => [p.lng, p.lat] as [number, number]);
 	selectedPathVisible.value = true;
+	routeDetails.setSelectedRoute(hoseRoute, forRef);
+	if (hoseRoute.routed) void maybeShowCrossCountryNote(hoseRoute.offRoadMeters);
 
 	if (rootMap && mapReady) {
 		const source = rootMap.getSource(SELECTED_PATH_SOURCE) as maplibregl.GeoJSONSource;
@@ -899,9 +958,22 @@ function updateSelectedPath(points: GeoPoint[]) {
 	}
 }
 
-function hideSelectedPath() {
+/** True when a recomputed route differs visibly from the drawn one. */
+function routeChanged(before: HoseRoute, after: HoseRoute): boolean {
+	return (
+		Math.round(before.meters) !== Math.round(after.meters) ||
+		before.points.length !== after.points.length ||
+		before.notRecommended !== after.notRecommended
+	);
+}
+
+/** Hides the line; `forRef` is the marker the attempt was for (its nearby row says "no line"). */
+function hideSelectedPath(forRef: string | null = selectedMarkerRef()) {
+	lineFreshness.reset();
 	selectedPathVisible.value = false;
+	selectedRoute = null;
 	selectedPathCoords.value = [];
+	routeDetails.setSelectedRoute(null, forRef);
 	if (rootMap && mapReady) {
 		setSelectedPathVisibility(false);
 	}
@@ -995,8 +1067,16 @@ const MAX_PATH_DIRECT_DISTANCE_M = 2500;
 // without await, and only the newest selection may draw its path.
 let pathRequestSeq = 0;
 
-const showPathToSelectedMarker = async () => {
-	if (!selectedMarker) return;
+// Late routing data (plan §6.9): the list and the line remember whether their
+// last result was complete, and recompute silently when data landed since.
+const listFreshness = new RouteFreshness();
+const lineFreshness = new RouteFreshness();
+
+const showPathToSelectedMarker = async (options: { silent?: boolean } = {}) => {
+	if (!selectedMarker) {
+		lineFreshness.reset();
+		return;
+	}
 	const inNearbyMode = nearbyWaterSource.isActive.value;
 	// The user can turn the marker line off; the nearby view always shows it
 	// since the routed path is the point of that view.
@@ -1005,6 +1085,9 @@ const showPathToSelectedMarker = async () => {
 		return;
 	}
 	const requestId = ++pathRequestSeq;
+	// The nearby list's expanded row shows the route as computing (or updating).
+	const forRef = selectedMarkerRef();
+	routeDetails.beginSelectedRoute(forRef);
 	// Outside the nearby view the map-center fallback would draw a confusing
 	// line out of the screen center, so a real user location is required there.
 	const currentLocation = inNearbyMode ? await getCurrentLocation() : currentUserLocation.value;
@@ -1013,40 +1096,83 @@ const showPathToSelectedMarker = async () => {
 		return;
 	}
 	const markerLngLat = selectedMarker.getLngLat();
-	let target: GeoPoint = { lat: markerLngLat.lat, lng: markerLngLat.lng };
-	// A pond area is reached at its shore (or its mapped suction point), not
-	// at the center the marker sits on.
+	let target: RouteTargetInput = { lat: markerLngLat.lat, lng: markerLngLat.lng };
+	// A pond area is reached at its shore (routing picks the best reachable
+	// shore point) or at its mapped suction point, not at the center the
+	// marker sits on. A pond outline that only arrives later (Overpass, in the
+	// background) redraws the line silently.
 	const element = markerStore.selectedMarker;
 	if (element) {
-		const access = await resolveAccessPoint(element, currentLocation);
+		const access = await resolveAccessPoint(element, currentLocation, {
+			onOutlineArrived: () => {
+				if (requestId === pathRequestSeq) void showPathToSelectedMarker({ silent: true });
+			}
+		});
 		if (requestId !== pathRequestSeq) return;
 		if (access) target = access;
 	}
+	const targetPoint = 'kind' in target ? accessTargetPoint(target) : target;
 	// A marker far from the user would draw a long, useless line across the
 	// map (and cost a routing request) — skip it. The nearby view is exempt:
 	// its results are distance-ordered and the line is its core feature.
-	if (!inNearbyMode && distanceTo(currentLocation, target) > MAX_PATH_DIRECT_DISTANCE_M) {
+	if (!inNearbyMode && distanceTo(currentLocation, targetPoint) > MAX_PATH_DIRECT_DISTANCE_M) {
 		hideSelectedPath();
 		return;
 	}
-	// Prefer the routed path; fall back to the straight line.
-	const routed = await getRoutedPath(currentLocation, target, {
-		clampToRoads: settingsStore.clampHosesToRoads
-	});
+	// Precache the route's window (priority 1, plan §6.9); the routing request
+	// below joins the same tile requests.
+	prefetchRouteWindow([currentLocation, targetPoint]);
+	// The routed path, or the straight line with the reason when unroutable. A newer
+	// request for the selected line cancels this one in the routing worker.
+	let hoseRoute: HoseRoute;
+	const startedAt = lineFreshness.begin();
+	try {
+		hoseRoute = await getRoutedPath(
+			currentLocation,
+			target,
+			{
+				mode: settingsStore.hoseRouting,
+				maxHosePressureBar: pumpCalculationStore.maxHosePressure,
+				// A pressurised hydrant feeds the line; otherwise a pump at the source.
+				sourcePressureBar:
+					parseHydrantPressure(element?.tags) ?? pumpCalculationStore.outputPressure
+			},
+			{ channel: 'selected-path' }
+		);
+	} catch (e) {
+		if (isRoutingCancelled(e)) return;
+		// A failed new line hides the previous marker's; a failed silent
+		// recompute keeps the drawn one. Either way the request is over.
+		if (requestId === pathRequestSeq) {
+			if (options.silent) routeDetails.setSelectedRoute(selectedRoute, forRef);
+			else hideSelectedPath(forRef);
+		}
+		throw e;
+	}
 	if (requestId !== pathRequestSeq) return;
-	const points = routed && routed.length >= 2 ? routed : [currentLocation, target];
-	updateSelectedPath(points);
+	lineFreshness.finish(startedAt, isRouteDataComplete(hoseRoute));
+	const previous = selectedRoute;
+	updateSelectedPath(hoseRoute, forRef);
+	// A silent recompute that changed the line: a short width pulse, no refit.
+	if (options.silent && previous && rootMap && mapReady && routeChanged(previous, hoseRoute)) {
+		pulseRouteLayers(rootMap, SELECTED_PATH_LAYER_PREFIX);
+	}
+	// A newly drawn route opens its details card; a silent recompute only
+	// updates an open one.
+	if (!options.silent) routeDetails.openDetails('selected');
 	// Only the nearby view refits the camera to the path; a plain marker tap
-	// keeps its usual fly-to/centering behavior and just shows the line.
-	if (inNearbyMode) {
+	// keeps its usual fly-to/centering behavior and just shows the line. A
+	// silent recompute (late data) never moves the camera.
+	if (inNearbyMode && !options.silent) {
 		fitMapToLayer();
 	}
 };
 
 // Toggling the setting while a marker is selected redraws or hides the
-// line immediately (the function no-ops when nothing is selected).
+// line immediately (the function no-ops when nothing is selected); so does a
+// change of the hose routing mode.
 watch(
-	() => settingsStore.showPathToMarker,
+	() => [settingsStore.showPathToMarker, settingsStore.hoseRouting],
 	() => {
 		void showPathToSelectedMarker();
 	}
@@ -1267,6 +1393,9 @@ function updateLocationMarker(point: GeoPoint) {
 	// Keep the accuracy circle in sync with the new position/accuracy
 	updateAccuracyCircle();
 
+	// Precache the routing tiles around the position (priority 2, plan §6.9).
+	updateGpsRing(point);
+
 	// Trigger nearby search if active
 	searchNearbyMarkers();
 }
@@ -1325,7 +1454,12 @@ async function getCurrentLocation(): Promise<GeoPoint> {
 	return { lat: center.lat, lng: center.lng };
 }
 
-async function searchNearbyMarkers() {
+/**
+ * Searches the nearby list. `silent`: a recompute after late routing data
+ * (plan §6.9): the metres update in place (the order follows when the list is
+ * not in use) and the line redraws without moving the camera.
+ */
+async function searchNearbyMarkers(options: { silent?: boolean } = {}) {
 	if (!nearbyWaterSource.isActive.value) {
 		return;
 	}
@@ -1333,9 +1467,52 @@ async function searchNearbyMarkers() {
 	if (!location) {
 		return;
 	}
-	nearbyWaterSource.list.value = await getNearbyMarkers(location);
-	await showPathToSelectedMarker();
+	const startedAt = listFreshness.begin();
+	try {
+		const fresh = await getNearbyMarkers(location);
+		listFreshness.finish(
+			startedAt,
+			!nearbyOutlinesPending() && fresh.every((marker) => isRouteDataComplete(marker.route))
+		);
+		if (options.silent) nearbyWaterSource.applySilentUpdate(fresh);
+		else nearbyWaterSource.setList(fresh);
+	} catch (e) {
+		// A newer search (location update) superseded this one: it updates the list.
+		if (isRoutingCancelled(e)) return;
+		throw e;
+	}
+	await showPathToSelectedMarker({ silent: options.silent });
 }
+
+// Late basemap/DEM tiles or pond outlines: recompute what was solved without
+// them. The list search redraws the selected line too, so list, label and
+// pump panel converge on one number.
+let recomputing = false;
+let arrivedWhileRecomputing = false;
+function recomputeAfterLateData(): void {
+	if (recomputing) {
+		arrivedWhileRecomputing = true;
+		return;
+	}
+	let task: Promise<void> | null = null;
+	if (nearbyWaterSource.isActive.value && listFreshness.needsRecompute()) {
+		task = searchNearbyMarkers({ silent: true });
+	} else if (selectedPathVisible.value && lineFreshness.needsRecompute()) {
+		task = showPathToSelectedMarker({ silent: true });
+	}
+	if (!task) return;
+	recomputing = true;
+	void task
+		.catch((e) => console.warn('Silent route recompute failed:', e))
+		.finally(() => {
+			recomputing = false;
+			if (arrivedWhileRecomputing) {
+				arrivedWhileRecomputing = false;
+				recomputeAfterLateData();
+			}
+		});
+}
+const stopRoutingDataWatch = onRoutingDataArrived(recomputeAfterLateData);
 
 async function loadMarkerImages(map: maplibregl.Map) {
 	const entries = Object.entries(markerIconUrls);
@@ -1452,45 +1629,65 @@ function addMapLayers(map: maplibregl.Map) {
 		data: { type: 'FeatureCollection', features: [] }
 	});
 
-	map.addLayer({
-		id: SELECTED_PATH_LAYER,
-		type: 'line',
-		source: SELECTED_PATH_SOURCE,
-		layout: { visibility: 'none' },
-		paint: {
-			'line-color': '#3388ff',
-			'line-width': 3
-		}
-	});
+	// Route runs: solid on roads, dashed off-road, coloured by steepness,
+	// ticks across very steep runs (plan section 6.8).
+	addRouteLayers(map, SELECTED_PATH_SOURCE, SELECTED_PATH_LAYER_PREFIX, false);
 
-	// Distance label rendered along the selected path line.
-	map.addLayer({
-		id: SELECTED_PATH_LABEL_LAYER,
-		type: 'symbol',
-		source: SELECTED_PATH_SOURCE,
-		// Anchored to the midpoint Point feature: a point symbol always renders,
-		// while 'line-center' placement drops the label whenever the text doesn't
-		// fit along the rendered line (short or sharply bent paths).
-		filter: ['==', ['geometry-type'], 'Point'],
-		layout: {
-			visibility: 'none',
-			'text-field': ['get', 'distanceText'],
-			'text-font': ['Noto Sans Medium'],
-			'text-size': 13,
-			'text-offset': [0, -0.9],
-			// The single label must always render, even over other symbols.
-			'text-allow-overlap': true,
-			'text-ignore-placement': true
-		},
-		paint: {
-			'text-color': '#3388ff',
-			'text-halo-color': '#ffffff',
-			'text-halo-width': 2
-		}
-	});
+	// The short badge on the line, anchored to the midpoint Point feature: a
+	// point symbol always renders, while 'line-center' placement drops it
+	// whenever the text doesn't fit along the rendered line.
+	addRouteBadgeLayer(
+		map,
+		SELECTED_PATH_SOURCE,
+		SELECTED_PATH_LABEL_LAYER,
+		isDarkMode.value && !isSatellite.value ? 'dark' : 'light',
+		false
+	);
 
 	pumpCalculation.setMap(map);
 }
+
+/** Layers a tap opens the route details card from: the lines and the badge. */
+function routeTapLayers(): string[] {
+	return [
+		SELECTED_PATH_LABEL_LAYER,
+		routeHitLayerId(SELECTED_PATH_LAYER_PREFIX),
+		routeHitLayerId(PUMP_LINE_LAYER_PREFIX)
+	];
+}
+
+/**
+ * Opens the details for a route line or badge under `point` (the card on
+ * desktop, the expanded sheet section on phones); true when one was hit. Of
+ * overlapping runs the coloured one wins, so a tap on an amber stretch
+ * focuses it. Without a sheet showing that line (phone) only the map
+ * highlight of the stretch remains.
+ */
+function openRouteDetailsAt(map: maplibregl.Map, point: maplibregl.Point): boolean {
+	const layers = routeTapLayers().filter((layer) => map.getLayer(layer));
+	if (layers.length === 0) return false;
+	const features = map.queryRenderedFeatures(point, { layers });
+	if (features.length === 0) return false;
+	const which = features.some((f) => f.layer.id === routeHitLayerId(PUMP_LINE_LAYER_PREFIX))
+		? 'pump'
+		: 'selected';
+	const runs = features
+		.filter((f) => f.geometry.type === 'LineString' && f.properties?.from !== undefined)
+		.map((f) => f.properties as TappedRun)
+		.sort((a, b) => Number(b.steep) - Number(a.steep) || Number(b.offRoad) - Number(a.offRoad));
+	routeDetails.openDetails(which, runs[0] ?? null, { reveal: true });
+	return true;
+}
+
+/** Highlights the focused stretch on its line and clears the other line's highlight. */
+function applyRouteHighlight() {
+	if (!rootMap || !mapReady) return;
+	const stretch = routeDetails.focusedStretch.value;
+	const which = routeDetails.source.value;
+	setRouteHighlight(rootMap, SELECTED_PATH_LAYER_PREFIX, which === 'selected' ? stretch : null);
+	setRouteHighlight(rootMap, PUMP_LINE_LAYER_PREFIX, which === 'pump' ? stretch : null);
+}
+watch([routeDetails.focusedStretch, routeDetails.source], applyRouteHighlight);
 
 function setupMapEventListeners(map: maplibregl.Map) {
 	// Opens the supply-pipe marker chooser (fire object / suction point /
@@ -1633,6 +1830,19 @@ function setupMapEventListeners(map: maplibregl.Map) {
 			return;
 		}
 
+		// A tap on a route line or its badge opens the details card, focused on
+		// a tapped coloured or dashed stretch.
+		if (!markerEditStore.isActive && openRouteDetailsAt(map, e.point)) return;
+
+		// With the card open, a tap on the map only closes it (the badge stays).
+		// Phones have no card (the details are in the sheet), nor has the
+		// nearby list (its selected row expands): the tap clears a focused
+		// stretch and then behaves as before.
+		if (routeDetails.isOpen.value) {
+			routeDetails.closeDetails();
+			if (!isMobile.value && !nearbyWaterSource.isActive.value) return;
+		}
+
 		// Click on empty map area
 		if (markerEditStore.isActive) {
 			if (markerEditStore.isArea) return;
@@ -1665,6 +1875,14 @@ function setupMapEventListeners(map: maplibregl.Map) {
 	});
 
 	// Cursor changes for interactive layers
+	for (const layer of routeTapLayers()) {
+		map.on('mouseenter', layer, () => {
+			map.getCanvas().style.cursor = 'pointer';
+		});
+		map.on('mouseleave', layer, () => {
+			map.getCanvas().style.cursor = '';
+		});
+	}
 	map.on('mouseenter', 'unclustered-point', () => {
 		map.getCanvas().style.cursor = 'pointer';
 	});
@@ -1706,7 +1924,15 @@ async function initMap() {
 		touchZoomRotate: true,
 		pitchWithRotate: true,
 		pitch: 0,
-		maxPitch: 75
+		maxPitch: 75,
+		// Mapterhorn elevation feeds hose routing and the pump calculation even
+		// when the 3D terrain/hillshade layers (and their source) are off, so it
+		// is always credited. MapLibre drops the duplicate when the terrain
+		// source adds the same string.
+		attributionControl: {
+			compact: true,
+			customAttribution: [MAPLIBRE_ATTRIBUTION, MAPTERHORN_ATTRIBUTION]
+		}
 	});
 
 	// Important: force MapLibre to recalc size after layout is ready
@@ -1729,6 +1955,11 @@ async function initMap() {
 		// moveend already fires after dragend, zoomend, flyTo, easeTo, etc.
 		// Using only moveend avoids duplicate handler invocations per interaction.
 		rootMap.on('moveend', debouncedMapMove);
+		rootMap.on('movestart', () => {
+			lastMoveStartAt = Date.now();
+			if (mapViewPrefetchTimer) clearTimeout(mapViewPrefetchTimer);
+			mapViewPrefetchTimer = null;
+		});
 
 		rootMap.on('pitchend', updateResetViewVisibility);
 		rootMap.on('rotateend', updateResetViewVisibility);
@@ -1792,6 +2023,7 @@ function reloadMapStyle() {
 
 		// Restore selected path if it was visible
 		restoreSelectedPath();
+		applyRouteHighlight();
 
 		// Re-add DOM markers that may have been detached
 		restoreDomMarkers();
@@ -1836,7 +2068,12 @@ onMounted(async () => {
 			if (path.includes('nearbysources') && !prevPath?.includes('nearbysources')) {
 				await searchNearbyMarkers();
 			} else if (!path.includes('nearbysources')) {
-				nearbyWaterSource.list.value = [];
+				nearbyWaterSource.setList([]);
+				listFreshness.reset();
+			}
+			// The pump line's card goes with the pump calculation.
+			if (!path.includes('supplypipe') && routeDetails.source.value === 'pump') {
+				routeDetails.closeDetails();
 			}
 		},
 		{ immediate: true }
@@ -1879,6 +2116,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+	stopRoutingDataWatch();
 	stopWatchingLocation();
 	if (rootMap) {
 		rootMap.remove();

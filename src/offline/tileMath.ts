@@ -24,6 +24,26 @@ export interface TileCoord {
 export const PROTOMAPS_MAX_ZOOM = 15;
 export const SATELLITE_MAX_ZOOM = 17;
 export const TERRAIN_MAX_ZOOM = 12;
+/**
+ * DEM zoom for the slope profile of hose routes (≈ 3.2 m/px at 48° N, plan
+ * §4.2). Fetched cache-first like the display tiles; when it is unavailable the
+ * profile falls back to {@link TERRAIN_MAX_ZOOM} and shows at most "steep".
+ */
+export const TERRAIN_ROUTING_ZOOM = 14;
+
+/** Zooms `0..zMax` inclusive. */
+export function zoomRange(zMax: number): number[] {
+	return Array.from({ length: zMax + 1 }, (_, z) => z);
+}
+
+/**
+ * Terrain zooms an offline area downloads: the display/pump DEM z0–12 plus
+ * the routing DEM z14 (plan §6.9, phase 7). z13 is skipped: nothing reads it.
+ */
+export const TERRAIN_DOWNLOAD_ZOOMS: readonly number[] = [
+	...zoomRange(TERRAIN_MAX_ZOOM),
+	TERRAIN_ROUTING_ZOOM
+];
 
 /** Converts a lng/lat pair to the XYZ tile it falls into at zoom `z`. */
 export function lngLatToTile(lng: number, lat: number, z: number): { x: number; y: number } {
@@ -49,6 +69,20 @@ export function* tilesForBounds(b: GeoBounds, zMin: number, zMax: number): Gener
 			for (let y = min.y; y <= max.y; y++) yield { z, x, y };
 		}
 	}
+}
+
+/**
+ * Iterates every tile covering `b` at each of `zooms`, in the given order
+ * (lazily, like {@link tilesForBounds}). The order is the download order, so
+ * appending a zoom keeps existing resume cursors valid.
+ */
+export function* tilesForZooms(b: GeoBounds, zooms: readonly number[]): Generator<TileCoord> {
+	for (const z of zooms) yield* tilesForBounds(b, z, z);
+}
+
+/** Tile count covering `b` at each of `zooms` (for progress + estimates). */
+export function tileCountForZooms(b: GeoBounds, zooms: readonly number[]): number {
+	return zooms.reduce((sum, z) => sum + tileCount(b, z, z), 0);
 }
 
 /** Total tile count covering `b` from `zMin` to `zMax` (for progress + estimates). */

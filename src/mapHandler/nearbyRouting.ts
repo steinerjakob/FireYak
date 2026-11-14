@@ -1,228 +1,248 @@
-import { GeoBounds, GeoPoint, distanceTo } from '@/types/geo';
-import { ObstacleData } from '@/types/obstacles';
-import { getObstaclesForBounds } from '@/mapHandler/obstacleGeometry';
-import { buildRoadGraph, routeFromOrigin, routePath, RoadGraph } from '@/mapHandler/roadRouting';
+import type { GeoPoint } from '@/types/geo';
+import { fetchRoutingTile } from '@/offline/offlineProtocol';
+import { decodeTerrariumImage } from '@/helper/demTiles';
 import {
-	buildTerrainGrid,
-	gridRoutePath,
-	solveTerrain,
-	TerrainGrid
-} from '@/mapHandler/gridRouting';
-import { effectiveDistanceMeters } from '@/helper/weightedDistance';
+	RoutingCancelledError,
+	configureRoutingIO,
+	invalidateRoutingContext as invalidateInlineContext,
+	isRoutingCancelled,
+	routeNearby,
+	routePath,
+	type HoseRoute,
+	type NearbyDistanceResult,
+	type NearbyRoutingOptions,
+	type RouteTargetInput,
+	type RoutingOptions
+} from '@/mapHandler/hoseRoutingCore';
+import { HoseRoutingClient } from '@/mapHandler/hoseRoutingProtocol';
 
 /**
- * Road-aware ranking for the nearby water sources list. Ranks by (in order of
- * preference per marker): routed distance → weighted straight-line heuristic
- * (buildings penalized, roads rewarded) → plain haversine. Two routers back
- * the routed distance, chosen by the `clampToRoads` option: strict
- * road-network routing (graph) or terrain routing that may cross gardens/open
- * ground while avoiding buildings (grid). Fails open: any error anywhere
- * yields the haversine order, the list must never break because of this
- * feature.
+ * Main-thread facade of hose routing (plan §6.10): the nearby list, the
+ * marker path and the pump line ask here. The solve runs in the hose routing
+ * worker (`src/workers/hoseRouting.worker.ts`); this side fetches the tile
+ * bytes cache-first (area store, routing cache, network: `fetchRoutingTile`;
+ * the native tile store is not reachable from a worker) and transfers them.
+ * Late tiles fill the routing cache and emit `routingDataArrived`
+ * (`routingData.ts`) so callers can recompute. Where a worker cannot
+ * start (no `Worker`, a WebView that refuses it, no answer within
+ * {@link WORKER_READY_TIMEOUT_MS}) or fails later, the same solve
+ * (`hoseRoutingCore.ts`) runs on the main thread instead.
+ *
+ * A request may name a `channel`: a newer request on the same channel
+ * supersedes the running one, which rejects with
+ * {@link RoutingCancelledError} (callers drop it silently).
  */
 
-/** Only markers within this straight-line distance get the routed treatment. */
-export const ROUTING_MAX_STRAIGHT_M = 1500;
-/** Cap on markers routed/weighted per search (they're processed nearest-first). */
-export const MAX_ROUTED_TARGETS = 30;
-/** Margin around the candidate bbox so snapping (≤100 m) never leaves the tile window. */
-const BOUNDS_MARGIN_M = 150;
-/** Rebuild the road graph after this long even if the window still covers the query. */
-const CONTEXT_TTL_MS = 60_000;
+export {
+	MAX_ROUTED_TARGETS,
+	PATH_MAX_STRAIGHT_M,
+	POND_SHORE_SAMPLE_M,
+	ROUTING_MAX_STRAIGHT_M,
+	RoutingCancelledError,
+	chooseCellSize,
+	isRoutingCancelled,
+	type HoseRoute,
+	type HoseRoutingMode,
+	type NearbyDistanceResult,
+	type NearbyRoutingOptions,
+	type RouteFallback,
+	type RouteTargetInput,
+	type RoutingCoverage,
+	type RoutingOptions
+} from '@/mapHandler/hoseRoutingCore';
 
-const M_PER_DEG_LAT = 110540;
-const M_PER_DEG_LNG_EQUATOR = 111320;
+/** How long the worker may take to answer `ready` before the main thread routes itself. */
+export const WORKER_READY_TIMEOUT_MS = 5000;
 
-interface RoutingContext {
-	bounds: GeoBounds;
-	obstacles: ObstacleData;
-	graph: RoadGraph;
-	/** Lazily built terrain grid; `null` = build failed (window too large). */
-	terrain?: TerrainGrid | null;
-	builtAt: number;
+/** Where a request runs; `auto` = the worker when it starts, else inline. */
+export type RoutingBackendChoice = 'auto' | 'inline';
+
+/** Request handling beyond the routing options. */
+export interface RoutingRequest {
+	/** Supersession key: a newer request on the same channel cancels this one. */
+	channel?: string;
 }
 
-let context: RoutingContext | null = null;
+type Backend = { kind: 'worker'; client: HoseRoutingClient; worker: Worker } | { kind: 'inline' };
 
-/** Router selection for the routed distance/path. */
-export interface RoutingOptions {
-	/** True = stick to the road network; false = terrain routing (gardens allowed). */
-	clampToRoads: boolean;
-}
+let backend: Promise<Backend> | null = null;
+let inlineConfigured = false;
+/** The inline runs per channel, so a newer request can cancel the older one. */
+const inlineChannels = new Map<string, { controller: AbortController; cancel: () => void }>();
 
-/** Lazily builds (once) and returns the context's terrain grid, if feasible. */
-function terrainFor(ctx: RoutingContext): TerrainGrid | null {
-	if (ctx.terrain === undefined) {
-		ctx.terrain = buildTerrainGrid(ctx.obstacles, ctx.bounds);
+function inlineBackend(): Backend {
+	if (!inlineConfigured) {
+		// Keeps the realm's DEM decoder (the browser's, or a spec's WASM one).
+		configureRoutingIO({ fetchTile: fetchRoutingTile });
+		inlineConfigured = true;
 	}
-	return ctx.terrain;
+	return { kind: 'inline' };
 }
 
-export interface NearbyDistanceResult {
-	/** Distance along the road network in meters, when routable. */
-	routedDistance: number | null;
-	/** Ranking key: routed distance, else weighted heuristic, else straight-line. */
-	sortDistance: number;
-}
+/** `VITE_HOSE_ROUTING_WORKER=0` (dev/measurement only) keeps routing on the main thread. */
+const workerDisabled = import.meta.env.VITE_HOSE_ROUTING_WORKER === '0';
 
-/** Bounding box over `points` expanded by `marginM` meters. */
-function boundsAround(points: GeoPoint[], marginM: number): GeoBounds {
-	let south = Infinity;
-	let west = Infinity;
-	let north = -Infinity;
-	let east = -Infinity;
-	for (const p of points) {
-		if (p.lat < south) south = p.lat;
-		if (p.lat > north) north = p.lat;
-		if (p.lng < west) west = p.lng;
-		if (p.lng > east) east = p.lng;
+async function startWorker(): Promise<Backend> {
+	if (typeof Worker === 'undefined' || workerDisabled) return inlineBackend();
+	let worker: Worker | null = null;
+	try {
+		worker = new Worker(new URL('../workers/hoseRouting.worker.ts', import.meta.url), {
+			type: 'module',
+			name: 'hose-routing'
+		});
+		const client = new HoseRoutingClient(worker, {
+			fetchTile: fetchRoutingTile,
+			decodeDem: decodeTerrariumImage
+		});
+		const started = worker;
+		started.onerror = (event) => {
+			console.warn('Hose routing worker failed, routing on the main thread:', event.message);
+			event.preventDefault?.();
+			client.failAll(new Error('Hose routing worker failed'));
+			started.terminate();
+			backend = Promise.resolve(inlineBackend());
+		};
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timeout = new Promise<never>((_, reject) => {
+			timer = setTimeout(() => reject(new Error('no ready message')), WORKER_READY_TIMEOUT_MS);
+		});
+		try {
+			const { demDecode } = await Promise.race([client.ready, timeout]);
+			if (!demDecode)
+				console.info('Hose routing worker: DEM images are decoded on the main thread');
+		} finally {
+			clearTimeout(timer);
+		}
+		return { kind: 'worker', client, worker };
+	} catch (e) {
+		console.warn('Hose routing worker unavailable, routing on the main thread:', e);
+		worker?.terminate();
+		return inlineBackend();
 	}
-	const midLat = (south + north) / 2;
-	const latMargin = marginM / M_PER_DEG_LAT;
-	const lngMargin = marginM / (M_PER_DEG_LNG_EQUATOR * Math.cos((midLat * Math.PI) / 180));
-	return {
-		south: south - latMargin,
-		west: west - lngMargin,
-		north: north + latMargin,
-		east: east + lngMargin
-	};
 }
 
-function boundsCover(outer: GeoBounds, inner: GeoBounds): boolean {
-	return (
-		inner.south >= outer.south &&
-		inner.north <= outer.north &&
-		inner.west >= outer.west &&
-		inner.east <= outer.east
+function getBackend(): Promise<Backend> {
+	backend ??= startWorker();
+	return backend;
+}
+
+/**
+ * Chooses where routing runs: `inline` (main thread; the debug view's
+ * comparison and the Node specs) or `auto` (the worker when it starts). Drops
+ * a running worker.
+ */
+export function setRoutingBackend(choice: RoutingBackendChoice): void {
+	void backend?.then((b) => {
+		if (b.kind === 'worker') {
+			b.client.failAll(new RoutingCancelledError('Routing backend changed'));
+			b.worker.terminate();
+		}
+	});
+	backend = choice === 'inline' ? Promise.resolve(inlineBackend()) : null;
+}
+
+/** Which backend serves the requests (debug view). */
+export async function routingBackendKind(): Promise<'worker' | 'inline'> {
+	return (await getBackend()).kind;
+}
+
+/**
+ * Runs `solve` on the main thread; with a channel, a newer inline request on
+ * it aborts this one (at its next await) and rejects its promise at once.
+ */
+function runInline<T>(channel: string | undefined, solve: (signal: AbortSignal) => Promise<T>) {
+	const controller = new AbortController();
+	if (channel === undefined) return solve(controller.signal);
+	inlineChannels.get(channel)?.cancel();
+	return new Promise<T>((resolve, reject) => {
+		const entry = {
+			controller,
+			cancel: () => {
+				controller.abort();
+				reject(new RoutingCancelledError('Routing request superseded'));
+			}
+		};
+		inlineChannels.set(channel, entry);
+		solve(controller.signal)
+			.then(resolve, reject)
+			.finally(() => {
+				if (inlineChannels.get(channel) === entry) inlineChannels.delete(channel);
+			});
+	});
+}
+
+/**
+ * Runs a request in the worker, or inline; a worker failure (not a
+ * cancellation) retries it inline once.
+ */
+async function dispatch<T>(
+	channel: string | undefined,
+	inWorker: (client: HoseRoutingClient) => Promise<T>,
+	inline: (signal: AbortSignal) => Promise<T>
+): Promise<T> {
+	const b = await getBackend();
+	if (b.kind === 'inline') return runInline(channel, inline);
+	try {
+		return await inWorker(b.client);
+	} catch (e) {
+		if (isRoutingCancelled(e)) throw e;
+		console.warn('Hose routing worker request failed, routing on the main thread:', e);
+		inlineBackend();
+		return runInline(channel, inline);
+	}
+}
+
+/** `{ lat, lng }` without anything else (reactive proxies included). */
+function plainPoint(point: GeoPoint): GeoPoint {
+	return { lat: point.lat, lng: point.lng };
+}
+
+/**
+ * Computes the routed distances (and routes) for the nearby list (see
+ * `routeNearby` in `hoseRoutingCore.ts`). Rejects only with
+ * {@link RoutingCancelledError} when superseded on its channel.
+ */
+export function computeNearbyDistances(
+	origin: GeoPoint,
+	targets: RouteTargetInput[],
+	straightDistances: number[],
+	options: NearbyRoutingOptions = { mode: 'optimized' },
+	request: RoutingRequest = {}
+): Promise<NearbyDistanceResult[]> {
+	// A plain copy: the GPS position comes from a Vue ref (a Proxy), which
+	// `postMessage` cannot clone.
+	origin = plainPoint(origin);
+	return dispatch(
+		request.channel,
+		(client) => client.nearby(origin, targets, straightDistances, options, request.channel),
+		(signal) => routeNearby(origin, targets, straightDistances, options, signal)
 	);
 }
 
 /**
- * Returns a routing context (decoded obstacles + built graph) covering
- * `bounds`, reusing the cached one while it still covers the query and is
- * fresh. Tile decodes are additionally cached per tile downstream, so a
- * rebuild after a small move is cheap.
+ * Routed display line `origin` → `target` (see `routePath` in
+ * `hoseRoutingCore.ts`). Never `null`; rejects only with
+ * {@link RoutingCancelledError} when superseded on its channel.
  */
-async function getContext(bounds: GeoBounds): Promise<RoutingContext> {
-	const now = Date.now();
-	if (context && now - context.builtAt < CONTEXT_TTL_MS && boundsCover(context.bounds, bounds)) {
-		return context;
-	}
-	const obstacles = await getObstaclesForBounds(bounds);
-	context = {
-		bounds,
-		obstacles,
-		graph: buildRoadGraph(obstacles.roads),
-		builtAt: now
-	};
-	return context;
+export function getRoutedPath(
+	origin: GeoPoint,
+	target: RouteTargetInput,
+	options: RoutingOptions = { mode: 'optimized' },
+	request: RoutingRequest = {}
+): Promise<HoseRoute> {
+	origin = plainPoint(origin);
+	if (!('kind' in target)) target = plainPoint(target);
+	return dispatch(
+		request.channel,
+		(client) => client.path(origin, target, options, request.channel),
+		(signal) => routePath(origin, target, options, signal)
+	);
 }
 
-/** Drops the cached routing context (e.g. for tuning/testing). */
+/** Drops the cached routing context in the worker and on the main thread (tuning/testing). */
 export function invalidateRoutingContext(): void {
-	context = null;
-}
-
-/**
- * Computes the road-aware ranking distances for the nearby list.
- *
- * @param origin - The searcher's location.
- * @param targets - Marker positions, parallel to `straightDistances`.
- * @param straightDistances - Precomputed haversine distances in meters.
- * @return One result per target; on any failure every marker falls back to its
- *         straight-line distance (haversine order).
- */
-export async function computeNearbyDistances(
-	origin: GeoPoint,
-	targets: GeoPoint[],
-	straightDistances: number[],
-	options: RoutingOptions = { clampToRoads: false }
-): Promise<NearbyDistanceResult[]> {
-	const results: NearbyDistanceResult[] = straightDistances.map((d) => ({
-		routedDistance: null,
-		sortDistance: d
-	}));
-
-	// Nearest-first candidates within the routing horizon, capped.
-	const candidates = straightDistances
-		.map((distance, index) => ({ distance, index }))
-		.filter((c) => c.distance <= ROUTING_MAX_STRAIGHT_M)
-		.sort((a, b) => a.distance - b.distance)
-		.slice(0, MAX_ROUTED_TARGETS)
-		.map((c) => c.index);
-	if (candidates.length === 0) return results;
-
-	try {
-		const candidatePoints = candidates.map((i) => targets[i]);
-		const bounds = boundsAround([origin, ...candidatePoints], BOUNDS_MARGIN_M);
-		const ctx = await getContext(bounds);
-		const { graph, obstacles } = ctx;
-
-		// Terrain routing (gardens allowed) unless clamped to roads; falls back
-		// to the graph when the grid can't be built for this window.
-		const terrainSolve = options.clampToRoads
-			? null
-			: (() => {
-					const terrain = terrainFor(ctx);
-					return terrain ? solveTerrain(terrain, origin) : null;
-				})();
-
-		// Price the point↔road legs with the building-aware heuristic so a snap
-		// candidate across a building block never beats one along open ground.
-		const legCost = (a: GeoPoint, b: GeoPoint) => effectiveDistanceMeters(a, b, obstacles);
-		const routed = terrainSolve
-			? candidatePoints.map((p) => terrainSolve.distanceTo(p))
-			: routeFromOrigin(graph, origin, candidatePoints, legCost);
-		candidates.forEach((targetIndex, i) => {
-			const route = routed[i];
-			if (route !== null) {
-				results[targetIndex] = {
-					routedDistance: route.meters,
-					// Rank by the geometric length too — the list must never look
-					// unsorted against the displayed meters. The priced cost only
-					// picks the best route per marker inside the routers. (Guard:
-					// a route can never beat the straight line.)
-					sortDistance: Math.max(route.meters, straightDistances[targetIndex])
-				};
-			} else {
-				// Off-network marker: weighted straight-line heuristic instead.
-				results[targetIndex] = {
-					routedDistance: null,
-					sortDistance: effectiveDistanceMeters(origin, targets[targetIndex], obstacles)
-				};
-			}
-		});
-	} catch (e) {
-		console.warn('Road-aware ranking failed, falling back to straight-line order:', e);
-	}
-
-	return results;
-}
-
-/**
- * Routed display polyline `origin` → `target`, or `null` when unroutable (the
- * caller draws the straight line instead).
- */
-export async function getRoutedPath(
-	origin: GeoPoint,
-	target: GeoPoint,
-	options: RoutingOptions = { clampToRoads: false }
-): Promise<GeoPoint[] | null> {
-	if (distanceTo(origin, target) > ROUTING_MAX_STRAIGHT_M * 2) return null;
-	try {
-		const bounds = boundsAround([origin, target], BOUNDS_MARGIN_M);
-		const ctx = await getContext(bounds);
-		const { graph, obstacles } = ctx;
-		if (!options.clampToRoads) {
-			const terrain = terrainFor(ctx);
-			const terrainPath = terrain ? gridRoutePath(terrain, origin, target) : null;
-			if (terrainPath) return terrainPath;
-			// Grid unavailable/unreached → try the road graph before giving up.
-		}
-		const legCost = (a: GeoPoint, b: GeoPoint) => effectiveDistanceMeters(a, b, obstacles);
-		return routePath(graph, origin, target, legCost);
-	} catch (e) {
-		console.warn('Routed path failed, falling back to straight line:', e);
-		return null;
-	}
+	invalidateInlineContext();
+	void backend?.then((b) => {
+		if (b.kind === 'worker') b.client.invalidate();
+	});
 }

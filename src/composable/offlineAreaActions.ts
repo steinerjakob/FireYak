@@ -1,44 +1,10 @@
 import { alertController, toastController } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
 import { useOfflineAreasStore } from '@/store/offlineAreasStore';
-import {
-	tileCount,
-	PROTOMAPS_MAX_ZOOM,
-	SATELLITE_MAX_ZOOM,
-	TERRAIN_MAX_ZOOM
-} from '@/offline/tileMath';
-import type { GeoBounds } from '@/types/geo';
 import { isDataPhaseDone, type OfflineArea } from '@/mapHandler/databaseHandler';
 
-/**
- * Calibration constants for pre-download size estimates. Average compressed
- * bytes per tile per source — rough, so estimates are shown as a ±40% range
- * rather than a fake exact figure.
- */
-export const AVG_TILE_BYTES: Record<string, number> = {
-	protomaps: 45_000,
-	satellite: 25_000,
-	terrain: 35_000
-};
-
-const SOURCE_MAX_ZOOM: Record<string, number> = {
-	protomaps: PROTOMAPS_MAX_ZOOM,
-	satellite: SATELLITE_MAX_ZOOM,
-	terrain: TERRAIN_MAX_ZOOM
-};
-
-/** Estimated download bytes for one tile source over the given bounds. */
-export function estimateSourceBytes(bounds: GeoBounds, source: string): number {
-	return tileCount(bounds, 0, SOURCE_MAX_ZOOM[source]) * AVG_TILE_BYTES[source];
-}
-
-/** Widens a byte estimate into a ±40% MB range (raw numbers, not localized). */
-export function estimateRangeMb(bytes: number): { low: number; high: number } {
-	const mb = bytes / (1024 * 1024);
-	const low = Math.max(1, Math.round(mb * 0.6));
-	const high = Math.max(low, Math.round(mb * 1.4));
-	return { low, high };
-}
+// Size estimates live in a pure module (specs); re-exported for the views.
+export { AVG_TILE_BYTES, estimateRangeMb, estimateSourceBytes } from '@/offline/areaSizeEstimate';
 
 /**
  * Shared helpers for the offline-area UIs (list view + detail view): status

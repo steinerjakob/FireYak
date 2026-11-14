@@ -14,12 +14,8 @@ import {
 import { downloadAreaData } from '@/offline/areaDataDownloader';
 import { downloadTiles, downloadStyleAssets } from '@/offline/tileDownloader';
 import { tileStore } from '@/offline/tileStore';
-import {
-	tileCount,
-	PROTOMAPS_MAX_ZOOM,
-	SATELLITE_MAX_ZOOM,
-	TERRAIN_MAX_ZOOM
-} from '@/offline/tileMath';
+import { tileCountForZooms } from '@/offline/tileMath';
+import { SOURCE_ZOOMS } from '@/offline/areaSizeEstimate';
 import { invalidateDownloadedAreasCache } from '@/offline/offlineProtocol';
 import { useNetworkStatus } from '@/composable/networkStatus';
 
@@ -64,23 +60,27 @@ export function isAreaTooLarge(bounds: GeoBounds): boolean {
 	);
 }
 
-/** One tile source to download for an area, with its max zoom. */
+/** One tile source to download for an area, with its zooms. */
 interface TileJob {
 	source: string;
-	zMax: number;
+	zooms: readonly number[];
 }
 
-/** The tile sources an area needs: protomaps always, satellite/terrain per toggles. */
+/**
+ * The tile sources an area needs: protomaps always, satellite/terrain per
+ * toggles. Terrain includes the routing DEM z14 (plan §6.9), so hose routes
+ * inside the area have full slope data offline.
+ */
 function tileJobsFor(area: OfflineArea): TileJob[] {
-	const jobs: TileJob[] = [{ source: 'protomaps', zMax: PROTOMAPS_MAX_ZOOM }];
-	if (area.includeSatellite) jobs.push({ source: 'satellite', zMax: SATELLITE_MAX_ZOOM });
-	if (area.includeTerrain) jobs.push({ source: 'terrain', zMax: TERRAIN_MAX_ZOOM });
+	const jobs: TileJob[] = [{ source: 'protomaps', zooms: SOURCE_ZOOMS.protomaps }];
+	if (area.includeSatellite) jobs.push({ source: 'satellite', zooms: SOURCE_ZOOMS.satellite });
+	if (area.includeTerrain) jobs.push({ source: 'terrain', zooms: SOURCE_ZOOMS.terrain });
 	return jobs;
 }
 
 /** Total tiles across all of the area's enabled sources (for the progress total). */
 function totalTilesFor(area: OfflineArea): number {
-	return tileJobsFor(area).reduce((sum, job) => sum + tileCount(area.bounds, 0, job.zMax), 0);
+	return tileJobsFor(area).reduce((sum, job) => sum + tileCountForZooms(area.bounds, job.zooms), 0);
 }
 
 /**
@@ -248,7 +248,7 @@ export const useOfflineAreasStore = defineStore('offlineAreas', () => {
 				await downloadTiles({
 					bounds: currentArea.bounds,
 					source: job.source,
-					zMax: job.zMax,
+					zooms: job.zooms,
 					areaId: id,
 					signal,
 					resumeFrom: tileResume[job.source] ?? 0,

@@ -5,15 +5,22 @@ import {
 	type MarkerFilters
 } from '@/store/settingsStore';
 import { Preferences } from '@capacitor/preferences';
+import {
+	CLAMP_HOSES_TO_ROADS_KEY,
+	HOSE_ROUTING_KEY,
+	resolveHoseRouting,
+	type HoseRoutingMode
+} from '@/helper/hoseRoutingSetting';
 
 const THEME_KEY = 'theme';
 const SHOW_ZOOM_BUTTONS_KEY = 'show_zoom_buttons';
 const MAP_LAYER_KEY = 'map_layer';
 const TERRAIN_3D_KEY = 'terrain_3d';
-const CLAMP_HOSES_TO_ROADS_KEY = 'clamp_hoses_to_roads';
 const SHOW_PATH_TO_MARKER_KEY = 'show_path_to_marker';
 const OSM_AUTH_KEY = 'osm_token';
 const MARKER_FILTERS_KEY = 'marker_filters';
+const CROSS_COUNTRY_NOTE_SEEN_KEY = 'cross_country_note_seen';
+const ROUTING_CACHE_MB_KEY = 'routing_cache_mb';
 
 export function useSettings() {
 	const settingsStore = useSettingsStore();
@@ -28,19 +35,25 @@ export function useSettings() {
 			showZoomButtonsResult,
 			mapLayerResult,
 			terrain3dResult,
+			hoseRoutingResult,
 			clampHosesToRoadsResult,
 			showPathToMarkerResult,
 			osmAuthKey,
-			markerFiltersResult
+			markerFiltersResult,
+			crossCountryNoteSeenResult,
+			routingCacheMbResult
 		] = await Promise.all([
 			Preferences.get({ key: THEME_KEY }),
 			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
 			Preferences.get({ key: MAP_LAYER_KEY }),
 			Preferences.get({ key: TERRAIN_3D_KEY }),
+			Preferences.get({ key: HOSE_ROUTING_KEY }),
 			Preferences.get({ key: CLAMP_HOSES_TO_ROADS_KEY }),
 			Preferences.get({ key: SHOW_PATH_TO_MARKER_KEY }),
 			Preferences.get({ key: OSM_AUTH_KEY }),
-			Preferences.get({ key: MARKER_FILTERS_KEY })
+			Preferences.get({ key: MARKER_FILTERS_KEY }),
+			Preferences.get({ key: CROSS_COUNTRY_NOTE_SEEN_KEY }),
+			Preferences.get({ key: ROUTING_CACHE_MB_KEY })
 		]);
 
 		if (themeResult.value) {
@@ -59,8 +72,23 @@ export function useSettings() {
 			settingsStore.setTerrain3d(terrain3dResult.value === 'true');
 		}
 
-		if (clampHosesToRoadsResult.value) {
-			settingsStore.setClampHosesToRoads(clampHosesToRoadsResult.value === 'true');
+		// Plan §6.7 (from phase 5): the migrated mode is final; it is written once
+		// and the old boolean key is removed.
+		const hoseRouting = resolveHoseRouting({
+			hoseRouting: hoseRoutingResult.value ?? null,
+			clampHosesToRoads: clampHosesToRoadsResult.value ?? null
+		});
+		settingsStore.setHoseRouting(hoseRouting.mode);
+		if (hoseRouting.shouldPersist) {
+			await Preferences.set({ key: HOSE_ROUTING_KEY, value: hoseRouting.mode });
+			await Preferences.remove({ key: CLAMP_HOSES_TO_ROADS_KEY });
+		}
+
+		settingsStore.setCrossCountryNoteSeen(crossCountryNoteSeenResult.value === 'true');
+
+		const routingCacheMb = Number(routingCacheMbResult.value);
+		if (routingCacheMbResult.value && Number.isFinite(routingCacheMb) && routingCacheMb > 0) {
+			settingsStore.setRoutingCacheMb(routingCacheMb);
 		}
 
 		if (showPathToMarkerResult.value) {
@@ -129,16 +157,22 @@ export function useSettings() {
 		});
 	};
 
-	/**
-	 * Saves whether hose routes must stick to the road network (see
-	 * `clampHosesToRoads` in the settings store).
-	 */
-	const saveClampHosesToRoads = async (enabled: boolean) => {
-		settingsStore.setClampHosesToRoads(enabled);
-		await Preferences.set({
-			key: CLAMP_HOSES_TO_ROADS_KEY,
-			value: String(enabled)
-		});
+	/** Saves the hose routing mode (see `hoseRouting` in the settings store). */
+	const saveHoseRouting = async (mode: HoseRoutingMode) => {
+		settingsStore.setHoseRouting(mode);
+		await Preferences.set({ key: HOSE_ROUTING_KEY, value: mode });
+	};
+
+	/** Saves the routing cache budget in MB (applied to the cache by `App.vue`). */
+	const saveRoutingCacheMb = async (mb: number) => {
+		settingsStore.setRoutingCacheMb(mb);
+		await Preferences.set({ key: ROUTING_CACHE_MB_KEY, value: String(mb) });
+	};
+
+	/** Remembers that the one-time cross-country note was dismissed. */
+	const saveCrossCountryNoteSeen = async () => {
+		settingsStore.setCrossCountryNoteSeen(true);
+		await Preferences.set({ key: CROSS_COUNTRY_NOTE_SEEN_KEY, value: 'true' });
 	};
 
 	/**
@@ -194,11 +228,13 @@ export function useSettings() {
 
 	return {
 		loadSettings,
+		saveRoutingCacheMb,
 		saveTheme,
 		saveShowZoomButtons,
 		saveMapLayer,
 		saveTerrain3d,
-		saveClampHosesToRoads,
+		saveHoseRouting,
+		saveCrossCountryNoteSeen,
 		saveShowPathToMarker,
 		saveOsmAuthToken,
 		removeOsmAuthToken,

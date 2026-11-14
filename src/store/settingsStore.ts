@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia';
+import { DEFAULT_HOSE_ROUTING, type HoseRoutingMode } from '@/helper/hoseRoutingSetting';
+import { DEFAULT_ROUTING_CACHE_MB } from '@/offline/routingCacheIndex';
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import {
 	initSystemColorScheme,
@@ -56,9 +58,16 @@ export const useSettingsStore = defineStore('settings', {
 		showZoomButtons: true,
 		mapLayer: 'standard' as MapLayerSetting,
 		terrain3d: false,
-		// When true, hose routes stick to the road network; when false (default)
-		// they may cut through gardens/open ground (buildings always avoided).
-		clampHosesToRoads: false,
+		// How hose routes are laid (plan §6.7): `optimized` (default) weighs
+		// roads, land use, slope and obstacles; `roads` sticks to the road
+		// network with short connections at both ends.
+		hoseRouting: DEFAULT_HOSE_ROUTING as HoseRoutingMode,
+		// Whether the one-time "check cross-country stretches on site" note has
+		// been dismissed (plan §6.8).
+		crossCountryNoteSeen: false,
+		// Byte budget (MB) of the routing cache: map and terrain tiles kept for
+		// hose routes along the way (plan §6.9).
+		routingCacheMb: DEFAULT_ROUTING_CACHE_MB,
 		// When true, a line from the user position to the selected marker is
 		// drawn on the map.
 		showPathToMarker: true,
@@ -67,7 +76,9 @@ export const useSettingsStore = defineStore('settings', {
 	}),
 	getters: {
 		/** Whether the dark palette is currently active. */
-		isDarkMode: (state) => resolveIsDark(state.theme)
+		isDarkMode: (state) => resolveIsDark(state.theme),
+		/** The "keep hose route on roads" toggle. */
+		clampHosesToRoads: (state) => state.hoseRouting === 'roads'
 	},
 	actions: {
 		setTheme(theme: ThemeSetting) {
@@ -83,8 +94,14 @@ export const useSettingsStore = defineStore('settings', {
 		setTerrain3d(enabled: boolean) {
 			this.terrain3d = enabled;
 		},
-		setClampHosesToRoads(enabled: boolean) {
-			this.clampHosesToRoads = enabled;
+		setHoseRouting(mode: HoseRoutingMode) {
+			this.hoseRouting = mode;
+		},
+		setCrossCountryNoteSeen(seen: boolean) {
+			this.crossCountryNoteSeen = seen;
+		},
+		setRoutingCacheMb(mb: number) {
+			this.routingCacheMb = mb;
 		},
 		setShowPathToMarker(enabled: boolean) {
 			this.showPathToMarker = enabled;

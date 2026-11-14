@@ -64,6 +64,18 @@ export default defineConfig([
 		rules
 	},
 	{
+		// App code must never reach test material: fixtures are test data (kept out
+		// of the bundle), `src/testing/` and vitest are dev-only.
+		files: ['src/**/*.{ts,vue}'],
+		ignores: ['src/**/*.spec.ts', 'src/testing/**'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{ patterns: ['**/__fixtures__/**', '@/testing/*', '**/testing/*', 'vitest'] }
+			]
+		}
+	},
+	{
 		files: ['**/*.vue'],
 		plugins,
 		languageOptions: {

@@ -415,7 +415,7 @@
 			"defaultName": "My district",
 			"includeSatellite": "Include satellite imagery",
 			"includeTerrain": "Include terrain",
-			"includeTerrainHint": "Needed for the offline pump calculation — terrain tiles provide the elevation data.",
+			"includeTerrainHint": "Needed offline for the pump calculation and for hose routes over hills — terrain tiles provide the elevation data.",
 			"autoRefresh": "Auto-refresh on Wi-Fi",
 			"autoRefreshHint": "Refresh automatically over Wi-Fi when older than 30 days.",
 			"estimate": "About {width} × {height} km",
@@ -452,19 +452,26 @@
 			},
 			"clampToRoads": {
 				"label": "Keep hose route on roads",
-				"description": "When off, routes may cut through gardens and open ground (buildings are always avoided)"
+				"description": "Off: the route weighs roads, fields, slopes and obstacles. On: roads and paths only, with short connections at both ends."
 			}
 		},
 		"pumpCalculation": {
 			"title": "Pump calculation",
 			"hoseLength": "Hose length (m)",
 			"hoseDiameter": "Hose diameter (mm)",
-			"hoseName": "Hose designation"
+			"hoseName": "Hose designation",
+			"maxHosePressure": "Max. hose working pressure (bar)",
+			"maxHosePressureHelp": "Long downhill lines warn when the pressure at rest could reach it"
 		},
 		"offline": {
 			"title": "Offline",
 			"offlineAreas": "Offline areas",
-			"pendingEdits": "Pending changes"
+			"pendingEdits": "Pending changes",
+			"routingCache": {
+				"label": "Route data cache",
+				"description": "Map and terrain data kept for hose routes along your way, so routes appear faster and work offline. In use: {used} MB",
+				"clear": "Clear"
+			}
 		}
 	},
 	"pendingEdits": {
@@ -518,5 +525,70 @@
 		},
 		"aboutLink": "What's new",
 		"support": "Support this project"
+	},
+	"route": {
+		"estimate": "approx. {distance}",
+		"offRoad": "{distance} off-road",
+		"roadOnly": "road {distance}",
+		"notRecommended": "Not recommended",
+		"checkPressure": "Check pressure",
+		"incomplete": "Map data incomplete",
+		"barriersUnknown": "Obstacles (fences) unknown",
+		"crossCountryNote": "Check cross-country stretches on site: fences, walls and hedges are not in the map data.",
+		"ok": "OK",
+		"fallback": {
+			"cellCap": "Area too large: roads only",
+			"tileCap": "Map data cut off",
+			"tooFar": "Straight line: too far to route",
+			"noRoadNearby": "Straight line: no road nearby",
+			"gridUnreached": "Not reachable off-road: roads only",
+			"thinBuildings": "Buildings incomplete here: roads only"
+		},
+		"noElevation": "Elevation data missing",
+		"details": {
+			"title": "Hose route",
+			"titlePump": "Hose line",
+			"close": "Close",
+			"length": "Length",
+			"hoses": "Hoses",
+			"climb": "Height difference",
+			"climbTowardsSource": "{climb} to the water source",
+			"offRoad": "Off-road",
+			"roadOnly": "On roads only",
+			"stretches": "Coloured stretches",
+			"noStretches": "No steep or off-road stretches.",
+			"legend": "Legend",
+			"uphill": "uphill",
+			"downhill": "downhill",
+			"directionSource": "Uphill and downhill as seen from your position towards the water source.",
+			"directionPump": "Uphill and downhill as seen from the suction point towards the fire object.",
+			"stretch": {
+				"steep": "Steep: {grade} % {direction} over {distance}",
+				"verySteep": "Very steep: {grade} % {direction} over {distance}",
+				"steepPlain": "Steep over {distance}",
+				"verySteepPlain": "Very steep over {distance}",
+				"offRoad": "Off-road: {distance}"
+			}
+		},
+		"section": {
+			"showDetails": "Show route details",
+			"hideDetails": "Hide route details",
+			"loading": "Computing the hose route …",
+			"updating": "Updating",
+			"noRoute": "No hose route available",
+			"noStretches": "No steep or off-road stretches",
+			"more": "+{count} more",
+			"count": {
+				"verySteep": "{count}× very steep",
+				"steep": "{count}× steep",
+				"offRoad": "{count}× off-road"
+			}
+		},
+		"legend": {
+			"road": "On roads and paths",
+			"offRoad": "Off-road (dashed)",
+			"steep": "Steep: over 25 %",
+			"verySteep": "Very steep: over 50 % (ticks)"
+		}
 	}
 }

@@ -25,6 +25,14 @@ import { RoadLine } from '@/types/obstacles';
 
 /** Max distance from a point to the road network for routing to apply. */
 export const MAX_SNAP_M = 100;
+/**
+ * Max final leg from the road network to a pond's shore (plan §6.5): a pond
+ * often lies off the road, and the farm track 200 m away beats a cycleway
+ * detour of a kilometre.
+ */
+export const POND_SHORE_SNAP_M = 250;
+/** Road attachments priced per shore sample (the cheapest by network + straight leg). */
+const SHORE_LEGS_PER_POINT = 3;
 /** Max distinct components considered per snapped point. */
 const MAX_SNAP_COMPONENTS = 8;
 /** Vertex-merge tolerance; also joins tile-boundary duplicates (~0.3 m quantization at z15). */
@@ -278,12 +286,17 @@ export function buildRoadGraph(roads: RoadLine[]): RoadGraph {
  * unreachable island fragment while the real street network passes a few
  * meters farther away. Returns an empty array when no road is in range.
  */
-function snapCandidates(graph: RoadGraph, point: GeoPoint): SnapCandidate[] {
+function snapCandidates(
+	graph: RoadGraph,
+	point: GeoPoint,
+	maxSnapM: number = MAX_SNAP_M,
+	perEdge = false
+): SnapCandidate[] {
 	if (graph.edges.length === 0) return [];
 
 	const px = point.lng * graph.mPerDegLng;
 	const py = point.lat * M_PER_DEG_LAT;
-	const cellRadius = Math.ceil(MAX_SNAP_M / SNAP_GRID_CELL_M);
+	const cellRadius = Math.ceil(maxSnapM / SNAP_GRID_CELL_M);
 	const ccx = Math.floor(px / SNAP_GRID_CELL_M);
 	const ccy = Math.floor(py / SNAP_GRID_CELL_M);
 
@@ -314,11 +327,14 @@ function snapCandidates(graph: RoadGraph, point: GeoPoint): SnapCandidate[] {
 				const qx = ax + t * dx;
 				const qy = ay + t * dy;
 				const dist = Math.hypot(px - qx, py - qy);
-				if (dist > MAX_SNAP_M) continue;
+				if (dist > maxSnapM) continue;
 				const component = graph.nodeComponent[edge.a];
-				const current = bestPerComponent.get(component);
+				// Per edge (shore targets): every road in range may be the best
+				// attachment, not just the nearest one of each component.
+				const slot = perEdge ? -1 - edgeIdx : component;
+				const current = bestPerComponent.get(slot);
 				if (!current || dist < current.distance) {
-					bestPerComponent.set(component, {
+					bestPerComponent.set(slot, {
 						edge: edgeIdx,
 						t,
 						position: { lng: qx / graph.mPerDegLng, lat: qy / M_PER_DEG_LAT },
@@ -331,9 +347,8 @@ function snapCandidates(graph: RoadGraph, point: GeoPoint): SnapCandidate[] {
 		}
 	}
 
-	return [...bestPerComponent.values()]
-		.sort((a, b) => a.distance - b.distance)
-		.slice(0, MAX_SNAP_COMPONENTS);
+	const sorted = [...bestPerComponent.values()].sort((a, b) => a.distance - b.distance);
+	return perEdge ? sorted : sorted.slice(0, MAX_SNAP_COMPONENTS);
 }
 
 /** Minimal binary min-heap over (distance, node) pairs with lazy deletion. */
@@ -461,6 +476,8 @@ interface Arrival {
 	/** Geometric length in meters of the same route (legs at face value). */
 	meters: number;
 	target: SnapCandidate;
+	/** The target point the route ends at (one of a shore's samples). */
+	endpoint: GeoPoint;
 	/** Node the route enters the target edge from, or -1 for the direct same-edge run. */
 	entry: number;
 	/** Origin candidate of the direct same-edge run (set only when entry === -1). */
@@ -473,50 +490,108 @@ export interface RouteResult {
 	meters: number;
 }
 
+/** A road-mode result with its display polyline and the point it ends at. */
+export interface RoadRouteResult extends RouteResult {
+	endpoint: GeoPoint;
+	points: GeoPoint[];
+}
+
 /**
- * Cheapest arrival at `target` given a solved origin: evaluates every target
- * snap candidate via both edge endpoints, plus the direct along-edge run when
- * an origin candidate sits on the same edge.
+ * Where a road route may end: one point (snapped within {@link MAX_SNAP_M}),
+ * or a set of points such as a pond's shore samples, each snapped within
+ * `maxSnapM`; the cheapest arrival over all of them wins. A set may bring its
+ * own `legCost` for the final leg (a shore leg priced by the cost model, plan
+ * §6.5); a leg it prices `Infinity` (through a building or water) is not used.
+ */
+export type RoadTarget = GeoPoint | { points: GeoPoint[]; maxSnapM: number; legCost?: LegCostFn };
+
+function targetPoints(target: RoadTarget): {
+	points: GeoPoint[];
+	maxSnapM: number;
+	legCost?: LegCostFn;
+} {
+	return 'points' in target ? target : { points: [target], maxSnapM: MAX_SNAP_M };
+}
+
+/**
+ * Cheapest arrival at `target` given a solved origin: evaluates every snap
+ * candidate of every target point via both edge endpoints, plus the direct
+ * along-edge run when an origin candidate sits on the same edge.
  */
 function bestArrival(
 	graph: RoadGraph,
 	solve: OriginSolve,
-	target: GeoPoint,
+	target: RoadTarget,
 	legCost: LegCostFn
 ): Arrival | null {
 	let best: Arrival | null = null;
+	const { points, maxSnapM, legCost: targetLegCost } = targetPoints(target);
+	const finalLegCost = targetLegCost ?? legCost;
+	// A set of points (a shore) is attached to every road within range, ranked
+	// by the network cost plus the straight leg, and only the most promising
+	// legs per point are priced (legCost is the expensive part).
+	const shore = points.length > 1;
 
-	for (const tc of snapCandidates(graph, target)) {
-		tc.legCost = legCost(target, tc.position);
-		const edge = graph.edges[tc.edge];
-		const viaA = solve.dist[edge.a] + tc.t * edge.length;
-		const viaB = solve.dist[edge.b] + (1 - tc.t) * edge.length;
-		const via = Math.min(viaA, viaB);
-		if (Number.isFinite(via)) {
-			const cost = via + tc.legCost;
-			if (!best || cost < best.cost) {
-				const entry = viaA <= viaB ? edge.a : edge.b;
-				// dist[] carries the origin leg at its priced cost; swap both legs
-				// for their geometric distances to get the real path length.
-				const oc = solve.candidates[solve.seed[entry]];
-				const meters = via - oc.legCost + oc.distance + tc.distance;
-				best = { cost, meters, target: tc, entry, directFrom: null };
-			}
+	for (const point of points) {
+		let candidates = snapCandidates(graph, point, maxSnapM, shore);
+		if (shore) {
+			const estimate = (tc: SnapCandidate) => {
+				const edge = graph.edges[tc.edge];
+				const via = Math.min(
+					solve.dist[edge.a] + tc.t * edge.length,
+					solve.dist[edge.b] + (1 - tc.t) * edge.length
+				);
+				return via + tc.distance;
+			};
+			candidates = candidates
+				.map((tc) => ({ tc, est: estimate(tc) }))
+				.filter((c) => Number.isFinite(c.est))
+				.sort((a, b) => a.est - b.est)
+				.slice(0, SHORE_LEGS_PER_POINT)
+				.map((c) => c.tc);
 		}
-		// Direct along-edge run when an origin candidate sits on the same edge
-		// (no node detour — matters on short isolated fragments).
-		for (const oc of solve.candidates) {
-			if (oc.edge !== tc.edge) continue;
-			const along = Math.abs(tc.t - oc.t) * edge.length;
-			const cost = oc.legCost + along + tc.legCost;
-			if (!best || cost < best.cost) {
-				best = {
-					cost,
-					meters: oc.distance + along + tc.distance,
-					target: tc,
-					entry: -1,
-					directFrom: oc
-				};
+		for (const tc of candidates) {
+			const edge = graph.edges[tc.edge];
+			const viaA = solve.dist[edge.a] + tc.t * edge.length;
+			const viaB = solve.dist[edge.b] + (1 - tc.t) * edge.length;
+			const via = Math.min(viaA, viaB);
+			let directBest = Infinity;
+			for (const oc of solve.candidates) {
+				if (oc.edge !== tc.edge) continue;
+				directBest = Math.min(directBest, oc.legCost + Math.abs(tc.t - oc.t) * edge.length);
+			}
+			if (!Number.isFinite(via) && !Number.isFinite(directBest)) continue;
+			// Legs cost ≥ 0: skip pricing a leg that cannot beat the best arrival.
+			if (best && Math.min(via, directBest) >= best.cost) continue;
+			tc.legCost = finalLegCost(point, tc.position);
+			if (!Number.isFinite(tc.legCost)) continue;
+			if (Number.isFinite(via)) {
+				const cost = via + tc.legCost;
+				if (!best || cost < best.cost) {
+					const entry = viaA <= viaB ? edge.a : edge.b;
+					// dist[] carries the origin leg at its priced cost; swap both legs
+					// for their geometric distances to get the real path length.
+					const oc = solve.candidates[solve.seed[entry]];
+					const meters = via - oc.legCost + oc.distance + tc.distance;
+					best = { cost, meters, target: tc, endpoint: point, entry, directFrom: null };
+				}
+			}
+			// Direct along-edge run when an origin candidate sits on the same edge
+			// (no node detour — matters on short isolated fragments).
+			for (const oc of solve.candidates) {
+				if (oc.edge !== tc.edge) continue;
+				const along = Math.abs(tc.t - oc.t) * edge.length;
+				const cost = oc.legCost + along + tc.legCost;
+				if (!best || cost < best.cost) {
+					best = {
+						cost,
+						meters: oc.distance + along + tc.distance,
+						target: tc,
+						endpoint: point,
+						entry: -1,
+						directFrom: oc
+					};
+				}
 			}
 		}
 	}
@@ -527,45 +602,47 @@ function bestArrival(
 /**
  * Routed results from `origin` to each target along the road network,
  * including both approach legs. `cost` (legs priced by `legCost`) is the
- * ranking key; `meters` is the geometric length for display. ONE Dijkstra
- * traversal serves all targets. `null` per target when it can't snap within
- * {@link MAX_SNAP_M} of a reachable component; all `null` when the origin
- * can't snap at all.
+ * ranking key; `meters` is the geometric length for display and equals the
+ * length of `points`. ONE Dijkstra traversal serves all targets. A target may
+ * be a set of points (a pond's shore samples, with their own snap range); the
+ * cheapest arrival wins and `endpoint` names it. `null` per target when it
+ * can't snap to a reachable component; all `null` when the origin can't snap
+ * at all.
  */
 export function routeFromOrigin(
 	graph: RoadGraph,
 	origin: GeoPoint,
-	targets: GeoPoint[],
+	targets: RoadTarget[],
 	legCost: LegCostFn = distanceTo
-): (RouteResult | null)[] {
+): (RoadRouteResult | null)[] {
 	const solve = solveFromOrigin(graph, origin, legCost);
 	if (!solve) return targets.map(() => null);
 
 	return targets.map((target) => {
 		const arrival = bestArrival(graph, solve, target, legCost);
-		return arrival ? { cost: arrival.cost, meters: arrival.meters } : null;
+		if (!arrival) return null;
+		return {
+			cost: arrival.cost,
+			meters: arrival.meters,
+			endpoint: arrival.endpoint,
+			points: pathOf(graph, solve, origin, arrival)
+		};
 	});
 }
 
 /**
- * Full display polyline for the route `origin` → `target`: origin, origin snap
- * point, node chain along the shortest path, target snap point, target.
- * Returns `null` when either end can't snap to a mutually reachable component.
+ * Display polyline of an arrival: origin, origin snap point, node chain along
+ * the shortest path, target snap point, endpoint.
  */
-export function routePath(
+function pathOf(
 	graph: RoadGraph,
+	solve: OriginSolve,
 	origin: GeoPoint,
-	target: GeoPoint,
-	legCost: LegCostFn = distanceTo
-): GeoPoint[] | null {
-	const solve = solveFromOrigin(graph, origin, legCost);
-	if (!solve) return null;
-	const arrival = bestArrival(graph, solve, target, legCost);
-	if (!arrival) return null;
-
+	arrival: Arrival
+): GeoPoint[] {
 	if (arrival.entry === -1 && arrival.directFrom) {
 		// Same-edge run: straight along the shared edge segment.
-		return [origin, arrival.directFrom.position, arrival.target.position, target];
+		return [origin, arrival.directFrom.position, arrival.target.position, arrival.endpoint];
 	}
 
 	// Node chain backwards from the entry endpoint to the seeded origin snap
@@ -585,6 +662,20 @@ export function routePath(
 	for (const nodeIdx of chain) {
 		path.push({ lng: graph.nodes[nodeIdx][0], lat: graph.nodes[nodeIdx][1] });
 	}
-	path.push(arrival.target.position, target);
+	path.push(arrival.target.position, arrival.endpoint);
 	return path;
+}
+
+/**
+ * Full display polyline for the route `origin` → `target` (see
+ * {@link routeFromOrigin}). Returns `null` when either end can't snap to a
+ * mutually reachable component.
+ */
+export function routePath(
+	graph: RoadGraph,
+	origin: GeoPoint,
+	target: RoadTarget,
+	legCost: LegCostFn = distanceTo
+): GeoPoint[] | null {
+	return routeFromOrigin(graph, origin, [target], legCost)[0]?.points ?? null;
 }
