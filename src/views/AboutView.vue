@@ -34,6 +34,25 @@
 					</ion-card-content>
 				</ion-card>
 
+				<ion-card>
+					<ion-card-header>
+						<ion-card-title>
+							<ion-icon
+								:icon="chatbubbles"
+								style="vertical-align: middle; margin-right: 8px"
+							></ion-icon>
+							{{ $t('about.feedback') }}
+						</ion-card-title>
+					</ion-card-header>
+					<ion-card-content>
+						<p>{{ $t('about.feedbackDescription') }}</p>
+						<ion-button expand="block" class="support-button" @click="openFeedback">
+							<ion-icon :icon="chatbubbles" slot="start"></ion-icon>
+							{{ $t('about.sendFeedback') }}
+						</ion-button>
+					</ion-card-content>
+				</ion-card>
+
 				<!-- Support card: hidden on Android, Ko-fi web-only — see DONATION_URL -->
 				<ion-card v-if="showSupportCard">
 					<ion-card-header>
@@ -132,7 +151,17 @@ import {
 	IonButtons,
 	IonBackButton
 } from '@ionic/vue';
-import { logoGithub, heart, star, bug, code, documentText, map, sparkles } from 'ionicons/icons';
+import {
+	logoGithub,
+	heart,
+	star,
+	bug,
+	code,
+	documentText,
+	map,
+	sparkles,
+	chatbubbles
+} from 'ionicons/icons';
 import { computed, onMounted, ref } from 'vue';
 import { App } from '@capacitor/app';
 import { AppInfo } from '@capacitor/app/dist/esm/definitions';
@@ -141,6 +170,7 @@ import { version } from '@/../package.json';
 import { useWhatsNew } from '@/composable/whatsNew';
 import { useDataFreshness } from '@/composable/dataFreshness';
 import { DONATION_URL, GITHUB_URL } from '@/helper/appStoreInfos';
+import { useI18n } from 'vue-i18n';
 
 const { openHistory } = useWhatsNew();
 const { planetTimestamp, load: loadDataFreshness, formatted } = useDataFreshness();
@@ -157,6 +187,35 @@ const buildLabel = __APP_BUILD_LABEL__;
 const showBuildLabel = computed(
 	() => !!buildLabel && !(appInfo.value?.version ?? '').includes(buildLabel)
 );
+
+const { locale } = useI18n();
+
+/** Tally feedback form; its hidden fields are filled from the URL query string. */
+const FEEDBACK_FORM_URL = 'https://tally.so/r/Dqk6XZ';
+
+/**
+ * Opens the feedback form with app version, platform, device info and language
+ * attached as hidden fields. The form shows German or English depending on `lang`.
+ * On native platforms it opens in the in-app browser, on web in a new tab.
+ */
+const openFeedback = async () => {
+	const params = new URLSearchParams({
+		version: appInfo.value?.build
+			? `${appInfo.value.version} (${appInfo.value.build})`
+			: (appInfo.value?.version ?? version),
+		platform: Capacitor.getPlatform(),
+		device: navigator.userAgent,
+		lang: locale.value
+	});
+	const url = `${FEEDBACK_FORM_URL}?${params.toString()}`;
+
+	if (Capacitor.isNativePlatform()) {
+		const { InAppBrowser, DefaultWebViewOptions } = await import('@capacitor/inappbrowser');
+		await InAppBrowser.openInWebView({ url, options: DefaultWebViewOptions });
+	} else {
+		window.open(url, '_blank');
+	}
+};
 
 /** Re-evaluates once the timestamp resolves; `null` hides the line entirely. */
 const dataAsOf = computed(() => (planetTimestamp.value ? formatted() : null));
