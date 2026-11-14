@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
 	CELL_CLASS,
 	CELL_CLASS_NAME,
@@ -83,7 +83,13 @@ const name = (effect: FeatureEffect) =>
 	typeof effect === 'number' ? CELL_CLASS_NAME[effect] : effect;
 
 describe.skipIf(!fixturesPresent)('cost-model classes over the fixture scenes', () => {
-	const scenes = SCENE_IDS.map((id) => ({ id, ...decodeSceneObstacles(loadScene(id)) }));
+	// Decode in beforeAll, not in the describe body: vitest still runs the body
+	// of a skipped describe to collect its tests, which would read the missing
+	// tiles in a fresh checkout (CI) and fail the whole file.
+	let scenes: ({ id: string } & ReturnType<typeof decodeSceneObstacles>)[] = [];
+	beforeAll(() => {
+		scenes = SCENE_IDS.map((id) => ({ id, ...decodeSceneObstacles(loadScene(id)) }));
+	});
 
 	it('has the five scenes', () => {
 		expect(scenes.map((s) => s.id)).toHaveLength(5);
