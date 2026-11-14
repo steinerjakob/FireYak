@@ -362,6 +362,9 @@ function createUserLocationMarker(): maplibregl.Marker {
 	return new maplibregl.Marker({ element: el, anchor: 'center' });
 }
 
+const MAPLIBRE_ATTRIBUTION = '<a href="https://maplibre.org/" target="_blank">MapLibre</a>';
+const MAPTERHORN_ATTRIBUTION = "<a href='https://mapterhorn.com/attribution'>© Mapterhorn</a>";
+
 function getProtomapsStyle(): maplibregl.StyleSpecification {
 	const lang = locale.value || 'en';
 	const flavor = isSatellite.value
@@ -398,7 +401,7 @@ function getProtomapsStyle(): maplibregl.StyleSpecification {
 			encoding: 'terrarium',
 			tileSize: 512,
 			maxzoom: 12,
-			attribution: "<a href='https://mapterhorn.com/attribution'>© Mapterhorn</a>"
+			attribution: MAPTERHORN_ATTRIBUTION
 		};
 		sources['terrainSource'] = terrainSource;
 		sources['hillshadeSource'] = terrainSource;
@@ -1921,7 +1924,15 @@ async function initMap() {
 		touchZoomRotate: true,
 		pitchWithRotate: true,
 		pitch: 0,
-		maxPitch: 75
+		maxPitch: 75,
+		// Mapterhorn elevation feeds hose routing and the pump calculation even
+		// when the 3D terrain/hillshade layers (and their source) are off, so it
+		// is always credited. MapLibre drops the duplicate when the terrain
+		// source adds the same string.
+		attributionControl: {
+			compact: true,
+			customAttribution: [MAPLIBRE_ATTRIBUTION, MAPTERHORN_ATTRIBUTION]
+		}
 	});
 
 	// Important: force MapLibre to recalc size after layout is ready
