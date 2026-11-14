@@ -64,6 +64,11 @@
 			"type": "fix",
 			"en": "The map credits now always name Mapterhorn, whose elevation data the hose routes use.",
 			"de": "Der Kartennachweis nennt jetzt immer Mapterhorn, dessen Höhendaten die Schlauchwege nutzen."
+		},
+		{
+			"type": "feature",
+			"en": "You can now send feedback, report bugs and suggest new features directly from the About page.",
+			"de": "Feedback, Fehlermeldungen und Ideen für neue Funktionen lassen sich jetzt direkt unter „Über FireYak“ senden."
 		}
 	],
 	"releases": [
