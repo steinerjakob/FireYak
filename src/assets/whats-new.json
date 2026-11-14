@@ -1,77 +1,82 @@
 {
-	"unreleased": [
-		{
-			"type": "feature",
-			"en": "Fire water ponds can now be added and edited, and existing ponds on the map can be marked as fire water ponds.",
-			"de": "Löschteiche lassen sich jetzt hinzufügen, bearbeiten und an bestehenden Teichen auf der Karte markieren."
-		},
-		{
-			"type": "fix",
-			"en": "Shared links to a water source now open it reliably, even on a device that hasn't loaded that area yet.",
-			"de": "Geteilte Links zu einer Wasserentnahmestelle öffnen sie jetzt zuverlässig, auch auf Geräten, die das Gebiet noch nicht geladen haben."
-		},
-		{
-			"type": "fix",
-			"en": "Suction points show up on the map again.",
-			"de": "Saugstellen werden wieder auf der Karte angezeigt."
-		},
-		{
-			"type": "improvement",
-			"en": "Suction pipes and suction hydrants are now labelled as such and are shown and hidden together with suction points.",
-			"de": "Saugrohre und Saughydranten heißen jetzt auch so und werden zusammen mit den Saugstellen ein- und ausgeblendet."
-		},
-		{
-			"type": "fix",
-			"en": "Offline map downloads no longer stop when the map server is busy – they pause briefly and carry on.",
-			"de": "Offline-Kartendownloads brechen nicht mehr ab, wenn der Kartenserver ausgelastet ist – sie pausieren kurz und laufen weiter."
-		},
-		{
-			"type": "improvement",
-			"en": "Distances and hose routes to large fire water ponds now end at the best reachable shore point or its suction point.",
-			"de": "Entfernungen und Schlauchwege zu großen Löschteichen enden jetzt am besten erreichbaren Uferpunkt oder an der Saugstelle."
-		},
-		{
-			"type": "fix",
-			"en": "Hose routes to a hydrant no longer cut through buildings, and the list and map show the same length.",
-			"de": "Schlauchwege zum Hydranten führen nicht mehr durch Gebäude, und Liste und Karte zeigen dieselbe Länge."
-		},
-		{
-			"type": "feature",
-			"en": "Hose routes now weigh roads, fields, slopes and obstacles; off-road and steep stretches are marked, with warnings where needed.",
-			"de": "Schlauchwege wägen jetzt Straßen, Felder, Steigungen und Hindernisse ab; Querfeldein- und Steilstücke werden markiert, mit Warnhinweis, wo nötig."
-		},
-		{
-			"type": "feature",
-			"en": "Set the maximum working pressure of your hoses; long downhill lines warn when it could be exceeded.",
-			"de": "Der maximale Betriebsdruck der Schläuche ist einstellbar; lange Leitungen bergab warnen, wenn er überschritten werden könnte."
-		},
-		{
-			"type": "improvement",
-			"en": "Hose routes appear immediately and work better offline; map data along your way is cached in the background.",
-			"de": "Schlauchwege erscheinen sofort und funktionieren offline besser; Kartendaten entlang deines Weges werden im Hintergrund gespeichert."
-		},
-		{
-			"type": "improvement",
-			"en": "Offline areas now include finer elevation data for hose routes.",
-			"de": "Offline-Gebiete enthalten jetzt genauere Höhendaten für Schlauchwege."
-		},
-		{
-			"type": "improvement",
-			"en": "Hose routes show a short badge on the map and clear details, on phones right in the bottom panel: length, hoses, height difference, warnings and why a stretch is coloured. Bridges no longer show as steep.",
-			"de": "Schlauchwege zeigen auf der Karte ein kurzes Etikett und übersichtliche Details, am Handy direkt im unteren Infobereich: Länge, Schläuche, Höhenunterschied, Warnungen und warum ein Abschnitt farbig ist. Brücken gelten nicht mehr als steil."
-		},
-		{
-			"type": "fix",
-			"en": "The map credits now always name Mapterhorn, whose elevation data the hose routes use.",
-			"de": "Der Kartennachweis nennt jetzt immer Mapterhorn, dessen Höhendaten die Schlauchwege nutzen."
-		},
-		{
-			"type": "feature",
-			"en": "You can now send feedback, report bugs and suggest new features directly from the About page.",
-			"de": "Feedback, Fehlermeldungen und Ideen für neue Funktionen lassen sich jetzt direkt unter „Über FireYak“ senden."
-		}
-	],
+	"unreleased": [],
 	"releases": [
+		{
+			"version": "2.20.0",
+			"date": "2026-11-14",
+			"entries": [
+				{
+					"type": "feature",
+					"en": "Fire water ponds can now be added and edited, and existing ponds on the map can be marked as fire water ponds.",
+					"de": "Löschteiche lassen sich jetzt hinzufügen, bearbeiten und an bestehenden Teichen auf der Karte markieren."
+				},
+				{
+					"type": "fix",
+					"en": "Shared links to a water source now open it reliably, even on a device that hasn't loaded that area yet.",
+					"de": "Geteilte Links zu einer Wasserentnahmestelle öffnen sie jetzt zuverlässig, auch auf Geräten, die das Gebiet noch nicht geladen haben."
+				},
+				{
+					"type": "fix",
+					"en": "Suction points show up on the map again.",
+					"de": "Saugstellen werden wieder auf der Karte angezeigt."
+				},
+				{
+					"type": "improvement",
+					"en": "Suction pipes and suction hydrants are now labelled as such and are shown and hidden together with suction points.",
+					"de": "Saugrohre und Saughydranten heißen jetzt auch so und werden zusammen mit den Saugstellen ein- und ausgeblendet."
+				},
+				{
+					"type": "fix",
+					"en": "Offline map downloads no longer stop when the map server is busy – they pause briefly and carry on.",
+					"de": "Offline-Kartendownloads brechen nicht mehr ab, wenn der Kartenserver ausgelastet ist – sie pausieren kurz und laufen weiter."
+				},
+				{
+					"type": "improvement",
+					"en": "Distances and hose routes to large fire water ponds now end at the best reachable shore point or its suction point.",
+					"de": "Entfernungen und Schlauchwege zu großen Löschteichen enden jetzt am besten erreichbaren Uferpunkt oder an der Saugstelle."
+				},
+				{
+					"type": "fix",
+					"en": "Hose routes to a hydrant no longer cut through buildings, and the list and map show the same length.",
+					"de": "Schlauchwege zum Hydranten führen nicht mehr durch Gebäude, und Liste und Karte zeigen dieselbe Länge."
+				},
+				{
+					"type": "feature",
+					"en": "Hose routes now weigh roads, fields, slopes and obstacles; off-road and steep stretches are marked, with warnings where needed.",
+					"de": "Schlauchwege wägen jetzt Straßen, Felder, Steigungen und Hindernisse ab; Querfeldein- und Steilstücke werden markiert, mit Warnhinweis, wo nötig."
+				},
+				{
+					"type": "feature",
+					"en": "Set the maximum working pressure of your hoses; long downhill lines warn when it could be exceeded.",
+					"de": "Der maximale Betriebsdruck der Schläuche ist einstellbar; lange Leitungen bergab warnen, wenn er überschritten werden könnte."
+				},
+				{
+					"type": "improvement",
+					"en": "Hose routes appear immediately and work better offline; map data along your way is cached in the background.",
+					"de": "Schlauchwege erscheinen sofort und funktionieren offline besser; Kartendaten entlang deines Weges werden im Hintergrund gespeichert."
+				},
+				{
+					"type": "improvement",
+					"en": "Offline areas now include finer elevation data for hose routes.",
+					"de": "Offline-Gebiete enthalten jetzt genauere Höhendaten für Schlauchwege."
+				},
+				{
+					"type": "improvement",
+					"en": "Hose routes show a short badge on the map and clear details, on phones right in the bottom panel: length, hoses, height difference, warnings and why a stretch is coloured. Bridges no longer show as steep.",
+					"de": "Schlauchwege zeigen auf der Karte ein kurzes Etikett und übersichtliche Details, am Handy direkt im unteren Infobereich: Länge, Schläuche, Höhenunterschied, Warnungen und warum ein Abschnitt farbig ist. Brücken gelten nicht mehr als steil."
+				},
+				{
+					"type": "fix",
+					"en": "The map credits now always name Mapterhorn, whose elevation data the hose routes use.",
+					"de": "Der Kartennachweis nennt jetzt immer Mapterhorn, dessen Höhendaten die Schlauchwege nutzen."
+				},
+				{
+					"type": "feature",
+					"en": "You can now send feedback, report bugs and suggest new features directly from the About page.",
+					"de": "Feedback, Fehlermeldungen und Ideen für neue Funktionen lassen sich jetzt direkt unter „Über FireYak“ senden."
+				}
+			]
+		},
 		{
 			"version": "2.19.0",
 			"date": "2026-11-06",

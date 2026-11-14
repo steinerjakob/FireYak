@@ -1,6 +1,32 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.20.0] - 2026-11-14
+
+### Features
+
+- *(about)* Add feedback form button (#116)
+- *(nearby)* Measure pond areas to the shore instead of the center (#114)
+- *(edit)* Add, edit and mark fire water ponds, including pond areas (#105)
+
+### Bug Fixes
+
+- *(map)* Show suction points again and treat suction hydrants as suction points (#112)
+- *(offline)* Keep tile downloads going when rate limited (#106)
+
+### Docs
+
+- *(plans)* Add optimized hose routing plan with slope and steep-section warnings (#115)
+
+### Ci
+
+- Retry flaky dependency downloads in the native builds (#113)
+- *(release)* Publish tagged releases straight to the stores (#109)
+- Ship native test builds from every push to main (#108)
+
+### Build
+
+- *(osm)* Make OSM endpoint and OAuth client configurable for preview builds (#107)
 ## [2.19.2] - 2026-11-07
 
 ### Bug Fixes
