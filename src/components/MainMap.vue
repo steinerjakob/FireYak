@@ -1660,7 +1660,7 @@ function addMapLayers(map: maplibregl.Map) {
 				STATUS_BADGE_IMAGE.outOfService,
 				STATUS_BADGE_IMAGE.caution
 			],
-			'icon-offset': [13, -13],
+			'icon-offset': [9, -9],
 			'icon-allow-overlap': true,
 			'icon-ignore-placement': true
 		}

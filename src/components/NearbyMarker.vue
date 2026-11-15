@@ -324,8 +324,8 @@ ion-item {
 
 .row-icon .status-badge {
 	position: absolute;
-	top: -7px;
-	right: -8px;
+	top: -5px;
+	right: -5px;
 	width: 16px;
 	height: 16px;
 }
