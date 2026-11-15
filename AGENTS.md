@@ -72,7 +72,7 @@ src/
 | `osmAuthStore.ts` | OAuth2 PKCE authentication with OpenStreetMap |
 | `pendingEditsStore.ts` | Reactive facade over the offline edit queue; exposes pending edits and sync-now |
 | `pumpCalculationSettings.ts` | Pump calculation parameters (incl. max. hose working pressure) with Preferences persistence |
-| `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, hose routing mode (`hoseRouting`: `optimized` by default, `roads` with the "keep on roads" toggle), the one-time cross-country note flag (`crossCountryNoteSeen`), the routing cache budget (`routingCacheMb`, default 50 MB; `App.vue` applies it), marker filters, zoom button visibility, system bar styling |
+| `settingsStore.ts` | Theme, map layer (standard/satellite), terrain 3D toggle, hose routing mode (`hoseRouting`: `optimized` by default, `roads` with the "keep on roads" toggle), the one-time cross-country note flag (`crossCountryNoteSeen`), the routing cache budget (`routingCacheMb`, default 50 MB; `App.vue` applies it), marker filters (incl. `outOfService`: show out-of-service sources), zoom button visibility, system bar styling |
 
 ### Composables (`src/composable/`)
 
@@ -115,6 +115,7 @@ src/
 | `routeLabel.ts` | Route label line of the nearby list (estimate prefix, hoses, signed climb, off-road metres, road-only length when > 15 % off) and the warning/fallback/coverage chips shared by the list, the details card and the pump panel; when the one-time cross-country note is due |
 | `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line, the phone sheet section's header (`routeSummary`, `headerChip`, `stretchSummary`), expanded state and sheet growth (`sectionStateAfter`, `sheetGrowTarget`), the pump panel's chips and which stay outside the section (`pumpLineChips`, `splitCoverageChips`), and the nearby row expansion (`rowExpansionAfter` with the select, arrow-toggle and stretch actions, `rowRouteState`) |
 | `routeProfile.ts` | Steep (>25 %/>50 %, grade over deck heights on bridges) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
+| `operationalStatus.ts` | Whether a water source can be used (issue #118): `sourceStatus` (`ok`/`caution`/`outOfService` from `disused:emergency` or `operational_status`), `emergencyOf` (the type whether in service or disused: use it for every type check), `splitLifecycle`/`applyLifecycle` (edit form ↔ the wiki's `disused:emergency` tagging) |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
 
@@ -127,6 +128,7 @@ src/
 | `costGrid.ts` | Pure rasteriser of the `optimized` grid: scanline polygon fill and supercover lines, drawn in the cost model's order (landuse, water, buildings, walls, roads, bridges); on grids finer than 8 m ways are drawn 8 m wide over open ground and landuse; `routableRoads` drops what `classifyRoad` excludes |
 | `cellHeap.ts` | Typed-array binary min-heap (cost, cell) used by the grid searches |
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
+| `statusBadges.ts` | Canvas-drawn status badges (red ✕ out of service, amber ! caution) for the map layer, the nearby list and the filter popover |
 | `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
 | `nearbyRouting.ts` | Main-thread facade of hose routing (nearby list, marker path, pump line): runs the solve in the routing worker, fetching tile bytes cache-first and transferring them; falls back to the same solve on the main thread when no worker starts; a request `channel` lets a newer request supersede (cancel) the running one (`RoutingCancelledError`) |
 | `hoseRoutingCore.ts` | The hose routing solve (pure, I/O injected via `configureRoutingIO`; runs in the worker and on the main thread): `RoutingOptions.mode` `optimized` (default) or `roads`, adaptive cell size (`chooseCellSize`: 4/6 m single paths, 8 m list, 400k cell cap), returns a `HoseRoute` (one length, 3D over the DEM profile, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |

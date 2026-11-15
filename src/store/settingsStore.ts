@@ -17,7 +17,11 @@ export type MarkerFilterKey =
 	| 'waterTank'
 	| 'fireWaterPond'
 	| 'fireStation';
-export type MarkerFilters = Record<MarkerFilterKey, boolean>;
+/**
+ * Category toggles plus `outOfService`: whether sources tagged as out of order
+ * are shown at all (issue #118; on by default, they get a badge instead).
+ */
+export type MarkerFilters = Record<MarkerFilterKey | 'outOfService', boolean>;
 
 /** Resolves a theme setting against the current system preference. */
 const resolveIsDark = (theme: ThemeSetting) =>
@@ -49,7 +53,8 @@ const DEFAULT_MARKER_FILTERS: MarkerFilters = {
 	suctionPoint: true,
 	waterTank: true,
 	fireWaterPond: true,
-	fireStation: true
+	fireStation: true,
+	outOfService: true
 };
 
 export const useSettingsStore = defineStore('settings', {
