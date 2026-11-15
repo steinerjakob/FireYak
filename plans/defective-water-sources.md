@@ -112,7 +112,8 @@ unchanged.
 
 The existing edit form (`MarkerEdit.vue`) gets an **"Operational status"**
 select for all water-source types: *Working* (removes the tag) / *Needs
-maintenance* / *Out of order*. Changing it pre-fills `survey:date` with today.
+maintenance* / *Out of order*. Changing it does **not** touch `survey:date`; the
+user sets the date themselves with the existing date field if they want one.
 It goes through `markerEditStore` + `editQueue` like every other edit, so it
 works offline and as a dry run on preview builds. An existing `broken` /
 `closed` / unknown value is shown as-is and kept unless the user changes it.
