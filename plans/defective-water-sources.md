@@ -26,7 +26,7 @@ Decided scope (review of the first draft):
 | Temporarily unusable (broken, no water, blocked, closed) | `operational_status=out_of_order` (also seen: `broken`, `closed`) | **Out of service** (red) |
 | Usable but faulty (leaking, stiff valve, missing cap) | `operational_status=needs_maintenance` (also `restricted`) | **Caution** (amber) |
 | Working (again) | no tag, or `operational_status=operational` | normal |
-| When it was checked | `survey:date=YYYY-MM-DD` (FireYak already edits this key; `check_date` is read as an alias) | "since 12 Oct 2026" |
+| When it was checked | `survey:date=YYYY-MM-DD` (FireYak already edits this key; `check_date` is read as an alias) | "last checked 12 Oct 2026" |
 | Permanently gone / decommissioned | lifecycle prefix `disused:emergency=…` / `removed:emergency=…` | drops out of the queries; this is the existing *delete* path, not this feature |
 
 Notes:
@@ -97,7 +97,7 @@ next to the category filter. Caution sources are always shown.
 
 - **Status banner** at the top of `MarkerInfo.vue` when status ≠ ok: red/amber
   row with the badge, "Out of order" / "Needs maintenance" and, when a date is
-  present, "since 12 Oct 2026". Older than ~6 months: add "may have been
+  present, "last checked 12 Oct 2026". Older than ~6 months: add "may have been
   repaired since".
 - `operational_status` and `check_date` join `relevantTags` in
   `MarkerInfo.vue` / `MarkerEdit.vue` so they are not listed under "other tags".
