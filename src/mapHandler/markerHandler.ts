@@ -43,7 +43,7 @@ import {
 } from '@/mapHandler/waterSourceAccess';
 import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
-import { hydrantSurveyAge, surveyedHydrantIcons } from '@/helper/hydrantSurveyAge';
+import { hydrantSurveyAge, surveyRingIcons } from '@/helper/hydrantSurveyAge';
 import { OsmRef, toRef } from '@/helper/osmRef';
 import { emergencyOf, sourceStatus } from '@/helper/operationalStatus';
 
@@ -95,13 +95,14 @@ function getIconKeyForNode(element: OverPassElement): string {
 }
 
 function getMapIconKey(element: OverPassElement, base: string, today?: Date): string {
+	const { tags } = element;
 	if (
-		element.tags?.emergency !== 'fire_hydrant' ||
-		!surveyedHydrantIcons.some((icon) => icon === base)
+		(tags?.emergency !== 'fire_hydrant' && tags?.emergency !== 'suction_point') ||
+		!surveyRingIcons.some((icon) => icon === base)
 	) {
 		return base;
 	}
-	return `${base}-${hydrantSurveyAge(element.tags['survey:date'], today)}`;
+	return `${base}-${hydrantSurveyAge(tags['survey:date'], today)}`;
 }
 
 export function getIconUrlForNode(element: OverPassElement): string {

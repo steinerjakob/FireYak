@@ -7,8 +7,8 @@
 		},
 		{
 			"type": "feature",
-			"en": "Colored rings on the map show when hydrants were last surveyed.",
-			"de": "Farbige Ringe auf der Karte zeigen, wann Hydranten zuletzt überprüft wurden."
+			"en": "Colored rings on the map show when hydrants and suction points were last surveyed.",
+			"de": "Farbige Ringe auf der Karte zeigen, wann Hydranten und Saugstellen zuletzt überprüft wurden."
 		}
 	],
 	"releases": [
