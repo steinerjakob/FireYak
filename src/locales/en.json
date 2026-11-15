@@ -267,6 +267,8 @@
 			"confirm": "Remove"
 		},
 		"buttons": {
+			"today": "Today",
+			"done": "OK",
 			"save": "Save to OSM",
 			"cancel": "Cancel",
 			"login": "Login to OSM",
