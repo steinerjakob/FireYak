@@ -150,7 +150,7 @@ import {
 	markerFetchFailed,
 	markerCacheVersion
 } from '@/mapHandler/markerHandler';
-import { surveyedHydrantIcons } from '@/helper/hydrantSurveyAge';
+import { surveyRingIcons } from '@/helper/hydrantSurveyAge';
 import { hydrantSurveyImages } from '@/map/hydrantSurveyIcons';
 import { useNetworkStatus } from '@/composable/networkStatus';
 import { useRoute, useRouter } from 'vue-router';
@@ -1524,7 +1524,7 @@ async function loadMarkerImages(map: maplibregl.Map) {
 			const response = await map.loadImage(url);
 			if (!map.hasImage(name)) {
 				map.addImage(name, response.data);
-				if (surveyedHydrantIcons.some((icon) => icon === name)) {
+				if (surveyRingIcons.some((icon) => icon === name)) {
 					for (const variant of hydrantSurveyImages(response.data)) {
 						map.addImage(`${name}-${variant.age}`, variant.image);
 					}

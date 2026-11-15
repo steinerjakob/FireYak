@@ -7,7 +7,7 @@ export const hydrantSurveyColors = {
 
 export type HydrantSurveyAge = keyof typeof hydrantSurveyColors;
 
-export const surveyedHydrantIcons = ['hydrant', 'underground', 'wall'] as const;
+export const surveyRingIcons = ['hydrant', 'underground', 'wall', 'pump'] as const;
 
 function monthsBefore(today: Date, months: number): number {
 	const cutoff = new Date(today.getFullYear(), today.getMonth() - months + 1, 0);
