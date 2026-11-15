@@ -150,6 +150,8 @@ import {
 	markerFetchFailed,
 	markerCacheVersion
 } from '@/mapHandler/markerHandler';
+import { surveyRingIcons } from '@/helper/hydrantSurveyAge';
+import { hydrantSurveyImages } from '@/map/hydrantSurveyIcons';
 import { useNetworkStatus } from '@/composable/networkStatus';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
@@ -1522,6 +1524,11 @@ async function loadMarkerImages(map: maplibregl.Map) {
 			const response = await map.loadImage(url);
 			if (!map.hasImage(name)) {
 				map.addImage(name, response.data);
+				if (surveyRingIcons.some((icon) => icon === name)) {
+					for (const variant of hydrantSurveyImages(response.data)) {
+						map.addImage(`${name}-${variant.age}`, variant.image);
+					}
+				}
 			}
 		} catch (e) {
 			// Image may have been added by a concurrent style reload
@@ -1616,7 +1623,7 @@ function addMapLayers(map: maplibregl.Map) {
 		source: MARKER_SOURCE_ID,
 		filter: ['!', ['has', 'point_count']],
 		layout: {
-			'icon-image': ['get', 'icon'],
+			'icon-image': ['coalesce', ['image', ['get', 'icon']], ['image', ['get', 'baseIcon']]],
 			'icon-size': 0.25,
 			'icon-allow-overlap': true
 		}
@@ -2047,7 +2054,21 @@ function zoomOut() {
 	rootMap?.zoomOut();
 }
 
+let mapSurveyDay = new Date().toDateString();
+
+function refreshSurveyAge() {
+	if (!mapReady || document.hidden) return;
+	const today = new Date().toDateString();
+	if (today === mapSurveyDay) return;
+	mapSurveyDay = today;
+	void handleMapMovement();
+}
+
+let surveyAgeTimer: ReturnType<typeof setInterval> | undefined;
+
 onMounted(async () => {
+	document.addEventListener('visibilitychange', refreshSurveyAge);
+	surveyAgeTimer = setInterval(refreshSurveyAge, 60_000);
 	await nextTick();
 	await initMap();
 
@@ -2116,6 +2137,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+	document.removeEventListener('visibilitychange', refreshSurveyAge);
+	clearInterval(surveyAgeTimer);
 	stopRoutingDataWatch();
 	stopWatchingLocation();
 	if (rootMap) {

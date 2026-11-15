@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n';
 import { type MapLayerSetting, type MarkerFilters, useSettingsStore } from '@/store/settingsStore';
 import { storeToRefs } from 'pinia';
 import { useSettings } from '@/composable/settings';
+import { hydrantSurveyColors } from '@/helper/hydrantSurveyAge';
 import { markerIconUrls } from '@/mapHandler/markerHandler';
 
 const props = defineProps<{
@@ -134,6 +135,13 @@ const hydrantSubtypes: Array<{ icon: string; labelKey: string }> = [
 							<img :src="markerIconUrls[sub.icon]" class="subtype-icon" :alt="t(sub.labelKey)" />
 							<span class="subtype-label">{{ t(sub.labelKey) }}</span>
 						</div>
+						<span class="subtype-legend-title survey-legend-title">{{
+							t('map.legend.surveyAge.title')
+						}}</span>
+						<div v-for="(color, age) in hydrantSurveyColors" :key="age" class="subtype-row">
+							<span class="survey-ring" :style="{ borderColor: color }" aria-hidden="true"></span>
+							<span class="subtype-label">{{ t(`map.legend.surveyAge.${age}`) }}</span>
+						</div>
 					</div>
 				</template>
 			</ion-list>
@@ -198,6 +206,19 @@ ion-popover.layer-selector-popover ion-item {
 	height: 28px;
 	object-fit: contain;
 	flex-shrink: 0;
+}
+
+.survey-legend-title {
+	margin-top: 8px;
+}
+
+.survey-ring {
+	flex: none;
+	box-sizing: border-box;
+	width: 16px;
+	height: 16px;
+	border: 4px solid;
+	border-radius: 50%;
 }
 
 .subtype-legend {

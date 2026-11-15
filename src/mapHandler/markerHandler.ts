@@ -43,6 +43,7 @@ import {
 } from '@/mapHandler/waterSourceAccess';
 import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
+import { hydrantSurveyAge, surveyRingIcons } from '@/helper/hydrantSurveyAge';
 import { OsmRef, toRef } from '@/helper/osmRef';
 
 // Map icon keys to URLs for use in MapLibre image loading. Suction points and
@@ -89,6 +90,17 @@ function getIconKeyForNode(element: OverPassElement): string {
 		return 'firestation';
 	}
 	return 'hydrant';
+}
+
+function getMapIconKey(element: OverPassElement, base: string, today?: Date): string {
+	const { tags } = element;
+	if (
+		(tags?.emergency !== 'fire_hydrant' && tags?.emergency !== 'suction_point') ||
+		!surveyRingIcons.some((icon) => icon === base)
+	) {
+		return base;
+	}
+	return `${base}-${hydrantSurveyAge(tags['survey:date'], today)}`;
 }
 
 export function getIconUrlForNode(element: OverPassElement): string {
@@ -242,7 +254,7 @@ let liveRefreshInFlight = false;
 function renderSignature(element: OverPassElement): string {
 	const lat = (element.lat ?? element.center?.lat ?? 0).toFixed(7);
 	const lng = (element.lon ?? element.center?.lon ?? 0).toFixed(7);
-	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${lat},${lng}`;
+	return `${toRef(element.type, element.id)}:${getMapIconKey(element, getIconKeyForNode(element))}:${lat},${lng}`;
 }
 
 /** True when every given tile was asked of Overpass within the live TTL. */
@@ -548,10 +560,12 @@ export async function getMarkersForView(
 
 		// Apply category filters — call inside the function so Pinia is active.
 		const { markerFilters } = useSettingsStore();
+		const today = new Date();
 		for (const element of mapElements) {
 			if (!markerFilters[categoryForNode(element)]) continue;
 			const lat = (element?.lat || element.center?.lat) as number;
 			const lng = (element.lon || element.center?.lon) as number;
+			const icon = getIconKeyForNode(element);
 			features.push({
 				type: 'Feature',
 				geometry: {
@@ -560,7 +574,8 @@ export async function getMarkersForView(
 				},
 				properties: {
 					ref: toRef(element.type, element.id),
-					icon: getIconKeyForNode(element)
+					icon: getMapIconKey(element, icon, today),
+					baseIcon: icon
 				}
 			});
 		}
