@@ -16,6 +16,8 @@ Decided scope (review of the first draft):
   the map. No reordering, no removal.
 - **No note key** is written. A free-text `note`/`description` that is already on
   the object keeps showing as it does today.
+- **No status banner** in the marker info; the status is a normal tag row.
+- **The date is never autofilled**; users set `survey:date` themselves.
 - **No separate "report problem" sheet, no OSM notes, no export / authority
   report.** Setting the status is a field in the existing edit form.
 
@@ -26,7 +28,6 @@ Decided scope (review of the first draft):
 | Temporarily unusable (broken, no water, blocked, closed) | `operational_status=out_of_order` (also seen: `broken`, `closed`) | **Out of service** (red) |
 | Usable but faulty (leaking, stiff valve, missing cap) | `operational_status=needs_maintenance` (also `restricted`) | **Caution** (amber) |
 | Working (again) | no tag, or `operational_status=operational` | normal |
-| When it was checked | `survey:date=YYYY-MM-DD` (FireYak already edits this key; `check_date` is read as an alias) | "last checked 12 Oct 2026" |
 | Permanently gone / decommissioned | lifecycle prefix `disused:emergency=…` / `removed:emergency=…` | drops out of the queries; this is the existing *delete* path, not this feature |
 
 Notes:
@@ -47,9 +48,8 @@ The Overpass area query (`out qt center 2000 tags`) and the static extract
 already deliver all tags.
 
 - **New pure helper `src/helper/operationalStatus.ts`** (+ spec):
-  `sourceStatus(tags) → 'ok' | 'caution' | 'outOfService'` and
-  `statusDate(tags)` (`survey:date` ‖ `check_date`). Single place for the value
-  mapping in §1.
+  `sourceStatus(tags) → 'ok' | 'caution' | 'outOfService'`. Single place for
+  the value mapping in §1.
 - **`markerHandler.ts`**: add `status: sourceStatus(element.tags)` to each GeoJSON
   feature's `properties` in `getMarkersForView`, and to `NearbyMarker` entries.
 - **`renderSignature()` must include the status.** Today it is
@@ -95,12 +95,11 @@ next to the category filter. Caution sources are always shown.
 
 ## 4. Marker info panel
 
-- **Status banner** at the top of `MarkerInfo.vue` when status ≠ ok: red/amber
-  row with the badge, "Out of order" / "Needs maintenance" and, when a date is
-  present, "last checked 12 Oct 2026". Older than ~6 months: add "may have been
-  repaired since".
-- `operational_status` and `check_date` join `relevantTags` in
-  `MarkerInfo.vue` / `MarkerEdit.vue` so they are not listed under "other tags".
+No banner. `operational_status` becomes a normal labelled row like the other
+tags: it joins `tagTranslationKeys` / `relevantTags` in `MarkerInfo.vue` (and
+`relevantTags` in `MarkerEdit.vue`, so it is not listed under "other tags"),
+with translated values (*Out of order*, *Needs maintenance*, …; unknown values
+shown raw). `survey:date` keeps showing as it does today.
 
 ## 5. Nearby list
 
@@ -121,5 +120,5 @@ works offline and as a dry run on preview builds. An existing `broken` /
 ## 7. Delivery
 
 One PR (`feature/118-out-of-service`): helper + spec, feature/nearby `status`,
-render signature, map layers + assets, filter toggle, info banner, nearby badge,
+render signature, map layers + assets, filter toggle, info-panel row, nearby badge,
 edit-form select, en/de strings, one `whats-new.json` entry.
