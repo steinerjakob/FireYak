@@ -227,6 +227,13 @@
 		},
 		"legend": {
 			"title": "Hydrantentypen",
+			"surveyAge": {
+				"title": "Zuletzt überprüft",
+				"recent": "Vor weniger als 12 Monaten",
+				"older": "Vor 12–24 Monaten",
+				"stale": "Vor mehr als 24 Monaten",
+				"unknown": "Kein gültiges Erfassungsdatum"
+			},
 			"pillarHydrant": "Überflurhydrant",
 			"undergroundHydrant": "Unterflurhydrant",
 			"wallHydrant": "Wandhydrant"
