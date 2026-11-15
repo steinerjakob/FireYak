@@ -4,6 +4,11 @@
 			"type": "feature",
 			"en": "Water sources that are out of service or need maintenance now have a badge on the map; you can also set this when editing.",
 			"de": "Außer Betrieb genommene und wartungsbedürftige Wasserentnahmestellen sind jetzt markiert und lassen sich beim Bearbeiten so kennzeichnen."
+		},
+		{
+			"type": "feature",
+			"en": "Colored rings on the map show when hydrants were last surveyed.",
+			"de": "Farbige Ringe auf der Karte zeigen, wann Hydranten zuletzt überprüft wurden."
 		}
 	],
 	"releases": [

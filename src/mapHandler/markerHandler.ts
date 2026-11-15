@@ -43,6 +43,7 @@ import {
 } from '@/mapHandler/waterSourceAccess';
 import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
+import { hydrantSurveyAge, surveyedHydrantIcons } from '@/helper/hydrantSurveyAge';
 import { OsmRef, toRef } from '@/helper/osmRef';
 import { emergencyOf, sourceStatus } from '@/helper/operationalStatus';
 
@@ -91,6 +92,16 @@ function getIconKeyForNode(element: OverPassElement): string {
 		return 'firestation';
 	}
 	return 'hydrant';
+}
+
+function getMapIconKey(element: OverPassElement, base: string, today?: Date): string {
+	if (
+		element.tags?.emergency !== 'fire_hydrant' ||
+		!surveyedHydrantIcons.some((icon) => icon === base)
+	) {
+		return base;
+	}
+	return `${base}-${hydrantSurveyAge(element.tags['survey:date'], today)}`;
 }
 
 export function getIconUrlForNode(element: OverPassElement): string {
@@ -246,7 +257,7 @@ function renderSignature(element: OverPassElement): string {
 	const lng = (element.lon ?? element.center?.lon ?? 0).toFixed(7);
 	// The status is part of it: a live edit that only flips `operational_status`
 	// changes the badge, so it must count as a change (issue #118).
-	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${sourceStatus(element.tags)}:${lat},${lng}`;
+	return `${toRef(element.type, element.id)}:${getMapIconKey(element, getIconKeyForNode(element))}:${sourceStatus(element.tags)}:${lat},${lng}`;
 }
 
 /** True when every given tile was asked of Overpass within the live TTL. */
@@ -552,12 +563,14 @@ export async function getMarkersForView(
 
 		// Apply category filters — call inside the function so Pinia is active.
 		const { markerFilters } = useSettingsStore();
+		const today = new Date();
 		for (const element of mapElements) {
 			if (!markerFilters[categoryForNode(element)]) continue;
 			const status = sourceStatus(element.tags);
 			if (status === 'outOfService' && !markerFilters.outOfService) continue;
 			const lat = (element?.lat || element.center?.lat) as number;
 			const lng = (element.lon || element.center?.lon) as number;
+			const icon = getIconKeyForNode(element);
 			features.push({
 				type: 'Feature',
 				geometry: {
@@ -566,7 +579,8 @@ export async function getMarkersForView(
 				},
 				properties: {
 					ref: toRef(element.type, element.id),
-					icon: getIconKeyForNode(element),
+					icon: getMapIconKey(element, icon, today),
+					baseIcon: icon,
 					status
 				}
 			});

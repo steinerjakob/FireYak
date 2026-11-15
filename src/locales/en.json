@@ -237,6 +237,13 @@
 		},
 		"legend": {
 			"title": "Hydrant types",
+			"surveyAge": {
+				"title": "Last surveyed",
+				"recent": "Less than 12 months ago",
+				"older": "12–24 months ago",
+				"stale": "More than 24 months ago",
+				"unknown": "No valid survey date"
+			},
 			"pillarHydrant": "Pillar Hydrant",
 			"undergroundHydrant": "Underground Hydrant",
 			"wallHydrant": "Wall Hydrant"
