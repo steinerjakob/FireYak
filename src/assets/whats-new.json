@@ -1,5 +1,11 @@
 {
-	"unreleased": [],
+	"unreleased": [
+		{
+			"type": "improvement",
+			"en": "Set the survey date to today with one tap when editing a water source.",
+			"de": "Beim Bearbeiten einer Wasserentnahmestelle kannst du mit einem Tipp das heutige Erfassungsdatum setzen."
+		}
+	],
 	"releases": [
 		{
 			"version": "2.20.0",
