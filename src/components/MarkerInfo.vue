@@ -60,6 +60,7 @@ const waterTankVolume = 'markerInfo.tags.volume';
 
 // Map of tag keys to translation keys
 const tagTranslationKeys: Record<string, string> = {
+	operational_status: 'markerInfo.tags.operationalStatus',
 	emergency: 'markerInfo.tags.emergencyType',
 	'fire_hydrant:type': 'markerInfo.tags.hydrantType',
 	'pillar:type': 'markerInfo.tags.pillarType',
@@ -97,6 +98,8 @@ const tagTranslationKeys: Record<string, string> = {
 // Tags that are relevant for fire brigades
 const relevantTags = [
 	//'emergency',
+	// First: whether the source can be used at all (issue #118).
+	'operational_status',
 	'fire_hydrant:type',
 	'pillar:type',
 	'fire_hydrant:diameter',
@@ -135,7 +138,7 @@ const translateValue = (key: string, value: string): string => {
 	// Check if this is a fire_hydrant field or water_source
 	if (
 		key.startsWith('fire_hydrant:') ||
-		['water_source', 'pillar:type', 'water', 'intermittent'].includes(key)
+		['water_source', 'pillar:type', 'water', 'intermittent', 'operational_status'].includes(key)
 	) {
 		const translationKey = `markerInfo.values.${key}.${value}`;
 		// Check if translation exists

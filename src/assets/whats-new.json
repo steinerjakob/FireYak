@@ -1,5 +1,11 @@
 {
-	"unreleased": [],
+	"unreleased": [
+		{
+			"type": "feature",
+			"en": "Water sources that are out of order or need maintenance are now marked on the map, and their status can be set when editing.",
+			"de": "Defekte und wartungsbedürftige Wasserentnahmestellen sind jetzt auf der Karte markiert; der Zustand lässt sich beim Bearbeiten setzen."
+		}
+	],
 	"releases": [
 		{
 			"version": "2.20.0",

@@ -44,6 +44,7 @@ import {
 import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
+import { sourceStatus } from '@/helper/operationalStatus';
 
 // Map icon keys to URLs for use in MapLibre image loading. Suction points and
 // suction hydrants use the blue/white `pump` icon on the map; `suctionpoint.png`
@@ -242,7 +243,9 @@ let liveRefreshInFlight = false;
 function renderSignature(element: OverPassElement): string {
 	const lat = (element.lat ?? element.center?.lat ?? 0).toFixed(7);
 	const lng = (element.lon ?? element.center?.lon ?? 0).toFixed(7);
-	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${lat},${lng}`;
+	// The status is part of it: a live edit that only flips `operational_status`
+	// changes the badge, so it must count as a change (issue #118).
+	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${sourceStatus(element.tags)}:${lat},${lng}`;
 }
 
 /** True when every given tile was asked of Overpass within the live TTL. */
@@ -550,6 +553,8 @@ export async function getMarkersForView(
 		const { markerFilters } = useSettingsStore();
 		for (const element of mapElements) {
 			if (!markerFilters[categoryForNode(element)]) continue;
+			const status = sourceStatus(element.tags);
+			if (status === 'outOfService' && !markerFilters.outOfService) continue;
 			const lat = (element?.lat || element.center?.lat) as number;
 			const lng = (element.lon || element.center?.lon) as number;
 			features.push({
@@ -560,7 +565,8 @@ export async function getMarkersForView(
 				},
 				properties: {
 					ref: toRef(element.type, element.id),
-					icon: getIconKeyForNode(element)
+					icon: getIconKeyForNode(element),
+					status
 				}
 			});
 		}

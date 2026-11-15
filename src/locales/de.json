@@ -42,7 +42,8 @@
 			"flowRate": "Durchflussrate",
 			"awwaClass": "AWWA-Klasse",
 			"waterType": "Art des Gewässers",
-			"intermittent": "Trocknet zeitweise aus"
+			"intermittent": "Trocknet zeitweise aus",
+			"operationalStatus": "Betriebszustand"
 		},
 		"values": {
 			"fire_hydrant:type": {
@@ -110,6 +111,14 @@
 			"intermittent": {
 				"yes": "Ja",
 				"no": "Nein"
+			},
+			"operational_status": {
+				"operational": "In Betrieb",
+				"needs_maintenance": "Wartung nötig",
+				"out_of_order": "Außer Betrieb",
+				"broken": "Defekt",
+				"closed": "Gesperrt",
+				"restricted": "Eingeschränkt"
 			}
 		},
 		"navigation": {
@@ -223,7 +232,8 @@
 			"suctionPoint": "Saugstelle",
 			"waterTank": "Wassertank",
 			"fireWaterPond": "Löschwasserteich",
-			"fireStation": "Feuerwehrhaus"
+			"fireStation": "Feuerwehrhaus",
+			"outOfService": "Außer Betrieb"
 		},
 		"legend": {
 			"title": "Hydrantentypen",
@@ -300,7 +310,8 @@
 			"pondArea": "Dieser Teich ist in OpenStreetMap als Wasserfläche eingezeichnet. Seine Form bleibt unverändert – nur die Angaben unten werden geändert.",
 			"waterType": "Um welche Art Gewässer es sich handelt. Teiche sind kleine stehende Gewässer, Speicherbecken und Becken sind künstlich angelegt.",
 			"intermittent": "Ob der Teich austrocknen kann, z. B. im Sommer. Wichtig, bevor man sich im Einsatz darauf verlässt.",
-			"naturalConflict": "Dieser Punkt ist als natural={value} getaggt. Ein Löschteich braucht natural=water – ändere es, wenn der Punkt wirklich der Teich ist."
+			"naturalConflict": "Dieser Punkt ist als natural={value} getaggt. Ein Löschteich braucht natural=water – ändere es, wenn der Punkt wirklich der Teich ist.",
+			"operationalStatus": "„Außer Betrieb“, wenn sie nicht nutzbar ist, „Wartung nötig“, wenn sie funktioniert, aber einen Mangel hat."
 		},
 		"messages": {
 			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",
@@ -593,5 +604,9 @@
 			"steep": "Steil: über 25 %",
 			"verySteep": "Sehr steil: über 50 % (Querstriche)"
 		}
+	},
+	"operationalStatus": {
+		"outOfService": "Außer Betrieb",
+		"caution": "Wartung nötig"
 	}
 }

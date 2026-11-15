@@ -23,10 +23,11 @@ import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import PondAreaCandidates from '@/components/PondAreaCandidates.vue';
+import { EDITABLE_STATUS_VALUES, OPERATIONAL_STATUS_KEY } from '@/helper/operationalStatus';
 
 const markerEditStore = useMarkerEditStore();
 const osmAuthStore = useOsmAuthStore();
-const { t } = useI18n();
+const { t, te } = useI18n();
 
 const hydrantTypes = ['pillar', 'underground', 'wall', 'pipe' /*, 'pond'*/];
 const hydrantPositions = ['sidewalk', 'lane', 'parking_lot', 'green', 'street'];
@@ -156,8 +157,23 @@ const onHydrantTypeChange = () => {
 	}
 };
 
+// "Working" removes the tag; any other value already on the object (`broken`,
+// `closed`, …) is offered as-is so it is kept unless the user changes it.
+const statusOptions = computed(() => {
+	const current = markerEditStore.editableTags[OPERATIONAL_STATUS_KEY];
+	const values: string[] = [...EDITABLE_STATUS_VALUES];
+	if (current && !values.includes(current)) values.push(current);
+	return values;
+});
+
+const statusLabel = (value: string) => {
+	const key = `markerInfo.values.operational_status.${value}`;
+	return te(key) ? t(key) : value;
+};
+
 const relevantTags = [
 	'emergency',
+	OPERATIONAL_STATUS_KEY,
 	'fire_hydrant:type',
 	'pillar:type',
 	'fire_hydrant:diameter',
@@ -768,6 +784,33 @@ const login = () => {
 				></ion-input>
 			</ion-item>
 		</ion-item-group>
+		<!-- ==================== OPERATIONAL STATUS (issue #118) ==================== -->
+		<ion-item-group>
+			<ion-item-divider>
+				<ion-label>{{ t('markerInfo.tags.operationalStatus') }}</ion-label>
+			</ion-item-divider>
+
+			<ion-item lines="none">
+				<ion-select
+					fill="outline"
+					label-placement="stacked"
+					:label="t('markerInfo.tags.operationalStatus')"
+					:value="markerEditStore.editableTags[OPERATIONAL_STATUS_KEY] ?? ''"
+					@ionChange="
+						(e: CustomEvent) => markerEditStore.updateTag(OPERATIONAL_STATUS_KEY, e.detail.value)
+					"
+					:helper-text="t('markerEdit.hints.operationalStatus')"
+				>
+					<ion-select-option value="">{{
+						t('markerInfo.values.operational_status.operational')
+					}}</ion-select-option>
+					<ion-select-option v-for="value in statusOptions" :key="value" :value="value">
+						{{ statusLabel(value) }}
+					</ion-select-option>
+				</ion-select>
+			</ion-item>
+		</ion-item-group>
+
 		<ion-item-group>
 			<ion-item-divider>
 				<ion-label>{{ t('markerInfo.tags.description') }}</ion-label>

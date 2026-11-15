@@ -23,19 +23,19 @@ Decided scope (review of the first draft):
 
 ## 1. OSM tagging
 
-| Situation | Tagging | Effect in FireYak |
-|---|---|---|
-| Temporarily unusable (broken, no water, blocked, closed) | `operational_status=out_of_order` (also seen: `broken`, `closed`) | **Out of service** (red) |
-| Usable but faulty (leaking, stiff valve, missing cap) | `operational_status=needs_maintenance` (also `restricted`) | **Caution** (amber) |
-| Working (again) | no tag, or `operational_status=operational` | normal |
-| Permanently gone / decommissioned | lifecycle prefix `disused:emergency=…` / `removed:emergency=…` | drops out of the queries; this is the existing *delete* path, not this feature |
+| Situation                                                | Tagging                                                           | Effect in FireYak                                                              |
+| -------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Temporarily unusable (broken, no water, blocked, closed) | `operational_status=out_of_order` (also seen: `broken`, `closed`) | **Out of service** (red)                                                       |
+| Usable but faulty (leaking, stiff valve, missing cap)    | `operational_status=needs_maintenance` (also `restricted`)        | **Caution** (amber)                                                            |
+| Working (again)                                          | no tag, or `operational_status=operational`                       | normal                                                                         |
+| Permanently gone / decommissioned                        | lifecycle prefix `disused:emergency=…` / `removed:emergency=…`    | drops out of the queries; this is the existing _delete_ path, not this feature |
 
 Notes:
 
 - `operational_status` is documented on the OSM wiki and works the same on
   `fire_hydrant`, `suction_point`, `water_tank` and `fire_water_pond`, so the
   feature covers every water source.
-- **"Dry" is ambiguous.** A US *dry hydrant* (`fire_hydrant:type=pipe`) is a
+- **"Dry" is ambiguous.** A US _dry hydrant_ (`fire_hydrant:type=pipe`) is a
   working suction pipe, not a fault. The UI says "out of order", never "dry".
   A pond that dries out in summer is `intermittent=yes` / `seasonal=*`, which
   FireYak already edits.
@@ -60,7 +60,7 @@ already deliver all tags.
 ## 3. Map
 
 Keep the type icon (hydrant/underground/wall/pump/…) so the user still sees
-*what* it is, and overlay the *state*:
+_what_ it is, and overlay the _state_:
 
 ```
    normal            caution            out of service
@@ -98,7 +98,7 @@ next to the category filter. Caution sources are always shown.
 No banner. `operational_status` becomes a normal labelled row like the other
 tags: it joins `tagTranslationKeys` / `relevantTags` in `MarkerInfo.vue` (and
 `relevantTags` in `MarkerEdit.vue`, so it is not listed under "other tags"),
-with translated values (*Out of order*, *Needs maintenance*, …; unknown values
+with translated values (_Out of order_, _Needs maintenance_, …; unknown values
 shown raw). `survey:date` keeps showing as it does today.
 
 ## 5. Nearby list
@@ -110,8 +110,8 @@ unchanged.
 ## 6. Setting the status
 
 The existing edit form (`MarkerEdit.vue`) gets an **"Operational status"**
-select for all water-source types: *Working* (removes the tag) / *Needs
-maintenance* / *Out of order*. Changing it does **not** touch `survey:date`; the
+select for all water-source types: _Working_ (removes the tag) / _Needs
+maintenance_ / _Out of order_. Changing it does **not** touch `survey:date`; the
 user sets the date themselves with the existing date field if they want one.
 It goes through `markerEditStore` + `editQueue` like every other edit, so it
 works offline and as a dry run on preview builds. An existing `broken` /

@@ -9,6 +9,8 @@ import {
 	IonList,
 	IonSpinner
 } from '@ionic/vue';
+import { sourceStatus } from '@/helper/operationalStatus';
+import { statusBadgeDataUrl } from '@/mapHandler/statusBadges';
 import { chevronDown } from 'ionicons/icons';
 
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
@@ -59,6 +61,7 @@ const formattedList = computed(() => {
 			ref: toRef(nearbyMarker.element.type, nearbyMarker.element.id),
 			title: getTitle(nearbyMarker.element),
 			icon: nearbyMarker.icon,
+			status: sourceStatus(nearbyMarker.element.tags),
 			distance: nearbyMarker.distance,
 			distanceText: getDistanceText(displayDistance),
 			chips: routeChips(nearbyMarker.route, nearbyMarker.fallback)
@@ -205,7 +208,20 @@ watch(details.focusRequest, async () => {
 						}"
 						@click.stop="onRowTap(item.ref)"
 					>
-						<img slot="start" :src="item.icon" style="height: 24px" alt="Target marker" />
+						<!-- Same status badge and fade as on the map (issue #118) -->
+						<span
+							slot="start"
+							class="row-icon"
+							:class="{ 'out-of-service': item.status === 'outOfService' }"
+						>
+							<img :src="item.icon" alt="Target marker" />
+							<img
+								v-if="item.status !== 'ok'"
+								:src="statusBadgeDataUrl(item.status)"
+								class="status-badge"
+								:alt="t(`operationalStatus.${item.status}`)"
+							/>
+						</span>
 						<ion-label>
 							<h3>{{ item.title }}</h3>
 							<p>{{ item.distanceText }}</p>
@@ -289,6 +305,29 @@ ion-item {
 	--padding-end: 12px;
 	--inner-padding-end: 0;
 	--min-height: 48px;
+}
+
+/* Row icon with the map's status badge in its top-right corner */
+.row-icon {
+	position: relative;
+	display: inline-flex;
+	height: 24px;
+}
+
+.row-icon > img:first-child {
+	height: 24px;
+}
+
+.row-icon.out-of-service > img:first-child {
+	opacity: 0.5;
+}
+
+.row-icon .status-badge {
+	position: absolute;
+	top: -5px;
+	right: -6px;
+	width: 12px;
+	height: 12px;
 }
 
 ion-icon {
