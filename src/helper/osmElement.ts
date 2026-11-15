@@ -1,5 +1,6 @@
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import type { OsmType } from '@/helper/osmRef';
+import { emergencyOf, isDisused } from '@/helper/operationalStatus';
 
 /**
  * Helpers for editing OSM elements that are not plain nodes.
@@ -90,8 +91,9 @@ export function isFlagEdit(
 	baseTags: Record<string, string> | null | undefined,
 	tags: Record<string, string>
 ): boolean {
+	// A disused pond put back into service is not a new flag (issue #118).
 	return (
-		baseTags != null && baseTags['emergency'] == null && tags['emergency'] === 'fire_water_pond'
+		baseTags != null && emergencyOf(baseTags) == null && tags['emergency'] === 'fire_water_pond'
 	);
 }
 
@@ -100,7 +102,8 @@ export function isUnflagEdit(
 	baseTags: Record<string, string> | null | undefined,
 	tags: Record<string, string>
 ): boolean {
-	return baseTags?.['emergency'] === 'fire_water_pond' && tags['emergency'] == null;
+	// Taking a pond out of service (`disused:emergency`) is not an unflag (issue #118).
+	return baseTags?.['emergency'] === 'fire_water_pond' && emergencyOf(tags) == null;
 }
 
 /**
@@ -109,7 +112,8 @@ export function isUnflagEdit(
  * (with a tombstone, so the lagging static extract cannot bring it back).
  */
 export function isMarkerTags(tags: Record<string, string>): boolean {
-	return tags['emergency'] != null || tags['amenity'] === 'fire_station';
+	// A disused (out-of-service) source stays on the map, faded (issue #118).
+	return emergencyOf(tags) != null || tags['amenity'] === 'fire_station';
 }
 
 /**
@@ -123,12 +127,15 @@ export function describeEdit(
 	baseTags: Record<string, string> | null | undefined,
 	tags: Record<string, string>
 ): string {
-	const markerType = tags['emergency'] || baseTags?.['emergency'] || 'fire_hydrant';
+	const markerType = emergencyOf(tags) || emergencyOf(baseTags ?? undefined) || 'fire_hydrant';
 	const area = isAreaType(elementType) ? ` (${elementType})` : '';
 	if (action === 'create') return `Add ${markerType}`;
 	if (action === 'delete') return `Remove ${markerType}`;
 	if (isUnflagEdit(baseTags, tags)) return `Remove fire_water_pond tag from water area${area}`;
 	if (isFlagEdit(baseTags, tags)) return `Tag water area as fire_water_pond${area}`;
+	const wasDisused = isDisused(baseTags ?? undefined);
+	if (!wasDisused && isDisused(tags)) return `Mark ${markerType} as out of service${area}`;
+	if (wasDisused && !isDisused(tags)) return `Mark ${markerType} as back in service${area}`;
 	return `Update ${markerType}${area}`;
 }
 

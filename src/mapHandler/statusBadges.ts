@@ -15,7 +15,7 @@ export const STATUS_BADGE_IMAGE: Record<BadgeStatus, string> = {
 };
 
 /** Rendered size of the badge in CSS pixels. */
-export const STATUS_BADGE_CSS_PX = 14;
+export const STATUS_BADGE_CSS_PX = 20;
 /** Device pixels per CSS pixel the badge is drawn at. */
 export const STATUS_BADGE_PIXEL_RATIO = 3;
 
@@ -39,17 +39,20 @@ function drawBadge(status: BadgeStatus): HTMLCanvasElement {
 	ctx.arc(c, c, c - 0.5, 0, Math.PI * 2);
 	ctx.fillStyle = '#ffffff';
 	ctx.fill();
+	const inner = c - 2;
 	ctx.beginPath();
-	ctx.arc(c, c, c - 2, 0, Math.PI * 2);
+	ctx.arc(c, c, inner, 0, Math.PI * 2);
 	ctx.fillStyle = fill;
 	ctx.fill();
 
+	// The mark is sized from the inner circle and kept well inside it, so it
+	// reads as a symbol on a disc rather than filling the badge edge to edge.
 	ctx.strokeStyle = mark;
 	ctx.fillStyle = mark;
 	ctx.lineCap = 'round';
-	ctx.lineWidth = 2;
+	ctx.lineWidth = inner * 0.26;
 	if (status === 'outOfService') {
-		const d = 2.6;
+		const d = inner * 0.3;
 		ctx.beginPath();
 		ctx.moveTo(c - d, c - d);
 		ctx.lineTo(c + d, c + d);
@@ -58,11 +61,11 @@ function drawBadge(status: BadgeStatus): HTMLCanvasElement {
 		ctx.stroke();
 	} else {
 		ctx.beginPath();
-		ctx.moveTo(c, c - 3.2);
-		ctx.lineTo(c, c + 0.8);
+		ctx.moveTo(c, c - inner * 0.45);
+		ctx.lineTo(c, c + inner * 0.1);
 		ctx.stroke();
 		ctx.beginPath();
-		ctx.arc(c, c + 3.2, 1.1, 0, Math.PI * 2);
+		ctx.arc(c, c + inner * 0.42, inner * 0.14, 0, Math.PI * 2);
 		ctx.fill();
 	}
 	return canvas;

@@ -13,6 +13,7 @@ import {
 import { cachedOutline, getAreaOutline } from '@/mapHandler/areaOutline';
 import { getMapNodesForView } from '@/mapHandler/databaseHandler';
 import { waterOutlineAt } from '@/mapHandler/obstacleGeometry';
+import { emergencyOf } from '@/helper/operationalStatus';
 
 /**
  * Where a hose actually reaches a water source (issue #110).
@@ -55,12 +56,12 @@ export function accessTargetPoint(target: AccessTarget): GeoPoint {
 
 /** True for fire water ponds mapped as an area (way/relation). */
 export function isPondArea(element: OverPassElement): boolean {
-	return element.tags?.['emergency'] === 'fire_water_pond' && isAreaType(elementTypeOf(element));
+	return emergencyOf(element.tags) === 'fire_water_pond' && isAreaType(elementTypeOf(element));
 }
 
 /** True for mapped pumping spots: suction points and suction hydrants. */
 export function isMappedSuctionPoint(element: OverPassElement): boolean {
-	return element.tags?.['emergency'] === 'suction_point' || isSuctionHydrant(element.tags);
+	return emergencyOf(element.tags) === 'suction_point' || isSuctionHydrant(element.tags);
 }
 
 /** The element's marker position as a {@link GeoPoint}. */

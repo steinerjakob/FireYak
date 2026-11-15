@@ -324,10 +324,10 @@ ion-item {
 
 .row-icon .status-badge {
 	position: absolute;
-	top: -5px;
-	right: -6px;
-	width: 12px;
-	height: 12px;
+	top: -7px;
+	right: -8px;
+	width: 16px;
+	height: 16px;
 }
 
 ion-icon {

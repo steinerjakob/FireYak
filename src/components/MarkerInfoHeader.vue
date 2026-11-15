@@ -15,6 +15,7 @@ import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { Share } from '@capacitor/share';
 import { markerTitleKey } from '@/helper/markerTitle';
+import { emergencyOf } from '@/helper/operationalStatus';
 
 const markerStore = useMapMarkerStore();
 const markerEditStore = useMarkerEditStore();
@@ -23,7 +24,7 @@ const { t } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
 const editAllowed = computed(() =>
 	['fire_hydrant', 'suction_point', 'water_tank', 'fire_water_pond'].includes(
-		markerData.value?.tags?.emergency || ''
+		emergencyOf(markerData.value?.tags) || ''
 	)
 );
 

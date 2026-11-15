@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import type { OverPassElement, WaterAreaCandidate } from '@/mapHandler/overPassApi';
 import { toRef } from '@/helper/osmRef';
+import { emergencyOf } from '@/helper/operationalStatus';
 
 const emit = defineEmits<{ (e: 'switch-type', type: string): void }>();
 
@@ -44,7 +45,7 @@ const existingPonds = computed(() => {
 		list.push({ element, distanceM });
 	};
 	markerEditStore.areaCandidates
-		.filter((c) => c.element.tags['emergency'] === 'fire_water_pond')
+		.filter((c) => emergencyOf(c.element.tags) === 'fire_water_pond')
 		.forEach((c) => add(c.element, c.inside ? 0 : c.distanceM));
 	markerEditStore.nearbyPonds.forEach((p) => add(p.element, p.distanceM));
 	return list.sort((a, b) => a.distanceM - b.distanceM);
@@ -52,7 +53,7 @@ const existingPonds = computed(() => {
 
 /** Water areas without the flag — these can be marked as fire ponds. */
 const candidates = computed(() =>
-	markerEditStore.areaCandidates.filter((c) => c.element.tags['emergency'] == null)
+	markerEditStore.areaCandidates.filter((c) => emergencyOf(c.element.tags) == null)
 );
 const waterNearPin = computed(() => markerEditStore.detectedWater?.status === 'water');
 

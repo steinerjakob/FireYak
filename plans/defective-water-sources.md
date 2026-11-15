@@ -23,18 +23,23 @@ Decided scope (review of the first draft):
 
 ## 1. OSM tagging
 
-| Situation                                                | Tagging                                                           | Effect in FireYak                                                              |
-| -------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Temporarily unusable (broken, no water, blocked, closed) | `operational_status=out_of_order` (also seen: `broken`, `closed`) | **Out of service** (red)                                                       |
-| Usable but faulty (leaking, stiff valve, missing cap)    | `operational_status=needs_maintenance` (also `restricted`)        | **Caution** (amber)                                                            |
-| Working (again)                                          | no tag, or `operational_status=operational`                       | normal                                                                         |
-| Permanently gone / decommissioned                        | lifecycle prefix `disused:emergency=…` / `removed:emergency=…`    | drops out of the queries; this is the existing _delete_ path, not this feature |
+The hydrant wiki page (Tag:emergency=fire_hydrant) says hydrants are in service
+by default and an **out-of-service** one takes the lifecycle prefix:
+`emergency=fire_hydrant` is **replaced** by `disused:emergency=fire_hydrant`.
+FireYak writes it that way, for every water-source type.
+
+| Situation                                                | Tagging FireYak writes                      | Also read (other mappers)                                   | Effect in FireYak        |
+| -------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------- | ------------------------ |
+| Temporarily unusable (broken, no water, blocked, closed) | `disused:emergency=<type>` (no `emergency`) | `operational_status=out_of_order` / `broken` / `closed` / … | **Out of service** (red) |
+| Usable but faulty (leaking, stiff valve, missing cap)    | `operational_status=needs_maintenance`      | `operational_status=restricted`, unknown values             | **Caution** (amber)      |
+| Working (again)                                          | `emergency=<type>`, no `operational_status` | `operational_status=operational`                            | normal                   |
 
 Notes:
 
-- `operational_status` is documented on the OSM wiki and works the same on
-  `fire_hydrant`, `suction_point`, `water_tank` and `fire_water_pond`, so the
-  feature covers every water source.
+- "Needs maintenance" does not conflict with the wiki: the source is still in
+  service, so it keeps `emergency=*`.
+- `disused:emergency` is only read for the four water-source types
+  (`fire_hydrant`, `suction_point`, `water_tank`, `fire_water_pond`).
 - **"Dry" is ambiguous.** A US _dry hydrant_ (`fire_hydrant:type=pipe`) is a
   working suction pipe, not a fault. The UI says "out of order", never "dry".
   A pond that dries out in summer is `intermittent=yes` / `seasonal=*`, which
@@ -42,20 +47,25 @@ Notes:
 - Unknown `operational_status` values count as **caution**: never as OK, never
   as out of service.
 
-## 2. Data plumbing (no query change needed)
+## 2. Data plumbing
 
-The Overpass area query (`out qt center 2000 tags`) and the static extract
-already deliver all tags.
-
-- **New pure helper `src/helper/operationalStatus.ts`** (+ spec):
-  `sourceStatus(tags) → 'ok' | 'caution' | 'outOfService'`. Single place for
-  the value mapping in §1.
-- **`markerHandler.ts`**: add `status: sourceStatus(element.tags)` to each GeoJSON
-  feature's `properties` in `getMarkersForView`, and to `NearbyMarker` entries.
-- **`renderSignature()` must include the status.** Today it is
-  `ref:iconKey:lat,lng`; without the status, a live refresh that only flips
-  `operational_status` is judged "nothing changed" and the map keeps the old
-  symbol.
+- **Pure helper `src/helper/operationalStatus.ts`** (+ spec):
+  `sourceStatus(tags) → 'ok' | 'caution' | 'outOfService'`, `emergencyOf(tags)`
+  (`emergency`, else a water-source `disused:emergency`), and
+  `splitLifecycle` / `applyLifecycle` for the edit form.
+- **Every type check uses `emergencyOf`**, so a disused hydrant is still a
+  hydrant: icon and filter category, titles, marker info/header, pond outline,
+  nearby candidates, pump calculation, pond-area lookup, `isMarkerTags`,
+  flag/unflag detection (taking a pond out of service is not an unflag) and the
+  changeset comment ("Mark fire_hydrant as out of service" / "… back in service").
+- **Overpass area query** also asks for `node["disused:emergency"~…]` and
+  `nwr["disused:emergency"=fire_water_pond]`.
+- **Static extract (data.fireyak.org)**: built outside this repo. Its filter must
+  also keep `disused:emergency=fire_hydrant,suction_point,water_tank,fire_water_pond`.
+  Until then, disused sources come only from the live Overpass top-up (and are not
+  in downloaded offline areas).
+- **`markerHandler.ts`**: `status` on each GeoJSON feature; `renderSignature()`
+  includes it, so a live refresh that only changes the status redraws the marker.
 
 ## 3. Map
 
@@ -77,9 +87,10 @@ In `MainMap.vue`, data-driven on the existing marker source:
    same source, `filter: ['all', ['!', ['has','point_count']], ['!=', ['get','status'], 'ok']]`,
    `icon-image: ['match', ['get','status'], 'outOfService', 'status-out', 'status-caution']`,
    `icon-offset` to the top-right corner, `icon-allow-overlap: true`.
-   Two new assets (`status-out.png`: red circle, white ✕; `status-caution.png`:
-   amber circle, white !), loaded alongside `markerIconUrls`. Must read on light,
-   dark and satellite.
+   Two badges (red disc with a white ✕, amber disc with a dark !, white ring,
+   20 px), drawn on a canvas at runtime (`src/mapHandler/statusBadges.ts`) and
+   shared with the nearby list and the filter row. The mark sits well inside the
+   disc. Must read on light, dark and satellite.
 3. **Clicks**: add the badge layer to `interactiveLayers`.
 4. **Clusters**: unchanged.
 
@@ -89,14 +100,14 @@ the badge for free.
 ### Filter
 
 `LayerSelectorModal.vue` gets one toggle under the category filters:
-**"Show out-of-service sources"**, default **on**. Stored as
+**"Out of Service"** (with the red badge as its icon), default **on**. Stored as
 `markerFilters.outOfService` in `settingsStore`, applied in `getMarkersForView`
 next to the category filter. Caution sources are always shown.
 
 ## 4. Marker info panel
 
 No banner. `operational_status` becomes a normal labelled row like the other
-tags: it joins `tagTranslationKeys` / `relevantTags` in `MarkerInfo.vue` (and
+tags (a disused source shows it as _Out of order_): it joins `tagTranslationKeys` / `relevantTags` in `MarkerInfo.vue` (and
 `relevantTags` in `MarkerEdit.vue`, so it is not listed under "other tags"),
 with translated values (_Out of order_, _Needs maintenance_, …; unknown values
 shown raw). `survey:date` keeps showing as it does today.
@@ -110,8 +121,10 @@ unchanged.
 ## 6. Setting the status
 
 The existing edit form (`MarkerEdit.vue`) gets an **"Operational status"**
-select for all water-source types: _Working_ (removes the tag) / _Needs
-maintenance_ / _Out of order_. Changing it does **not** touch `survey:date`; the
+select for all water-source types: _Working_ (`emergency=<type>`, no
+`operational_status`) / _Needs maintenance_ (`operational_status`) / _Out of
+order_ (`disused:emergency=<type>`, via the store's `outOfService` flag; the form
+itself always edits the plain type). Changing it does **not** touch `survey:date`; the
 user sets the date themselves with the existing date field if they want one.
 It goes through `markerEditStore` + `editQueue` like every other edit, so it
 works offline and as a dry run on preview builds. An existing `broken` /
@@ -120,5 +133,5 @@ works offline and as a dry run on preview builds. An existing `broken` /
 ## 7. Delivery
 
 One PR (`feature/118-out-of-service`): helper + spec, feature/nearby `status`,
-render signature, map layers + assets, filter toggle, info-panel row, nearby badge,
+render signature, Overpass query, map layers + badges, filter toggle, info-panel row, nearby badge,
 edit-form select, en/de strings, one `whats-new.json` entry.

@@ -23,7 +23,12 @@ import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
 import PondAreaCandidates from '@/components/PondAreaCandidates.vue';
-import { EDITABLE_STATUS_VALUES, OPERATIONAL_STATUS_KEY } from '@/helper/operationalStatus';
+import {
+	DISUSED_EMERGENCY_KEY,
+	EDITABLE_STATUS_VALUES,
+	OPERATIONAL_STATUS_KEY,
+	OUT_OF_SERVICE_VALUE
+} from '@/helper/operationalStatus';
 
 const markerEditStore = useMarkerEditStore();
 const osmAuthStore = useOsmAuthStore();
@@ -157,14 +162,30 @@ const onHydrantTypeChange = () => {
 	}
 };
 
-// "Working" removes the tag; any other value already on the object (`broken`,
-// `closed`, …) is offered as-is so it is kept unless the user changes it.
+// Operational status (issue #118). "Out of order" is saved the way the OSM
+// wiki asks, as `disused:emergency=<type>` (the store's `outOfService` flag);
+// "Needs maintenance" as `operational_status`; "Working" removes both. Any
+// other `operational_status` already on the object (`broken`, `closed`, …) is
+// offered as-is so it is kept unless the user changes it.
+const statusValue = computed(() =>
+	markerEditStore.outOfService
+		? OUT_OF_SERVICE_VALUE
+		: (markerEditStore.editableTags[OPERATIONAL_STATUS_KEY] ?? '')
+);
+
 const statusOptions = computed(() => {
 	const current = markerEditStore.editableTags[OPERATIONAL_STATUS_KEY];
 	const values: string[] = [...EDITABLE_STATUS_VALUES];
 	if (current && !values.includes(current)) values.push(current);
 	return values;
 });
+
+const onStatusChange = (value: string) => {
+	if (value === statusValue.value) return;
+	markerEditStore.outOfService = value === OUT_OF_SERVICE_VALUE;
+	// One status at a time: the lifecycle prefix replaces `operational_status`.
+	markerEditStore.updateTag(OPERATIONAL_STATUS_KEY, markerEditStore.outOfService ? '' : value);
+};
 
 const statusLabel = (value: string) => {
 	const key = `markerInfo.values.operational_status.${value}`;
@@ -173,6 +194,7 @@ const statusLabel = (value: string) => {
 
 const relevantTags = [
 	'emergency',
+	DISUSED_EMERGENCY_KEY,
 	OPERATIONAL_STATUS_KEY,
 	'fire_hydrant:type',
 	'pillar:type',
@@ -795,10 +817,8 @@ const login = () => {
 					fill="outline"
 					label-placement="stacked"
 					:label="t('markerInfo.tags.operationalStatus')"
-					:value="markerEditStore.editableTags[OPERATIONAL_STATUS_KEY] ?? ''"
-					@ionChange="
-						(e: CustomEvent) => markerEditStore.updateTag(OPERATIONAL_STATUS_KEY, e.detail.value)
-					"
+					:value="statusValue"
+					@ionChange="(e: CustomEvent) => onStatusChange(e.detail.value)"
 					:helper-text="t('markerEdit.hints.operationalStatus')"
 				>
 					<ion-select-option value="">{{

@@ -7,6 +7,7 @@ import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { elementPosition } from '@/helper/osmElement';
 import { OSM_DATA_WEB_URL } from '@/services/osmConfig';
+import { emergencyOf, isDisused, OUT_OF_SERVICE_VALUE } from '@/helper/operationalStatus';
 
 const markerStore = useMapMarkerStore();
 
@@ -15,7 +16,7 @@ const markerData = computed(() => markerStore.selectedMarker);
 const markerEditStore = useMarkerEditStore();
 
 /** Ponds get a quick action for their pumping spot (a suction point at the shore). */
-const isPond = computed(() => markerData.value?.tags?.emergency === 'fire_water_pond');
+const isPond = computed(() => emergencyOf(markerData.value?.tags) === 'fire_water_pond');
 
 const addPumpingSpot = () => {
 	const position = markerData.value ? elementPosition(markerData.value) : null;
@@ -164,7 +165,13 @@ const translateValue = (key: string, value: string): string => {
 const getFilteredTags = () => {
 	if (!markerData.value?.tags) return [];
 
-	return Object.entries(markerData.value.tags)
+	// A disused source (`disused:emergency`, the wiki's out-of-service tagging)
+	// shows the same status row as `operational_status=out_of_order` (issue #118).
+	const tags = isDisused(markerData.value.tags)
+		? { ...markerData.value.tags, operational_status: OUT_OF_SERVICE_VALUE }
+		: markerData.value.tags;
+
+	return Object.entries(tags)
 		.filter(([key]) => relevantTags.includes(key))
 		.map(([key, value]) => ({
 			key,

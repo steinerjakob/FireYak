@@ -225,6 +225,7 @@ import { outdoorsFlavor } from '@/map/outdoorsFlavor';
 import { nightFlavor } from '@/map/nightFlavor';
 import { satelliteFlavor } from '@/map/satelliteFlavor';
 import { coerceRef } from '@/helper/osmRef';
+import { emergencyOf } from '@/helper/operationalStatus';
 
 const MAP_ELEMENT_ID = 'map';
 const MOVE_DEBOUNCE_MS = 300;
@@ -697,7 +698,7 @@ async function updateAreaOutline() {
 		: !markerEditStore.isActive
 			? markerStore.selectedMarker
 			: null;
-	const isPond = target?.tags?.emergency === 'fire_water_pond';
+	const isPond = emergencyOf(target?.tags) === 'fire_water_pond';
 	// Marking a water area is a pond-to-be, so it is outlined too.
 	if (!target || (!isPond && !(markerEditStore.isEditing && markerEditStore.isArea))) {
 		setAreaOutline([]);
@@ -1659,7 +1660,7 @@ function addMapLayers(map: maplibregl.Map) {
 				STATUS_BADGE_IMAGE.outOfService,
 				STATUS_BADGE_IMAGE.caution
 			],
-			'icon-offset': [11, -11],
+			'icon-offset': [13, -13],
 			'icon-allow-overlap': true,
 			'icon-ignore-placement': true
 		}

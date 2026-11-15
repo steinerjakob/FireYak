@@ -44,7 +44,7 @@ import {
 import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
-import { sourceStatus } from '@/helper/operationalStatus';
+import { emergencyOf, sourceStatus } from '@/helper/operationalStatus';
 
 // Map icon keys to URLs for use in MapLibre image loading. Suction points and
 // suction hydrants use the blue/white `pump` icon on the map; `suctionpoint.png`
@@ -66,7 +66,8 @@ export const markerIconUrls: Record<string, string> = {
 // way- and relation-typed hydrants, ponds and tanks too, which would
 // otherwise all render (and filter) as fire stations.
 function getIconKeyForNode(element: OverPassElement): string {
-	const emergency = element.tags?.emergency;
+	// A disused (out-of-service) source keeps its type's icon (issue #118).
+	const emergency = emergencyOf(element.tags);
 	switch (emergency) {
 		case 'fire_hydrant': {
 			// Fixed suction pipes are tagged as hydrants in OSM, but need
@@ -98,7 +99,7 @@ export function getIconUrlForNode(element: OverPassElement): string {
 
 /** Maps an OSM element to its filter category key. Tags only — see comment above. */
 function categoryForNode(element: OverPassElement): MarkerFilterKey {
-	const emergency = element.tags?.emergency;
+	const emergency = emergencyOf(element.tags);
 	switch (emergency) {
 		case 'fire_hydrant':
 			// Suction pipes share the suction-point symbol, so they belong to the

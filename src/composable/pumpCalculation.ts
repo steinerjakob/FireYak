@@ -33,6 +33,7 @@ import { alertController } from '@ionic/vue';
 import { GeoPoint, distanceTo } from '@/types/geo';
 import { OsmRef } from '@/helper/osmRef';
 import { useRouteDetails } from '@/composable/routeDetails';
+import { emergencyOf } from '@/helper/operationalStatus';
 
 const PUMP_LINE_SOURCE = 'pump-line';
 /** Route runs (on-road, off-road dashed, steep ticks) share this prefix. */
@@ -774,7 +775,7 @@ export function usePumpCalculation() {
 	 */
 	const useMarkerAsWaterSource = async (ref: OsmRef, coords: GeoPoint) => {
 		const node = await getMapNodeById(ref);
-		const emergency = node?.tags?.emergency;
+		const emergency = emergencyOf(node?.tags);
 		const isWaterSource =
 			emergency === 'fire_hydrant' ||
 			emergency === 'suction_point' ||

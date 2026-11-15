@@ -1,3 +1,5 @@
+import { emergencyOf } from '@/helper/operationalStatus';
+
 /**
  * i18n key for a marker's generic title (used when it has no `name`).
  *
@@ -8,7 +10,7 @@
  * title, matching their suction-point map symbol.
  */
 export function markerTitleKey(tags: Record<string, string> | undefined): string {
-	switch (tags?.emergency) {
+	switch (emergencyOf(tags)) {
 		case 'fire_hydrant':
 			if (!isSuctionHydrant(tags)) return 'markerInfo.title.fireHydrant';
 			// A pipe is a fixed suction pipe; any other type (pillar, underground…)
@@ -32,7 +34,7 @@ export function isSuctionHydrant(tags: Record<string, string> | undefined): bool
 	// Tag values are case-sensitive by convention, but mappers do write
 	// `Suction`; treat those the same so they don't fall back to "hydrant".
 	return (
-		tags?.emergency === 'fire_hydrant' &&
+		emergencyOf(tags) === 'fire_hydrant' &&
 		tags?.['fire_hydrant:pressure']?.trim().toLowerCase() === 'suction'
 	);
 }
