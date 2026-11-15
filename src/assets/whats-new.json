@@ -24,6 +24,11 @@
 			"type": "improvement",
 			"en": "Opening or editing a water source now checks OpenStreetMap for its latest details and updates them right away.",
 			"de": "Beim Öffnen oder Bearbeiten einer Wasserentnahmestelle werden ihre Angaben jetzt mit OpenStreetMap abgeglichen und sofort aktualisiert."
+		},
+		{
+			"type": "improvement",
+			"en": "Set the survey date to today with one tap when editing a water source.",
+			"de": "Beim Bearbeiten einer Wasserentnahmestelle kannst du mit einem Tipp das heutige Erfassungsdatum setzen."
 		}
 	],
 	"releases": [
