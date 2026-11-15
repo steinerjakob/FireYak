@@ -152,7 +152,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		const nodes = await getNearbyMapNodes(location, DUPLICATE_POND_RADIUS_M);
 		if (pendingLocation.value !== location) return; // pin moved meanwhile
 		nearbyPonds.value = nodes
-			.filter((n) => n.tags?.['emergency'] === 'fire_water_pond' && n.id > 0)
+			.filter((n) => emergencyOf(n.tags) === 'fire_water_pond' && n.id > 0)
 			.map((element) => {
 				const position = elementPosition(element);
 				const distanceM = position
@@ -241,7 +241,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		// physical water feature too, so a node edit adds `natural=water`.
 		// Areas are left alone: their physical tagging is not ours to change.
 		if (
-			marker.tags?.['emergency'] === 'fire_water_pond' &&
+			emergencyOf(marker.tags) === 'fire_water_pond' &&
 			!isAreaType(marker.type) &&
 			!hasPhysicalWaterTag(marker.tags)
 		) {

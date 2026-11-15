@@ -1,6 +1,6 @@
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import type { OsmType } from '@/helper/osmRef';
-import { emergencyOf, isDisused } from '@/helper/operationalStatus';
+import { DISUSED_EMERGENCY_KEY, emergencyOf, isDisused } from '@/helper/operationalStatus';
 
 /**
  * Helpers for editing OSM elements that are not plain nodes.
@@ -70,9 +70,14 @@ export const FIRE_POND_ONLY_TAGS = ['emergency'];
  * a fire pond (e.g. `emergency=water_tank`) are returned unchanged.
  */
 export function withoutFirePondFlag(tags: Record<string, string>): Record<string, string> {
-	if (tags['emergency'] !== 'fire_water_pond') return { ...tags };
+	if (emergencyOf(tags) !== 'fire_water_pond') return { ...tags };
+	// An out-of-service pond carries the flag as `disused:emergency` (issue #118).
 	return Object.fromEntries(
-		Object.entries(tags).filter(([key]) => !FIRE_POND_ONLY_TAGS.includes(key))
+		Object.entries(tags).filter(
+			([key, value]) =>
+				!FIRE_POND_ONLY_TAGS.includes(key) &&
+				!(key === DISUSED_EMERGENCY_KEY && value === 'fire_water_pond')
+		)
 	);
 }
 
@@ -103,7 +108,7 @@ export function isUnflagEdit(
 	tags: Record<string, string>
 ): boolean {
 	// Taking a pond out of service (`disused:emergency`) is not an unflag (issue #118).
-	return baseTags?.['emergency'] === 'fire_water_pond' && emergencyOf(tags) == null;
+	return emergencyOf(baseTags ?? undefined) === 'fire_water_pond' && emergencyOf(tags) == null;
 }
 
 /**

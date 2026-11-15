@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import {
 	accessTargetFor,
+	isUsableSuctionPoint,
 	resolveAccessPoint,
 	type AccessLookups
 } from '@/mapHandler/waterSourceAccess';
@@ -149,5 +150,26 @@ describe('resolveAccessPoint: outline sources and no Overpass wait', () => {
 		answer(extractOutline);
 		await vi.waitFor(() => expect(arrived).toHaveBeenCalledTimes(1));
 		expect(arrived.mock.calls[0][0].kind).toBe('shore');
+	});
+});
+
+describe('isUsableSuctionPoint (issue #118)', () => {
+	const node = (tags: Record<string, string>): OverPassElement =>
+		({ type: 'node', id: 1, lat: 0, lon: 0, tags }) as OverPassElement;
+
+	it('takes working and needs-maintenance pumping spots', () => {
+		expect(isUsableSuctionPoint(node({ emergency: 'suction_point' }))).toBe(true);
+		expect(
+			isUsableSuctionPoint(
+				node({ emergency: 'suction_point', operational_status: 'needs_maintenance' })
+			)
+		).toBe(true);
+	});
+
+	it('skips out-of-service ones, however they are tagged', () => {
+		expect(isUsableSuctionPoint(node({ 'disused:emergency': 'suction_point' }))).toBe(false);
+		expect(
+			isUsableSuctionPoint(node({ emergency: 'suction_point', operational_status: 'broken' }))
+		).toBe(false);
 	});
 });

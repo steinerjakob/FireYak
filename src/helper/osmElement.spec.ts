@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { describeEdit, isFlagEdit, isMarkerTags, isUnflagEdit } from './osmElement';
+import {
+	describeEdit,
+	isFlagEdit,
+	isMarkerTags,
+	isUnflagEdit,
+	withoutFirePondFlag
+} from './osmElement';
 
 describe('out-of-service edits (issue #118)', () => {
 	const pond = { emergency: 'fire_water_pond', natural: 'water' };
@@ -35,5 +41,17 @@ describe('out-of-service edits (issue #118)', () => {
 		expect(describeEdit('update', 'node', hydrant, { ...hydrant, ref: '1' })).toBe(
 			'Update fire_hydrant'
 		);
+	});
+
+	it('unflags an out-of-service pond area too, keeping its water tags', () => {
+		expect(withoutFirePondFlag(disusedPond)).toEqual({ natural: 'water' });
+		expect(withoutFirePondFlag(pond)).toEqual({ natural: 'water' });
+		expect(isUnflagEdit(disusedPond, { natural: 'water' })).toBe(true);
+		expect(describeEdit('update', 'way', disusedPond, { natural: 'water' })).toBe(
+			'Remove fire_water_pond tag from water area (way)'
+		);
+		// Other disused features are left alone.
+		const tank = { 'disused:emergency': 'water_tank' };
+		expect(withoutFirePondFlag(tank)).toEqual(tank);
 	});
 });

@@ -33,7 +33,7 @@ import { parseHydrantPressure } from '@/helper/hosePressure';
 import {
 	accessTargetFor,
 	accessTargetPoint,
-	isMappedSuctionPoint,
+	isUsableSuctionPoint,
 	isPondArea,
 	knownOutline,
 	markerPoint,
@@ -730,7 +730,7 @@ export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise
 		pondCandidates.map((element) => routingOutline(element).catch(() => null))
 	);
 
-	const suctionPoints = wideCandidates.filter(isMappedSuctionPoint);
+	const suctionPoints = wideCandidates.filter(isUsableSuctionPoint);
 	const elements: OverPassElement[] = [];
 	const targets: AccessTarget[] = [];
 	const candidates = [...pointCandidates, ...pondCandidates];
