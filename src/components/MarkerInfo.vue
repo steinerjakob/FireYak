@@ -241,8 +241,9 @@ const openOsmEditUrl = () => {
 					:color="statusChip[tag.status].color"
 					class="status-chip"
 				>
+					<!-- Text in its own element: a lone icon is also :last-child and gets trailing-icon spacing -->
 					<ion-icon :icon="statusChip[tag.status].icon" />
-					{{ tag.value }}
+					<span>{{ tag.value }}</span>
 				</ion-chip>
 				<p v-else>{{ tag.value }}</p>
 			</ion-label>
@@ -337,7 +338,6 @@ ion-label p {
 .status-chip ion-icon {
 	color: var(--ion-color-contrast);
 	--color: var(--ion-color-contrast);
-	margin-inline-end: 6px;
 }
 
 .loading-note {
