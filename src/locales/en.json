@@ -42,7 +42,8 @@
 			"flowRate": "Flow Rate",
 			"awwaClass": "AWWA Class",
 			"waterType": "Water Body Type",
-			"intermittent": "Dries Out Seasonally"
+			"intermittent": "Dries Out Seasonally",
+			"operationalStatus": "Operational Status"
 		},
 		"values": {
 			"fire_hydrant:type": {
@@ -110,6 +111,14 @@
 			"intermittent": {
 				"yes": "Yes",
 				"no": "No"
+			},
+			"operational_status": {
+				"operational": "Working",
+				"needs_maintenance": "Needs Maintenance",
+				"out_of_order": "Out of Order",
+				"broken": "Broken",
+				"closed": "Closed",
+				"restricted": "Restricted"
 			}
 		},
 		"navigation": {
@@ -223,7 +232,8 @@
 			"suctionPoint": "Suction Point",
 			"waterTank": "Water Tank",
 			"fireWaterPond": "Fire Water Pond",
-			"fireStation": "Fire Station"
+			"fireStation": "Fire Station",
+			"outOfService": "Out of Service"
 		},
 		"legend": {
 			"title": "Hydrant types",
@@ -300,7 +310,8 @@
 			"pondArea": "This pond is mapped as a water area in OpenStreetMap. Its shape stays as it is — only the details below are changed.",
 			"waterType": "What kind of water body this is. Ponds are small standing waters, reservoirs and basins are man-made.",
 			"intermittent": "Whether the pond can run dry, e.g. in summer. Important to know before relying on it.",
-			"naturalConflict": "This point is tagged natural={value}. A fire water pond needs natural=water — change it if the point really is the pond."
+			"naturalConflict": "This point is tagged natural={value}. A fire water pond needs natural=water — change it if the point really is the pond.",
+			"operationalStatus": "Set \"Out of Order\" if it cannot be used, \"Needs Maintenance\" if it works but is faulty."
 		},
 		"messages": {
 			"saveSuccess": "Successfully saved to OpenStreetMap!",
@@ -593,5 +604,9 @@
 			"steep": "Steep: over 25 %",
 			"verySteep": "Very steep: over 50 % (ticks)"
 		}
+	},
+	"operationalStatus": {
+		"outOfService": "Out of Service",
+		"caution": "Needs Maintenance"
 	}
 }

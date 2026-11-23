@@ -37,6 +37,13 @@ import {
 	withoutFirePondFlag
 } from '@/helper/osmElement';
 import { getFeatureForEdit, rememberDevServerCreate, uploadChange } from '@/services/osmWrite';
+import {
+	applyLifecycle,
+	DISUSED_EMERGENCY_KEY,
+	EMERGENCY_KEY,
+	emergencyOf,
+	splitLifecycle
+} from '@/helper/operationalStatus';
 
 /** How long the "saved" toast stays up after a successful upload. */
 const SAVE_SUCCESS_TOAST_MS = 2000;
@@ -46,6 +53,12 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const isAdding = ref(false);
 	const pendingLocation = ref<GeoPoint | null>(null);
 	const editableTags = ref<Record<string, string>>({});
+	/**
+	 * Out of service (issue #118). Kept apart from the tags: the form always
+	 * edits the plain `emergency` type, and saving moves it to
+	 * `disused:emergency` as the OSM wiki asks (see `applyLifecycle`).
+	 */
+	const outOfService = ref(false);
 	const originalMarker = ref<OverPassElement | null>(null);
 	const router = useRouter();
 	const route = useRoute();
@@ -85,7 +98,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	const isFlagging = computed(() => isEditing.value && flagging.value);
 	/** True while editing an area that already is a fire pond on the server. */
 	const isPondArea = computed(
-		() => isArea.value && originalMarker.value?.tags?.['emergency'] === 'fire_water_pond'
+		() => isArea.value && emergencyOf(originalMarker.value?.tags) === 'fire_water_pond'
 	);
 	/**
 	 * Whether the edit sheet offers a delete action: nodes are deleted, pond
@@ -139,7 +152,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		const nodes = await getNearbyMapNodes(location, DUPLICATE_POND_RADIUS_M);
 		if (pendingLocation.value !== location) return; // pin moved meanwhile
 		nearbyPonds.value = nodes
-			.filter((n) => n.tags?.['emergency'] === 'fire_water_pond' && n.id > 0)
+			.filter((n) => emergencyOf(n.tags) === 'fire_water_pond' && n.id > 0)
 			.map((element) => {
 				const position = elementPosition(element);
 				const distanceM = position
@@ -220,13 +233,15 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		isAdding.value = false;
 		flagging.value = false;
 		originalMarker.value = marker;
-		editableTags.value = { ...marker.tags };
+		const lifecycle = splitLifecycle(marker.tags ?? {});
+		editableTags.value = lifecycle.tags;
+		outOfService.value = lifecycle.outOfService;
 		autoAddedTags.value = [];
 		// Older pond nodes often carry only the flag. The wiki requires the
 		// physical water feature too, so a node edit adds `natural=water`.
 		// Areas are left alone: their physical tagging is not ours to change.
 		if (
-			marker.tags?.['emergency'] === 'fire_water_pond' &&
+			emergencyOf(marker.tags) === 'fire_water_pond' &&
 			!isAreaType(marker.type) &&
 			!hasPhysicalWaterTag(marker.tags)
 		) {
@@ -246,6 +261,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			emergency: 'fire_hydrant',
 			'fire_hydrant:type': 'pillar'
 		};
+		outOfService.value = false;
 		autoAddedTags.value = [];
 		pendingLocation.value = location;
 	}
@@ -342,6 +358,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		isAdding.value = false;
 		pendingLocation.value = null;
 		editableTags.value = {};
+		outOfService.value = false;
 		originalMarker.value = null;
 		autoAddedTags.value = [];
 	}
@@ -445,7 +462,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			return;
 		}
 
-		await commitTags(finalTags, t('markerEdit.messages.saveSuccess'));
+		await commitTags(
+			applyLifecycle(finalTags, outOfService.value),
+			t('markerEdit.messages.saveSuccess')
+		);
 	}
 
 	/**
@@ -460,12 +480,22 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	 */
 	function rebaseOnServer(serverTags: Record<string, string>, conflicts: string[]) {
 		if (!originalMarker.value) return;
-		const oldBase = originalMarker.value.tags ?? {};
+		// Compare in the form's view, where a disused source carries its plain
+		// `emergency` type and the out-of-service flag separately (issue #118).
+		const base = splitLifecycle(originalMarker.value.tags ?? {});
+		const server = splitLifecycle(serverTags);
+		const oldBase = base.tags;
+		const lifecycleConflict = conflicts.some((key) =>
+			[EMERGENCY_KEY, DISUSED_EMERGENCY_KEY].includes(key)
+		);
+		if (outOfService.value === base.outOfService || lifecycleConflict) {
+			outOfService.value = server.outOfService;
+		}
 		// An empty form field means "remove this tag".
 		const value = (v: string | undefined) => (v === '' ? undefined : v);
 		const keys = new Set([
 			...Object.keys(oldBase),
-			...Object.keys(serverTags),
+			...Object.keys(server.tags),
 			...Object.keys(editableTags.value)
 		]);
 		for (const key of keys) {
@@ -474,9 +504,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			// save would upload their stale value over someone else's change.
 			// Conflicting fields show the other mapper's value too; the user's
 			// other (non-conflicting) edits are kept.
-			if (!userEdited || conflicts.includes(key)) {
-				if (serverTags[key] === undefined) delete editableTags.value[key];
-				else editableTags.value[key] = serverTags[key];
+			const conflicting = conflicts.includes(key) || (key === EMERGENCY_KEY && lifecycleConflict);
+			if (!userEdited || conflicting) {
+				if (server.tags[key] === undefined) delete editableTags.value[key];
+				else editableTags.value[key] = server.tags[key];
 			}
 		}
 		originalMarker.value = { ...originalMarker.value, tags: { ...serverTags } };
@@ -782,6 +813,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	return {
 		isEditing,
 		isAdding,
+		outOfService,
 		isActive,
 		markerType,
 		elementType,

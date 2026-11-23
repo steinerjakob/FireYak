@@ -33,7 +33,7 @@ import { parseHydrantPressure } from '@/helper/hosePressure';
 import {
 	accessTargetFor,
 	accessTargetPoint,
-	isMappedSuctionPoint,
+	isUsableSuctionPoint,
 	isPondArea,
 	knownOutline,
 	markerPoint,
@@ -44,6 +44,7 @@ import {
 import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
+import { emergencyOf, sourceStatus } from '@/helper/operationalStatus';
 
 // Map icon keys to URLs for use in MapLibre image loading. Suction points and
 // suction hydrants use the blue/white `pump` icon on the map; `suctionpoint.png`
@@ -65,7 +66,8 @@ export const markerIconUrls: Record<string, string> = {
 // way- and relation-typed hydrants, ponds and tanks too, which would
 // otherwise all render (and filter) as fire stations.
 function getIconKeyForNode(element: OverPassElement): string {
-	const emergency = element.tags?.emergency;
+	// A disused (out-of-service) source keeps its type's icon (issue #118).
+	const emergency = emergencyOf(element.tags);
 	switch (emergency) {
 		case 'fire_hydrant': {
 			// Fixed suction pipes are tagged as hydrants in OSM, but need
@@ -97,7 +99,7 @@ export function getIconUrlForNode(element: OverPassElement): string {
 
 /** Maps an OSM element to its filter category key. Tags only — see comment above. */
 function categoryForNode(element: OverPassElement): MarkerFilterKey {
-	const emergency = element.tags?.emergency;
+	const emergency = emergencyOf(element.tags);
 	switch (emergency) {
 		case 'fire_hydrant':
 			// Suction pipes share the suction-point symbol, so they belong to the
@@ -242,7 +244,9 @@ let liveRefreshInFlight = false;
 function renderSignature(element: OverPassElement): string {
 	const lat = (element.lat ?? element.center?.lat ?? 0).toFixed(7);
 	const lng = (element.lon ?? element.center?.lon ?? 0).toFixed(7);
-	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${lat},${lng}`;
+	// The status is part of it: a live edit that only flips `operational_status`
+	// changes the badge, so it must count as a change (issue #118).
+	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${sourceStatus(element.tags)}:${lat},${lng}`;
 }
 
 /** True when every given tile was asked of Overpass within the live TTL. */
@@ -550,6 +554,8 @@ export async function getMarkersForView(
 		const { markerFilters } = useSettingsStore();
 		for (const element of mapElements) {
 			if (!markerFilters[categoryForNode(element)]) continue;
+			const status = sourceStatus(element.tags);
+			if (status === 'outOfService' && !markerFilters.outOfService) continue;
 			const lat = (element?.lat || element.center?.lat) as number;
 			const lng = (element.lon || element.center?.lon) as number;
 			features.push({
@@ -560,7 +566,8 @@ export async function getMarkersForView(
 				},
 				properties: {
 					ref: toRef(element.type, element.id),
-					icon: getIconKeyForNode(element)
+					icon: getIconKeyForNode(element),
+					status
 				}
 			});
 		}
@@ -723,7 +730,7 @@ export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise
 		pondCandidates.map((element) => routingOutline(element).catch(() => null))
 	);
 
-	const suctionPoints = wideCandidates.filter(isMappedSuctionPoint);
+	const suctionPoints = wideCandidates.filter(isUsableSuctionPoint);
 	const elements: OverPassElement[] = [];
 	const targets: AccessTarget[] = [];
 	const candidates = [...pointCandidates, ...pondCandidates];

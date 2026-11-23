@@ -10,6 +10,7 @@ import {
 	IonToggle
 } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
+import { statusBadgeDataUrl } from '@/mapHandler/statusBadges';
 import { type MapLayerSetting, type MarkerFilters, useSettingsStore } from '@/store/settingsStore';
 import { storeToRefs } from 'pinia';
 import { useSettings } from '@/composable/settings';
@@ -136,6 +137,22 @@ const hydrantSubtypes: Array<{ icon: string; labelKey: string }> = [
 						</div>
 					</div>
 				</template>
+				<!-- Out-of-service sources: shown faded with a red badge by default (issue #118) -->
+				<ion-item>
+					<ion-toggle
+						:checked="localFilters.outOfService"
+						@ionChange="onFilterToggle('outOfService', $event.detail.checked)"
+					>
+						<div class="filter-label">
+							<img
+								:src="statusBadgeDataUrl('outOfService')"
+								class="filter-icon status-icon"
+								:alt="t('map.filters.outOfService')"
+							/>
+							<ion-label>{{ t('map.filters.outOfService') }}</ion-label>
+						</div>
+					</ion-toggle>
+				</ion-item>
 			</ion-list>
 		</div>
 	</ion-popover>
