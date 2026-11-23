@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote } from '@ionic/vue';
-import { openOutline, createOutline, addCircleOutline } from 'ionicons/icons';
+import { IonButton, IonChip, IonIcon, IonItem, IonLabel, IonList, IonNote } from '@ionic/vue';
+import {
+	openOutline,
+	createOutline,
+	addCircleOutline,
+	banOutline,
+	constructOutline
+} from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { elementPosition } from '@/helper/osmElement';
 import { OSM_DATA_WEB_URL } from '@/services/osmConfig';
-import { emergencyOf, isDisused, OUT_OF_SERVICE_VALUE } from '@/helper/operationalStatus';
+import {
+	emergencyOf,
+	isDisused,
+	OPERATIONAL_STATUS_KEY,
+	OUT_OF_SERVICE_VALUE,
+	sourceStatus,
+	type SourceStatus
+} from '@/helper/operationalStatus';
 
 const markerStore = useMapMarkerStore();
 
@@ -176,13 +189,24 @@ const getFilteredTags = () => {
 		.map(([key, value]) => ({
 			key,
 			label: t(tagTranslationKeys[key] || key),
-			value: translateValue(key, value)
+			value: translateValue(key, value),
+			// The status row is shown as a coloured chip so it stands out (issue #118).
+			status:
+				key === OPERATIONAL_STATUS_KEY
+					? sourceStatus({ [OPERATIONAL_STATUS_KEY]: value })
+					: ('ok' as SourceStatus)
 		}))
 		.sort((a, b) => {
 			const aIndex = relevantTags.indexOf(a.key);
 			const bIndex = relevantTags.indexOf(b.key);
 			return aIndex - bIndex;
 		});
+};
+
+/** Chip colour and icon per status: warning for maintenance, danger for out of service. */
+const statusChip: Record<Exclude<SourceStatus, 'ok'>, { color: string; icon: string }> = {
+	caution: { color: 'warning', icon: constructOutline },
+	outOfService: { color: 'danger', icon: banOutline }
 };
 
 const getCoordinates = () => {
@@ -212,7 +236,15 @@ const openOsmEditUrl = () => {
 		<ion-item v-for="tag in getFilteredTags()" :key="tag.key" lines="none">
 			<ion-label>
 				<h3>{{ tag.label }}</h3>
-				<p>{{ tag.value }}</p>
+				<ion-chip
+					v-if="tag.status !== 'ok'"
+					:color="statusChip[tag.status].color"
+					class="status-chip"
+				>
+					<ion-icon :icon="statusChip[tag.status].icon" />
+					{{ tag.value }}
+				</ion-chip>
+				<p v-else>{{ tag.value }}</p>
 			</ion-label>
 		</ion-item>
 
@@ -289,6 +321,23 @@ ion-label h3 {
 ion-label p {
 	font-size: 1rem !important;
 	margin-top: 0;
+}
+
+/* Filled in the warning / danger colour on every theme, so it never reads as a plain entry. */
+.status-chip {
+	--background: var(--ion-color-base);
+	--color: var(--ion-color-contrast);
+	background: var(--ion-color-base);
+	color: var(--ion-color-contrast);
+	border-color: var(--ion-color-base);
+	margin: 4px 0 0;
+	font-weight: 600;
+}
+
+.status-chip ion-icon {
+	color: var(--ion-color-contrast);
+	--color: var(--ion-color-contrast);
+	margin-inline-end: 6px;
 }
 
 .loading-note {

@@ -2,8 +2,8 @@
 	"unreleased": [
 		{
 			"type": "feature",
-			"en": "Water sources that are out of service or need maintenance now have a badge on the map; you can also set this when editing.",
-			"de": "Außer Betrieb genommene und wartungsbedürftige Wasserentnahmestellen sind jetzt markiert und lassen sich beim Bearbeiten so kennzeichnen."
+			"en": "Water sources that are out of service or need maintenance are now badged on the map and highlighted in their details; you can also set this when editing.",
+			"de": "Außer Betrieb genommene und wartungsbedürftige Wasserentnahmestellen sind jetzt auf der Karte und in den Details hervorgehoben und lassen sich beim Bearbeiten so kennzeichnen."
 		}
 	],
 	"releases": [
