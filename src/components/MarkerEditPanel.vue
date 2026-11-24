@@ -62,7 +62,8 @@ useIonModalBreakpoint(modal, initialBreakpoint);
 .desktop-card {
 	position: fixed;
 	left: 0;
-	top: 0;
+	/* Below the search bar, so the bar stays fully visible */
+	top: var(--desktop-side-panel-top);
 	bottom: 0;
 	width: 400px;
 	z-index: 1002;

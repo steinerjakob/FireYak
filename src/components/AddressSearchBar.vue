@@ -176,7 +176,8 @@ function onSelectResult(feature: PhotonFeature) {
 	top: 10px;
 	left: 50%;
 	transform: translateX(-50%);
-	z-index: 1001;
+	/* Above the desktop side panels (1002) so the results dropdown overlaps them */
+	z-index: 1003;
 	width: 100%;
 	max-width: 656px;
 	padding: calc(var(--ion-safe-area-top, env(safe-area-inset-top, 0px)) + 8px) 16px 0 16px;
