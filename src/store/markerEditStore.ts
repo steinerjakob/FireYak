@@ -441,6 +441,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			await enqueueEdit({ action: 'create', osmId: 0, baseTags: null, tags: finalTags, lat, lon });
 		} else if (isEditing.value && originalMarker.value) {
 			const type = elementType.value;
+			// A live read in flight predates this queued edit — don't let it win.
+			markerStore.noteLocalWrite(toRef(type, originalMarker.value.id));
 			await enqueueEdit({
 				action: 'update',
 				elementType: type,
@@ -550,6 +552,9 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				else editableTags.value[key] = server.tags[key];
 			}
 		}
+		// The server now supplies these keys itself, so a later type switch must
+		// not remove them — they are no longer ours to take back.
+		autoAddedTags.value = autoAddedTags.value.filter((key) => server.tags[key] === undefined);
 		originalMarker.value = { ...originalMarker.value, tags: { ...serverTags } };
 	}
 
@@ -564,6 +569,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	}
 
 	async function commitTags(finalTags: Record<string, string>, successMessage: string) {
+		// The save captured its tags against the current edit base. A live read
+		// still in flight must not swap that base while the upload is prepared;
+		// refreshes that finished before the save stay in effect.
+		editSession++;
 		const lat = pendingLocation.value?.lat || 0;
 		const lon = pendingLocation.value?.lng || 0;
 
@@ -744,6 +753,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	async function enqueueDelete() {
 		if (!originalMarker.value) return;
 		const marker = originalMarker.value;
+		markerStore.noteLocalWrite(toRef(elementType.value, marker.id));
 		await enqueueEdit({
 			action: 'delete',
 			osmId: marker.id,

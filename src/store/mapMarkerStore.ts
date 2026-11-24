@@ -23,9 +23,15 @@ import {
 import { useNetworkStatus } from '@/composable/networkStatus';
 import { OsmRef, parseRef, toRef } from '@/helper/osmRef';
 
+/** A marker lookup's result and whether it was read live from OSM. */
+interface MarkerLookup {
+	node: CachedMapNode | null;
+	live: boolean;
+}
+
 export const useMapMarkerStore = defineStore('marker', () => {
 	// State
-	const fetchPromises = ref<Map<OsmRef, Promise<CachedMapNode | null>>>(new Map());
+	const fetchPromises = ref<Map<OsmRef, Promise<MarkerLookup>>>(new Map());
 	const selectedMarker = ref<CachedMapNode | null>(null);
 	/**
 	 * Lookup state of the marker being selected, so the info panel can tell
@@ -33,21 +39,27 @@ export const useMapMarkerStore = defineStore('marker', () => {
 	 */
 	const selectedMarkerStatus = ref<'idle' | 'loading' | 'notFound'>('idle');
 	const selectedMarkerImages = ref<ImageInfo[]>([]);
-	/** Refs just loaded live on a cache miss — already current, no revalidation needed. */
-	const loadedLive = new Set<OsmRef>();
 
 	// Actions
 	async function fetchMarkerById(ref: OsmRef): Promise<CachedMapNode | null> {
+		return (await lookupMarker(ref)).node;
+	}
+
+	/**
+	 * Resolves a marker from the cache, else live from OSM. `live` tells the
+	 * caller this very lookup read it from OSM, so it needs no revalidation.
+	 */
+	function lookupMarker(ref: OsmRef): Promise<MarkerLookup> {
 		// Return in-flight promise if already fetching
-		if (fetchPromises.value.has(ref)) {
-			return fetchPromises.value.get(ref) || null;
-		}
+		const inFlight = fetchPromises.value.get(ref);
+		if (inFlight) return inFlight;
 
 		// Create fetch promise
-		const fetchPromise = (async () => {
+		const fetchPromise = (async (): Promise<MarkerLookup> => {
 			try {
 				// Try database first
 				let node = await getMapNodeById(ref);
+				let live = false;
 
 				// If not in database, fetch from API
 				if (!node) {
@@ -74,11 +86,11 @@ export const useMapMarkerStore = defineStore('marker', () => {
 						// (a differently-typed element with the same numeric id).
 						const fetchedRef = toRef(fetched.type, fetched.id);
 						node = fetchedRef === ref ? { ...fetched, ref: fetchedRef } : null;
-						if (node) loadedLive.add(ref);
+						live = node !== null;
 					}
 				}
 
-				return node;
+				return { node, live };
 			} finally {
 				// Cleanup
 				fetchPromises.value.delete(ref);
@@ -255,7 +267,7 @@ export const useMapMarkerStore = defineStore('marker', () => {
 
 		if (ref) {
 			selectedMarkerImages.value.length = 0;
-			const marker = await fetchMarkerById(ref);
+			const { node: marker, live } = await lookupMarker(ref);
 			// A newer selection (or a deselect) happened meanwhile — don't let this
 			// older lookup overwrite it.
 			if (sequence !== selectSequence) return;
@@ -266,7 +278,7 @@ export const useMapMarkerStore = defineStore('marker', () => {
 				// a second marker lookup.
 				fetchMarkerImageInfoById(ref, marker.tags);
 				// Show the cached values now, check OSM for newer ones meanwhile.
-				if (!loadedLive.delete(ref)) void revalidateMarker(ref);
+				if (!live) void revalidateMarker(ref);
 			}
 		}
 	}
