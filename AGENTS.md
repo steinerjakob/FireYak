@@ -66,8 +66,8 @@ src/
 |---|---|
 | `index.ts` | Pinia instance initialization |
 | `defaultStore.ts` | Tracks visible map dimensions, safe areas, responsive layout state |
-| `mapMarkerStore.ts` | Fetches/caches fire-related markers from OSM and local IndexedDB |
-| `markerEditStore.ts` | Handles marker editing/adding/delete state; uploads via osm-api or queues offline via `editQueue.ts` |
+| `mapMarkerStore.ts` | Fetches/caches fire-related markers from OSM and local IndexedDB; `revalidateMarker` reads a marker's live OSM version in the background (on select and on edit start) and updates the cache, map and open panel when it changed (skipped for queued offline edits, preview dry runs, and when a save landed meanwhile via `noteLocalWrite`) |
+| `markerEditStore.ts` | Handles marker editing/adding/delete state; uploads via osm-api or queues offline via `editQueue.ts`; on edit start the form opens with cached values and is rebased onto the live OSM tags once they arrive (untouched fields follow OSM, user changes are kept) |
 | `offlineAreasStore.ts` | Manages downloaded offline map areas (download/refresh/delete, size estimates, auto-refresh) |
 | `osmAuthStore.ts` | OAuth2 PKCE authentication with OpenStreetMap |
 | `pendingEditsStore.ts` | Reactive facade over the offline edit queue; exposes pending edits and sync-now |
@@ -116,6 +116,7 @@ src/
 | `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line, the phone sheet section's header (`routeSummary`, `headerChip`, `stretchSummary`), expanded state and sheet growth (`sectionStateAfter`, `sheetGrowTarget`), the pump panel's chips and which stay outside the section (`pumpLineChips`, `splitCoverageChips`), and the nearby row expansion (`rowExpansionAfter` with the select, arrow-toggle and stretch actions, `rowRouteState`) |
 | `routeProfile.ts` | Steep (>25 %/>50 %, grade over deck heights on bridges) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
 | `operationalStatus.ts` | Whether a water source can be used (issue #118): `sourceStatus` (`ok`/`caution`/`outOfService` from `disused:emergency` or `operational_status`), `emergencyOf` (the type whether in service or disused: use it for every type check), `splitLifecycle`/`applyLifecycle` (edit form ↔ the wiki's `disused:emergency` tagging) |
+| `markerRevalidation.ts` | Pure rules for folding a marker's live OSM version into its cached row (`mergeFreshElement`: tags always, node position, areas keep center/outline; `sameTags`) |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
 

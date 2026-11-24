@@ -83,6 +83,18 @@ export async function getFeatureForEdit(type: OsmType, id: number): Promise<OSM.
 	return feature;
 }
 
+/**
+ * Existing objects a dry run pretended to change in this session. Their local
+ * cache shows the simulated result, which a revalidation against the live
+ * server would silently revert — so the marker revalidation skips them.
+ */
+const dryRunRefs = new Set<OsmRef>();
+
+/** True when `ref` was changed only locally by a preview-build dry run. */
+export function wasDryRunEdited(ref: OsmRef): boolean {
+	return dryRunRefs.has(ref);
+}
+
 function touchesExisting(change: OSM.OsmChange): boolean {
 	return [...change.modify, ...change.delete].some((f) => isProductionObject(f.type, f.id));
 }
@@ -105,6 +117,9 @@ export async function uploadChange(
 		return OSM.uploadChangeset(tags, change);
 	}
 
+	for (const feature of [...change.modify, ...change.delete]) {
+		dryRunRefs.add(toRef(feature.type, feature.id));
+	}
 	const summary = describeChange(tags, change);
 	console.info('[FireYak preview] Dry run, not uploaded:\n' + summary, { tags, change });
 	const t = i18n.global.t;

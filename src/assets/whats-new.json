@@ -4,6 +4,11 @@
 			"type": "feature",
 			"en": "Water sources that are out of service or need maintenance are now badged on the map and highlighted in their details; you can also set this when editing.",
 			"de": "Außer Betrieb genommene und wartungsbedürftige Wasserentnahmestellen sind jetzt auf der Karte und in den Details hervorgehoben und lassen sich beim Bearbeiten so kennzeichnen."
+		},
+		{
+			"type": "improvement",
+			"en": "Opening or editing a water source now checks OpenStreetMap for its latest details and updates them right away.",
+			"de": "Beim Öffnen oder Bearbeiten einer Wasserentnahmestelle werden ihre Angaben jetzt mit OpenStreetMap abgeglichen und sofort aktualisiert."
 		}
 	],
 	"releases": [
