@@ -40,8 +40,11 @@ jobs:
   # xcodebuild needs match-provided signing during the archive step, so iOS
   # cannot use the build/sign split that Android does. It is hardened instead:
   # pinned actions, npm ci --ignore-scripts, no persisted credentials.
+  # App Store Connect requires the iOS 27 SDK (Xcode 27+) for uploads from
+  # April 2027 (ITMS-90725). macos-latest only ships Xcode 26.x, so use the
+  # dedicated Xcode 27 runner image.
   deploy:
-    runs-on: macos-latest
+    runs-on: xcode-27
     permissions:
       contents: read
     env:
@@ -70,7 +73,8 @@ jobs:
       - name: Select Xcode Version
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
-          xcode-version: latest-stable
+          # Newest installed Xcode 27.x, i.e. the iOS 27 SDK.
+          xcode-version: '27'
 
       - name: Resolve Swift packages (with retries)
         # GitHub release downloads of binary targets (e.g. Cordova.xcframework.zip)
