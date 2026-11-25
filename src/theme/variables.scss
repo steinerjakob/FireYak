@@ -1,7 +1,8 @@
 :root {
 	/* Desktop side panels (marker info, edit, pump, nearby) start below the
 	   address search bar (10px offset + 8px padding + 48px bar); the ion-card
-	   margin adds the gap. */
+	   margin adds the gap. While offline, AddressSearchBar overrides it inline
+	   to start below the offline hint. */
 	--desktop-side-panel-top: calc(var(--ion-safe-area-top, 0px) + 56px);
 	color-scheme: light dark;
 

@@ -46,7 +46,7 @@
 			</button>
 		</div>
 		<!-- Offline hint: address search needs a connection -->
-		<div v-if="!isOnline" class="search-offline-hint">
+		<div v-if="!isOnline" ref="offlineHint" class="search-offline-hint">
 			<ion-icon :icon="cloudOfflineOutline"></ion-icon>
 			<span>{{ $t('addressSearch.offlineHint') }}</span>
 		</div>
@@ -79,7 +79,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { IonIcon, IonSearchbar, IonSpinner } from '@ionic/vue';
 import { cloudOfflineOutline, informationCircle, settings as settingsIcon } from 'ionicons/icons';
 import { type PhotonFeature, usePhotonSearch } from '@/composable/photonSearch';
@@ -113,6 +113,40 @@ const {
 } = usePhotonSearch();
 
 const showSearchResults = ref(false);
+
+// Desktop side panels start below the search bar (--desktop-side-panel-top).
+// The offline hint hangs below the bar and can wrap, so while it shows the
+// panels start below the hint instead, keeping their header buttons usable.
+const offlineHint = ref<HTMLElement | null>(null);
+const PANEL_CARD_MARGIN_PX = 10; // ion-card margin of the desktop panels
+const PANEL_GAP_PX = 8;
+let hintObserver: ResizeObserver | null = null;
+
+function updatePanelTop() {
+	const root = document.documentElement.style;
+	const hint = offlineHint.value;
+	if (!hint) {
+		root.removeProperty('--desktop-side-panel-top');
+		return;
+	}
+	const top = hint.getBoundingClientRect().bottom - PANEL_CARD_MARGIN_PX + PANEL_GAP_PX;
+	root.setProperty('--desktop-side-panel-top', `${Math.ceil(top)}px`);
+}
+
+watch(offlineHint, (hint) => {
+	hintObserver?.disconnect();
+	hintObserver = null;
+	if (hint && typeof ResizeObserver !== 'undefined') {
+		hintObserver = new ResizeObserver(updatePanelTop);
+		hintObserver.observe(hint);
+	}
+	updatePanelTop();
+});
+
+onBeforeUnmount(() => {
+	hintObserver?.disconnect();
+	document.documentElement.style.removeProperty('--desktop-side-panel-top');
+});
 
 // Whichever panel is currently attached below the bar (results dropdown or
 // the offline hint) needs the bar's bottom corners flattened so the two
