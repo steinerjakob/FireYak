@@ -25,6 +25,7 @@ import { useNetworkStatus } from '@/composable/networkStatus';
 import { useInAppReview } from '@/composable/inAppReview';
 import { enqueueEdit, isNetworkError } from '@/offline/editQueue';
 import { toRef } from '@/helper/osmRef';
+import { sameTags } from '@/helper/markerRevalidation';
 import {
 	describeEdit,
 	elementPosition,
@@ -228,7 +229,11 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 		}
 	});
 
+	/** Bumped whenever an edit starts or ends; a late live read checks it. */
+	let editSession = 0;
+
 	function startEditing(marker: OverPassElement) {
+		editSession++;
 		isEditing.value = true;
 		isAdding.value = false;
 		flagging.value = false;
@@ -253,6 +258,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	}
 
 	function startAdding(location: GeoPoint) {
+		editSession++;
 		isAdding.value = true;
 		isEditing.value = false;
 		flagging.value = false;
@@ -295,6 +301,39 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			return;
 		}
 		startEditing(marker);
+		refreshEditBase(marker);
+	}
+
+	/**
+	 * The form opens with the cached values at once; meanwhile the current
+	 * version is read from OSM. When it differs (the extract is days behind),
+	 * fields the user has not touched yet switch to the live values and the
+	 * live tags become the base of the edit — so a save neither reverts nor
+	 * conflicts with a change made since the extract. Fields the user already
+	 * changed are kept. A node's pin follows a live move unless it was dragged.
+	 */
+	function refreshEditBase(marker: OverPassElement) {
+		if (marker.id <= 0) return; // pending offline create: nothing on OSM yet
+		const session = editSession;
+		void markerStore.revalidateMarker(toRef(marker.type, marker.id)).then((live) => {
+			if (!live || session !== editSession || !isEditing.value || flagging.value) return;
+			const base = originalMarker.value;
+			if (!base) return;
+
+			if (!sameTags(base.tags, live.tags)) rebaseOnServer(live.tags ?? {}, []);
+
+			const moved =
+				!isAreaType(base.type) &&
+				live.lat != null &&
+				live.lon != null &&
+				(live.lat !== base.lat || live.lon !== base.lon);
+			if (moved) {
+				const pinUntouched =
+					pendingLocation.value?.lat === base.lat && pendingLocation.value?.lng === base.lon;
+				originalMarker.value = { ...originalMarker.value!, lat: live.lat, lon: live.lon };
+				if (pinUntouched) pendingLocation.value = { lat: live.lat!, lng: live.lon! };
+			}
+		});
 	}
 
 	async function requestStartAdding(location: GeoPoint) {
@@ -351,6 +390,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	}
 
 	function cancelEdit() {
+		editSession++;
 		resetAreaLookup();
 		detectedWater.value = null;
 		flagging.value = false;
@@ -401,6 +441,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 			await enqueueEdit({ action: 'create', osmId: 0, baseTags: null, tags: finalTags, lat, lon });
 		} else if (isEditing.value && originalMarker.value) {
 			const type = elementType.value;
+			// A live read in flight predates this queued edit — don't let it win.
+			markerStore.noteLocalWrite(toRef(type, originalMarker.value.id));
 			await enqueueEdit({
 				action: 'update',
 				elementType: type,
@@ -510,6 +552,9 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 				else editableTags.value[key] = server.tags[key];
 			}
 		}
+		// The server now supplies these keys itself, so a later type switch must
+		// not remove them — they are no longer ours to take back.
+		autoAddedTags.value = autoAddedTags.value.filter((key) => server.tags[key] === undefined);
 		originalMarker.value = { ...originalMarker.value, tags: { ...serverTags } };
 	}
 
@@ -524,6 +569,10 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	}
 
 	async function commitTags(finalTags: Record<string, string>, successMessage: string) {
+		// The save captured its tags against the current edit base. A live read
+		// still in flight must not swap that base while the upload is prepared;
+		// refreshes that finished before the save stay in effect.
+		editSession++;
 		const lat = pendingLocation.value?.lat || 0;
 		const lon = pendingLocation.value?.lng || 0;
 
@@ -611,6 +660,8 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 					// A freshly flagged area may carry a tombstone from an earlier
 					// local unflag — lift it so the stored marker is visible.
 					if (isAreaType(type)) await clearDeletedMapNode(toRef(type, finalId));
+					// A live read still in flight predates this save — don't let it win.
+					markerStore.noteLocalWrite(toRef(type, finalId));
 					const updatedMarker: OverPassElement = toCacheElement(
 						type,
 						finalId,
@@ -702,6 +753,7 @@ export const useMarkerEditStore = defineStore('markerEdit', () => {
 	async function enqueueDelete() {
 		if (!originalMarker.value) return;
 		const marker = originalMarker.value;
+		markerStore.noteLocalWrite(toRef(elementType.value, marker.id));
 		await enqueueEdit({
 			action: 'delete',
 			osmId: marker.id,
