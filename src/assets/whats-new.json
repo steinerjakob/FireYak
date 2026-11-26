@@ -1,6 +1,11 @@
 {
 	"unreleased": [
 		{
+			"type": "fix",
+			"en": "On larger screens an open side panel no longer covers the search bar, and the cross-country hint now appears at the bottom.",
+			"de": "Auf großen Bildschirmen verdeckt ein offenes Seitenpanel die Suchleiste nicht mehr, und der Querfeldein-Hinweis erscheint jetzt unten."
+		},
+		{
 			"type": "feature",
 			"en": "Water sources that are out of service or need maintenance are now badged on the map and highlighted in their details; you can also set this when editing.",
 			"de": "Außer Betrieb genommene und wartungsbedürftige Wasserentnahmestellen sind jetzt auf der Karte und in den Details hervorgehoben und lassen sich beim Bearbeiten so kennzeichnen."
