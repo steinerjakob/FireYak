@@ -3,7 +3,7 @@
 		{
 			"type": "feature",
 			"en": "Optional clock badges show how long ago a water source was last checked on site; turn them on in the map layers menu.",
-			"de": "Optionale Uhr-Symbole zeigen, wann eine Wasserentnahmestelle zuletzt vor Ort geprüft wurde – einschaltbar im Kartenlayer-Menü."
+			"de": "Optionale Uhr-Symbole zeigen, wann eine Entnahmestelle zuletzt vor Ort geprüft wurde (Kartenlayer-Menü)."
 		},
 		{
 			"type": "fix",

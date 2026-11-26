@@ -20,7 +20,8 @@ import { emergencyOf, WATER_SOURCE_TYPES } from '@/helper/operationalStatus';
  * - `recent`: within the last 12 months
  * - `older`: 12 to 24 months ago (both anniversaries included)
  * - `stale`: more than 24 months ago
- * - `none`: no valid date (missing, partial, impossible or in the future): no badge
+ * - `none`: no valid date (missing, partial, impossible or more than a day in
+ *   the future): no badge
  */
 export type SurveyAge = 'recent' | 'older' | 'stale' | 'none';
 
@@ -73,10 +74,20 @@ export function lastSurveyDate(tags: Tags): number | null {
 	return newest;
 }
 
-/** Age bucket of the last on-site check, against the local calendar day `today`. */
+/** The local calendar day after `today`, as a sortable number. */
+function tomorrow(today: Date): number {
+	const next = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+	return next.getFullYear() * 10000 + (next.getMonth() + 1) * 100 + next.getDate();
+}
+
+/**
+ * Age bucket of the last on-site check, against the local calendar day
+ * `today`. A date one day ahead is a mapper in a later time zone (or a tool
+ * writing the UTC day), so it counts as `recent`; further ahead is invalid.
+ */
 export function surveyAge(tags: Tags, today: Date = new Date()): SurveyAge {
 	const date = lastSurveyDate(tags);
-	if (date === null || date > monthsBefore(today, 0)) return 'none';
+	if (date === null || date > tomorrow(today)) return 'none';
 	if (date > monthsBefore(today, SURVEY_RECENT_MONTHS)) return 'recent';
 	return date >= monthsBefore(today, SURVEY_STALE_MONTHS) ? 'older' : 'stale';
 }

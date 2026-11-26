@@ -1,7 +1,8 @@
 /**
  * The small badges drawn on top of a water-source icon: a red ✕ for out of
  * service, an amber ! for caution (issue #118), and a clock for how long ago
- * the source was last checked on site (issue #120; green, amber, red). Drawn
+ * the source was last checked on site (issue #120; an outlined clock in green,
+ * amber or red, so it never reads as a status badge). Drawn
  * on a canvas at runtime, so the map and the nearby list share one source
  * without extra image assets, and the map gets a crisp high-DPI image.
  *
@@ -33,13 +34,26 @@ export const STATUS_BADGE_PIXEL_RATIO = 3;
 
 type BadgeKind = BadgeStatus | SurveyAgeBadge;
 
-const COLORS: Record<BadgeKind, { fill: string; mark: string }> = {
+const COLORS: Record<BadgeStatus, { fill: string; mark: string }> = {
 	outOfService: { fill: '#d32f2f', mark: '#ffffff' },
-	caution: { fill: '#f9a825', mark: '#212121' },
-	recent: { fill: '#2e7d32', mark: '#ffffff' },
-	older: { fill: '#f9a825', mark: '#212121' },
-	stale: { fill: '#d32f2f', mark: '#ffffff' }
+	caution: { fill: '#f9a825', mark: '#212121' }
 };
+
+/**
+ * Survey clocks are outlined (white face, coloured rim and hands), never a
+ * filled disc: a stale red clock must not read as the out-of-service ✕, nor an
+ * amber one as the caution !. The amber is darker than the caution badge's so
+ * the hands stay readable on the white face.
+ */
+const SURVEY_COLORS: Record<SurveyAgeBadge, string> = {
+	recent: '#2e7d32',
+	older: '#c77800',
+	stale: '#c62828'
+};
+
+function isSurveyKind(kind: BadgeKind): kind is SurveyAgeBadge {
+	return kind in SURVEY_COLORS;
+}
 
 function drawBadge(kind: BadgeKind): HTMLCanvasElement {
 	const size = STATUS_BADGE_CSS_PX * STATUS_BADGE_PIXEL_RATIO;
@@ -49,7 +63,6 @@ function drawBadge(kind: BadgeKind): HTMLCanvasElement {
 	const ctx = canvas.getContext('2d')!;
 	ctx.scale(STATUS_BADGE_PIXEL_RATIO, STATUS_BADGE_PIXEL_RATIO);
 	const c = STATUS_BADGE_CSS_PX / 2;
-	const { fill, mark } = COLORS[kind];
 
 	// White ring keeps the badge readable on the icon, dark map and satellite.
 	ctx.beginPath();
@@ -57,6 +70,26 @@ function drawBadge(kind: BadgeKind): HTMLCanvasElement {
 	ctx.fillStyle = '#ffffff';
 	ctx.fill();
 	const inner = c - 2;
+	ctx.lineCap = 'round';
+
+	if (isSurveyKind(kind)) {
+		// Clock: coloured rim around a white face, hands at 12 and 3.
+		const color = SURVEY_COLORS[kind];
+		ctx.beginPath();
+		ctx.arc(c, c, inner - 1.1, 0, Math.PI * 2);
+		ctx.lineWidth = 2.2;
+		ctx.strokeStyle = color;
+		ctx.stroke();
+		ctx.lineWidth = inner * 0.22;
+		ctx.beginPath();
+		ctx.moveTo(c, c - inner * 0.5);
+		ctx.lineTo(c, c);
+		ctx.lineTo(c + inner * 0.38, c);
+		ctx.stroke();
+		return canvas;
+	}
+
+	const { fill, mark } = COLORS[kind];
 	ctx.beginPath();
 	ctx.arc(c, c, inner, 0, Math.PI * 2);
 	ctx.fillStyle = fill;
@@ -66,22 +99,8 @@ function drawBadge(kind: BadgeKind): HTMLCanvasElement {
 	// reads as a symbol on a disc rather than filling the badge edge to edge.
 	ctx.strokeStyle = mark;
 	ctx.fillStyle = mark;
-	ctx.lineCap = 'round';
 	ctx.lineWidth = inner * 0.26;
-	if (kind === 'recent' || kind === 'older' || kind === 'stale') {
-		// Clock: a thin dial and two hands (at 12 and 3), lighter than the ✕
-		// and ! so it reads as information next to them, not as a warning.
-		ctx.lineWidth = inner * 0.16;
-		ctx.beginPath();
-		ctx.arc(c, c, inner * 0.62, 0, Math.PI * 2);
-		ctx.stroke();
-		ctx.lineWidth = inner * 0.18;
-		ctx.beginPath();
-		ctx.moveTo(c, c - inner * 0.38);
-		ctx.lineTo(c, c);
-		ctx.lineTo(c + inner * 0.28, c);
-		ctx.stroke();
-	} else if (kind === 'outOfService') {
+	if (kind === 'outOfService') {
 		const d = inner * 0.3;
 		ctx.beginPath();
 		ctx.moveTo(c - d, c - d);

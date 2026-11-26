@@ -34,7 +34,7 @@ describe('surveyAge', () => {
 	it('has no age without a valid past date', () => {
 		expect(surveyAge(undefined, today)).toBe('none');
 		expect(surveyAge({}, today)).toBe('none');
-		expect(at('2026-11-16')).toBe('none');
+		expect(at('2026-11-17')).toBe('none');
 		expect(at('2026-02-29')).toBe('none');
 		expect(at('2026-11')).toBe('none');
 	});
@@ -45,6 +45,12 @@ describe('surveyAge', () => {
 		expect(surveyAge({ 'survey:date': '2023-03-01' }, leapDay)).toBe('recent');
 		expect(surveyAge({ 'survey:date': '2022-02-28' }, leapDay)).toBe('older');
 		expect(surveyAge({ 'survey:date': '2022-02-27' }, leapDay)).toBe('stale');
+	});
+
+	it('accepts one day ahead for mappers in later time zones', () => {
+		expect(at('2026-11-16')).toBe('recent');
+		expect(surveyAge({ 'survey:date': '2027-01-01' }, new Date(2026, 11, 31))).toBe('recent');
+		expect(surveyAge({ 'survey:date': '2027-01-02' }, new Date(2026, 11, 31))).toBe('none');
 	});
 
 	it('crosses year boundaries', () => {

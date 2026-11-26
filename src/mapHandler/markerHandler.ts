@@ -242,13 +242,16 @@ let liveRefreshInFlight = false;
  * leave the marker at its old coordinates until the next pan. Rounded to ~1 cm
  * so float noise can't force a pointless re-render.
  */
-function renderSignature(element: OverPassElement): string {
+function renderSignature(element: OverPassElement, surveyDay: Date | null): string {
 	const lat = (element.lat ?? element.center?.lat ?? 0).toFixed(7);
 	const lng = (element.lon ?? element.center?.lon ?? 0).toFixed(7);
 	// The status and survey badges are part of it: a live edit that only flips
 	// `operational_status` or sets a new `survey:date` changes a badge, so it
-	// must count as a change (issues #118, #120).
-	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${sourceStatus(element.tags)}:${surveyBadge(element.tags)}:${lat},${lng}`;
+	// must count as a change (issues #118, #120). The survey badge only while
+	// it is shown (`surveyDay` null otherwise), so a date edit alone does not
+	// redraw an unchanged map.
+	const survey = surveyDay ? surveyBadge(element.tags, surveyDay) : '';
+	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${sourceStatus(element.tags)}:${survey}:${lat},${lng}`;
 }
 
 /** True when every given tile was asked of Overpass within the live TTL. */
@@ -309,8 +312,10 @@ async function refreshFromLiveSource(mapBounds: GeoBounds): Promise<void> {
 		// case it just confirms the extract — bumping the cache version regardless
 		// would then cost a full re-read, GeoJSON rebuild and supercluster
 		// re-index for a frame identical to the one already on screen.
-		const rendered = new Set((await getMapNodesForView(queryBounds)).map(renderSignature));
-		const changed = liveElements.some((element) => !rendered.has(renderSignature(element)));
+		const surveyDay = useSettingsStore().showSurveyAge ? new Date() : null;
+		const signature = (element: OverPassElement) => renderSignature(element, surveyDay);
+		const rendered = new Set((await getMapNodesForView(queryBounds)).map(signature));
+		const changed = liveElements.some((element) => !rendered.has(signature(element)));
 
 		// Upsert only. storeMapNodes keys by ref and overwrites, so anything
 		// Overpass knows about more recently than the extract wins.

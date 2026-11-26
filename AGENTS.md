@@ -91,6 +91,7 @@ src/
 | `screenDetection.ts` | Mobile/desktop breakpoint detection (768px) |
 | `screenOrientation.ts` | Device orientation monitoring via Capacitor |
 | `settings.ts` | Loads/saves persistent settings via Capacitor Preferences (incl. the one-time hose routing migration write-back) |
+| `surveyDay.ts` | Reactive local "today" (`surveyToday`) for the survey-age badges, shared by the map and the nearby list; moves on at midnight and when the app returns to the foreground on a new day (`trackSurveyDay`, ref-counted) |
 | `systemColorScheme.ts` | Single source of truth for the OS `prefers-color-scheme` preference; re-polls on every foreground transition because Android's WebView drops the `change` event while backgrounded |
 | `whatsNew.ts` | Loads `whats-new.json`, tracks last-seen app version, drives the What's New modal |
 
@@ -116,7 +117,7 @@ src/
 | `routeDetails.ts` | The route badge on the map (`ca. 156 m · 8 B`, tone by warning), the details view model (rows, chips, coloured stretches with grade and direction, legend) for the selected route and the pump line, the phone sheet section's header (`routeSummary`, `headerChip`, `stretchSummary`), expanded state and sheet growth (`sectionStateAfter`, `sheetGrowTarget`), the pump panel's chips and which stay outside the section (`pumpLineChips`, `splitCoverageChips`), and the nearby row expansion (`rowExpansionAfter` with the select, arrow-toggle and stretch actions, `rowRouteState`) |
 | `routeProfile.ts` | Steep (>25 %/>50 %, grade over deck heights on bridges) and off-road runs of a route, slope "not recommended" triggers, the 3D length (`length3d`) that is the reported metres, the 6 m road proximity test (`isNearAnyRoad`) |
 | `operationalStatus.ts` | Whether a water source can be used (issue #118): `sourceStatus` (`ok`/`caution`/`outOfService` from `disused:emergency` or `operational_status`), `emergencyOf` (the type whether in service or disused: use it for every type check), `splitLifecycle`/`applyLifecycle` (edit form ↔ the wiki's `disused:emergency` tagging) |
-| `surveyAge.ts` | How long ago a water source was last checked on site (issue #120): the newer of `survey:date`/`check_date` bucketed `recent` < 12 months, `older` 12–24, `stale` > 24, `none` (no badge); `surveyBadge` limits it to water sources. A mapper's on-site visit, not a function test |
+| `surveyAge.ts` | How long ago a water source was last checked on site (issue #120): the newer of `survey:date`/`check_date` bucketed `recent` < 12 months, `older` 12–24, `stale` > 24, `none` (no badge; one day ahead counts as today for later time zones); `surveyBadge` limits it to water sources. A mapper's on-site visit, not a function test |
 | `markerRevalidation.ts` | Pure rules for folding a marker's live OSM version into its cached row (`mergeFreshElement`: tags always, node position, areas keep center/outline; `sameTags`) |
 | `osmElement.ts` | Node vs. area (way/relation) helpers for editing: cache shape, fire-pond flag/unflag, changeset wording |
 | `tileMath.ts` | Minimal Web-Mercator slippy-tile helpers used by the tile-freshness registry |
@@ -130,7 +131,7 @@ src/
 | `costGrid.ts` | Pure rasteriser of the `optimized` grid: scanline polygon fill and supercover lines, drawn in the cost model's order (landuse, water, buildings, walls, roads, bridges); on grids finer than 8 m ways are drawn 8 m wide over open ground and landuse; `routableRoads` drops what `classifyRoad` excludes |
 | `cellHeap.ts` | Typed-array binary min-heap (cost, cell) used by the grid searches |
 | `markerHandler.ts` | Creates MapLibre markers with type-specific icons, manages cache |
-| `statusBadges.ts` | Canvas-drawn badges for the map layer, the nearby list and the filter popover: status (red ✕ out of service, amber ! caution, top-right) and the survey-age clock (green/amber/red; top-right, or top-left beside a status badge) |
+| `statusBadges.ts` | Canvas-drawn badges for the map layer, the nearby list and the filter popover: status (filled: red ✕ out of service, amber ! caution, top-right) and the survey-age clock (outlined: green/amber/red rim and hands; top-right, or top-left beside a status badge) |
 | `markerImageHandler.ts` | Fetches marker photos from Wikimedia Commons and Panoramax |
 | `nearbyRouting.ts` | Main-thread facade of hose routing (nearby list, marker path, pump line): runs the solve in the routing worker, fetching tile bytes cache-first and transferring them; falls back to the same solve on the main thread when no worker starts; a request `channel` lets a newer request supersede (cancel) the running one (`RoutingCancelledError`) |
 | `hoseRoutingCore.ts` | The hose routing solve (pure, I/O injected via `configureRoutingIO`; runs in the worker and on the main thread): `RoutingOptions.mode` `optimized` (default) or `roads`, adaptive cell size (`chooseCellSize`: 4/6 m single paths, 8 m list, 400k cell cap), returns a `HoseRoute` (one length, 3D over the DEM profile, steep/off-road runs, warnings, surfaced fallbacks incl. thin building data, coverage) |

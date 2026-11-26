@@ -160,6 +160,7 @@ import {
 	type BadgeStatus
 } from '@/mapHandler/statusBadges';
 import { SURVEY_AGE_BADGES } from '@/helper/surveyAge';
+import { surveyToday, trackSurveyDay } from '@/composable/surveyDay';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
@@ -2142,20 +2143,11 @@ function zoomOut() {
 	rootMap?.zoomOut();
 }
 
-// Survey badges are aged against "today" when the markers are drawn. A day
-// rollover only matters when the app comes back to the foreground on a new
-// day (no polling timer): then the markers are drawn again.
-let surveyAgeDay = new Date().toDateString();
-function refreshSurveyAgeOnNewDay() {
-	if (document.hidden) return;
-	const today = new Date().toDateString();
-	if (today === surveyAgeDay) return;
-	surveyAgeDay = today;
-	if (mapReady && showSurveyAge.value) void handleMapMovement();
-}
+// Survey badges are aged against "today" when the markers are drawn; on a new
+// day (midnight, or back in the foreground) they are drawn again.
+const stopSurveyDay = trackSurveyDay();
 
 onMounted(async () => {
-	document.addEventListener('visibilitychange', refreshSurveyAgeOnNewDay);
 	await nextTick();
 	await initMap();
 
@@ -2222,13 +2214,14 @@ onMounted(async () => {
 		{ deep: true }
 	);
 
-	watch(showSurveyAge, () => {
-		if (mapReady) handleMapMovement();
+	// Toggling redraws either way; a new day only matters while badges show.
+	watch([showSurveyAge, surveyToday], ([on], [wasOn]) => {
+		if (mapReady && (on || wasOn)) handleMapMovement();
 	});
 });
 
 onUnmounted(() => {
-	document.removeEventListener('visibilitychange', refreshSurveyAgeOnNewDay);
+	stopSurveyDay();
 	stopRoutingDataWatch();
 	stopWatchingLocation();
 	if (rootMap) {

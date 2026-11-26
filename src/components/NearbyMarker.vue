@@ -12,6 +12,7 @@ import {
 import { sourceStatus } from '@/helper/operationalStatus';
 import { statusBadgeDataUrl, surveyBadgeDataUrl } from '@/mapHandler/statusBadges';
 import { surveyBadge } from '@/helper/surveyAge';
+import { surveyToday } from '@/composable/surveyDay';
 import { useSettingsStore } from '@/store/settingsStore';
 import { chevronDown } from 'ionicons/icons';
 
@@ -56,7 +57,8 @@ const getDistanceText = (distance: number) => {
 };
 
 const formattedList = computed(() => {
-	const today = new Date();
+	// Reactive day: the badges turn over at midnight together with the map's.
+	const today = surveyToday.value;
 	return list.value.map((nearbyMarker) => {
 		// Prefer the routed length: that is the length the hoses actually have
 		// to cover (and what the B-tube count is for) and what the map label shows.
