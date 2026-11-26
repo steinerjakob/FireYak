@@ -235,6 +235,13 @@
 			"fireStation": "Fire Station",
 			"outOfService": "Out of Service"
 		},
+		"surveyAge": {
+			"toggle": "Last checked on site",
+			"recent": "Less than 12 months ago",
+			"older": "12 to 24 months ago",
+			"stale": "More than 24 months ago",
+			"note": "From the survey date in OpenStreetMap: when someone last saw the source on site, not a function test."
+		},
 		"legend": {
 			"title": "Hydrant types",
 			"pillarHydrant": "Pillar Hydrant",

@@ -1,6 +1,11 @@
 {
 	"unreleased": [
 		{
+			"type": "feature",
+			"en": "Optional clock badges show how long ago a water source was last checked on site; turn them on in the map layers menu.",
+			"de": "Optionale Uhr-Symbole zeigen, wann eine Wasserentnahmestelle zuletzt vor Ort geprüft wurde – einschaltbar im Kartenlayer-Menü."
+		},
+		{
 			"type": "fix",
 			"en": "On larger screens an open side panel no longer covers the search bar, and the cross-country hint now appears at the bottom.",
 			"de": "Auf großen Bildschirmen verdeckt ein offenes Seitenpanel die Suchleiste nicht mehr, und der Querfeldein-Hinweis erscheint jetzt unten."

@@ -154,9 +154,12 @@ import { useNetworkStatus } from '@/composable/networkStatus';
 import {
 	STATUS_BADGE_IMAGE,
 	STATUS_BADGE_PIXEL_RATIO,
+	SURVEY_BADGE_IMAGE,
 	statusBadgeImageData,
+	surveyBadgeImageData,
 	type BadgeStatus
 } from '@/mapHandler/statusBadges';
+import { SURVEY_AGE_BADGES } from '@/helper/surveyAge';
 import { useRoute, useRouter } from 'vue-router';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useDarkMode } from '@/composable/darkModeDetection';
@@ -233,6 +236,7 @@ const DISABLE_CLUSTERING_ZOOM = 14;
 const CLUSTER_RADIUS = 50;
 const MARKER_SOURCE_ID = 'markers';
 const MARKER_STATUS_BADGE_LAYER = 'marker-status-badge';
+const MARKER_SURVEY_BADGE_LAYER = 'marker-survey-badge';
 const SELECTED_PATH_SOURCE = 'selected-path';
 // Route runs (on-road, off-road dashed, steep ticks) share this prefix.
 const SELECTED_PATH_LAYER_PREFIX = 'selected-path';
@@ -269,7 +273,8 @@ const pumpCalculation = usePumpCalculation();
 const nearbyWaterSource = useNearbyWaterSource();
 const defaultStore = useDefaultStore();
 const settingsStore = useSettingsStore();
-const { showZoomButtons, mapLayer, terrain3d, markerFilters } = storeToRefs(settingsStore);
+const { showZoomButtons, mapLayer, terrain3d, markerFilters, showSurveyAge } =
+	storeToRefs(settingsStore);
 const { t, locale } = useI18n();
 
 const { isMobile } = useScreenDetection();
@@ -1543,6 +1548,12 @@ async function loadMarkerImages(map: maplibregl.Map) {
 			pixelRatio: STATUS_BADGE_PIXEL_RATIO
 		});
 	}
+	// Survey-age clocks (issue #120), same canvas pipeline.
+	for (const age of SURVEY_AGE_BADGES) {
+		const name = SURVEY_BADGE_IMAGE[age];
+		if (map.hasImage(name)) continue;
+		map.addImage(name, surveyBadgeImageData(age), { pixelRatio: STATUS_BADGE_PIXEL_RATIO });
+	}
 }
 
 function addMapLayers(map: maplibregl.Map) {
@@ -1661,6 +1672,39 @@ function addMapLayers(map: maplibregl.Map) {
 				STATUS_BADGE_IMAGE.caution
 			],
 			'icon-offset': [11, -11],
+			'icon-allow-overlap': true,
+			'icon-ignore-placement': true
+		}
+	});
+
+	// Survey-age clock (issue #120): top-right like the status badge, or
+	// top-left when the status badge already takes the top-right corner. The
+	// `survey` property is only set while the setting is on.
+	map.addLayer({
+		id: MARKER_SURVEY_BADGE_LAYER,
+		type: 'symbol',
+		source: MARKER_SOURCE_ID,
+		filter: [
+			'all',
+			['!', ['has', 'point_count']],
+			['in', ['get', 'survey'], ['literal', [...SURVEY_AGE_BADGES]]]
+		],
+		layout: {
+			'icon-image': [
+				'match',
+				['get', 'survey'],
+				'recent',
+				SURVEY_BADGE_IMAGE.recent,
+				'older',
+				SURVEY_BADGE_IMAGE.older,
+				SURVEY_BADGE_IMAGE.stale
+			],
+			'icon-offset': [
+				'case',
+				['in', ['get', 'status'], ['literal', ['outOfService', 'caution']]],
+				['literal', [-11, -11]],
+				['literal', [11, -11]]
+			],
 			'icon-allow-overlap': true,
 			'icon-ignore-placement': true
 		}
@@ -1824,7 +1868,12 @@ function setupMapEventListeners(map: maplibregl.Map) {
 	// General map click handler
 	map.on('click', async (e) => {
 		// Check if click was on a marker or cluster
-		const interactiveLayers = ['clusters', 'unclustered-point', MARKER_STATUS_BADGE_LAYER];
+		const interactiveLayers = [
+			'clusters',
+			'unclustered-point',
+			MARKER_STATUS_BADGE_LAYER,
+			MARKER_SURVEY_BADGE_LAYER
+		];
 		const features = map.queryRenderedFeatures(e.point, { layers: interactiveLayers });
 
 		if (features.length > 0) {
@@ -1927,7 +1976,7 @@ function setupMapEventListeners(map: maplibregl.Map) {
 			map.getCanvas().style.cursor = '';
 		});
 	}
-	for (const layer of ['unclustered-point', MARKER_STATUS_BADGE_LAYER]) {
+	for (const layer of ['unclustered-point', MARKER_STATUS_BADGE_LAYER, MARKER_SURVEY_BADGE_LAYER]) {
 		map.on('mouseenter', layer, () => {
 			map.getCanvas().style.cursor = 'pointer';
 		});
@@ -2093,7 +2142,20 @@ function zoomOut() {
 	rootMap?.zoomOut();
 }
 
+// Survey badges are aged against "today" when the markers are drawn. A day
+// rollover only matters when the app comes back to the foreground on a new
+// day (no polling timer): then the markers are drawn again.
+let surveyAgeDay = new Date().toDateString();
+function refreshSurveyAgeOnNewDay() {
+	if (document.hidden) return;
+	const today = new Date().toDateString();
+	if (today === surveyAgeDay) return;
+	surveyAgeDay = today;
+	if (mapReady && showSurveyAge.value) void handleMapMovement();
+}
+
 onMounted(async () => {
+	document.addEventListener('visibilitychange', refreshSurveyAgeOnNewDay);
 	await nextTick();
 	await initMap();
 
@@ -2159,9 +2221,14 @@ onMounted(async () => {
 		},
 		{ deep: true }
 	);
+
+	watch(showSurveyAge, () => {
+		if (mapReady) handleMapMovement();
+	});
 });
 
 onUnmounted(() => {
+	document.removeEventListener('visibilitychange', refreshSurveyAgeOnNewDay);
 	stopRoutingDataWatch();
 	stopWatchingLocation();
 	if (rootMap) {
