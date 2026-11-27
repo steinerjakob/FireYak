@@ -59,6 +59,8 @@ export const useMapMarkerStore = defineStore('marker', () => {
 			try {
 				// Try database first
 				let node = await getMapNodeById(ref);
+				// An older version cached any element a shared link pointed at.
+				if (node && !isMarkerTags(node.tags ?? {})) node = null;
 				let live = false;
 
 				// If not in database, fetch from API
@@ -78,7 +80,11 @@ export const useMapMarkerStore = defineStore('marker', () => {
 						? ((await fetchElementFromOsmApi(parsed.type, parsed.id)) ??
 							(await fetchElementById(parsed.type, parsed.id)))
 						: null;
-					if (fetched) {
+					// Only FireYak's own types are markers (issue #132): a link to any
+					// other OSM element (say a defibrillator, `emergency=defibrillator`)
+					// would otherwise open as a hydrant, the icon fallback, and land
+					// in the marker cache, which feeds the map.
+					if (fetched && isMarkerTags(fetched.tags ?? {})) {
 						// Store in database for future use — the element is valid data
 						// regardless of whether it is the one that was asked for.
 						await storeMapNodes([fetched]);

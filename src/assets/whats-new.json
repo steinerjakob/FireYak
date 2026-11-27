@@ -1,6 +1,11 @@
 {
 	"unreleased": [
 		{
+			"type": "fix",
+			"en": "Links to things that aren't water sources, like defibrillators, no longer open as a fire hydrant.",
+			"de": "Links auf Objekte, die keine Wasserentnahmestellen sind, etwa Defibrillatoren, öffnen sich nicht mehr als Hydrant."
+		},
+		{
 			"type": "feature",
 			"en": "Optional clock badges show how long ago a water source was last checked on site; turn them on in the map layers menu.",
 			"de": "Optionale Uhr-Symbole zeigen, wann eine Entnahmestelle zuletzt vor Ort geprüft wurde (Kartenlayer-Menü)."

@@ -134,7 +134,7 @@
 			"loading": "Loading marker information...",
 			"dataUpdated": "Data updated {time}",
 			"photosOfflineHint": "Photos are unavailable offline.",
-			"notFound": "This water source could not be loaded. It may have been removed from OpenStreetMap, or the connection failed — try again later."
+			"notFound": "This water source could not be loaded. It may have been removed from OpenStreetMap, the link does not point to a water source, or the connection failed — try again later."
 		},
 		"images": {
 			"alt": "Water source photo",
