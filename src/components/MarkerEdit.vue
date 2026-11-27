@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
 	IonButton,
+	IonButtons,
 	IonIcon,
 	IonItem,
 	IonLabel,
@@ -18,7 +19,7 @@ import {
 	IonChip
 } from '@ionic/vue';
 import { saveOutline, closeOutline, logInOutline, waterOutline } from 'ionicons/icons';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
@@ -44,8 +45,15 @@ const localToday = (): string => {
 	return `${year}-${month}-${day}`;
 };
 
-const setSurveyDateToday = () => {
-	markerEditStore.editableTags['survey:date'] = localToday();
+const surveyDatePicker = ref<InstanceType<typeof IonDatetime> | null>(null);
+
+const setSurveyDateToday = async () => {
+	const picker = surveyDatePicker.value?.$el as HTMLIonDatetimeElement | undefined;
+	if (!picker) return;
+	const today = localToday();
+	picker.max = today;
+	await picker.reset(today);
+	await picker.confirm(true);
 };
 
 const hydrantPositions = ['sidewalk', 'lane', 'parking_lot', 'green', 'street'];
@@ -874,6 +882,7 @@ const login = () => {
 				<ion-modal :keep-contents-mounted="true">
 					<ion-datetime
 						id="survey-date"
+						ref="surveyDatePicker"
 						presentation="date"
 						:value="markerEditStore.editableTags['survey:date']"
 						@ionChange="
@@ -881,16 +890,21 @@ const login = () => {
 								(markerEditStore.editableTags['survey:date'] = e.detail.value?.split('T')[0])
 						"
 						:max="localToday()"
-					></ion-datetime>
+					>
+						<ion-buttons slot="buttons">
+							<ion-button @click="setSurveyDateToday">{{
+								t('markerEdit.buttons.today')
+							}}</ion-button>
+							<ion-button @click="surveyDatePicker?.$el.cancel(true)">{{
+								t('markerEdit.buttons.cancel')
+							}}</ion-button>
+							<ion-button @click="surveyDatePicker?.$el.confirm(true)">{{
+								t('markerEdit.buttons.done')
+							}}</ion-button>
+						</ion-buttons>
+					</ion-datetime>
 				</ion-modal>
 			</ion-item>
-			<div class="suggestion-chips">
-				<ion-chip
-					:outline="markerEditStore.editableTags['survey:date'] !== localToday()"
-					@click="setSurveyDateToday"
-					>{{ t('markerEdit.buttons.today') }}</ion-chip
-				>
-			</div>
 		</ion-item-group>
 
 		<!-- Unknown / Other Tags -->

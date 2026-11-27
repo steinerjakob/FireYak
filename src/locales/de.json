@@ -285,6 +285,7 @@
 		},
 		"buttons": {
 			"today": "Heute",
+			"done": "OK",
 			"save": "In OSM speichern",
 			"cancel": "Abbrechen",
 			"login": "In OSM einloggen",
