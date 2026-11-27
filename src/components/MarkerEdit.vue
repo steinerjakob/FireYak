@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
 	IonButton,
+	IonButtons,
 	IonIcon,
 	IonItem,
 	IonLabel,
@@ -18,7 +19,7 @@ import {
 	IonChip
 } from '@ionic/vue';
 import { saveOutline, closeOutline, logInOutline, waterOutline } from 'ionicons/icons';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { useOsmAuthStore } from '@/store/osmAuthStore';
@@ -35,6 +36,26 @@ const osmAuthStore = useOsmAuthStore();
 const { t, te } = useI18n();
 
 const hydrantTypes = ['pillar', 'underground', 'wall', 'pipe' /*, 'pond'*/];
+// Keep the date in the device's local timezone (not UTC).
+const localToday = (): string => {
+	const date = new Date();
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+};
+
+const surveyDatePicker = ref<InstanceType<typeof IonDatetime> | null>(null);
+
+const setSurveyDateToday = async () => {
+	const picker = surveyDatePicker.value?.$el as HTMLIonDatetimeElement | undefined;
+	if (!picker) return;
+	const today = localToday();
+	picker.max = today;
+	await picker.reset(today);
+	await picker.confirm(true);
+};
+
 const hydrantPositions = ['sidewalk', 'lane', 'parking_lot', 'green', 'street'];
 const waterSources = [
 	'main',
@@ -861,14 +882,27 @@ const login = () => {
 				<ion-modal :keep-contents-mounted="true">
 					<ion-datetime
 						id="survey-date"
+						ref="surveyDatePicker"
 						presentation="date"
 						:value="markerEditStore.editableTags['survey:date']"
 						@ionChange="
 							(e: CustomEvent) =>
 								(markerEditStore.editableTags['survey:date'] = e.detail.value?.split('T')[0])
 						"
-						:max="new Date().toISOString().split('T')[0]"
-					></ion-datetime>
+						:max="localToday()"
+					>
+						<ion-buttons slot="buttons">
+							<ion-button @click="setSurveyDateToday">{{
+								t('markerEdit.buttons.today')
+							}}</ion-button>
+							<ion-button @click="surveyDatePicker?.$el.cancel(true)">{{
+								t('markerEdit.buttons.cancel')
+							}}</ion-button>
+							<ion-button @click="surveyDatePicker?.$el.confirm(true)">{{
+								t('markerEdit.buttons.done')
+							}}</ion-button>
+						</ion-buttons>
+					</ion-datetime>
 				</ion-modal>
 			</ion-item>
 		</ion-item-group>
