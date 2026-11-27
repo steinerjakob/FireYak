@@ -33,7 +33,7 @@ import { parseHydrantPressure } from '@/helper/hosePressure';
 import {
 	accessTargetFor,
 	accessTargetPoint,
-	isMappedSuctionPoint,
+	isUsableSuctionPoint,
 	isPondArea,
 	knownOutline,
 	markerPoint,
@@ -44,6 +44,9 @@ import {
 import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
+import { emergencyOf, sourceStatus } from '@/helper/operationalStatus';
+import { surveyBadge } from '@/helper/surveyAge';
+import { isMarkerTags } from '@/helper/osmElement';
 
 // Map icon keys to URLs for use in MapLibre image loading. Suction points and
 // suction hydrants use the blue/white `pump` icon on the map; `suctionpoint.png`
@@ -65,7 +68,8 @@ export const markerIconUrls: Record<string, string> = {
 // way- and relation-typed hydrants, ponds and tanks too, which would
 // otherwise all render (and filter) as fire stations.
 function getIconKeyForNode(element: OverPassElement): string {
-	const emergency = element.tags?.emergency;
+	// A disused (out-of-service) source keeps its type's icon (issue #118).
+	const emergency = emergencyOf(element.tags);
 	switch (emergency) {
 		case 'fire_hydrant': {
 			// Fixed suction pipes are tagged as hydrants in OSM, but need
@@ -95,9 +99,13 @@ export function getIconUrlForNode(element: OverPassElement): string {
 	return markerIconUrls[getIconKeyForNode(element)];
 }
 
-/** Maps an OSM element to its filter category key. Tags only — see comment above. */
-function categoryForNode(element: OverPassElement): MarkerFilterKey {
-	const emergency = element.tags?.emergency;
+/**
+ * Maps an OSM element to its filter category key. Tags only — see comment above.
+ * `null` for anything FireYak doesn't show (say a defibrillator an older version
+ * cached from a shared link, issue #132), so it never renders as a hydrant.
+ */
+function categoryForNode(element: OverPassElement): MarkerFilterKey | null {
+	const emergency = emergencyOf(element.tags);
 	switch (emergency) {
 		case 'fire_hydrant':
 			// Suction pipes share the suction-point symbol, so they belong to the
@@ -113,7 +121,7 @@ function categoryForNode(element: OverPassElement): MarkerFilterKey {
 			return 'fireWaterPond';
 	}
 	if (element.tags?.amenity === 'fire_station') return 'fireStation';
-	return 'fireHydrant';
+	return null;
 }
 
 // --- Freshness registry (§1.4) -------------------------------------------
@@ -239,10 +247,16 @@ let liveRefreshInFlight = false;
  * leave the marker at its old coordinates until the next pan. Rounded to ~1 cm
  * so float noise can't force a pointless re-render.
  */
-function renderSignature(element: OverPassElement): string {
+function renderSignature(element: OverPassElement, surveyDay: Date | null): string {
 	const lat = (element.lat ?? element.center?.lat ?? 0).toFixed(7);
 	const lng = (element.lon ?? element.center?.lon ?? 0).toFixed(7);
-	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${lat},${lng}`;
+	// The status and survey badges are part of it: a live edit that only flips
+	// `operational_status` or sets a new `survey:date` changes a badge, so it
+	// must count as a change (issues #118, #120). The survey badge only while
+	// it is shown (`surveyDay` null otherwise), so a date edit alone does not
+	// redraw an unchanged map.
+	const survey = surveyDay ? surveyBadge(element.tags, surveyDay) : '';
+	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${sourceStatus(element.tags)}:${survey}:${lat},${lng}`;
 }
 
 /** True when every given tile was asked of Overpass within the live TTL. */
@@ -303,8 +317,10 @@ async function refreshFromLiveSource(mapBounds: GeoBounds): Promise<void> {
 		// case it just confirms the extract — bumping the cache version regardless
 		// would then cost a full re-read, GeoJSON rebuild and supercluster
 		// re-index for a frame identical to the one already on screen.
-		const rendered = new Set((await getMapNodesForView(queryBounds)).map(renderSignature));
-		const changed = liveElements.some((element) => !rendered.has(renderSignature(element)));
+		const surveyDay = useSettingsStore().showSurveyAge ? new Date() : null;
+		const signature = (element: OverPassElement) => renderSignature(element, surveyDay);
+		const rendered = new Set((await getMapNodesForView(queryBounds)).map(signature));
+		const changed = liveElements.some((element) => !rendered.has(signature(element)));
 
 		// Upsert only. storeMapNodes keys by ref and overwrites, so anything
 		// Overpass knows about more recently than the extract wins.
@@ -547,9 +563,14 @@ export async function getMarkersForView(
 		void refreshFromLiveSource(mapBounds);
 
 		// Apply category filters — call inside the function so Pinia is active.
-		const { markerFilters } = useSettingsStore();
+		const { markerFilters, showSurveyAge } = useSettingsStore();
+		// One "today" for the whole batch, so every badge is aged the same.
+		const today = new Date();
 		for (const element of mapElements) {
-			if (!markerFilters[categoryForNode(element)]) continue;
+			const category = categoryForNode(element);
+			if (!category || !markerFilters[category]) continue;
+			const status = sourceStatus(element.tags);
+			if (status === 'outOfService' && !markerFilters.outOfService) continue;
 			const lat = (element?.lat || element.center?.lat) as number;
 			const lng = (element.lon || element.center?.lon) as number;
 			features.push({
@@ -560,7 +581,10 @@ export async function getMarkersForView(
 				},
 				properties: {
 					ref: toRef(element.type, element.id),
-					icon: getIconKeyForNode(element)
+					icon: getIconKeyForNode(element),
+					status,
+					// Survey clock badge (issue #120), only when the setting is on.
+					...(showSurveyAge ? { survey: surveyBadge(element.tags, today) } : {})
 				}
 			});
 		}
@@ -697,7 +721,9 @@ export function nearbyOutlinesPending(): boolean {
 
 export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise<NearbyMarker[]> {
 	// Everything else is found by its position, exactly as before.
-	const pointCandidates = (await getNearbyMapNodes(latLng, radius)).filter((e) => !isPondArea(e));
+	const pointCandidates = (await getNearbyMapNodes(latLng, radius)).filter(
+		(e) => !isPondArea(e) && isMarkerTags(e.tags ?? {})
+	);
 
 	// Pond areas: a wider window of centers, kept when their outline reaches
 	// the radius (or, without an outline, when it could still be fetched).
@@ -723,7 +749,7 @@ export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise
 		pondCandidates.map((element) => routingOutline(element).catch(() => null))
 	);
 
-	const suctionPoints = wideCandidates.filter(isMappedSuctionPoint);
+	const suctionPoints = wideCandidates.filter(isUsableSuctionPoint);
 	const elements: OverPassElement[] = [];
 	const targets: AccessTarget[] = [];
 	const candidates = [...pointCandidates, ...pondCandidates];

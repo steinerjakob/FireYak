@@ -221,6 +221,10 @@ function buildAreaQuery(mapBounds: GeoBounds): string {
 	const statements = [
 		`node[emergency~"^(fire_hydrant|water_tank|suction_point)$"]${boundString};`,
 		`nwr[emergency=fire_water_pond]${boundString};`,
+		// Out-of-service sources, tagged with the lifecycle prefix as the wiki
+		// asks: shown faded with a badge rather than dropped (issue #118).
+		`node["disused:emergency"~"^(fire_hydrant|water_tank|suction_point)$"]${boundString};`,
+		`nwr["disused:emergency"=fire_water_pond]${boundString};`,
 		`way[amenity=fire_station]${boundString};`
 	];
 

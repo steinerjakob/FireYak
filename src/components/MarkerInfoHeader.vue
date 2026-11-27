@@ -14,7 +14,9 @@ import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 import { markerTitleKey } from '@/helper/markerTitle';
+import { emergencyOf } from '@/helper/operationalStatus';
 
 const markerStore = useMapMarkerStore();
 const markerEditStore = useMarkerEditStore();
@@ -23,7 +25,7 @@ const { t } = useI18n();
 const markerData = computed(() => markerStore.selectedMarker);
 const editAllowed = computed(() =>
 	['fire_hydrant', 'suction_point', 'water_tank', 'fire_water_pond'].includes(
-		markerData.value?.tags?.emergency || ''
+		emergencyOf(markerData.value?.tags) || ''
 	)
 );
 
@@ -75,11 +77,15 @@ const shareMarker = async () => {
 
 	try {
 		if (await Share.canShare()) {
-			await Share.share({
-				title: title,
-				text: t('markerInfo.share.text', { title }),
-				url: url
-			});
+			const text = t('markerInfo.share.text', { title });
+			if (Capacitor.getPlatform() === 'ios') {
+				// iOS hands text and url to the share sheet as separate items, and
+				// many targets (WhatsApp, Mail, …) keep only the text — so put the
+				// link into the message itself. Android already appends it natively.
+				await Share.share({ title, text: `${text} ${url}` });
+			} else {
+				await Share.share({ title, text, url });
+			}
 		} else {
 			// Fallback: copy to clipboard
 			await navigator.clipboard.writeText(url);

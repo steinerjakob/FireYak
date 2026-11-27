@@ -1,12 +1,26 @@
 <script setup lang="ts">
-import { IonButton, IonIcon, IonItem, IonLabel, IonList, IonNote } from '@ionic/vue';
-import { openOutline, createOutline, addCircleOutline } from 'ionicons/icons';
+import { IonButton, IonChip, IonIcon, IonItem, IonLabel, IonList, IonNote } from '@ionic/vue';
+import {
+	openOutline,
+	createOutline,
+	addCircleOutline,
+	banOutline,
+	constructOutline
+} from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMapMarkerStore } from '@/store/mapMarkerStore';
 import { useMarkerEditStore } from '@/store/markerEditStore';
 import { elementPosition } from '@/helper/osmElement';
 import { OSM_DATA_WEB_URL } from '@/services/osmConfig';
+import {
+	emergencyOf,
+	isDisused,
+	OPERATIONAL_STATUS_KEY,
+	OUT_OF_SERVICE_VALUE,
+	sourceStatus,
+	type SourceStatus
+} from '@/helper/operationalStatus';
 
 const markerStore = useMapMarkerStore();
 
@@ -15,7 +29,7 @@ const markerData = computed(() => markerStore.selectedMarker);
 const markerEditStore = useMarkerEditStore();
 
 /** Ponds get a quick action for their pumping spot (a suction point at the shore). */
-const isPond = computed(() => markerData.value?.tags?.emergency === 'fire_water_pond');
+const isPond = computed(() => emergencyOf(markerData.value?.tags) === 'fire_water_pond');
 
 const addPumpingSpot = () => {
 	const position = markerData.value ? elementPosition(markerData.value) : null;
@@ -60,6 +74,7 @@ const waterTankVolume = 'markerInfo.tags.volume';
 
 // Map of tag keys to translation keys
 const tagTranslationKeys: Record<string, string> = {
+	operational_status: 'markerInfo.tags.operationalStatus',
 	emergency: 'markerInfo.tags.emergencyType',
 	'fire_hydrant:type': 'markerInfo.tags.hydrantType',
 	'pillar:type': 'markerInfo.tags.pillarType',
@@ -97,6 +112,8 @@ const tagTranslationKeys: Record<string, string> = {
 // Tags that are relevant for fire brigades
 const relevantTags = [
 	//'emergency',
+	// First: whether the source can be used at all (issue #118).
+	'operational_status',
 	'fire_hydrant:type',
 	'pillar:type',
 	'fire_hydrant:diameter',
@@ -135,7 +152,7 @@ const translateValue = (key: string, value: string): string => {
 	// Check if this is a fire_hydrant field or water_source
 	if (
 		key.startsWith('fire_hydrant:') ||
-		['water_source', 'pillar:type', 'water', 'intermittent'].includes(key)
+		['water_source', 'pillar:type', 'water', 'intermittent', 'operational_status'].includes(key)
 	) {
 		const translationKey = `markerInfo.values.${key}.${value}`;
 		// Check if translation exists
@@ -161,18 +178,35 @@ const translateValue = (key: string, value: string): string => {
 const getFilteredTags = () => {
 	if (!markerData.value?.tags) return [];
 
-	return Object.entries(markerData.value.tags)
+	// A disused source (`disused:emergency`, the wiki's out-of-service tagging)
+	// shows the same status row as `operational_status=out_of_order` (issue #118).
+	const tags = isDisused(markerData.value.tags)
+		? { ...markerData.value.tags, operational_status: OUT_OF_SERVICE_VALUE }
+		: markerData.value.tags;
+
+	return Object.entries(tags)
 		.filter(([key]) => relevantTags.includes(key))
 		.map(([key, value]) => ({
 			key,
 			label: t(tagTranslationKeys[key] || key),
-			value: translateValue(key, value)
+			value: translateValue(key, value),
+			// The status row is shown as a coloured chip so it stands out (issue #118).
+			status:
+				key === OPERATIONAL_STATUS_KEY
+					? sourceStatus({ [OPERATIONAL_STATUS_KEY]: value })
+					: ('ok' as SourceStatus)
 		}))
 		.sort((a, b) => {
 			const aIndex = relevantTags.indexOf(a.key);
 			const bIndex = relevantTags.indexOf(b.key);
 			return aIndex - bIndex;
 		});
+};
+
+/** Chip colour and icon per status: warning for maintenance, danger for out of service. */
+const statusChip: Record<Exclude<SourceStatus, 'ok'>, { color: string; icon: string }> = {
+	caution: { color: 'warning', icon: constructOutline },
+	outOfService: { color: 'danger', icon: banOutline }
 };
 
 const getCoordinates = () => {
@@ -202,7 +236,16 @@ const openOsmEditUrl = () => {
 		<ion-item v-for="tag in getFilteredTags()" :key="tag.key" lines="none">
 			<ion-label>
 				<h3>{{ tag.label }}</h3>
-				<p>{{ tag.value }}</p>
+				<ion-chip
+					v-if="tag.status !== 'ok'"
+					:color="statusChip[tag.status].color"
+					class="status-chip"
+				>
+					<!-- Text in its own element: a lone icon is also :last-child and gets trailing-icon spacing -->
+					<ion-icon :icon="statusChip[tag.status].icon" />
+					<span>{{ tag.value }}</span>
+				</ion-chip>
+				<p v-else>{{ tag.value }}</p>
 			</ion-label>
 		</ion-item>
 
@@ -279,6 +322,22 @@ ion-label h3 {
 ion-label p {
 	font-size: 1rem !important;
 	margin-top: 0;
+}
+
+/* Filled in the warning / danger colour on every theme, so it never reads as a plain entry. */
+.status-chip {
+	--background: var(--ion-color-base);
+	--color: var(--ion-color-contrast);
+	background: var(--ion-color-base);
+	color: var(--ion-color-contrast);
+	border-color: var(--ion-color-base);
+	margin: 4px 0 0;
+	font-weight: 600;
+}
+
+.status-chip ion-icon {
+	color: var(--ion-color-contrast);
+	--color: var(--ion-color-contrast);
 }
 
 .loading-note {

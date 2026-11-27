@@ -17,7 +17,11 @@ export type MarkerFilterKey =
 	| 'waterTank'
 	| 'fireWaterPond'
 	| 'fireStation';
-export type MarkerFilters = Record<MarkerFilterKey, boolean>;
+/**
+ * Category toggles plus `outOfService`: whether sources tagged as out of order
+ * are shown at all (issue #118; on by default, they get a badge instead).
+ */
+export type MarkerFilters = Record<MarkerFilterKey | 'outOfService', boolean>;
 
 /** Resolves a theme setting against the current system preference. */
 const resolveIsDark = (theme: ThemeSetting) =>
@@ -49,7 +53,8 @@ const DEFAULT_MARKER_FILTERS: MarkerFilters = {
 	suctionPoint: true,
 	waterTank: true,
 	fireWaterPond: true,
-	fireStation: true
+	fireStation: true,
+	outOfService: true
 };
 
 export const useSettingsStore = defineStore('settings', {
@@ -71,6 +76,10 @@ export const useSettingsStore = defineStore('settings', {
 		// When true, a line from the user position to the selected marker is
 		// drawn on the map.
 		showPathToMarker: true,
+		// When true, water sources with a `survey:date`/`check_date` get a clock
+		// badge (green < 12 months, amber 12–24, red older; issue #120). Off by
+		// default: most sources have no date, and it serves data maintainers.
+		showSurveyAge: false,
 		osmAuthToken: '',
 		markerFilters: { ...DEFAULT_MARKER_FILTERS } as MarkerFilters
 	}),
@@ -105,6 +114,9 @@ export const useSettingsStore = defineStore('settings', {
 		},
 		setShowPathToMarker(enabled: boolean) {
 			this.showPathToMarker = enabled;
+		},
+		setShowSurveyAge(enabled: boolean) {
+			this.showSurveyAge = enabled;
 		},
 		setOsmAuthToken(token: string) {
 			this.osmAuthToken = token;

@@ -102,3 +102,18 @@ describe('one-time cross-country note', () => {
 		expect(useSettingsStore().crossCountryNoteSeen).toBe(true);
 	});
 });
+
+describe('loadSettings: survey-age badges (issue #120)', () => {
+	it('are off by default', async () => {
+		const store = await load({});
+		expect(store.showSurveyAge).toBe(false);
+	});
+
+	it('restore a saved choice and persist a toggle', async () => {
+		const store = await load({ show_survey_age: 'true' });
+		expect(store.showSurveyAge).toBe(true);
+		await useSettings().saveShowSurveyAge(false);
+		expect(store.showSurveyAge).toBe(false);
+		expect(prefs.get('show_survey_age')).toBe('false');
+	});
+});

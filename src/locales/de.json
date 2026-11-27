@@ -42,7 +42,8 @@
 			"flowRate": "Durchflussrate",
 			"awwaClass": "AWWA-Klasse",
 			"waterType": "Art des Gewässers",
-			"intermittent": "Trocknet zeitweise aus"
+			"intermittent": "Trocknet zeitweise aus",
+			"operationalStatus": "Betriebszustand"
 		},
 		"values": {
 			"fire_hydrant:type": {
@@ -110,6 +111,14 @@
 			"intermittent": {
 				"yes": "Ja",
 				"no": "Nein"
+			},
+			"operational_status": {
+				"operational": "In Betrieb",
+				"needs_maintenance": "Wartung nötig",
+				"out_of_order": "Außer Betrieb",
+				"broken": "Defekt",
+				"closed": "Gesperrt",
+				"restricted": "Eingeschränkt"
 			}
 		},
 		"navigation": {
@@ -125,7 +134,7 @@
 			"loading": "Lade Marker-Informationen...",
 			"dataUpdated": "Daten aktualisiert {time}",
 			"photosOfflineHint": "Fotos sind offline nicht verfügbar.",
-			"notFound": "Diese Wasserentnahmestelle konnte nicht geladen werden. Sie wurde vielleicht aus OpenStreetMap entfernt, oder die Verbindung ist fehlgeschlagen – versuche es später noch einmal."
+			"notFound": "Diese Wasserentnahmestelle konnte nicht geladen werden. Sie wurde vielleicht aus OpenStreetMap entfernt, der Link zeigt auf keine Wasserentnahmestelle, oder die Verbindung ist fehlgeschlagen – versuche es später noch einmal."
 		},
 		"images": {
 			"alt": "Foto der Wasserentnahmestelle",
@@ -223,7 +232,15 @@
 			"suctionPoint": "Saugstelle",
 			"waterTank": "Wassertank",
 			"fireWaterPond": "Löschwasserteich",
-			"fireStation": "Feuerwehrhaus"
+			"fireStation": "Feuerwehrhaus",
+			"outOfService": "Außer Betrieb"
+		},
+		"surveyAge": {
+			"toggle": "Zuletzt vor Ort geprüft",
+			"recent": "Vor weniger als 12 Monaten",
+			"older": "Vor 12 bis 24 Monaten",
+			"stale": "Vor mehr als 24 Monaten",
+			"note": "Laut Erfassungsdatum in OpenStreetMap: wann die Stelle zuletzt vor Ort gesehen wurde, keine Funktionsprüfung."
 		},
 		"legend": {
 			"title": "Hydrantentypen",
@@ -302,7 +319,8 @@
 			"pondArea": "Dieser Teich ist in OpenStreetMap als Wasserfläche eingezeichnet. Seine Form bleibt unverändert – nur die Angaben unten werden geändert.",
 			"waterType": "Um welche Art Gewässer es sich handelt. Teiche sind kleine stehende Gewässer, Speicherbecken und Becken sind künstlich angelegt.",
 			"intermittent": "Ob der Teich austrocknen kann, z. B. im Sommer. Wichtig, bevor man sich im Einsatz darauf verlässt.",
-			"naturalConflict": "Dieser Punkt ist als natural={value} getaggt. Ein Löschteich braucht natural=water – ändere es, wenn der Punkt wirklich der Teich ist."
+			"naturalConflict": "Dieser Punkt ist als natural={value} getaggt. Ein Löschteich braucht natural=water – ändere es, wenn der Punkt wirklich der Teich ist.",
+			"operationalStatus": "„Außer Betrieb“, wenn sie nicht nutzbar ist, „Wartung nötig“, wenn sie funktioniert, aber einen Mangel hat."
 		},
 		"messages": {
 			"saveSuccess": "Erfolgreich in OpenStreetMap gespeichert!",
@@ -595,5 +613,9 @@
 			"steep": "Steil: über 25 %",
 			"verySteep": "Sehr steil: über 50 % (Querstriche)"
 		}
+	},
+	"operationalStatus": {
+		"outOfService": "Außer Betrieb",
+		"caution": "Wartung nötig"
 	}
 }

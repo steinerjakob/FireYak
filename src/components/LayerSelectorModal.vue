@@ -10,6 +10,8 @@ import {
 	IonToggle
 } from '@ionic/vue';
 import { useI18n } from 'vue-i18n';
+import { statusBadgeDataUrl, surveyBadgeDataUrl } from '@/mapHandler/statusBadges';
+import { SURVEY_AGE_BADGES } from '@/helper/surveyAge';
 import { type MapLayerSetting, type MarkerFilters, useSettingsStore } from '@/store/settingsStore';
 import { storeToRefs } from 'pinia';
 import { useSettings } from '@/composable/settings';
@@ -27,8 +29,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const settingsStore = useSettingsStore();
-const { mapLayer, terrain3d, markerFilters } = storeToRefs(settingsStore);
-const { saveMapLayer, saveTerrain3d, saveMarkerFilters } = useSettings();
+const { mapLayer, terrain3d, markerFilters, showSurveyAge } = storeToRefs(settingsStore);
+const { saveMapLayer, saveTerrain3d, saveMarkerFilters, saveShowSurveyAge } = useSettings();
 
 const selectedLayer = ref<MapLayerSetting>(mapLayer.value);
 const terrainEnabled = ref(terrain3d.value);
@@ -54,6 +56,11 @@ async function onLayerChange(value: MapLayerSetting) {
 async function onTerrainToggle(enabled: boolean) {
 	terrainEnabled.value = enabled;
 	await saveTerrain3d(enabled);
+	emit('changed');
+}
+
+async function onSurveyAgeToggle(enabled: boolean) {
+	await saveShowSurveyAge(enabled);
 	emit('changed');
 }
 
@@ -136,6 +143,45 @@ const hydrantSubtypes: Array<{ icon: string; labelKey: string }> = [
 						</div>
 					</div>
 				</template>
+				<!-- Out-of-service sources: shown faded with a red badge by default (issue #118) -->
+				<ion-item>
+					<ion-toggle
+						:checked="localFilters.outOfService"
+						@ionChange="onFilterToggle('outOfService', $event.detail.checked)"
+					>
+						<div class="filter-label">
+							<img
+								:src="statusBadgeDataUrl('outOfService')"
+								class="filter-icon status-icon"
+								:alt="t('map.filters.outOfService')"
+							/>
+							<ion-label>{{ t('map.filters.outOfService') }}</ion-label>
+						</div>
+					</ion-toggle>
+				</ion-item>
+				<!-- Survey-age clock badges (issue #120): off by default -->
+				<ion-item>
+					<ion-toggle
+						:checked="showSurveyAge"
+						@ionChange="onSurveyAgeToggle($event.detail.checked)"
+					>
+						<div class="filter-label">
+							<img
+								:src="surveyBadgeDataUrl('recent')"
+								class="filter-icon status-icon"
+								:alt="t('map.surveyAge.toggle')"
+							/>
+							<ion-label>{{ t('map.surveyAge.toggle') }}</ion-label>
+						</div>
+					</ion-toggle>
+				</ion-item>
+				<div v-if="showSurveyAge" class="subtype-legend">
+					<div v-for="age in SURVEY_AGE_BADGES" :key="age" class="subtype-row">
+						<img :src="surveyBadgeDataUrl(age)" class="subtype-icon survey-icon" alt="" />
+						<span class="subtype-label">{{ t(`map.surveyAge.${age}`) }}</span>
+					</div>
+					<span class="subtype-label survey-note">{{ t('map.surveyAge.note') }}</span>
+				</div>
 			</ion-list>
 		</div>
 	</ion-popover>
@@ -231,5 +277,17 @@ ion-popover.layer-selector-popover ion-item {
 .subtype-label {
 	font-size: 13px;
 	color: var(--md-sys-on-surface-variant);
+}
+
+.survey-icon {
+	width: 16px;
+	height: 16px;
+	margin: 0 3px;
+}
+
+.survey-note {
+	display: block;
+	margin-top: 4px;
+	font-size: 12px;
 }
 </style>

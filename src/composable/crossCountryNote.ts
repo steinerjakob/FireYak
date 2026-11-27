@@ -22,7 +22,7 @@ export function useCrossCountryNote() {
 		const toast = await toastController.create({
 			message: t('route.crossCountryNote'),
 			duration: 10_000,
-			position: 'top',
+			position: 'bottom',
 			buttons: [{ text: t('route.ok'), role: 'cancel' }]
 		});
 		void toast.onDidDismiss().then(() => saveCrossCountryNoteSeen());

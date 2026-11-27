@@ -12,6 +12,7 @@ import { HttpRangeClient } from 'flatgeobuf/lib/mjs/http-reader';
 import { OverPassElement } from '@/mapHandler/overPassApi';
 import { GeoBounds } from '@/types/geo';
 import { OsmType } from '@/helper/osmRef';
+import { emergencyOf } from '@/helper/operationalStatus';
 
 const BASE = import.meta.env.VITE_DATA_BASE_URL ?? 'https://data.fireyak.org';
 export const FGB_URL = `${BASE}/water_sources.fgb`;
@@ -188,7 +189,7 @@ export function toOverPassElement(feature: GeoJSON.Feature): OverPassElement | n
 		// (fire stations, tanks) don't need it, and huge water bodies are left
 		// to the on-demand lookup so the marker cache stays small.
 		if (
-			tags['emergency'] === 'fire_water_pond' &&
+			emergencyOf(tags) === 'fire_water_pond' &&
 			positionCount(geometry) <= MAX_OUTLINE_POSITIONS
 		) {
 			element.outline = geometry;

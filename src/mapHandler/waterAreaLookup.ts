@@ -5,6 +5,7 @@ import {
 	WATER_AREA_NEAR_RADIUS_M,
 	type WaterAreaCandidate
 } from '@/mapHandler/overPassApi';
+import { emergencyOf } from '@/helper/operationalStatus';
 
 /**
  * Finds the OSM water areas at or next to a pin (plan §2.1), for marking an
@@ -85,7 +86,7 @@ const WATER_TAGS = (tags: Record<string, string>): boolean =>
 	tags['natural'] === 'water' || tags['landuse'] === 'reservoir' || tags['landuse'] === 'basin';
 /** Other `emergency=*` areas (e.g. tanks) are never offered; fire ponds stay for the duplicate guard. */
 const OFFERABLE = (tags: Record<string, string>): boolean =>
-	tags['emergency'] == null || tags['emergency'] === 'fire_water_pond';
+	emergencyOf(tags) == null || emergencyOf(tags) === 'fire_water_pond';
 
 interface ApiNode {
 	type: 'node';
