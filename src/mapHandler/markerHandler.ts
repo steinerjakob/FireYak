@@ -45,6 +45,7 @@ import { expandBounds, outlineBounds } from '@/helper/areaShore';
 import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
 import { emergencyOf, sourceStatus } from '@/helper/operationalStatus';
+import { surveyBadge } from '@/helper/surveyAge';
 
 // Map icon keys to URLs for use in MapLibre image loading. Suction points and
 // suction hydrants use the blue/white `pump` icon on the map; `suctionpoint.png`
@@ -241,12 +242,16 @@ let liveRefreshInFlight = false;
  * leave the marker at its old coordinates until the next pan. Rounded to ~1 cm
  * so float noise can't force a pointless re-render.
  */
-function renderSignature(element: OverPassElement): string {
+function renderSignature(element: OverPassElement, surveyDay: Date | null): string {
 	const lat = (element.lat ?? element.center?.lat ?? 0).toFixed(7);
 	const lng = (element.lon ?? element.center?.lon ?? 0).toFixed(7);
-	// The status is part of it: a live edit that only flips `operational_status`
-	// changes the badge, so it must count as a change (issue #118).
-	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${sourceStatus(element.tags)}:${lat},${lng}`;
+	// The status and survey badges are part of it: a live edit that only flips
+	// `operational_status` or sets a new `survey:date` changes a badge, so it
+	// must count as a change (issues #118, #120). The survey badge only while
+	// it is shown (`surveyDay` null otherwise), so a date edit alone does not
+	// redraw an unchanged map.
+	const survey = surveyDay ? surveyBadge(element.tags, surveyDay) : '';
+	return `${toRef(element.type, element.id)}:${getIconKeyForNode(element)}:${sourceStatus(element.tags)}:${survey}:${lat},${lng}`;
 }
 
 /** True when every given tile was asked of Overpass within the live TTL. */
@@ -307,8 +312,10 @@ async function refreshFromLiveSource(mapBounds: GeoBounds): Promise<void> {
 		// case it just confirms the extract — bumping the cache version regardless
 		// would then cost a full re-read, GeoJSON rebuild and supercluster
 		// re-index for a frame identical to the one already on screen.
-		const rendered = new Set((await getMapNodesForView(queryBounds)).map(renderSignature));
-		const changed = liveElements.some((element) => !rendered.has(renderSignature(element)));
+		const surveyDay = useSettingsStore().showSurveyAge ? new Date() : null;
+		const signature = (element: OverPassElement) => renderSignature(element, surveyDay);
+		const rendered = new Set((await getMapNodesForView(queryBounds)).map(signature));
+		const changed = liveElements.some((element) => !rendered.has(signature(element)));
 
 		// Upsert only. storeMapNodes keys by ref and overwrites, so anything
 		// Overpass knows about more recently than the extract wins.
@@ -551,7 +558,9 @@ export async function getMarkersForView(
 		void refreshFromLiveSource(mapBounds);
 
 		// Apply category filters — call inside the function so Pinia is active.
-		const { markerFilters } = useSettingsStore();
+		const { markerFilters, showSurveyAge } = useSettingsStore();
+		// One "today" for the whole batch, so every badge is aged the same.
+		const today = new Date();
 		for (const element of mapElements) {
 			if (!markerFilters[categoryForNode(element)]) continue;
 			const status = sourceStatus(element.tags);
@@ -567,7 +576,9 @@ export async function getMarkersForView(
 				properties: {
 					ref: toRef(element.type, element.id),
 					icon: getIconKeyForNode(element),
-					status
+					status,
+					// Survey clock badge (issue #120), only when the setting is on.
+					...(showSurveyAge ? { survey: surveyBadge(element.tags, today) } : {})
 				}
 			});
 		}

@@ -17,6 +17,7 @@ const SHOW_ZOOM_BUTTONS_KEY = 'show_zoom_buttons';
 const MAP_LAYER_KEY = 'map_layer';
 const TERRAIN_3D_KEY = 'terrain_3d';
 const SHOW_PATH_TO_MARKER_KEY = 'show_path_to_marker';
+const SHOW_SURVEY_AGE_KEY = 'show_survey_age';
 const OSM_AUTH_KEY = 'osm_token';
 const MARKER_FILTERS_KEY = 'marker_filters';
 const CROSS_COUNTRY_NOTE_SEEN_KEY = 'cross_country_note_seen';
@@ -41,7 +42,8 @@ export function useSettings() {
 			osmAuthKey,
 			markerFiltersResult,
 			crossCountryNoteSeenResult,
-			routingCacheMbResult
+			routingCacheMbResult,
+			showSurveyAgeResult
 		] = await Promise.all([
 			Preferences.get({ key: THEME_KEY }),
 			Preferences.get({ key: SHOW_ZOOM_BUTTONS_KEY }),
@@ -53,7 +55,8 @@ export function useSettings() {
 			Preferences.get({ key: OSM_AUTH_KEY }),
 			Preferences.get({ key: MARKER_FILTERS_KEY }),
 			Preferences.get({ key: CROSS_COUNTRY_NOTE_SEEN_KEY }),
-			Preferences.get({ key: ROUTING_CACHE_MB_KEY })
+			Preferences.get({ key: ROUTING_CACHE_MB_KEY }),
+			Preferences.get({ key: SHOW_SURVEY_AGE_KEY })
 		]);
 
 		if (themeResult.value) {
@@ -94,6 +97,8 @@ export function useSettings() {
 		if (showPathToMarkerResult.value) {
 			settingsStore.setShowPathToMarker(showPathToMarkerResult.value === 'true');
 		}
+
+		settingsStore.setShowSurveyAge(showSurveyAgeResult.value === 'true');
 
 		if (osmAuthKey.value) {
 			settingsStore.setOsmAuthToken(osmAuthKey.value);
@@ -187,6 +192,12 @@ export function useSettings() {
 		});
 	};
 
+	/** Saves whether the survey-age clock badges are shown (issue #120). */
+	const saveShowSurveyAge = async (enabled: boolean) => {
+		settingsStore.setShowSurveyAge(enabled);
+		await Preferences.set({ key: SHOW_SURVEY_AGE_KEY, value: String(enabled) });
+	};
+
 	/**
 	 * Persists the OSM OAuth token and mirrors it into the settings store.
 	 */
@@ -236,6 +247,7 @@ export function useSettings() {
 		saveHoseRouting,
 		saveCrossCountryNoteSeen,
 		saveShowPathToMarker,
+		saveShowSurveyAge,
 		saveOsmAuthToken,
 		removeOsmAuthToken,
 		getOsmAuthToken,

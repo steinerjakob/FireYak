@@ -235,6 +235,13 @@
 			"fireStation": "Feuerwehrhaus",
 			"outOfService": "Außer Betrieb"
 		},
+		"surveyAge": {
+			"toggle": "Zuletzt vor Ort geprüft",
+			"recent": "Vor weniger als 12 Monaten",
+			"older": "Vor 12 bis 24 Monaten",
+			"stale": "Vor mehr als 24 Monaten",
+			"note": "Laut Erfassungsdatum in OpenStreetMap: wann die Stelle zuletzt vor Ort gesehen wurde, keine Funktionsprüfung."
+		},
 		"legend": {
 			"title": "Hydrantentypen",
 			"pillarHydrant": "Überflurhydrant",

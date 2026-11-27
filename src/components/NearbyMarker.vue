@@ -10,7 +10,10 @@ import {
 	IonSpinner
 } from '@ionic/vue';
 import { sourceStatus } from '@/helper/operationalStatus';
-import { statusBadgeDataUrl } from '@/mapHandler/statusBadges';
+import { statusBadgeDataUrl, surveyBadgeDataUrl } from '@/mapHandler/statusBadges';
+import { surveyBadge } from '@/helper/surveyAge';
+import { surveyToday } from '@/composable/surveyDay';
+import { useSettingsStore } from '@/store/settingsStore';
 import { chevronDown } from 'ionicons/icons';
 
 import { useNearbyWaterSource } from '@/composable/nearbyWaterSource';
@@ -27,6 +30,7 @@ import { ROUTE_SHEET_KEY, useRouteDetails, useRouteDetailsView } from '@/composa
 import { rowExpansionAfter, rowRouteState } from '@/helper/routeDetails';
 
 const { list, updatedRefs, markInteraction } = useNearbyWaterSource();
+const settingsStore = useSettingsStore();
 const router = useRouter();
 const route = useRoute();
 const { t, locale } = useI18n();
@@ -53,6 +57,8 @@ const getDistanceText = (distance: number) => {
 };
 
 const formattedList = computed(() => {
+	// Reactive day: the badges turn over at midnight together with the map's.
+	const today = surveyToday.value;
 	return list.value.map((nearbyMarker) => {
 		// Prefer the routed length: that is the length the hoses actually have
 		// to cover (and what the B-tube count is for) and what the map label shows.
@@ -62,6 +68,7 @@ const formattedList = computed(() => {
 			title: getTitle(nearbyMarker.element),
 			icon: nearbyMarker.icon,
 			status: sourceStatus(nearbyMarker.element.tags),
+			survey: settingsStore.showSurveyAge ? surveyBadge(nearbyMarker.element.tags, today) : null,
 			distance: nearbyMarker.distance,
 			distanceText: getDistanceText(displayDistance),
 			chips: routeChips(nearbyMarker.route, nearbyMarker.fallback)
@@ -208,7 +215,7 @@ watch(details.focusRequest, async () => {
 						}"
 						@click.stop="onRowTap(item.ref)"
 					>
-						<!-- Same status badge and fade as on the map (issue #118) -->
+						<!-- Same status badge, survey clock and fade as on the map (issues #118, #120) -->
 						<span
 							slot="start"
 							class="row-icon"
@@ -220,6 +227,13 @@ watch(details.focusRequest, async () => {
 								:src="statusBadgeDataUrl(item.status)"
 								class="status-badge"
 								:alt="t(`operationalStatus.${item.status}`)"
+							/>
+							<img
+								v-if="item.survey"
+								:src="surveyBadgeDataUrl(item.survey)"
+								class="survey-badge"
+								:class="{ 'beside-status': item.status !== 'ok' }"
+								:alt="t(`map.surveyAge.${item.survey}`)"
 							/>
 						</span>
 						<ion-label>
@@ -322,12 +336,19 @@ ion-item {
 	opacity: 0.5;
 }
 
-.row-icon .status-badge {
+.row-icon .status-badge,
+.row-icon .survey-badge {
 	position: absolute;
 	top: -5px;
 	right: -5px;
 	width: 16px;
 	height: 16px;
+}
+
+/* The status badge keeps the top-right corner; the clock moves left. */
+.row-icon .survey-badge.beside-status {
+	right: auto;
+	left: -5px;
 }
 
 ion-icon {
