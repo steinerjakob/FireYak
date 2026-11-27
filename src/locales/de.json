@@ -284,8 +284,7 @@
 			"confirm": "Entfernen"
 		},
 		"buttons": {
-			"today": "Heute",
-			"done": "OK",
+			"today": "Erfassungsdatum auf heute setzen",
 			"save": "In OSM speichern",
 			"cancel": "Abbrechen",
 			"login": "In OSM einloggen",

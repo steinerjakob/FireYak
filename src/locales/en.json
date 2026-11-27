@@ -284,8 +284,7 @@
 			"confirm": "Remove"
 		},
 		"buttons": {
-			"today": "Today",
-			"done": "OK",
+			"today": "Set survey date to today",
 			"save": "Save to OSM",
 			"cancel": "Cancel",
 			"login": "Login to OSM",
