@@ -15,9 +15,11 @@ on:
       - '.github/workflows/ios.yml'
   workflow_dispatch:
 
+# Queue instead of cancel: a run already on the simulator finishes, and only
+# the newest waiting run is kept.
 concurrency:
   group: ios-smoke-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
