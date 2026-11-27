@@ -61,6 +61,21 @@ describe('surveyAge', () => {
 });
 
 describe('lastSurveyDate', () => {
+	it('skips a date too far in the future instead of the valid one, in either key', () => {
+		expect(surveyAge({ 'survey:date': '2026-11-30', check_date: '2026-06-01' }, today)).toBe(
+			'recent'
+		);
+		expect(surveyAge({ 'survey:date': '2025-06-01', check_date: '2026-11-30' }, today)).toBe(
+			'older'
+		);
+		expect(surveyAge({ 'survey:date': '2026-11-30', check_date: '2027-01-01' }, today)).toBe(
+			'none'
+		);
+		expect(lastSurveyDate({ 'survey:date': '2026-11-16', check_date: '2026-06-01' }, today)).toBe(
+			20261116
+		);
+	});
+
 	it('falls back to check_date and takes the newer of both', () => {
 		expect(lastSurveyDate({ check_date: '2026-03-01' })).toBe(20260301);
 		expect(lastSurveyDate({ 'survey:date': '2023-01-01', check_date: '2026-03-01' })).toBe(

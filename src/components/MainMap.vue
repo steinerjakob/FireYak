@@ -1691,6 +1691,9 @@ function addMapLayers(map: maplibregl.Map) {
 			['in', ['get', 'survey'], ['literal', [...SURVEY_AGE_BADGES]]]
 		],
 		layout: {
+			// Also hidden through visibility, so turning the setting off clears the
+			// badges at once, even below the zoom where markers are re-fetched.
+			visibility: showSurveyAge.value ? 'visible' : 'none',
 			'icon-image': [
 				'match',
 				['get', 'survey'],
@@ -2214,8 +2217,13 @@ onMounted(async () => {
 		{ deep: true }
 	);
 
-	// Toggling redraws either way; a new day only matters while badges show.
+	// Toggling shows/hides the badge layer directly (handleMapMovement does
+	// nothing at low zoom) and redraws the features; a new day only matters
+	// while badges show.
 	watch([showSurveyAge, surveyToday], ([on], [wasOn]) => {
+		if (on !== wasOn && rootMap?.getLayer(MARKER_SURVEY_BADGE_LAYER)) {
+			rootMap.setLayoutProperty(MARKER_SURVEY_BADGE_LAYER, 'visibility', on ? 'visible' : 'none');
+		}
 		if (mapReady && (on || wasOn)) handleMapMovement();
 	});
 });

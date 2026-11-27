@@ -64,16 +64,6 @@ function monthsBefore(today: Date, months: number): number {
 	return year * 10000 + month * 100 + day;
 }
 
-/** The newest valid date among `survey:date` and `check_date`, or null. */
-export function lastSurveyDate(tags: Tags): number | null {
-	let newest: number | null = null;
-	for (const key of SURVEY_DATE_KEYS) {
-		const date = parseSurveyDate(tags?.[key]);
-		if (date !== null && (newest === null || date > newest)) newest = date;
-	}
-	return newest;
-}
-
 /** The local calendar day after `today`, as a sortable number. */
 function tomorrow(today: Date): number {
 	const next = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -81,13 +71,26 @@ function tomorrow(today: Date): number {
 }
 
 /**
- * Age bucket of the last on-site check, against the local calendar day
- * `today`. A date one day ahead is a mapper in a later time zone (or a tool
- * writing the UTC day), so it counts as `recent`; further ahead is invalid.
+ * The newest valid date among `survey:date` and `check_date`, or null. A date
+ * one day ahead of the local `today` is a mapper in a later time zone (or a
+ * tool writing the UTC day) and counts; one further ahead is invalid and is
+ * skipped, so it never hides a valid date on the other key.
  */
+export function lastSurveyDate(tags: Tags, today: Date = new Date()): number | null {
+	const latest = tomorrow(today);
+	let newest: number | null = null;
+	for (const key of SURVEY_DATE_KEYS) {
+		const date = parseSurveyDate(tags?.[key]);
+		if (date === null || date > latest) continue;
+		if (newest === null || date > newest) newest = date;
+	}
+	return newest;
+}
+
+/** Age bucket of the last on-site check, against the local calendar day `today`. */
 export function surveyAge(tags: Tags, today: Date = new Date()): SurveyAge {
-	const date = lastSurveyDate(tags);
-	if (date === null || date > tomorrow(today)) return 'none';
+	const date = lastSurveyDate(tags, today);
+	if (date === null) return 'none';
 	if (date > monthsBefore(today, SURVEY_RECENT_MONTHS)) return 'recent';
 	return date >= monthsBefore(today, SURVEY_STALE_MONTHS) ? 'older' : 'stale';
 }
