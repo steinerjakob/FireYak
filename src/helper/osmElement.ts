@@ -1,6 +1,11 @@
 import type { OverPassElement } from '@/mapHandler/overPassApi';
 import type { OsmType } from '@/helper/osmRef';
-import { DISUSED_EMERGENCY_KEY, emergencyOf, isDisused } from '@/helper/operationalStatus';
+import {
+	DISUSED_EMERGENCY_KEY,
+	WATER_SOURCE_TYPES,
+	emergencyOf,
+	isDisused
+} from '@/helper/operationalStatus';
 
 /**
  * Helpers for editing OSM elements that are not plain nodes.
@@ -118,7 +123,13 @@ export function isUnflagEdit(
  */
 export function isMarkerTags(tags: Record<string, string>): boolean {
 	// A disused (out-of-service) source stays on the map, faded (issue #118).
-	return emergencyOf(tags) != null || tags['amenity'] === 'fire_station';
+	// Only FireYak's own types count: `emergency` has many other values (a
+	// defibrillator, a phone, an assembly point …) that are no water source (#132).
+	const type = emergencyOf(tags);
+	return (
+		(type != null && (WATER_SOURCE_TYPES as readonly string[]).includes(type)) ||
+		tags['amenity'] === 'fire_station'
+	);
 }
 
 /**

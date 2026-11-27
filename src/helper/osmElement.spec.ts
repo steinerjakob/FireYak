@@ -16,6 +16,13 @@ describe('out-of-service edits (issue #118)', () => {
 		expect(isMarkerTags({ natural: 'water' })).toBe(false);
 	});
 
+	it('does not take other emergency features for markers (issue #132)', () => {
+		expect(isMarkerTags({ emergency: 'defibrillator' })).toBe(false);
+		expect(isMarkerTags({ emergency: 'phone' })).toBe(false);
+		expect(isMarkerTags({ emergency: 'fire_hydrant' })).toBe(true);
+		expect(isMarkerTags({ amenity: 'fire_station' })).toBe(true);
+	});
+
 	it('does not read taking a pond out of service as removing its flag', () => {
 		expect(isUnflagEdit(pond, disusedPond)).toBe(false);
 		expect(isUnflagEdit(pond, { natural: 'water' })).toBe(true);

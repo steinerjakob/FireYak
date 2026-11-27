@@ -46,6 +46,7 @@ import { tileKeysForBounds } from '@/helper/tileMath';
 import { OsmRef, toRef } from '@/helper/osmRef';
 import { emergencyOf, sourceStatus } from '@/helper/operationalStatus';
 import { surveyBadge } from '@/helper/surveyAge';
+import { isMarkerTags } from '@/helper/osmElement';
 
 // Map icon keys to URLs for use in MapLibre image loading. Suction points and
 // suction hydrants use the blue/white `pump` icon on the map; `suctionpoint.png`
@@ -98,8 +99,12 @@ export function getIconUrlForNode(element: OverPassElement): string {
 	return markerIconUrls[getIconKeyForNode(element)];
 }
 
-/** Maps an OSM element to its filter category key. Tags only — see comment above. */
-function categoryForNode(element: OverPassElement): MarkerFilterKey {
+/**
+ * Maps an OSM element to its filter category key. Tags only — see comment above.
+ * `null` for anything FireYak doesn't show (say a defibrillator an older version
+ * cached from a shared link, issue #132), so it never renders as a hydrant.
+ */
+function categoryForNode(element: OverPassElement): MarkerFilterKey | null {
 	const emergency = emergencyOf(element.tags);
 	switch (emergency) {
 		case 'fire_hydrant':
@@ -116,7 +121,7 @@ function categoryForNode(element: OverPassElement): MarkerFilterKey {
 			return 'fireWaterPond';
 	}
 	if (element.tags?.amenity === 'fire_station') return 'fireStation';
-	return 'fireHydrant';
+	return null;
 }
 
 // --- Freshness registry (§1.4) -------------------------------------------
@@ -562,7 +567,8 @@ export async function getMarkersForView(
 		// One "today" for the whole batch, so every badge is aged the same.
 		const today = new Date();
 		for (const element of mapElements) {
-			if (!markerFilters[categoryForNode(element)]) continue;
+			const category = categoryForNode(element);
+			if (!category || !markerFilters[category]) continue;
 			const status = sourceStatus(element.tags);
 			if (status === 'outOfService' && !markerFilters.outOfService) continue;
 			const lat = (element?.lat || element.center?.lat) as number;
@@ -715,7 +721,9 @@ export function nearbyOutlinesPending(): boolean {
 
 export async function getNearbyMarkers(latLng: GeoPoint, radius = 2000): Promise<NearbyMarker[]> {
 	// Everything else is found by its position, exactly as before.
-	const pointCandidates = (await getNearbyMapNodes(latLng, radius)).filter((e) => !isPondArea(e));
+	const pointCandidates = (await getNearbyMapNodes(latLng, radius)).filter(
+		(e) => !isPondArea(e) && isMarkerTags(e.tags ?? {})
+	);
 
 	// Pond areas: a wider window of centers, kept when their outline reaches
 	// the radius (or, without an outline, when it could still be fetched).
