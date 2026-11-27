@@ -17,13 +17,7 @@ import {
 	IonModal,
 	IonChip
 } from '@ionic/vue';
-import {
-	saveOutline,
-	closeOutline,
-	logInOutline,
-	todayOutline,
-	waterOutline
-} from 'ionicons/icons';
+import { saveOutline, closeOutline, logInOutline, waterOutline } from 'ionicons/icons';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useMarkerEditStore } from '@/store/markerEditStore';
@@ -877,16 +871,6 @@ const login = () => {
 					<p>{{ t('markerEdit.hints.surveyDate') }}</p>
 				</ion-label>
 				<ion-datetime-button datetime="survey-date" slot="end"></ion-datetime-button>
-				<ion-button
-					slot="end"
-					fill="clear"
-					:aria-label="t('markerEdit.buttons.today')"
-					:title="t('markerEdit.buttons.today')"
-					:disabled="markerEditStore.editableTags['survey:date'] === localToday()"
-					@click="setSurveyDateToday"
-				>
-					<ion-icon slot="icon-only" :icon="todayOutline"></ion-icon>
-				</ion-button>
 				<ion-modal :keep-contents-mounted="true">
 					<ion-datetime
 						id="survey-date"
@@ -900,6 +884,13 @@ const login = () => {
 					></ion-datetime>
 				</ion-modal>
 			</ion-item>
+			<div class="suggestion-chips">
+				<ion-chip
+					:outline="markerEditStore.editableTags['survey:date'] !== localToday()"
+					@click="setSurveyDateToday"
+					>{{ t('markerEdit.buttons.today') }}</ion-chip
+				>
+			</div>
 		</ion-item-group>
 
 		<!-- Unknown / Other Tags -->
