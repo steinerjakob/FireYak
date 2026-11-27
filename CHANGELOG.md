@@ -1,6 +1,27 @@
 # Changelog
 
 All notable changes to FireYak.
+## [2.21.0] - 2026-11-27
+
+### Features
+
+- Add Today shortcut to OSM survey date (#122)
+- *(map)* Optional clock badge for how long ago a source was checked on site (#130)
+- *(markers)* Revalidate markers against live OSM on select and edit (#127)
+- *(info)* Highlight out-of-service status as a chip in the info panel (#124)
+- *(map)* Mark out-of-service water sources (#119)
+
+### Bug Fixes
+
+- Don't open non-water-source links as hydrants (#135)
+- Include marker link when sharing on iOS (#134)
+- *(ios)* Adopt the UIScene lifecycle for the iOS 27 SDK (#131)
+- *(layout)* Start desktop side panels below the search bar; show cross-country note at the bottom (#129)
+
+### Ci
+
+- *(ios)* Update fastlane to 2.242.0 for Xcode 27 uploads (#126)
+- *(ios)* Build with Xcode 27 / iOS 27 SDK (#125)
 ## [2.20.0] - 2026-11-14
 
 ### Features
