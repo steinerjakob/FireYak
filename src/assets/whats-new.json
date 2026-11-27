@@ -7,6 +7,11 @@
 		},
 		{
 			"type": "fix",
+			"en": "Sharing a water source on iPhone now includes the link in the message again.",
+			"de": "Beim Teilen einer Wasserentnahmestelle am iPhone ist der Link jetzt wieder in der Nachricht enthalten."
+		},
+		{
+			"type": "fix",
 			"en": "On larger screens an open side panel no longer covers the search bar, and the cross-country hint now appears at the bottom.",
 			"de": "Auf großen Bildschirmen verdeckt ein offenes Seitenpanel die Suchleiste nicht mehr, und der Querfeldein-Hinweis erscheint jetzt unten."
 		},
