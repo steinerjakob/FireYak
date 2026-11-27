@@ -1,0 +1,156 @@
+name: iOS Smoke Test
+
+# Builds the app for the iOS simulator with the same Xcode as ios.yml, launches
+# it on an iOS simulator and fails when it crashes or never loads the web app.
+# Needs no signing and no secrets.
+
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.ts'
+      - '.github/workflows/ios-smoke.yml'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ios-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    # Keep runner and Xcode in step with ios.yml.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      SPM_PACKAGES_DIR: ${{ github.workspace }}/.spm-packages
+      DERIVED_DATA: ${{ github.workspace }}/.derived-data
+      SMOKE_DIR: ${{ github.workspace }}/smoke
+      BUNDLE_ID: org.jst.fireyak
+      # Seconds the app must stay alive after launch.
+      ALIVE_SECONDS: 45
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build web assets
+        run: npm run buildAndSync
+
+      - name: Select Xcode Version
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: '27'
+
+      - name: Resolve Swift packages (with retries)
+        run: |
+          for attempt in 1 2 3 4; do
+            if xcodebuild -resolvePackageDependencies \
+                -project ios/App/App.xcodeproj -scheme App \
+                -clonedSourcePackagesDirPath "$SPM_PACKAGES_DIR"; then
+              exit 0
+            fi
+            echo "::warning::Swift package resolution failed (attempt $attempt), retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          echo "::error::Swift package resolution failed after 4 attempts"
+          exit 1
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA" \
+            -clonedSourcePackagesDirPath "$SPM_PACKAGES_DIR" \
+            CODE_SIGNING_ALLOWED=NO | xcbeautify --renderer github-actions
+
+      - name: Boot newest iOS simulator
+        run: |
+          read -r UDID NAME RUNTIME < <(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          def ver(rt):
+              return tuple(int(p) for p in rt.rsplit(".", 1)[-1].split("-")[1:])
+          ios = sorted((rt for rt in data if ".iOS-" in rt and data[rt]), key=ver, reverse=True)
+          for rt in ios:
+              phones = [d for d in data[rt] if d["name"].startswith("iPhone")]
+              if phones:
+                  print(phones[0]["udid"], phones[0]["name"].replace(" ", "_"), rt.rsplit(".", 1)[-1])
+                  break
+          ')
+          if [ -z "$UDID" ]; then echo "::error::No iOS simulator available"; exit 1; fi
+          echo "Using $NAME ($RUNTIME, $UDID)"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "SIM_RUNTIME=$RUNTIME" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Launch app and check it stays alive
+        run: |
+          mkdir -p "$SMOKE_DIR"
+          APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/App.app"
+          /usr/libexec/PlistBuddy -c 'Print :DTSDKName' "$APP/Info.plist" | tee "$SMOKE_DIR/sdk.txt"
+          xcrun simctl install "$SIM_UDID" "$APP"
+
+          xcrun simctl spawn "$SIM_UDID" log stream --level debug \
+            --predicate 'process == "App"' > "$SMOKE_DIR/os-log.txt" 2>&1 &
+          LOG_PID=$!
+          START=$(date +%s)
+
+          LAUNCH=$(xcrun simctl launch --terminate-running-process \
+            --stdout="$SMOKE_DIR/stdout.txt" --stderr="$SMOKE_DIR/stderr.txt" \
+            "$SIM_UDID" "$BUNDLE_ID")
+          echo "$LAUNCH"
+          PID=${LAUNCH##*: }
+
+          ALIVE=true
+          for _ in $(seq "$ALIVE_SECONDS"); do
+            if ! kill -0 "$PID" 2>/dev/null; then ALIVE=false; break; fi
+            sleep 1
+          done
+          echo "Alive after launch: $ALIVE ($(( $(date +%s) - START ))s)"
+
+          xcrun simctl io "$SIM_UDID" screenshot "$SMOKE_DIR/screenshot.png" || true
+          kill "$LOG_PID" 2>/dev/null || true
+          find ~/Library/Logs/DiagnosticReports -name 'App*' -newermt "@$START" \
+            -exec cp {} "$SMOKE_DIR/" \; 2>/dev/null || true
+
+          echo "--- app stdout/stderr (tail) ---"
+          tail -n 40 "$SMOKE_DIR/stdout.txt" "$SMOKE_DIR/stderr.txt" || true
+          echo "--- os log faults/errors (tail) ---"
+          grep -iE "fault|error|exception|crash|scene" "$SMOKE_DIR/os-log.txt" | tail -n 40 || true
+
+          if [ "$ALIVE" != true ]; then
+            echo "::error::App exited within ${ALIVE_SECONDS}s of launch on $SIM_RUNTIME (crash reports and logs are in the smoke-test artifact)"
+            exit 1
+          fi
+          if ! grep -q "Loading app at" "$SMOKE_DIR/stdout.txt" "$SMOKE_DIR/stderr.txt"; then
+            echo "::error::App stayed alive but Capacitor never started loading the web app"
+            exit 1
+          fi
+          echo "App launched on $SIM_RUNTIME and stayed alive for ${ALIVE_SECONDS}s"
+
+      - name: Upload smoke-test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-smoke-${{ env.SIM_RUNTIME || 'unknown' }}
+          path: smoke/
+          if-no-files-found: warn
