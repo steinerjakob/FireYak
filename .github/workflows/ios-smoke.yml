@@ -86,11 +86,15 @@ jobs:
       - name: Boot newest iOS simulator
         run: |
           read -r UDID NAME RUNTIME < <(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
+          import json, re, sys
           data = json.load(sys.stdin)["devices"]
+          # Runtime keys look like ...SimRuntime.iOS-27-2, some with a device
+          # suffix (...iOS-27-1-iPhone19); sort by the numeric version only.
           def ver(rt):
-              return tuple(int(p) for p in rt.rsplit(".", 1)[-1].split("-")[1:])
-          ios = sorted((rt for rt in data if ".iOS-" in rt and data[rt]), key=ver, reverse=True)
+              m = re.search(r"\.iOS-(\d+)-(\d+)(?:-(\d+))?", rt)
+              return tuple(int(g or 0) for g in m.groups())
+          ios = sorted((rt for rt in data if re.search(r"\.iOS-\d+-\d+", rt) and data[rt]),
+                       key=ver, reverse=True)
           for rt in ios:
               phones = [d for d in data[rt] if d["name"].startswith("iPhone")]
               if phones:
